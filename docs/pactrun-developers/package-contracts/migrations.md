@@ -90,6 +90,11 @@ bindings. Requirements are admission prerequisites rather than ACLs. A Pack MAY
 use retained state for compatibility or recovery, and plan or lint output SHOULD
 make that dependence visible.
 
+The V1 identity spelling and the boundary between intrinsic target validation,
+exact-source relational validation, and Admission are defined by
+[Revision Core Format V1](./revision-core-format-v1.md). Source availability is
+not made an installation prerequisite by that format specification.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0162 - Single target writer

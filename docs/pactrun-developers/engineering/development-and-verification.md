@@ -37,6 +37,11 @@ file location, implementation package, or temporary classification. Moving or
 rewriting a requirement does not change its ID unless an approved design change
 retires and replaces the requirement.
 
+Stable requirement and test IDs are durable references, not contiguous
+sequence assertions. IDs MUST be unique, every reference MUST resolve, and a
+retired ID MUST NOT be reused or cause unrelated IDs to be renumbered merely to
+close a numeric gap. Traceability tooling MUST accept legitimate gaps.
+
 Contributor-process rules do not use `PR-REQ` identifiers. Informative prose
 does not need artificial requirements or tests.
 
@@ -131,6 +136,8 @@ Traceability checks MUST cover at least:
 5. dangling references after deletion or renaming;
 6. mechanically verifiable implemented requirements without required automated
    verification.
+
+Numeric continuity is intentionally not a traceability invariant.
 
 ## Test the real contract
 

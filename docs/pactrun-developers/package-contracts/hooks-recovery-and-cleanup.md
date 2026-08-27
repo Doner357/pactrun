@@ -14,6 +14,10 @@ A Hook MUST be treated as a trusted external program implementing
 Package-specific behavior. It MAY be written as a shell, PowerShell, Python,
 Node.js, Go, Rust, or another executable supported by the host.
 
+`RevisionCoreFormatV1` represents native and interpreter launch without host
+file associations and excludes launcher `argv[0]` from the Pack-facing
+contract. See [Revision Core Format V1](./revision-core-format-v1.md).
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0168 - One language-neutral protocol

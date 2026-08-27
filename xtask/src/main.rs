@@ -4,11 +4,15 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod revision_core_v1;
+
 fn main() -> ExitCode {
     let workspace_root = workspace_root();
     let result = match env::args().nth(1).as_deref() {
         Some("ci") => run_ci(&workspace_root),
         Some("docs-build") => build_docs(&workspace_root),
+        Some("revision-core-v1-verify") => revision_core_v1::verify(&workspace_root),
+        Some("revision-core-v1-calculate") => revision_core_v1::calculate(&workspace_root),
         Some(command) => Err(format!("unknown xtask command: {command}")),
         None => Err("missing xtask command".to_owned()),
     };
@@ -17,7 +21,9 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("error: {error}");
-            eprintln!("usage: cargo xtask <ci|docs-build>");
+            eprintln!(
+                "usage: cargo xtask <ci|docs-build|revision-core-v1-verify|revision-core-v1-calculate>"
+            );
             ExitCode::FAILURE
         }
     }
@@ -31,6 +37,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn run_ci(workspace_root: &Path) -> Result<(), String> {
+    revision_core_v1::verify(workspace_root)?;
     run(workspace_root, "cargo", &["fmt", "--all", "--check"])?;
     run(
         workspace_root,

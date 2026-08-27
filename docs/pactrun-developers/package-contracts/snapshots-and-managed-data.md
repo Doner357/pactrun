@@ -40,6 +40,11 @@ Snapshot Capture and Restore MUST be authored as Pactrun-defined managed-state
 lifecycle capabilities, not Actions. A Capture Hook provides service recovery
 state; Pactrun supplies and records the complete managed binding state.
 
+Their `RevisionCoreFormatV1` identity projection keeps Capture and Restore
+separate. Capability-specific prerequisites remain additive to global managed
+execution invariants. See
+[Revision Core Format V1](./revision-core-format-v1.md).
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0147 - Snapshot authoritative body
