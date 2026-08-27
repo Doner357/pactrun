@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
           label: 'Package Contracts',
           items: [
             'pactrun-developers/package-contracts/authoring-model',
+            'pactrun-developers/package-contracts/revision-core-format-v1',
             'pactrun-developers/package-contracts/actions-inputs-and-parameters',
             'pactrun-developers/package-contracts/recipes-and-runtime-content',
             'pactrun-developers/package-contracts/snapshots-and-managed-data',

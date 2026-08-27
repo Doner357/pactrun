@@ -78,6 +78,9 @@ identity-affecting normalization, collection ordering, runtime-content
 descriptor, canonical byte profile, hash framing, domain separation, and hash
 algorithm.
 
+The Frozen `RevisionCoreFormatV1` contract is defined by
+[Revision Core Format V1](../package-contracts/revision-core-format-v1.md).
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0080 - Snapshot integrity format ownership

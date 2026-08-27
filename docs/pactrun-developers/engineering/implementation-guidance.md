@@ -128,9 +128,10 @@ state machine, cancellation, EOF, and protocol errors.
 
 ### RevisionCoreV1 authoring spelling
 
-Define stable Input identity representation, explicit transition schema,
-Migration requirements and outputs, Cleanup requirements, and runtime-content
-descriptors without changing their already established semantics.
+The Frozen identity spelling, normalization, framing, and verification
+boundary are defined by
+[Revision Core Format V1](../package-contracts/revision-core-format-v1.md).
+Production projection and persistence remain Phase 1 implementation work.
 
 ### Persistence and concurrency encoding
 

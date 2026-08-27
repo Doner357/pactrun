@@ -56,6 +56,11 @@ Each Action and lifecycle capability owns its own parameters, requirements, and
 implementation. Presentation may coexist with semantics in the authoring model,
 but the installation projection separates their identity roles.
 
+In `RevisionCoreFormatV1`, capability-specific fixed prerequisites are
+semantics of the capability kind. They are not an author-configurable generic
+requirements block. The exact identity projection is defined by
+[Revision Core Format V1](./revision-core-format-v1.md).
+
 ## PR-REQ-0123 - Explicit normalized semantics
 
 An authoring frontend MAY offer conservative shorthand, including implicit

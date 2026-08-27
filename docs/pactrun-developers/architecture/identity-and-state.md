@@ -78,6 +78,9 @@ separation and framing, RFC 8785 JSON Canonicalization Scheme bytes, and a fixed
 SHA-256 profile represented by a self-describing digest such as
 `sha256:<value>`. JCS MUST NOT replace Pactrun semantic normalization.
 
+The exact Frozen contract is defined by
+[Revision Core Format V1](../package-contracts/revision-core-format-v1.md).
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0018 - Stable published identity
