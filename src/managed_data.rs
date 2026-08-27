@@ -1,0 +1,1 @@
+//! Managed-data lifecycle ownership.

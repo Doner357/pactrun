@@ -1,0 +1,8 @@
+/.env/
+/.remote-sync/
+/.pnpm-store/
+/target/
+/website/node_modules/
+/website/.docusaurus/
+/website/build/
+/docs.zip

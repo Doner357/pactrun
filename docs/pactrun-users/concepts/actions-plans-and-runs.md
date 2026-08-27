@@ -1,0 +1,19 @@
+---
+title: Actions, Plans, and Runs
+---
+
+# Actions, Plans, and Runs
+
+:::info Documentation status
+
+Planned after the initial Pactrun release. This page currently reserves the
+documentation structure only.
+
+:::
+
+## Planned coverage
+
+- Action discovery and invocation
+- Plan previews and staleness
+- Run history and outcomes
+- Concurrent operation feedback
