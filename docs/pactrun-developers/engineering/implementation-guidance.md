@@ -112,13 +112,14 @@ guarantees.
 - network- and host-dependent generation;
 - Revision Candidate output.
 
-## Specification work still open
+## Specification status and open work
 
 ### SnapshotIntegrityFormatV1
 
-Define the exact semantic manifest fields, binding and content descriptors, JCS
-preconditions, normalization, framing bytes, digest encoding, and golden
-vectors.
+The Frozen semantic manifest, binding and content descriptors, normalization,
+JCS profile, framing, digest encoding, and golden vectors are defined by
+[Snapshot Integrity Format V1](../package-contracts/snapshot-integrity-format-v1.md).
+Production Snapshot persistence and runtime behavior remain Phase 4 work.
 
 ### HookProtocolV1
 

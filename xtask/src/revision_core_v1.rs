@@ -1779,7 +1779,7 @@ fn verify_node_oracle(workspace_root: &Path) -> Result<(), String> {
     }
 }
 
-fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
+pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
     let mut markdown = Vec::new();
     collect_files(&workspace_root.join("docs"), "md", &mut markdown)?;
     let mut requirements = BTreeSet::new();

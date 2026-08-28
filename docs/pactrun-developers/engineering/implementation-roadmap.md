@@ -21,8 +21,10 @@ is Frozen.
 - `RevisionCoreFormatV1` is Frozen with Rust verification, an independent Node
   24 oracle, golden vectors, and requirement/test traceability.
 - The production crate remains a compile-oriented modular-monolith scaffold.
-- Phase 0 still requires `SnapshotIntegrityFormatV1`, the `HookProtocolV1`
-  message and state-machine skeleton, and a structured error taxonomy.
+- `SnapshotIntegrityFormatV1` is Frozen on its feature branch and awaits review
+  and merge into `develop`.
+- Phase 0 still requires the `HookProtocolV1` message and state-machine skeleton
+  and a structured error taxonomy.
 - Runtime launcher integration under `PR-REQ-0194` remains pending until real
   Compiler, Admission, and Executor integration tests exist.
 
@@ -40,7 +42,7 @@ is Frozen.
 
 ### M0-A - SnapshotIntegrityFormatV1
 
-**State: Proposed.**
+**State: In progress.**
 
 Define the exact Snapshot integrity contract without implementing Snapshot
 persistence or runtime behavior.
