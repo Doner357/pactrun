@@ -24,8 +24,12 @@ is Frozen.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
-- Phase 0 still requires the `HookProtocolV1` message and state-machine skeleton
-  and a structured error taxonomy.
+- `HookProtocolV1` is Frozen with Rust validation, an independent Node 24
+  valid-fixture oracle, cross-language fixtures, and requirement/test
+  traceability on its feature branch. Production runtime integration remains
+  deferred, and M0-B is not Complete until reviewed Git settlement merges it
+  into `develop`.
+- Phase 0 still requires a structured error taxonomy.
 - Runtime launcher integration under `PR-REQ-0194` remains pending until real
   Compiler, Admission, and Executor integration tests exist.
 
@@ -73,14 +77,14 @@ Completion gate:
 
 ### M0-B - HookProtocolV1
 
-**State: Proposed.**
+**State: In progress.**
 
 Define the language-neutral Hook Protocol message and state-machine skeleton.
 
 Scope:
 
 - transport and framing profile;
-- version negotiation and unsupported-version behavior;
+- exact version confirmation and unsupported-version behavior;
 - request identifiers, acknowledgments, and ordering;
 - Session establishment and authority handles;
 - Action, Snapshot, Migration, and Cleanup contexts and typed outputs;

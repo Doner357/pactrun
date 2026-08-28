@@ -664,33 +664,13 @@ fn semantic_identifier(value: String) -> Result<String, VerifyError> {
 }
 
 fn snapshot_path(value: String) -> Result<String, VerifyError> {
-    if value.is_empty() || value.len() > 1024 || !value.is_ascii() {
+    if !crate::lexical_v1::is_runtime_path(&value) {
         return Err(VerifyError::new(
             "invalid_snapshot_path",
             format!("invalid Snapshot content path {value:?}"),
         ));
     }
-    for segment in value.split('/') {
-        if semantic_identifier(segment.to_owned()).is_err() || is_windows_reserved(segment) {
-            return Err(VerifyError::new(
-                "invalid_snapshot_path",
-                format!("invalid Snapshot content path {value:?}"),
-            ));
-        }
-    }
     Ok(value)
-}
-
-fn is_windows_reserved(value: &str) -> bool {
-    let stem = value
-        .split('.')
-        .next()
-        .unwrap_or(value)
-        .to_ascii_uppercase();
-    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || (stem.len() == 4
-            && (stem.starts_with("COM") || stem.starts_with("LPT"))
-            && matches!(stem.as_bytes()[3], b'1'..=b'9'))
 }
 
 fn sha256_digest(value: String) -> Result<String, VerifyError> {
