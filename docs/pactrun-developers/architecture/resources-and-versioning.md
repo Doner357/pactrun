@@ -90,10 +90,12 @@ SnapshotId binding, producer and provenance normalization, complete managed
 binding representation, service-content roles, collection ordering, canonical
 bytes, domain separation, and hash profile. It MUST hash a semantic manifest,
 not archive bytes. `SnapshotIntegrityFormatV1` MUST apply semantic normalization
-before RFC 8785 JCS encoding and use a fixed SHA-256 profile; its exact schema
-and framing remain open specification work.
+before RFC 8785 JCS encoding and use a fixed SHA-256 profile. The exact Frozen
+contract is defined by
+[Snapshot Integrity Format V1](../package-contracts/snapshot-integrity-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0013, PR-TEST-0015, PR-TEST-0016, PR-TEST-0018,
+PR-TEST-0019.**
 
 ### PR-REQ-0081 - Bundle envelopes
 

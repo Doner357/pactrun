@@ -73,6 +73,10 @@ content roles and digests. It MUST exclude presentation-only origin names,
 local import metadata, labels, notes, trust decisions, compression, and archive
 representation.
 
+The exact V1 identity spelling, semantic manifest, normalization, framing, and
+verification boundary are defined by
+[Snapshot Integrity Format V1](./snapshot-integrity-format-v1.md).
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0150 - Capture view consistency
