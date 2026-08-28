@@ -732,9 +732,18 @@ fn exact_integer(value: &RawValue) -> Result<i64, VerifyError> {
     if digits.bytes().all(|byte| byte == b'0') {
         return Ok(0);
     }
-    let decimal_shift = exponent - i64::try_from(fraction.len()).unwrap_or(i64::MAX);
+    let fraction_len = i64::try_from(fraction.len())
+        .map_err(|_| VerifyError::new("invalid_number", "integer fraction is too long"))?;
+    let decimal_shift = exponent.checked_sub(fraction_len).ok_or_else(|| {
+        VerifyError::new("invalid_number", "integer decimal shift is out of range")
+    })?;
     if decimal_shift < 0 {
-        let remove = usize::try_from(-decimal_shift).unwrap_or(usize::MAX);
+        let remove = decimal_shift
+            .checked_neg()
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| {
+                VerifyError::new("invalid_number", "integer decimal shift is out of range")
+            })?;
         if remove > digits.len()
             || !digits[digits.len() - remove..]
                 .bytes()
@@ -1282,6 +1291,9 @@ mod tests {
             exact_integer(&RawValue::Number(MAX_SAFE_INTEGER.to_string())).unwrap(),
             MAX_SAFE_INTEGER
         );
+        for token in ["9007199254740992", "1e-9223372036854775808"] {
+            assert!(exact_integer(&RawValue::Number(token.to_owned())).is_err());
+        }
     }
 
     // Test-ID: PR-TEST-0015

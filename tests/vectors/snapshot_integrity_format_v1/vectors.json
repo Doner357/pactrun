@@ -307,6 +307,16 @@
       "expected_error": "invalid_number"
     },
     {
+      "name": "timestamp_safe_integer_overflow",
+      "raw_manifest": "{\"format_version\":1,\"snapshot_id\":\"00000000000000000000000000000000\",\"producer\":{\"package_id\":\"11111111111111111111111111111111\",\"revision_content_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"},\"origin_instance_id\":\"22222222222222222222222222222222\",\"captured_at\":{\"unix_seconds\":9007199254740992,\"nanoseconds\":0},\"managed_bindings\":[],\"service_content\":[]}",
+      "expected_error": "invalid_number"
+    },
+    {
+      "name": "timestamp_extreme_negative_exponent",
+      "raw_manifest": "{\"format_version\":1,\"snapshot_id\":\"00000000000000000000000000000000\",\"producer\":{\"package_id\":\"11111111111111111111111111111111\",\"revision_content_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"},\"origin_instance_id\":\"22222222222222222222222222222222\",\"captured_at\":{\"unix_seconds\":1e-9223372036854775808,\"nanoseconds\":0},\"managed_bindings\":[],\"service_content\":[]}",
+      "expected_error": "invalid_number"
+    },
+    {
       "name": "duplicate_binding_id",
       "raw_manifest": "{\"format_version\":1,\"snapshot_id\":\"00000000000000000000000000000000\",\"producer\":{\"package_id\":\"11111111111111111111111111111111\",\"revision_content_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"},\"origin_instance_id\":\"22222222222222222222222222222222\",\"captured_at\":{\"unix_seconds\":0,\"nanoseconds\":0},\"managed_bindings\":[{\"input_id\":\"config\",\"role\":\"active\",\"state\":\"absent\",\"protection\":\"normal\"},{\"input_id\":\"config\",\"role\":\"active\",\"state\":\"absent\",\"protection\":\"normal\"}],\"service_content\":[]}",
       "expected_error": "duplicate_semantic_key"
