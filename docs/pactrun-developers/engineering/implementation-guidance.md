@@ -123,9 +123,12 @@ Production Snapshot persistence and runtime behavior remain Phase 4 work.
 
 ### HookProtocolV1
 
-Define transport and framing, negotiation, request IDs and acknowledgments,
-authority handles, Migration and Cleanup contexts, staged outputs, recovery-risk
-state machine, cancellation, EOF, and protocol errors.
+The Frozen transport, framing, exact version confirmation, request and
+acknowledgment rules, authority handles, operation contexts, staged outputs,
+recovery-risk state machine, cancellation, completion handshake, and protocol
+errors are defined by
+[Hook Protocol V1](../package-contracts/hook-protocol-v1.md). Production Hook
+Runtime integration remains Phase 3 and later work.
 
 ### RevisionCoreV1 authoring spelling
 

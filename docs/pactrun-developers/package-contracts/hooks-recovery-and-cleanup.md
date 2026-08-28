@@ -24,15 +24,19 @@ contract. See [Revision Core Format V1](./revision-core-format-v1.md).
 
 Direct Hooks, helper CLIs, wrappers, and SDKs MUST converge on one versioned,
 language-neutral canonical Hook Protocol. An adapter MUST NOT define a second
-semantic API.
+semantic API. The exact Frozen V1 wire and state-machine contract is defined by
+[Hook Protocol V1](./hook-protocol-v1.md).
 
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0169 - Session authority
 
 A `HookSessionSpec` MUST provide only the Instance context, parameters, managed
-data authorities, protocol features, and I/O contract granted to that
-execution. Requests outside Pactrun-mediated authority MUST be rejected.
+data authorities, protocol-version-defined facilities, and I/O contract granted
+to that execution. Requests outside Pactrun-mediated authority MUST be rejected.
+
+The exact Frozen V1 Session authority representation is defined by
+[Hook Protocol V1](./hook-protocol-v1.md).
 
 The Session MUST NOT let a Hook browse arbitrary managed stores, read another
 Instance's managed data, delete arbitrary resources, invoke another Action,

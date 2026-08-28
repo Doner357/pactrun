@@ -1470,19 +1470,11 @@ fn host_executable_name(value: String) -> Result<String, VerifyError> {
 }
 
 fn runtime_path(value: String) -> Result<String, VerifyError> {
-    if value.is_empty() || value.len() > 1024 || !value.is_ascii() {
+    if !crate::lexical_v1::is_runtime_path(&value) {
         return Err(VerifyError::new(
             "invalid_runtime_path",
             format!("invalid runtime path {value:?}"),
         ));
-    }
-    for segment in value.split('/') {
-        if semantic_identifier(segment.to_owned()).is_err() || is_windows_reserved(segment) {
-            return Err(VerifyError::new(
-                "invalid_runtime_path",
-                format!("invalid runtime path {value:?}"),
-            ));
-        }
     }
     Ok(value)
 }
@@ -1782,19 +1774,39 @@ fn verify_node_oracle(workspace_root: &Path) -> Result<(), String> {
 pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
     let mut markdown = Vec::new();
     collect_files(&workspace_root.join("docs"), "md", &mut markdown)?;
-    let mut requirements = BTreeSet::new();
-    let mut referenced_tests = BTreeSet::new();
+    let mut requirements = BTreeMap::<String, BTreeSet<String>>::new();
     for path in markdown {
         let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+        let mut current_requirement = None;
+        let mut verification_requirement = None;
         for line in text.lines() {
             if let Some(id) = token_after(line, "### PR-REQ-") {
                 let id = format!("PR-REQ-{id}");
-                if !requirements.insert(id.clone()) {
+                if requirements.insert(id.clone(), BTreeSet::new()).is_some() {
                     return Err(format!("duplicate requirement ID {id}"));
                 }
+                current_requirement = Some(id);
             }
-            if line.starts_with("**Verification:") && !line.contains("Pending automated coverage") {
-                referenced_tests.extend(extract_ids(line, "PR-TEST-"));
+            if line.starts_with("**Verification:") {
+                verification_requirement = if line.contains("Pending automated coverage") {
+                    None
+                } else {
+                    Some(current_requirement.clone().ok_or_else(|| {
+                        format!(
+                            "verification metadata has no owning requirement in {}",
+                            path.display()
+                        )
+                    })?)
+                };
+            }
+            if let Some(requirement) = &verification_requirement {
+                requirements
+                    .get_mut(requirement)
+                    .expect("current requirement was inserted")
+                    .extend(extract_ids(line, "PR-TEST-"));
+                if line.ends_with("**") {
+                    verification_requirement = None;
+                }
             }
         }
     }
@@ -1823,16 +1835,26 @@ pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
         }
     }
 
-    for test in referenced_tests {
-        if !tests.contains_key(&test) {
-            return Err(format!("requirement references nonexistent test {test}"));
+    for (requirement, referenced_tests) in &requirements {
+        for test in referenced_tests {
+            let verified_requirements = tests
+                .get(test)
+                .ok_or_else(|| format!("requirement references nonexistent test {test}"))?;
+            if !verified_requirements.contains(requirement) {
+                return Err(format!(
+                    "requirement {requirement} references {test}, but the test does not reference the requirement"
+                ));
+            }
         }
     }
-    for (test, verified_requirements) in tests {
+    for (test, verified_requirements) in &tests {
         for requirement in verified_requirements {
-            if !requirements.contains(&requirement) {
+            let referenced_tests = requirements.get(requirement).ok_or_else(|| {
+                format!("test {test} references nonexistent requirement {requirement}")
+            })?;
+            if !referenced_tests.contains(test) {
                 return Err(format!(
-                    "test {test} references nonexistent requirement {requirement}"
+                    "test {test} references {requirement}, but the requirement does not reference the test"
                 ));
             }
         }
