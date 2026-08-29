@@ -133,10 +133,22 @@ integration remain later slices.
 
 M1-B implements the crate-private immutable runtime-content blob store against
 an already-existing dedicated root. Durable creation and provisioning of that
-root remains a later bootstrap, deployment, or M1-C integration obligation;
+root remains a later bootstrap or deployment obligation;
 M1-B does not introduce CLI provisioning or claim a generic Windows durable
 directory-creation mechanism. A later database reference may be published only
 after M1-B has returned durable content-publication success.
+
+The completed M1-C slice adds the first
+independently versioned SQLite persistence schema for exact Revision identities,
+the two canonical Revision content components, and the closure-derived
+ContentId-to-blob reference index. Both the database and runtime-content roots
+remain pre-provisioned. M1-C does not add installation, Instances, bindings,
+backup UX, garbage collection, or generic repositories.
+
+M1-D remains proposed for metadata persistence. Presentation, provenance,
+labels, reference bindings, and local metadata remain deferred until their
+typed canonical or non-canonical persistence shapes receive separate approval;
+M1-C MUST NOT invent an opaque metadata schema for them.
 
 Completion gate:
 

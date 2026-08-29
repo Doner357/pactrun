@@ -97,6 +97,10 @@ impl HostExecutableName {
 pub(crate) struct Sha256Digest(String);
 
 impl Sha256Digest {
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(format!("sha256:{}", hex::encode(bytes)))
+    }
+
     pub(crate) fn parse(value: impl Into<String>) -> Result<Self, RevisionCoreV1Error> {
         let value = value.into();
         let Some(hex) = value.strip_prefix("sha256:") else {
@@ -120,6 +124,18 @@ impl Sha256Digest {
 
     pub(crate) fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub(crate) fn to_bytes(&self) -> [u8; 32] {
+        let bytes = hex::decode(
+            self.0
+                .strip_prefix("sha256:")
+                .expect("typed digest always has the SHA-256 prefix"),
+        )
+        .expect("typed digest always has lowercase hexadecimal payload");
+        bytes
+            .try_into()
+            .expect("typed SHA-256 digest always contains 32 bytes")
     }
 }
 

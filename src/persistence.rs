@@ -5,8 +5,13 @@
 #![allow(dead_code)]
 
 mod runtime_content_store;
+mod sqlite_revision_store;
 
 #[allow(unused_imports)]
 pub(crate) use runtime_content_store::{
     RuntimeContentStore, RuntimeContentStoreError, StoredRuntimeBlob, VerifiedRuntimeBlob,
+};
+#[allow(unused_imports)]
+pub(crate) use sqlite_revision_store::{
+    PactrunPersistence, PersistenceError, StoredRevisionContentV1,
 };

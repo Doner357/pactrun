@@ -10,7 +10,7 @@ use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 use sha2::{Digest, Sha256};
@@ -37,14 +37,19 @@ pub(crate) struct RuntimeContentStore {
     root_file: File,
     lock_file: File,
     in_process_lock: Mutex<()>,
+    instance: Arc<StoreInstanceMarker>,
     #[cfg(test)]
     observer: TestObserver,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
+struct StoreInstanceMarker(u8);
+
+#[derive(Clone, Debug)]
 pub(crate) struct StoredRuntimeBlob {
     digest: Sha256Digest,
     byte_len: u64,
+    store_instance: Arc<StoreInstanceMarker>,
 }
 
 impl StoredRuntimeBlob {
@@ -193,19 +198,7 @@ impl std::error::Error for RuntimeContentStoreError {
 
 impl RuntimeContentStore {
     pub(crate) fn open(root: impl AsRef<Path>) -> Result<Self, RuntimeContentStoreError> {
-        let requested_root = root.as_ref();
-        let root_file = platform::open_root(requested_root).map_err(|error| {
-            if error.kind() == io::ErrorKind::Unsupported {
-                RuntimeContentStoreError::UnsupportedStorageProfile(error.to_string())
-            } else if error.kind() == io::ErrorKind::InvalidData {
-                RuntimeContentStoreError::entry("validate store root", error)
-            } else {
-                RuntimeContentStoreError::io("open supported store root", error)
-            }
-        })?;
-        let root = requested_root.canonicalize().map_err(|error| {
-            RuntimeContentStoreError::io("canonicalize trusted store root", error)
-        })?;
+        let (root, root_file) = open_supported_root(root.as_ref())?;
 
         #[cfg(windows)]
         let lock_file = platform::open_lock(&root)
@@ -219,6 +212,7 @@ impl RuntimeContentStore {
             root_file,
             lock_file,
             in_process_lock: Mutex::new(()),
+            instance: Arc::new(StoreInstanceMarker(0)),
             #[cfg(test)]
             observer: TestObserver::default(),
         })
@@ -274,6 +268,7 @@ impl RuntimeContentStore {
                     Ok(StoredRuntimeBlob {
                         digest: expected.clone(),
                         byte_len: existing_len,
+                        store_instance: Arc::clone(&self.instance),
                     })
                 }
                 Err(RuntimeContentStoreError::MissingBlob(_)) => {
@@ -299,6 +294,7 @@ impl RuntimeContentStore {
                             return Ok(StoredRuntimeBlob {
                                 digest: expected.clone(),
                                 byte_len: existing_len,
+                                store_instance: Arc::clone(&self.instance),
                             });
                         }
                         Err(error) => {
@@ -321,6 +317,7 @@ impl RuntimeContentStore {
                     Ok(StoredRuntimeBlob {
                         digest: expected.clone(),
                         byte_len,
+                        store_instance: Arc::clone(&self.instance),
                     })
                 }
                 Err(error) => Err(error),
@@ -365,6 +362,10 @@ impl RuntimeContentStore {
             self.open_verified(&digest)?;
         }
         Ok(())
+    }
+
+    pub(super) fn owns_publication(&self, publication: &StoredRuntimeBlob) -> bool {
+        Arc::ptr_eq(&self.instance, &publication.store_instance)
     }
 
     fn create_staging(&self) -> Result<(String, File), RuntimeContentStoreError> {
@@ -494,6 +495,46 @@ impl RuntimeContentStore {
     fn take_events(&self) -> Vec<PersistenceEvent> {
         std::mem::take(&mut *self.observer.events.lock().expect("test event mutex"))
     }
+}
+
+pub(super) fn validate_supported_storage_root(
+    root: &Path,
+) -> Result<PathBuf, RuntimeContentStoreError> {
+    open_supported_root(root).map(|(canonical, _)| canonical)
+}
+
+pub(super) fn validate_existing_regular_entry(
+    root: &Path,
+    name: &str,
+) -> Result<(), RuntimeContentStoreError> {
+    let (canonical, root_file) = open_supported_root(root)?;
+    match platform::open_existing_read(&canonical, name, &root_file) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::InvalidData => Err(
+            RuntimeContentStoreError::entry("validate database entry", error),
+        ),
+        Err(error) => Err(RuntimeContentStoreError::io(
+            "validate database entry",
+            error,
+        )),
+    }
+}
+
+fn open_supported_root(requested_root: &Path) -> Result<(PathBuf, File), RuntimeContentStoreError> {
+    let root_file = platform::open_root(requested_root).map_err(|error| {
+        if error.kind() == io::ErrorKind::Unsupported {
+            RuntimeContentStoreError::UnsupportedStorageProfile(error.to_string())
+        } else if error.kind() == io::ErrorKind::InvalidData {
+            RuntimeContentStoreError::entry("validate store root", error)
+        } else {
+            RuntimeContentStoreError::io("open supported store root", error)
+        }
+    })?;
+    let root = requested_root
+        .canonicalize()
+        .map_err(|error| RuntimeContentStoreError::io("canonicalize trusted store root", error))?;
+    Ok((root, root_file))
 }
 
 fn copy_and_hash(
