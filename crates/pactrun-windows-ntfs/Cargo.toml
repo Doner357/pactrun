@@ -1,0 +1,15 @@
+[package]
+name = "pactrun-windows-ntfs"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_WindowsProgramming",
+] }

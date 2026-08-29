@@ -405,6 +405,13 @@ pub(crate) struct RuntimeContentClosureIdentityV1 {
     files: Vec<RuntimeFileV1>,
 }
 
+impl RuntimeContentClosureIdentityV1 {
+    /// Identity-preserving read-only access for physical availability checks.
+    pub(crate) fn files(&self) -> &[RuntimeFileV1] {
+        &self.files
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RuntimeContentProjectionInputV1 {
     pub(crate) files: Vec<RuntimeFileV1>,
