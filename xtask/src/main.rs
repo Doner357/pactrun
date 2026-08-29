@@ -4,6 +4,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
+mod error_taxonomy_v1;
 mod hook_protocol_v1;
 mod lexical_v1;
 mod revision_core_v1;
@@ -21,6 +22,7 @@ fn main() -> ExitCode {
             snapshot_integrity_v1::calculate(&workspace_root)
         }
         Some("hook-protocol-v1-verify") => hook_protocol_v1::verify(&workspace_root),
+        Some("error-taxonomy-v1-verify") => error_taxonomy_v1::verify(&workspace_root),
         Some(command) => Err(format!("unknown xtask command: {command}")),
         None => Err("missing xtask command".to_owned()),
     };
@@ -30,7 +32,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("error: {error}");
             eprintln!(
-                "usage: cargo xtask <ci|docs-build|revision-core-v1-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|hook-protocol-v1-verify>"
+                "usage: cargo xtask <ci|docs-build|revision-core-v1-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
             );
             ExitCode::FAILURE
         }
@@ -48,6 +50,7 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
     revision_core_v1::verify(workspace_root)?;
     snapshot_integrity_v1::verify(workspace_root)?;
     hook_protocol_v1::verify(workspace_root)?;
+    error_taxonomy_v1::verify(workspace_root)?;
     run(workspace_root, "cargo", &["fmt", "--all", "--check"])?;
     run(
         workspace_root,

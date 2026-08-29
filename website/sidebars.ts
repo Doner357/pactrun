@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
             'pactrun-developers/architecture/execution-and-concurrency',
             'pactrun-developers/architecture/recovery-and-reconciliation',
             'pactrun-developers/architecture/resources-and-versioning',
+            'pactrun-developers/architecture/error-taxonomy-v1',
           ],
         },
         {

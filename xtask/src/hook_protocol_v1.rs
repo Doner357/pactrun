@@ -1675,6 +1675,7 @@ mod tests {
     fn strict_json_rejects_duplicate_properties_and_invalid_scalars() {
         assert_eq!(invalid_code("duplicate_property"), "duplicate_property");
         assert_eq!(invalid_code("invalid_utf8_payload"), "invalid_utf8");
+        assert_eq!(invalid_code("malformed_json"), "invalid_json");
         assert_eq!(
             invalid_code("lone_high_surrogate"),
             "invalid_unicode_scalar"
@@ -1814,6 +1815,10 @@ mod tests {
         assert_eq!(
             invalid_code("request_ack_id_mismatch"),
             "request_id_mismatch"
+        );
+        assert_eq!(
+            invalid_code("resolve_risk_while_clear"),
+            "invalid_recovery_transition"
         );
         assert_eq!(
             invalid_code("success_with_open_risk"),
