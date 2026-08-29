@@ -118,12 +118,18 @@ Completion gate:
 
 ### M1 - Identity and persistence foundation
 
-**State: Proposed.**
+**State: In progress.**
 
 Implement production Package, Revision, and Instance identities; opaque Instance
 state versions; immutable runtime content; production `RevisionCoreV1`
 projection and canonicalization; metadata associations; and the persistence
 migration skeleton.
+
+The active M1-A slice implements only production identity primitives, the two
+Frozen Revision content semantic components, pure projection, strict canonical
+codec, framing, digest, and Error Taxonomy conformance. Persistence, immutable
+content-store availability, authoring and installation, and runtime launcher
+integration remain later slices.
 
 Completion gate:
 

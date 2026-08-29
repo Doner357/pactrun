@@ -91,6 +91,75 @@ format versions MUST be rejected instead of interpreted on a best-effort basis.
 
 **Verification: Pending automated coverage.**
 
+## Production identity and Revision Core foundation
+
+### PR-REQ-0225 - Production opaque identity primitives
+
+The production `PackageId`, `InstanceId`, and `InstanceStateVersion` types MUST
+each contain 128 opaque bits and use exactly 32 lowercase hexadecimal
+characters when rendered or parsed. Pactrun MUST generate new values using the
+operating system cryptographic random source. `InstanceStateVersion` MUST NOT
+expose arithmetic or ordering semantics.
+
+`RevisionContentDigest` MUST contain a SHA-256 result and use `sha256:` followed
+by 64 lowercase hexadecimal characters. `RevisionIdentity` MUST remain the
+structured pair of `PackageId` and `RevisionContentDigest`; a flattened display
+spelling is not a second identity. M1-A does not define persistence or a generic
+Serde representation for these opaque identities.
+
+**Verification: PR-TEST-0039.**
+
+### PR-REQ-0226 - Production Revision content component boundary
+
+The production Revision content model MUST preserve two sibling semantic and
+hash components: `RevisionCoreV1` and
+`RuntimeContentClosureIdentityV1`. `ValidatedRevisionContentV1` MUST contain the
+validated pair. Neither component may contain the other, and neither is
+persistence metadata. Cross-component Hook `ContentId` validation belongs to
+the validated-pair boundary.
+
+For M1-A, a Hook content reference exists when it resolves to exactly one entry
+in the supplied semantic runtime-content closure. Direct launch additionally
+requires that descriptor to be executable. Interpreter script launch does not
+gain an executable-bit requirement. This validation MUST perform no filesystem,
+content-store, materialization, permission, or launcher lookup.
+
+Production projection MUST be deterministic and normalize the Frozen semantic
+sets while preserving ordered Hook arguments. Semantic JSON decoding is an
+internal codec and conformance facility, not a Pack authoring, import, or
+persistence contract. M2 authoring MUST enter through
+`NormalizedPackDefinition` and the typed projection boundary rather than this
+internal parser.
+
+**Verification: PR-TEST-0040, PR-TEST-0041, PR-TEST-0042.**
+
+### PR-REQ-0227 - Production Revision Core codec conformance
+
+The production wire view MUST contain exactly the identity-bearing fields in
+Frozen `RevisionCoreFormatV1`. Typed invariants and implementation helpers MUST
+NOT enter canonical JSON. In particular, runtime files serialize the Frozen
+`id`, `path`, `kind: regular_file`, `blob_digest`, and `executable` fields;
+runtime content has no independent format-version field.
+
+Semantic decoding MUST reject duplicate decoded property names, unknown fields,
+invalid UTF-8 or Unicode scalar sequences, invalid exact integers, non-finite
+binary64 values, unsafe integers, and excessive input depth. Raw number tokens
+MUST remain available until their schema type is known. Canonical production
+decode MUST additionally require byte-for-byte equality with the re-encoded RFC
+8785 JCS representation. The digest API MUST accept only a validated sibling
+pair and apply the Frozen dual-component framing and SHA-256 profile.
+
+Production code MUST NOT depend on or call Pactrun-owned xtask parser,
+normalizer, or verifier implementation. Sharing suitable commodity Rust
+dependencies does not violate this boundary. Every applicable Frozen negative
+vector MUST be rejected, but an exact `PactrunErrorRefV1` is required only when
+the vector's spelling is registered under `revision_core_format_v1` in the
+Frozen error catalog. Internal or verifier-only spellings MUST remain
+non-normative and MUST NOT be mapped to a speculative generic error.
+
+**Verification: PR-TEST-0040, PR-TEST-0043, PR-TEST-0044, PR-TEST-0045,
+PR-TEST-0046.**
+
 ## References and non-identity metadata
 
 ### PR-REQ-0019 - Human label ambiguity
