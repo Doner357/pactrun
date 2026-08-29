@@ -13,3 +13,11 @@ unsafe_code = "forbid"
 
 [lints]
 workspace = true
+
+[dependencies]
+getrandom = "0.4"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_jcs = "=0.2.0"
+serde_json = { version = "1", features = ["raw_value"] }
+sha2 = "0.10"
