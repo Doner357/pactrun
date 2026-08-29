@@ -102,7 +102,7 @@ Completion gate:
 
 ### M0-C - Structured error taxonomy
 
-**State: Proposed.**
+**State: In progress.**
 
 Define stable error categories and codes across format validation, semantic and
 relational validation, resolution, compilation, admission, execution, Hook
