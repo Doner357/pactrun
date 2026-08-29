@@ -11,4 +11,5 @@ mod executor;
 mod hook;
 mod managed_data;
 mod persistence;
+mod revision_core_v1;
 mod workflow;
