@@ -131,6 +131,13 @@ codec, framing, digest, and Error Taxonomy conformance. Persistence, immutable
 content-store availability, authoring and installation, and runtime launcher
 integration remain later slices.
 
+M1-B implements the crate-private immutable runtime-content blob store against
+an already-existing dedicated root. Durable creation and provisioning of that
+root remains a later bootstrap, deployment, or M1-C integration obligation;
+M1-B does not introduce CLI provisioning or claim a generic Windows durable
+directory-creation mechanism. A later database reference may be published only
+after M1-B has returned durable content-publication success.
+
 Completion gate:
 
 - the production codec reproduces every Frozen Revision Core vector;
