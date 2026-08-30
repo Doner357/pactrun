@@ -28,9 +28,15 @@ is Frozen.
   independent Node 24 valid-fixture oracle, cross-language fixtures, and
   requirement/test traceability. Production runtime integration remains
   deferred.
-- Phase 0 still requires a structured error taxonomy.
+- The structured error taxonomy is Frozen and merged into `develop` with
+  negative fixtures and requirement/test traceability.
 - Runtime launcher integration under `PR-REQ-0194` remains pending until real
   Compiler, Admission, and Executor integration tests exist.
+- The accepted `ServiceStorage` and ServiceStorage-backed Managed Service
+  Resource direction corrects the earlier assumption that every Pactrun-visible
+  persistent file is an Input. Its representation-independent semantic closure
+  is complete in the current working tree without changing Frozen V1 schemas or
+  claiming production support.
 
 ## Milestone states
 
@@ -41,6 +47,26 @@ is Frozen.
   the completion gate from being met.
 - **Complete:** every completion gate has passed and the result has been merged
   into `develop`.
+
+## Pre-M1-D design gates
+
+These design-gate states describe semantic and documentation closure, not the
+milestone state taxonomy above:
+
+| Design gate | State |
+| --- | --- |
+| ServiceStorage architecture correction | **Closed; integration pending.** |
+| ServiceStorage semantic closure | **Closed; integration pending.** |
+| ServiceStorage representation and runtime | **Deferred.** |
+| Cleanup completion/finalization coordination | **Deferred.** |
+| Abandon non-destruction durable representation | **Deferred.** |
+| Broader service-owned resource taxonomy | **Deferred.** |
+| M1-D non-identity metadata persistence | **Next / Proposed.** |
+
+`Integration pending` means the design and documentation audit are closed in
+the feature-branch working tree but have not been committed or merged into the
+canonical `develop` baseline. Later integration removes that marker; it does not
+reopen the semantic design unless review finds a substantive conflict.
 
 ## Milestones
 
@@ -145,10 +171,20 @@ ContentId-to-blob reference index. Both the database and runtime-content roots
 remain pre-provisioned. M1-C does not add installation, Instances, bindings,
 backup UX, garbage collection, or generic repositories.
 
-M1-D remains proposed for metadata persistence. Presentation, provenance,
-labels, reference bindings, and local metadata remain deferred until their
-typed canonical or non-canonical persistence shapes receive separate approval;
-M1-C MUST NOT invent an opaque metadata schema for them.
+M1-D is the next proposed slice for non-identity metadata persistence.
+Presentation, provenance, labels, reference bindings, local aliases, local
+notes, local trust decisions, and other already specified typed descriptive
+metadata remain deferred until their canonical or non-canonical persistence
+shapes receive separate approval; M1-C MUST NOT invent an opaque metadata schema
+for them.
+
+`ServiceStorage` is not an M1-D metadata extension. M1-D MUST NOT persist a
+storage or resource declaration or identity, live presence, service-owned
+contents, locator or association, continuity, compatibility, retention,
+discard, persistent Hook authority, operation prerequisite, Cleanup or storage-
+finalization obligation, Abandon non-destruction obligation, or broader resource
+taxonomy. It MUST NOT add a service-resource table, retained-resource registry,
+or another operational durable representation.
 
 Completion gate:
 
@@ -167,6 +203,11 @@ Implement minimal YAML authoring, Revision installation, incomplete Instance
 creation, the single active/retained managed-binding registry, Input operations,
 Secret protection and redaction, and Observe/Mutate guards.
 
+This milestone covers Pactrun-authoritative Managed Input Bindings only. It
+MUST NOT model a service-generated editable persistent file as an Input, an
+Input rematerialization target, or an implicitly synchronized binding in order
+to simulate `ServiceStorage`.
+
 Completion gate:
 
 - Package Source can produce and install an exact immutable Revision;
@@ -182,6 +223,10 @@ Completion gate:
 Implement resolution, `InvokeAction` intent, typed sequential compilation,
 Admission, stale-state checks, durable pins, Hook Runtime and Session authority,
 I/O transitions, Executor behavior, and Run records.
+
+Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
+reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority
+or linearization over service-owned live bytes.
 
 This milestone owns the first real automated coverage for `PR-REQ-0194`. It must
 test host launcher lookup, Plan binding, Admission revalidation, exact process
@@ -205,6 +250,10 @@ Implement Capture binding-view consistency, `SnapshotCandidate` validation and
 commit, complete managed binding state, canonical integrity, sensitive
 export/import boundaries, and exact-compatible cross-Instance Restore.
 
+M4 MUST NOT automatically scan `ServiceStorage` or treat every ServiceStorage-
+backed Managed Service Resource as Snapshot content. Service recovery content
+remains selected and transformed by Capture before commit.
+
 Completion gate:
 
 - runtime Snapshot integrity reproduces the Frozen integrity-format vectors;
@@ -220,6 +269,11 @@ Completion gate:
 Implement target-owned Migration graphs, chaining, normalized transitions,
 typed active/retained source references, target requirements and outputs,
 single-writer validation, staged targets, and per-edge commits.
+
+The listed transitions and staged binding commit are Managed Input semantics.
+M5 MUST NOT extend `Carry`, `Keep`, `Discard`, or `Declassify` into an invented
+ServiceStorage-backed resource schema or claim a service filesystem/database
+transaction is atomic with Pactrun persistence.
 
 Completion gate:
 
@@ -238,6 +292,9 @@ Implement execution ownership, recovery-risk entry and resolution, durable
 self-sufficient recovery state, crash-boundary injection, orphan reconciliation,
 and manual recovery.
 
+Recovery of a Pactrun-owned boundary MUST NOT be presented as rollback or proof
+of coherence for service-owned live resources.
+
 Completion gate:
 
 - crash tests cover every durable transition boundary;
@@ -252,6 +309,14 @@ Completion gate:
 Implement typed Cleanup requirements and context, the shared risk protocol,
 cleanup-before-delete behavior, retry semantics, and explicit
 `AbandonManagement`.
+
+M7 MUST NOT infer deletion of a source-only ServiceStorage-backed Managed
+Service Resource merely because a Revision stops naming it. Cleanup success is
+not itself the durable do-not-replay boundary. An ambiguous completion does not
+authorize replay, while a published Cleanup-completed boundary permits only
+Pactrun-owned storage finalization. Abandonment does not authorize present or
+later GC deletion of service-owned state; the durable representations remain
+open.
 
 Completion gate:
 
@@ -273,6 +338,36 @@ Completion gate:
 - authoring metadata and environmental observations do not alter Frozen identity
   semantics unless the relevant format includes them;
 - source-dependent generation has deterministic validation and diagnostics.
+
+## Deferred ServiceStorage representation and runtime gates
+
+The representation-independent semantics are closed by PR-REQ-0235 through
+PR-REQ-0248. The following work remains required before production
+`ServiceStorage` or ServiceStorage-backed Managed Service Resource support can
+be planned as an implementation milestone:
+
+- a future Revision Core serialization for storage/resource declarations,
+  identities, associations, locators, compatibility mappings, prerequisites,
+  and user exposure/access;
+- a future Hook Protocol authority only where a Hook requires
+  protocol-mediated persistent access, independently versioned from Revision
+  Core;
+- a durable representation and persistence-ownership boundary for continuity,
+  retention, explicit discard, and Abandon non-destruction obligations;
+- protocol/runtime coordination for target commit plus risk clear and for the
+  ambiguous window between Cleanup success submission and durable do-not-replay
+  publication;
+- storage allocation, presence observation, locking, storage-lifetime
+  finalization, operator handoff, explicit discard, and the concrete runtime;
+- a broader taxonomy deciding whether Docker volumes, external databases,
+  remote objects, or other service-owned resources use related abstractions.
+
+This list is a design gate, not a V2 schema, persistence design, CLI spelling,
+authoring syntax, compatibility algorithm, transition union, orphan-storage
+registry, or production milestone. Implementers MUST NOT bypass it by using
+Managed Inputs or M1-D metadata as a live-file or operational-state mirror.
+Hook-produced Managed Input or explicit ownership adoption may be designed
+separately and is not expanded here.
 
 ## Cross-cutting completion rules
 

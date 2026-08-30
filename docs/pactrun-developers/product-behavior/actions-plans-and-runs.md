@@ -71,3 +71,10 @@ Long-running Observe Actions can continue with their admitted context while a
 Mutate operation updates current Instance state. The running Action keeps its
 old pinned view; subsequent operations see the newly committed state. Mutate
 operations on the same Instance serialize or conflict.
+
+This pinning model applies to the exact Revision and Pactrun-authoritative
+managed context. It does not freeze or linearize service-owned live bytes. A
+service may mutate a ServiceStorage-backed Managed Service Resource without
+Pactrun observing the change or publishing a new `InstanceStateVersion`;
+future authority and operation-prerequisite representations must account for
+that ownership boundary.

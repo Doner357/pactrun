@@ -11,7 +11,10 @@ informative.**
 
 A **Package** is a stable product lineage. A **Revision** is one immutable
 operational definition and its owned runtime content. An **Instance** is the
-long-lived service object that a user manages against one active Revision.
+long-lived service object that a user manages against one active Revision. Its
+persistent data may include Pactrun-authoritative Managed Input Bindings and,
+under a future versioned contract, service-authoritative Managed Service
+Resources. Those ownership models are distinct.
 
 Installing a Package creates or reuses an immutable Revision; it does not create
 an Instance. Exact internal identity rules are defined in
@@ -61,6 +64,22 @@ creation and Migration independent from immediate execution readiness. Use
 Instance inspection to discover missing Inputs, then bind them through Input
 management. Ordinary Actions and Snapshot Capture remain blocked until the
 active Revision's required bindings are present.
+
+## ServiceStorage-backed live resources
+
+A future Revision may declare a stable ServiceStorage-backed Managed Service
+Resource even while the corresponding live object is absent. The service may
+create or mutate the live state later without advancing `InstanceStateVersion`.
+Pactrun may manage the resource contract and continuity without owning its
+authoritative bytes.
+
+Compatible Revisions interpret and use the same Instance live resource rather
+than copying it into Revision-specific files. A source-only resource is retained
+conservatively unless destructive removal is explicit. The schema and durable
+representation of declaration, compatibility, continuity, retention, discard,
+access, and prerequisites remain future design work rather than current V1
+product support. This model does not yet classify Docker volumes, external
+databases, remote objects, or other non-ServiceStorage-backed resources.
 
 ## Package scope
 

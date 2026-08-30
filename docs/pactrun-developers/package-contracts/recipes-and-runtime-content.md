@@ -48,7 +48,10 @@ APIs.
 
 Pactrun MUST materialize runtime content it needs to execute an Installed
 Revision. Runtime behavior MUST NOT depend on mutable source files after
-installation.
+installation. This is immutable, Revision-scoped, Pactrun-owned content. It
+MUST NOT be confused with Instance-scoped `ServiceStorage` or ServiceStorage-
+backed Managed Service Resources whose live contents are service-authoritative
+and may change across Runs.
 
 **Verification: Pending automated coverage.**
 
@@ -57,6 +60,12 @@ installation.
 Authors and frontends MUST provide enough normalized information for Pactrun to
 bind immutable content to logical runtime roles and paths. Reassigning identical
 blobs to different semantic roles MAY produce a different Revision digest.
+
+This runtime-content closure does not content-address, copy, version, or
+automatically Snapshot service-owned live state. A formal identity-bearing
+ServiceStorage-backed Managed Service Resource declaration requires a future
+Revision Core format. This requirement does not classify other service-owned
+resource kinds.
 
 **Verification: Pending automated coverage.**
 

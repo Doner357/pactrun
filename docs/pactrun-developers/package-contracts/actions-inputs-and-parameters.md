@@ -39,7 +39,9 @@ The exact authoring spelling remains open specification work.
 
 Authors MUST treat Pactrun-managed Input payloads as opaque bytes. Pactrun MUST
 preserve zero-length and arbitrary payloads without parsing, converting, or
-inferring a type from file extensions.
+inferring a type from file extensions. The payload is a detached,
+Pactrun-authoritative binding; this contract does not turn a service-owned live
+file into an Input or authorize implicit synchronization with one.
 
 **Verification: Pending automated coverage.**
 
@@ -58,6 +60,48 @@ Ordinary Actions MUST receive active bindings only. Migration and Cleanup MAY
 use typed references to active and retained bindings under their own
 requirements. Authors SHOULD treat dependence on retained data as a visible
 compatibility or recovery smell, not as a prohibited capability.
+
+**Verification: Pending automated coverage.**
+
+## ServiceStorage-backed service state is not an Input
+
+A Package MUST distinguish an Input from a future ServiceStorage-backed Managed
+Service Resource. An Input is a Pactrun-authoritative persistent binding. A
+ServiceStorage-backed Managed Service Resource is attached live state whose
+authoritative contents belong to the service even when Pactrun identifies or
+exposes the resource contractually. A persistent configuration file therefore
+is not automatically an Input merely because a user needs to inspect or edit it.
+
+For example, a service's live `management.json` may be declared as a Managed
+Service File, remain absent until the service creates it, and then be edited in
+place by the service or user. Pactrun MUST NOT model that case as
+Input-to-file materialization followed by implicit two-way synchronization.
+The accepted ownership invariants are defined by
+[PR-REQ-0235](../architecture/identity-and-state.md#pr-req-0235---persistent-instance-data-ownership)
+and
+[PR-REQ-0236](../architecture/identity-and-state.md#pr-req-0236---managed-service-resource-declaration-and-existence).
+
+The authoring spelling for `ServiceStorage` and its Managed Service Resources is
+a future Revision Core format design gate and is not added by this page. This
+section does not decide whether another kind of service-owned resource uses the
+same abstraction.
+
+### PR-REQ-0243 - Resource exposure and mutation route
+
+A ServiceStorage-backed Managed Service Resource exposure contract MUST keep
+read exposure separate from its user mutation route. Read exposure is
+conceptually hidden or readable. User mutation is conceptually unavailable,
+direct, or mediated by a Pack operation. Representation of those choices
+remains future format work.
+
+Direct mutation MUST mean only that the user is authorized to modify the same
+service-authoritative live state. It MUST NOT imply that the service can safely
+consume the change while running or that Pactrun provides quiescence, atomicity,
+conflict detection, rollback, reload, restart, Snapshot creation, continuous
+observation, or `InstanceStateVersion` advancement. When safe mutation requires
+service-specific validation, quiescence, reload, or restart, the Package MUST
+own that behavior through an operation and its Hook rather than relying on the
+direct-exposure contract.
 
 **Verification: Pending automated coverage.**
 

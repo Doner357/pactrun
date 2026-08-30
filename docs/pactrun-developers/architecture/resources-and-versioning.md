@@ -48,7 +48,11 @@ prevent Revision deletion.
 Physical GC MUST NOT remove content reachable from any managed object,
 Snapshot, accepted-Run pin, checkpoint, or recovery state. GC MUST use strong
 references or reachability rather than interpreting operation names or service
-semantics.
+semantics. This rule governs Pactrun-owned content stores; it does not authorize
+Pactrun to delete service-owned live resources. In particular, abandonment does
+not make ServiceStorage-backed state collectible as unreferenced storage. The
+non-destruction policy and its future durable representation are separate design
+concerns defined by PR-REQ-0247.
 
 **Verification: Pending automated coverage.**
 
@@ -112,6 +116,27 @@ The canonical Hook Protocol MUST have its own language-neutral version covering
 Session establishment, authority, I/O transitions, typed contexts and outputs,
 recovery-risk messages, cancellation, EOF, and protocol violations. SDKs and
 helpers MUST remain adapters to that protocol.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0240 - Future ServiceStorage version gates
+
+The accepted `ServiceStorage` and ServiceStorage-backed Managed Service Resource
+architecture MUST NOT be added to the closed `RevisionCoreFormatV1` schema or
+the Frozen `HookProtocolV1` authority union. A formal identity-bearing storage
+or resource declaration requires a future Revision Core format. A formal
+persistent service-storage Session authority, if required, requires a future
+Hook Protocol version.
+
+Revision Core and Hook Protocol remain independent version domains. A future
+Revision Core format MUST NOT imply that every Hook uses the same-numbered or a
+new Hook Protocol version. PR-REQ-0235 through PR-REQ-0248 close the
+representation-independent ServiceStorage-backed semantics. The declaration,
+authority, compatibility, access, prerequisite, continuity, retention, discard,
+migration-coordination, Cleanup coordination, non-destruction, and durable-
+representation encodings and mechanisms remain formal design gates rather than
+properties of V1. Whether non-ServiceStorage-backed service-owned resources use
+the same abstraction remains a separate taxonomy gate.
 
 **Verification: Pending automated coverage.**
 

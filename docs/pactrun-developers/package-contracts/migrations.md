@@ -33,7 +33,11 @@ first two and MAY still leave the target ordinarily incomplete.
 Each edge in a Migration chain MUST establish a separate durable commit
 boundary. The active Revision and managed bindings remain at the source boundary
 until the edge commit atomically publishes target Revision, staged binding
-state, disposition, and a new Instance state version.
+state, Managed Input disposition, and a new Instance state version. This is an
+atomic Pactrun-owned state commit. It does not include service-owned filesystem,
+database, Docker volume, or external-resource bytes, and it does not define a
+future persisted representation for ServiceStorage-backed Managed Service
+Resource association, continuity, retention, or discard.
 
 **Verification: Pending automated coverage.**
 
@@ -49,10 +53,12 @@ Secret transitions, target-writer conflicts, and unavailable resources.
 
 ### PR-REQ-0157 - Canonical transition set
 
-Normalized Migration semantics MUST use explicit `Carry(source -> target)`,
-`Declassify(source -> target)`, `Keep(source)`, and `Discard(source)`
-transitions. `Discard` is always explicit. Identity rename or change requires
-an explicit mapping.
+Normalized Managed Input Migration semantics MUST use explicit
+`Carry(source -> target)`, `Declassify(source -> target)`, `Keep(source)`, and
+`Discard(source)` transitions. `Discard` is always explicit. Input identity
+rename or change requires an explicit mapping. These transitions MUST NOT be
+silently generalized into a ServiceStorage-backed Managed Service Resource
+transition schema.
 
 **Verification: Pending automated coverage.**
 
@@ -60,16 +66,20 @@ an explicit mapping.
 
 An authoring frontend MAY default the same stable Input identity to `Carry` and
 a source-only Input to `Keep`, but normalization MUST materialize those choices.
-Existing unrelated retained bindings persist without repeated `Keep`
-declarations unless explicitly consumed, reactivated, or discarded.
+Existing unrelated retained Input bindings persist without repeated `Keep`
+declarations unless explicitly consumed, reactivated, or discarded. No
+corresponding default or persisted retained-resource registry is defined here
+for ServiceStorage-backed Managed Service Resources.
 
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0159 - Declarative transition scope
 
-Declarative transitions MUST express binding continuity and disposition only.
-They MUST NOT perform one-to-many, many-to-one, or arbitrary payload
-transformation. Opaque transformation belongs to a typed Migration Hook output.
+Declarative Managed Input transitions MUST express binding continuity and
+disposition only. They MUST NOT perform one-to-many, many-to-one, or arbitrary
+payload transformation. Opaque Managed Input transformation belongs to a typed
+Migration Hook output. Service-owned transformation follows the separate
+future-version direction in PR-REQ-0237 and PR-REQ-0238.
 
 **Verification: Pending automated coverage.**
 
@@ -139,6 +149,84 @@ and Instance consequences.
 The Package MUST own database schema, application data formats, service
 configuration semantics, external resources, and arbitrary opaque payload
 transformation. A Migration Hook is optional when declarative state movement is
-sufficient.
+sufficient. For ServiceStorage-backed service-owned live resources, Pactrun does
+not parse the payload or infer that a compatible transition requires byte
+copying. This requirement does not classify other kinds of service-owned
+resources.
+
+**Verification: Pending automated coverage.**
+
+## ServiceStorage-backed resource continuity
+
+This section records accepted semantic policy for a future versioned design. It
+does not define authoring syntax, Revision Core fields, Hook Protocol authority,
+transition variants, a retained-resource registry, persistence tables, or an
+atomic storage mechanism.
+
+### PR-REQ-0237 - Service-resource continuity and conservative retention
+
+When source and target Revisions declare the same ServiceStorage-backed Managed
+Service Resource semantic identity and the Package declares their
+representations compatible, they MUST interpret and use the same Instance
+persistent live resource. Continuity MUST NOT be described as copying source-
+Revision bytes into a target-Revision copy, and it MUST NOT require
+rematerialization merely because the active Revision or service process changes.
+
+A source-only ServiceStorage-backed Managed Service Resource MUST NOT be deleted
+merely because the target Revision no longer declares it. The semantic default
+is conservative non-destruction, and destructive removal or discard MUST be
+explicit. Loss of an active declaration does not promise future discovery,
+exposure, or reattachment. This requirement does not introduce, imply, or name a
+persisted retained-resource registry, binding registry, state table, or other
+durable representation. How continuity, compatibility, retention, and discard
+map to Pactrun-owned durable state remains a future design gate.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0238 - Service transformation and recovery boundary
+
+When a ServiceStorage-backed Managed Service Resource changes locator or
+representation, splits, merges, or needs another service-specific
+transformation, the target-owned inbound Migration semantics and Migration Hook
+MUST own that transformation. Pactrun MUST NOT parse or transform the service-
+owned payload itself.
+
+Before crossing a boundary that may leave service-owned state outside a known
+coherent state after permanent Hook loss, the Hook MUST use the existing
+`EnterRecoveryRisk` acknowledgment. It MUST use `ResolveRecoveryRisk` only after
+the service-owned state reaches a target-coherent boundary. Target coherence
+alone MUST NOT be presented as a completed Pactrun target publication. Pactrun
+MUST NOT claim that the transformation and a Pactrun SQLite commit form one
+atomic transaction. The Pactrun-owned publication ordering is defined by
+[PR-REQ-0246](../architecture/recovery-and-reconciliation.md#pr-req-0246---service-transformation-target-publication-boundary).
+
+If execution is lost while risk remains open, the Run MAY become `Interrupted`
+and the Instance MAY enter `ManualRecoveryRequired`. Recovery of the
+Pactrun-owned committed boundary MUST NOT be presented as proof that the
+service-owned state remains coherent with the source Revision. No inferred
+compensation, automatic Hook replay, or service-state rollback is introduced.
+
+The identity encoding, association schema, compatibility expression,
+continuity and retention representation, discard representation, target-commit
+coordination mechanism, operation-prerequisite representation, user-access
+encoding, and persistence ownership remain future design gates. This section
+does not classify non-ServiceStorage-backed service-owned resources.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0245 - Explicit compatibility and resource mapping
+
+Pactrun MUST NOT infer ServiceStorage-backed resource compatibility or semantic
+continuity from a locator, filename, payload inspection, or coincidental
+content. Same resource identity with a Package-declared compatible
+representation means in-place continuity over the same Instance live resource.
+
+A locator change, representation or schema change, identity change, split, or
+merge MUST use explicit target-owned semantics. An identity spelling change is
+an identity change and requires an explicit source-to-target mapping; one-to-
+many and many-to-one relationships likewise require explicit mappings and any
+necessary Migration Hook transformation. These semantics do not define the
+future declaration fields, mapping syntax, compatibility algorithm, or durable
+continuity representation.
 
 **Verification: Pending automated coverage.**

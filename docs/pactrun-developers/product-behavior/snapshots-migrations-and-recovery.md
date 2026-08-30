@@ -12,7 +12,11 @@ A Snapshot is an immutable recovery object produced under one exact Revision.
 It contains the complete managed binding state, including active and retained
 bindings, optional absence, protection metadata, and Package-produced service
 recovery content. It is not an Instance clone and does not contain Run history
-or old binding history.
+or old binding history. Pactrun does not automatically scan `ServiceStorage` or
+mirror every ServiceStorage-backed Managed Service Resource into a Snapshot. The
+Capture Hook selects and transforms recovery-relevant service-owned state at an
+appropriate service consistency boundary before Pactrun validates, hashes, and
+commits it.
 
 ### PR-REQ-0099 - Snapshot operations
 
@@ -99,13 +103,36 @@ retain or discard the old Secret and provide a new Normal binding.
 
 **Verification: Pending automated coverage.**
 
+### ServiceStorage-backed resource continuity
+
+The existing `Carry`, `Keep`, `Discard`, and `Declassify` model applies to
+Pactrun-authoritative Managed Input Bindings. It is not a Service Resource
+transition schema. This section does not classify Docker volumes, external
+databases, remote objects, or other non-ServiceStorage-backed service state.
+
+Compatible source and target Revisions use the same Instance persistent live
+resource without copying or rematerializing its bytes. A source-only resource
+is retained conservatively, and destructive removal must be explicit. If a path
+or representation changes, a resource splits or merges, or another
+service-specific transformation is required, target-owned inbound Migration
+semantics and a Migration Hook own the transformation and use the existing
+recovery-risk handshake.
+
+This policy does not define a retained-resource registry or any other durable
+representation. Compatibility, continuity, retention, discard, association,
+access, prerequisites, target-commit coordination, and persistence ownership
+remain future-version design gates.
+
 ## Failure and recovery
 
 ### PR-REQ-0109 - Failure is not manual recovery
 
 A failed, cancelled, timed-out, or interrupted Run MUST NOT by itself place an
 Instance in `ManualRecoveryRequired`. That consequence occurs only when durable
-recovery state says an unresolved recovery-risk boundary was open.
+recovery state says an unresolved recovery-risk boundary was open. If execution
+is lost during service-owned transformation while risk is open, recovery of the
+Pactrun-owned committed boundary does not prove that service state remains
+coherent with the source Revision.
 
 **Verification: Pending automated coverage.**
 
@@ -123,9 +150,11 @@ preconditions. Ordinary managed execution remains blocked by default.
 ### PR-REQ-0111 - Normal managed deletion
 
 If the active Revision defines Cleanup, normal deletion MUST run Cleanup and
-remove the Instance only after Hook success with clear recovery risk. Without a
-Cleanup capability, normal deletion MAY remove Pactrun-owned Instance state
-directly.
+MUST NOT proceed to Pactrun-provided storage-lifetime finalization until Cleanup
+has reported success with clear recovery risk and Pactrun has durably published
+the Cleanup-completed boundary defined by PR-REQ-0247. With or without a Cleanup
+capability, successful normal deletion requires the Pactrun-provided Instance
+storage lifetime to have ended before Pactrun removes the Instance state.
 
 **Verification: Pending automated coverage.**
 
@@ -140,11 +169,49 @@ Pactrun MUST NOT create persistent `Deleting` or `DeletionFailed` states.
 
 ### PR-REQ-0113 - AbandonManagement intent
 
-`AbandonManagement` MUST be an explicit destructive intent, not a generic
-`--force`. It MUST skip Package Cleanup and remove Pactrun-owned Instance state
-even when Cleanup is unavailable or the Instance requires manual recovery. It
-MUST warn that external resources, files, processes, or credentials may remain.
-It MUST remain a managed execution with Run history that distinguishes explicit
-abandonment from successful managed cleanup.
+`AbandonManagement` MUST be an explicit intent to destroy the Pactrun management
+relationship, not a generic `--force` and not authorization to destroy service-
+owned state. It MUST skip Package Cleanup and remove Pactrun-owned Instance
+management state even when Cleanup is unavailable or the Instance requires
+manual recovery. It MUST warn that service-owned resources, files, processes,
+or credentials may remain. It MUST remain a managed execution with Run history
+that distinguishes explicit abandonment from successful managed cleanup.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0247 - Cleanup finalization and abandonment
+
+A Cleanup Hook success with clear recovery risk MUST NOT by itself be treated as
+a durable Cleanup-completed boundary. Before beginning Pactrun-provided storage-
+lifetime finalization, Pactrun MUST durably publish that Cleanup completed and
+MUST NOT be replayed. Only after that publication MAY Pactrun perform its own
+storage-lifetime finalization, and normal deletion MUST NOT succeed until the
+provided storage lifetime has ended.
+
+The Frozen completion rule in
+[PR-REQ-0216](../package-contracts/hook-protocol-v1.md#pr-req-0216---operation-completion-and-terminal-states)
+remains authoritative: loss before accepted completion prevents protocol
+success, Pactrun MUST NOT infer replay or compensation, and
+`completion_accepted` does not itself imply a Run or Instance commit. Therefore,
+loss after a Hook sends Cleanup success but before Pactrun durably publishes the
+Cleanup-completed boundary MUST NOT be treated as proof that replay is safe or
+that Cleanup durably completed. Exact coordination of that ambiguous window
+remains a future Hook Protocol and recovery design gate; this requirement adds
+no replay, compensation, manual-recovery, or finalization inference.
+
+After the durable Cleanup-completed boundary exists, a crash or failure during
+Pactrun-provided storage-lifetime finalization MUST retry or resume only that
+Pactrun-owned finalization obligation and MUST NOT replay Cleanup. Until it
+finishes, deletion MUST NOT report success or allow ordinary management to
+bypass the obligation. The obligation MUST NOT require a public persistent
+`Deleting` or `DeletionFailed` Instance state; its representation and retry
+mechanism remain future persistence and runtime design.
+
+`AbandonManagement` MUST NOT destructively remove the abandoned service-owned
+state during abandonment and MUST NOT authorize later ordinary garbage
+collection, unreferenced-storage cleanup, or maintenance to remove it. The
+durable non-destruction representation, later discoverability, operator handoff,
+and explicit discard remain future persistence and runtime design gates. This
+requirement introduces no orphan-storage or retained-resource registry.
 
 **Verification: Pending automated coverage.**
