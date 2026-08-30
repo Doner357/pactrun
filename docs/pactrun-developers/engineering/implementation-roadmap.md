@@ -38,8 +38,9 @@ is Frozen.
   is integrated into the canonical `develop` baseline without changing Frozen
   V1 schemas or claiming production support.
 - The non-identity metadata semantic and Candidate PersistenceSchemaV2 closure
-  is implementation-ready design on its integration branch. It does not yet
-  constitute production persistence or automated coverage.
+  is integrated into the canonical `develop` baseline and is implementation-
+  ready design. It does not yet constitute production persistence or automated
+  coverage.
 
 ## Milestone states
 
@@ -64,12 +65,15 @@ milestone state taxonomy above:
 | Cleanup completion/finalization coordination | **Deferred.** |
 | Abandon non-destruction durable representation | **Deferred.** |
 | Broader service-owned resource taxonomy | **Deferred.** |
-| Non-identity metadata semantic and persistence closure | **Closed; integration pending.** |
-| M1-D non-identity metadata implementation | **Planned; implementation-ready after integration.** |
+| Non-identity metadata semantic and persistence closure | **Closed.** |
+| M1-D non-identity metadata implementation | **Planned; implementation-ready.** |
 
-The ServiceStorage architecture correction and semantic closure are integrated
-into the canonical `develop` baseline. A later representation or runtime design
-does not reopen these semantics unless review finds a substantive conflict.
+The ServiceStorage architecture correction, ServiceStorage semantic closure,
+and non-identity metadata persistence closure are integrated into the canonical
+`develop` baseline. A later ServiceStorage representation or runtime design
+does not reopen the closed ServiceStorage semantics unless review finds a
+substantive conflict. M1-D implementation starts from the integrated Candidate
+PersistenceSchemaV2 contract.
 
 ## Milestones
 
