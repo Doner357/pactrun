@@ -25,8 +25,14 @@ an Instance. Exact internal identity rules are defined in
 Every operation that accepts a human Package, Revision, Instance, Snapshot, or
 Run reference MUST resolve it to the appropriate exact identity before
 compilation or mutation. An ambiguous Revision reference MUST fail with an
-actionable ambiguity error and MUST NOT silently select a newest or most
-recently installed candidate.
+actionable `resolution.ambiguous_reference` error and MUST NOT silently select a
+newest or most recently installed candidate.
+
+Reference-label resolution MUST compare the exact label and deduplicate by
+exact Revision target before deciding ambiguity. Multiple provenance sources
+for one target remain one candidate. Deterministic candidate presentation MUST
+use the canonical typed Revision ordering in PR-REQ-0250 and MUST NOT depend on
+installation, insertion, timestamp, locale, or database query order.
 
 **Verification: Pending automated coverage.**
 
@@ -53,7 +59,10 @@ required in the initial product scope; if added later, it MUST preserve
 
 User-visible version strings and labels MUST be presented as human references,
 not immutable Revision identity. Inspection MUST be able to show every
-association and its provenance when more than one claim exists.
+association and its typed source tuple, including unattributed bindings, when
+more than one claim exists. Inspection MAY offer non-authoritative normalized
+or fuzzy discovery, but exact resolution, equality, and ambiguity MUST remain
+based on the preserved exact label.
 
 **Verification: Pending automated coverage.**
 
