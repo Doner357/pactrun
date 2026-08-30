@@ -55,18 +55,17 @@ milestone state taxonomy above:
 
 | Design gate | State |
 | --- | --- |
-| ServiceStorage architecture correction | **Closed; integration pending.** |
-| ServiceStorage semantic closure | **Closed; integration pending.** |
+| ServiceStorage architecture correction | **Closed.** |
+| ServiceStorage semantic closure | **Closed.** |
 | ServiceStorage representation and runtime | **Deferred.** |
 | Cleanup completion/finalization coordination | **Deferred.** |
 | Abandon non-destruction durable representation | **Deferred.** |
 | Broader service-owned resource taxonomy | **Deferred.** |
 | M1-D non-identity metadata persistence | **Next / Proposed.** |
 
-`Integration pending` means the design and documentation audit are closed in
-the feature-branch working tree but have not been committed or merged into the
-canonical `develop` baseline. Later integration removes that marker; it does not
-reopen the semantic design unless review finds a substantive conflict.
+The ServiceStorage architecture correction and semantic closure are integrated
+into the canonical `develop` baseline. A later representation or runtime design
+does not reopen these semantics unless review finds a substantive conflict.
 
 ## Milestones
 
