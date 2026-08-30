@@ -7,9 +7,12 @@ title: Implementation Guidance
 **Status: Informative implementation guidance constrained by the normative
 architecture.**
 
-Core domain semantic closure is complete, with no known unresolved domain
-semantics blocking a prototype. Open work concerns exact formats, wire
-contracts, CLI spelling, persistence mechanisms, implementation, and tests. If
+The Frozen V1 identity and wire domains remain closed for their existing scope,
+and no known issue blocks prototypes that stay within that scope. The
+representation-independent semantics for `ServiceStorage` and ServiceStorage-
+backed Managed Service Resources are closed; their serialization, wire,
+persistence, and runtime remain deferred. Implementers must not hide that work
+by modeling service-owned live files as synchronized Inputs or M1-D metadata. If
 a prototype shows that established invariants cannot coexist, the conflict must
 return to design review rather than being hidden by another abstraction.
 
@@ -36,6 +39,14 @@ Implementers may choose, without changing Pactrun semantics:
 Those decisions must not change the canonical hash contracts, domain
 identities, state transitions, authority boundaries, or user-visible
 guarantees.
+
+They also do not authorize an implementer to invent ServiceStorage declaration
+serialization, authority wire shapes, continuity or retention persistence,
+discard representation, access encoding, compatibility algorithms, Cleanup
+coordination, Abandon non-destruction state, or a broader service-resource
+taxonomy. Those representations and mechanisms require later formal design;
+the closed semantics are summarized in
+[ServiceStorage Semantic Baseline](../architecture/service-storage-semantic-baseline.md).
 
 ## Suggested implementation sequence
 
@@ -65,6 +76,10 @@ guarantees.
 - Secret redaction and protection;
 - Observe and Mutate guard.
 
+This phase implements Pactrun-authoritative bindings only. It must not
+materialize a Managed Input into a service file and synchronize it as a
+substitute for `ServiceStorage`.
+
 ### Phase 3 - Action execution
 
 - Resolution and InvokeAction intent;
@@ -72,6 +87,9 @@ guarantees.
 - stale-state admission and durable pins;
 - Hook Runtime and Session authority;
 - I/O transitions and Run records.
+
+Workspace remains execution-scoped scratch. Persistent service-resource
+authority is not part of Frozen Hook Protocol V1 or this phase.
 
 ### Phase 4 - Snapshots
 
@@ -81,6 +99,9 @@ guarantees.
 - sensitive export/import;
 - exact-compatible cross-Instance Restore.
 
+Capture selects service recovery content; this phase does not automatically
+Snapshot an entire future `ServiceStorage`.
+
 ### Phase 5 - Migration
 
 - target-owned graph and chaining;
@@ -88,6 +109,9 @@ guarantees.
 - typed active and retained references;
 - requirements, outputs, and single-writer validation;
 - staged targets, incomplete intermediate state, and per-edge commits.
+
+These transitions govern Managed Input Bindings. They must not be generalized
+into an unapproved Service Resource transition or persistence schema.
 
 ### Phase 6 - Recovery
 
@@ -102,8 +126,13 @@ guarantees.
 - typed Cleanup requirements and context;
 - shared risk protocol;
 - cleanup-before-delete behavior;
-- retry semantics without deletion lifecycle states;
+- durable Cleanup-completed finalization without inferred Hook replay;
 - explicit AbandonManagement.
+
+An ambiguous Cleanup completion before the durable do-not-replay boundary is a
+future Hook Protocol and recovery coordination gate. After that boundary,
+storage-finalization retry must not replay Cleanup. Abandonment must not make
+service-owned state eligible for ordinary GC or unreferenced-storage cleanup.
 
 ### Phase 8 - Recipes and advanced authoring
 
@@ -136,6 +165,26 @@ The Frozen identity spelling, normalization, framing, and verification
 boundary are defined by
 [Revision Core Format V1](../package-contracts/revision-core-format-v1.md).
 Production projection and persistence remain Phase 1 implementation work.
+
+### Closed ServiceStorage semantics; deferred representation
+
+Persistent Instance data has two relevant ownership domains: detached
+Pactrun-authoritative Managed Input Bindings and ServiceStorage-backed,
+service-authoritative Managed Service Resources. The service may create or
+mutate live resource bytes without advancing `InstanceStateVersion`; Pactrun
+does not implicitly synchronize, pin, content-address, or automatically
+Snapshot those bytes. This closure does not classify non-ServiceStorage-backed
+service-owned resources.
+
+The domain semantics are closed in the linked normative requirements and
+synthesized by the ServiceStorage Semantic Baseline. Before implementation,
+formal design must still define Revision Core serialization, Hook authority wire
+support where needed, durable continuity/retention/discard and Abandon non-
+destruction representation, Cleanup completion coordination, and the concrete
+runtime. Revision Core and Hook Protocol versions remain independent. No
+authoring syntax, CLI, wire shape, storage table, retained-resource or orphan-
+storage registry, compatibility algorithm, or broader resource taxonomy is
+chosen here.
 
 ### Persistence and concurrency encoding
 

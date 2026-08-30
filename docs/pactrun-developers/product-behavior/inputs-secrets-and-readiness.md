@@ -7,17 +7,58 @@ title: Inputs, Secrets, and Readiness
 **Status: Normative product behavior specification except where linked to an
 owning requirement.**
 
-## Three input scopes
+## Persistent and execution data scopes
 
-Pactrun keeps three concepts separate:
+Pactrun keeps ownership and lifetime explicit:
+
+| Concept | Lifetime | Scope | Authority and example |
+| --- | --- | --- | --- |
+| Revision Runtime Content | Immutable | Revision | Pactrun-owned installed executable and support content |
+| Managed Input Binding | Persistent | Instance | Pactrun-authoritative detached domain, password, or configuration payload |
+| `ServiceStorage` / ServiceStorage-backed Managed Service Resource | Persistent | Instance | Pactrun-provided storage lifetime with service-authoritative live contents |
+| Workspace | One execution | Execution | Hook-writable temporary scratch |
+| Run Artifact | Retained by policy | Run | Pactrun-managed committed Action output |
+| Snapshot | Durable immutable object | Snapshot | Validated recovery state, not a live-state mirror |
+
+The first two persistent Instance-data models are not interchangeable. A
+Managed Input Binding is an opaque detached value whose presence, replacement,
+retention, and Secret protection are managed by Pactrun. A ServiceStorage-backed
+Managed Service Resource is live state that the service may create or mutate
+directly. Pactrun may identify and expose its contract without owning,
+versioning, linearizing, content-addressing, or automatically Snapshotting the
+live bytes.
+
+Visibility does not decide ownership: a Pactrun-visible persistent file is not
+therefore required to be an Input, and an Input MUST NOT be kept synchronized
+implicitly with a service-owned file.
+
+## Three value-delivery scopes
+
+Pactrun also keeps three value-delivery concepts separate:
 
 | Concept | Lifetime | Scope | Example |
 | --- | --- | --- | --- |
-| Instance Input or Secret | Persistent | Instance | Domain, password, configuration file |
+| Instance Input or Secret | Persistent | Instance | Domain, password, detached configuration payload |
 | Invocation Parameter | One invocation | Action or Snapshot operation | Tail count, follow mode, one-time credential |
 | Managed Input | One managed workflow | Workflow | Snapshot payload or Migration content |
 
 They are not interchangeable generic maps.
+
+## Informative live-file example
+
+A NetBird Revision may declare a future Managed Service File with semantic
+identity `management_config`, associated with storage `netbird_state` and path
+`management.json`. The declaration may exist while the file is absent. The
+service may later create and continuously use the same file, and a user may
+need to inspect or edit that live state. A compatible Revision transition or
+container recreation continues to use that one persistent resource without
+copying or rematerializing it.
+
+This case is not modeled as `Input -> materialize -> synchronize`. Formal
+identity encoding, authoring, authority wire shape, access encoding,
+compatibility representation, retention persistence, and durable representation
+remain future-version design gates. The example does not classify non-
+ServiceStorage-backed resources.
 
 ## PR-REQ-0090 - Ordinary execution context
 

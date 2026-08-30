@@ -17,3 +17,4 @@ documentation structure only.
 - Plan previews and staleness
 - Run history and outcomes
 - Concurrent operation feedback
+- Pactrun-owned state versions versus service-owned live mutations

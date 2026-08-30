@@ -6,6 +6,16 @@ title: Snapshot Integrity Format V1
 
 **Status: Frozen normative Package contract specification.**
 
+:::note Informative ServiceStorage scope clarification
+
+The V1 `service_content` closure represents immutable recovery content selected
+and submitted through Snapshot Capture. It is not an automatic inventory or
+mirror of future `ServiceStorage` or Managed Service Resources. This
+clarification changes no V1 schema, normalization, canonical bytes, framing,
+digest, or golden vector.
+
+:::
+
 This page defines the complete, Frozen `SnapshotIntegrityFormatV1` contract.
 The Candidate used these exact semantic schema, canonical bytes, framing, and
 digests as conformance data without publishing them as stable Pactrun Snapshot

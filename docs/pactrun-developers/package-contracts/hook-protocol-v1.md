@@ -6,6 +6,19 @@ title: Hook Protocol V1
 
 **Status: Frozen normative Package contract specification.**
 
+:::note Informative future-version scope note
+
+The Frozen V1 authority union does not contain persistent `ServiceStorage` or
+Managed Service Resource authority. `WorkspaceAuthorityV1` remains
+execution-scoped temporary scratch and must not be reinterpreted as persistent
+service storage. If a future Hook requires protocol-mediated persistent
+authority, its wire support requires a future Hook Protocol version. This does
+not require every future Hook to upgrade, and Hook Protocol remains independent
+from Revision Core format versions. This note changes no V1 message, authority,
+state transition, fixture, or conformance behavior.
+
+:::
+
 This page defines the complete Frozen `HookProtocolV1` wire and state-machine
 contract. The Candidate used these exact messages, framing, state transitions,
 and fixtures as conformance data. Freezing changed status and verification

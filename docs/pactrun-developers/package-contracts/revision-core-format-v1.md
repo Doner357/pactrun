@@ -6,6 +6,16 @@ title: Revision Core Format V1
 
 **Status: Frozen normative Package contract specification.**
 
+:::note Informative future-version scope note
+
+The accepted `ServiceStorage` and Managed Service Resource architecture is not
+part of the closed `RevisionCoreV1` schema. Formal identity-bearing declarations
+require a future Revision Core format. This note adds no V1 field or semantic
+meaning and changes no V1 normalization, canonical bytes, framing, digest, or
+golden vector.
+
+:::
+
 This page defines the complete, Frozen `RevisionCoreFormatV1` identity
 contract. The Candidate used these exact schema, canonical bytes, framing, and
 digests without publishing them as stable identities. Freezing changed status

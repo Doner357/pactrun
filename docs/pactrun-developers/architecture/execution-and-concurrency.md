@@ -63,7 +63,10 @@ An Execution Plan MUST be immutable, typed, and sequential-first. It MUST fix an
 exact `InstanceId`, expected `InstanceStateVersion`, operation requirements,
 exact managed references, Hook Session authority, steps, recovery directives,
 and commit semantics. The initial implementation MUST NOT introduce a generic
-DAG engine.
+DAG engine. This requirement fixes Pactrun-owned authoritative context; it MUST
+NOT be interpreted as an immutable snapshot or linearization claim over
+service-owned live bytes. Future ServiceStorage-backed Managed Service Resource
+planning representation remains a separate versioned design gate.
 
 **Verification: Pending automated coverage.**
 
@@ -116,11 +119,19 @@ managed execution and management mutations.
 
 **Verification: Pending automated coverage.**
 
-### PR-REQ-0046 - Immutable admitted context
+### PR-REQ-0046 - Immutable Pactrun-owned admitted context
 
 An admitted execution MUST continue to observe the exact Revision, Inputs,
-Secrets, and managed content pinned at admission. Later replacement or deletion
-from current Instance state MUST NOT alter the running context.
+Secrets, and Pactrun-owned managed content pinned at admission. Later
+replacement or deletion from current Instance state MUST NOT alter that pinned
+context.
+
+Service-owned bytes of a ServiceStorage-backed Managed Service Resource are
+explicitly outside this immutable binding-snapshot guarantee. The service may
+mutate live contents while an execution is running, and Pactrun MUST NOT treat an
+`InstanceStateVersion`, mutation guard, or execution pin as proof that those
+bytes were frozen or linearized. How a future Plan binds resource declarations,
+associations, and operation prerequisites remains design work.
 
 **Verification: Pending automated coverage.**
 
@@ -128,7 +139,9 @@ from current Instance state MUST NOT alter the running context.
 
 Execution pins MUST be durable rather than process-memory-only. A pinned
 Revision or payload MUST remain available across process failure until the Run
-is terminal and no execution or recovery reference remains.
+is terminal and no execution or recovery reference remains. This Pactrun-owned
+content lifetime guarantee does not content-address, copy, or freeze a
+ServiceStorage-backed Managed Service Resource's live bytes.
 
 **Verification: Pending automated coverage.**
 

@@ -13,7 +13,8 @@ title: Recovery and Reconciliation
 A `TransitionCheckpoint` MUST contain the authoritative Pactrun-owned state or
 references needed to return to the last committed boundary. It MUST NOT be
 presented as a service Snapshot or as proof that external service state can be
-rolled back.
+rolled back. It does not capture or restore authoritative ServiceStorage-backed
+Managed Service Resource bytes.
 
 **Verification: Pending automated coverage.**
 
@@ -51,7 +52,10 @@ A terminal non-success with clear risk MUST NOT by itself require manual
 recovery. A terminal non-success or execution loss with open risk MUST apply the
 already durable Pactrun-owned recovery directive and place the Instance in
 `ManualRecoveryRequired`. A Hook that reports success while risk remains open
-MUST cause protocol failure and `ManualRecoveryRequired`.
+MUST cause protocol failure and `ManualRecoveryRequired`. In that state,
+Pactrun MUST NOT claim that service-owned live state remains coherent with the
+currently committed source Revision merely because the Pactrun-owned boundary
+was recovered.
 
 **Verification: Pending automated coverage.**
 
@@ -103,7 +107,36 @@ state without the Plan.
 A new authoritative Instance state, its new `InstanceStateVersion`, and the
 corresponding recovery boundary and disposition MUST be published atomically.
 Pactrun MUST NOT expose a new Instance commit with recovery state still pointing
-at an earlier boundary.
+at an earlier boundary. This atomicity is limited to Pactrun-owned authoritative
+state and recovery records. It MUST NOT be described as a single atomic
+transaction with a service filesystem, database, Docker volume, or external
+resource, and it does not predefine how future ServiceStorage-backed Managed
+Service Resource continuity or retention is durably represented.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0246 - Service transformation target-publication boundary
+
+For a future Revision transition that transforms a ServiceStorage-backed Managed
+Service Resource across a service-owned coherence boundary, the durable recovery
+risk MUST remain `Open` after the service reaches target coherence until Pactrun
+can publish the target Pactrun-owned boundary. Target coherence by itself MUST
+NOT clear the durable risk or change the committed Revision.
+
+The target Revision, staged Managed Input state and disposition, new
+`InstanceStateVersion`, corresponding recovery boundary, and durable risk clear
+MUST be published as one Pactrun-owned target boundary. This atomic publication
+MUST NOT include the service-owned bytes or presume a persisted resource
+association, continuity, retention, or discard representation. A supporting
+future Hook Protocol or runtime coordination mechanism MUST acknowledge risk
+resolution consistently with this ordering without changing the Frozen V1 wire.
+
+If execution is lost after the service may have reached target coherence but
+before that Pactrun-owned publication succeeds, the committed source boundary
+remains authoritative, risk remains `Open`, the Run MAY become `Interrupted`,
+and the Instance MUST enter `ManualRecoveryRequired`. That guard means Pactrun
+cannot assert that the service-owned state matches the committed source; it does
+not authorize Hook replay, compensation, or service-state rollback.
 
 **Verification: Pending automated coverage.**
 

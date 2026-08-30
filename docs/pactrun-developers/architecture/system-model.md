@@ -118,6 +118,33 @@ types MUST NOT become the source of Pactrun policy or identity semantics.
 
 **Verification: Pending automated coverage.**
 
+## Persistent and execution data ownership
+
+Pactrun distinguishes data by ownership, lifetime, and authority. Visibility to
+Pactrun or to a user does not by itself make persistent data an Input.
+
+| Concept | Lifetime and scope | Authoritative owner | Role |
+| --- | --- | --- | --- |
+| Revision Runtime Content | Immutable, Revision-scoped | Pactrun | Installed executable and support content addressed by the exact Revision |
+| Managed Input Binding | Persistent, Instance-scoped | Pactrun | Detached opaque binding whose presence, replacement, retention, and protection are Pactrun-managed |
+| `ServiceStorage` / ServiceStorage-backed Managed Service Resource | Persistent, Instance-scoped | Pactrun for provided-storage lifetime; service for live contents | Attached live state whose semantic identity and use contract are managed without transferring content authority |
+| Workspace | Temporary, execution-scoped | Hook within granted scratch authority | Uncommitted scratch and staging |
+| Run Artifact | Run-scoped | Pactrun | Committed output belonging to one Run |
+| Snapshot | Durable immutable object | Pactrun | Validated recovery representation, not a live-state mirror |
+
+A Managed Service File is a file-shaped ServiceStorage-backed Managed Service
+Resource. The service may create or mutate its authoritative live bytes without
+Pactrun observing the mutation time. Pactrun may identify and expose the
+resource contractually, but MUST NOT treat those bytes as a Managed Input
+Binding, maintain a second authoritative-looking copy through implicit
+synchronization, or claim the same linearization guarantees that apply to
+Pactrun-owned bindings. This taxonomy does not automatically include Docker
+volumes, external databases, remote objects, or other service-owned resources.
+The normative requirements are in
+[Identity and State](./identity-and-state.md#servicestorage-backed-semantic-closure),
+and the cross-specification synthesis is in
+[ServiceStorage Semantic Baseline](./service-storage-semantic-baseline.md).
+
 ## Conceptual layers
 
 ```text

@@ -17,3 +17,6 @@ documentation structure only.
 - Revision selection and labels
 - Instance creation, inspection, and lifecycle
 - Incomplete Instance presentation
+- Future ServiceStorage-backed resource declaration, absence, continuity, and
+  conservative non-destruction
+- Deferred taxonomy for other service-owned resources

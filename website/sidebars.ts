@@ -14,6 +14,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'pactrun-developers/architecture/system-model',
             'pactrun-developers/architecture/identity-and-state',
+            'pactrun-developers/architecture/service-storage-semantic-baseline',
             'pactrun-developers/architecture/execution-and-concurrency',
             'pactrun-developers/architecture/recovery-and-reconciliation',
             'pactrun-developers/architecture/resources-and-versioning',

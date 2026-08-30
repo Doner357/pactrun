@@ -25,7 +25,9 @@ that becomes a new lineage MUST be explicitly re-identified.
 `RevisionContentDigest` MUST identify Pactrun-managed operational semantics and
 immutable owned runtime content. It MUST exclude `PackageId`, display content,
 publisher claims, labels, source location, install time, local aliases, notes,
-and local trust decisions.
+and local trust decisions. A future Revision Core format may make a
+ServiceStorage-backed Managed Service Resource declaration identity-bearing,
+but the service-owned live bytes MUST remain outside the Revision digest.
 
 **Verification: Pending automated coverage.**
 
@@ -49,6 +51,10 @@ parameter behavior, compiler or executor behavior, operation access, Hook
 Session authority, Inputs, Snapshot, Migration, Cleanup, failures, recovery, or
 service-facing runtime behavior. Presentation, attribution, provenance, and
 local-management data MUST remain outside it.
+
+`RevisionCoreFormatV1` is already Frozen and contains no `ServiceStorage` or
+ServiceStorage-backed Managed Service Resource declaration. The accepted future
+architecture does not retroactively add those concepts to its closed schema.
 
 **Verification: Pending automated coverage.**
 
@@ -347,6 +353,12 @@ Presentation observations MUST refer to semantic keys already present in
 The initial product scope MUST NOT silently select one observation as a trusted
 preferred or canonical description.
 
+This metadata category is descriptive and non-operational. It MUST NOT be used
+to persist a ServiceStorage declaration, a ServiceStorage-backed Managed Service
+Resource identity or declaration, live-resource presence, continuity,
+retention, authority, an operation prerequisite, or a storage-lifetime
+obligation.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0021 - Portable and local metadata
@@ -399,25 +411,30 @@ Every Instance MUST have one opaque, durable, non-revivable
 `InstanceStateVersion` representing a Pactrun-owned authoritative state
 publication event. It MUST NOT be an external-service hash. A rollback or
 recovery that recreates earlier field values MUST publish a new token to prevent
-ABA behavior.
+ABA behavior. Service-owned live bytes are not part of this token.
 
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0026 - State-version publication
 
-Any committed Instance-state change that can affect future compilation,
-admission, execution-visible managed context, lifecycle, or recovery MUST
-atomically publish one new `InstanceStateVersion`. This includes active Revision
-changes, managed binding mutations, Restore commits, Migration edge commits,
-ManualRecoveryRequired transitions, and `ResolveManualRecovery`.
+Any committed Pactrun-authoritative Instance-state change that can affect future
+compilation, admission, execution-visible managed context, lifecycle, or
+recovery MUST atomically publish one new `InstanceStateVersion`. This includes
+active Revision changes, managed binding mutations, Restore commits, Migration
+edge commits, ManualRecoveryRequired transitions, and
+`ResolveManualRecovery`. It does not make service-owned live bytes part of the
+same publication.
 
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0027 - Non-versioned observations
 
-Hook-only external side effects, Snapshot object creation, Run and Artifact
-creation, and presentation-only metadata MUST NOT independently change an
-Instance's state version.
+Hook-only external side effects, service-created or service-modified Managed
+Service Resource bytes within ServiceStorage, Snapshot object creation, Run and
+Artifact creation, and presentation-only metadata MUST NOT independently change
+an Instance's state version. Pactrun MUST NOT claim that
+`InstanceStateVersion` linearizes mutations that Pactrun does not
+authoritatively own or observe.
 
 **Verification: Pending automated coverage.**
 
@@ -488,5 +505,110 @@ requires an explicit Migration transition and explicit operator authorization.
 Retained Secrets MUST retain protection, and ordinary inspection, diagnostics,
 Run records, and user-visible metadata MUST NOT disclose their values or
 value-derived digests.
+
+**Verification: Pending automated coverage.**
+
+## ServiceStorage-backed semantic closure
+
+This section defines representation-independent architecture invariants for
+ServiceStorage-backed Managed Service Resources. It does not decide whether
+Docker volumes, external databases, remote objects, or other service-owned
+resources use this abstraction. That broader resource taxonomy remains future
+design work. This section also does not define a Revision Core schema, Hook
+Protocol wire shape, authoring syntax, persistence model, CLI, or production
+implementation.
+
+### PR-REQ-0235 - Persistent Instance-data ownership
+
+Pactrun MUST distinguish Pactrun-authoritative Managed Input Bindings from
+service-authoritative live state in Pactrun-provided ServiceStorage. A Managed
+Input Binding is an Instance-scoped, persistent, detached opaque value whose
+authoritative copy, presence, replacement, retention, and Secret protection are
+managed by Pactrun. A ServiceStorage-backed Managed Service Resource is attached
+live state whose authoritative bytes or contents are owned and used by the
+service. Pactrun ownership of the provided storage lifetime MUST NOT be
+misrepresented as ownership of those contents.
+
+A persistent file MUST NOT be classified as an Input merely because Pactrun or
+a user needs to see or modify it. Pactrun MUST NOT maintain an Input and a
+service-owned file as implicit bidirectionally synchronized authoritative
+copies. Explicit future ownership transfer into a Managed Input may be designed
+separately, but is not the default solution for service-owned live state.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0236 - Managed Service Resource declaration and existence
+
+`ServiceStorage` MUST mean Pactrun-provided, Instance-scoped persistent storage
+made available to service or Hook behavior across Runs. A ServiceStorage-backed
+Managed Service Resource MUST have a stable semantic identity declared by a
+Revision and a contractual association with a ServiceStorage semantic identity.
+It MAY also have a locator, user exposure, access, and operation prerequisites.
+A file-shaped ServiceStorage-backed resource MAY be called a Managed Service
+File.
+
+Pactrun may manage those contracts and cross-Revision semantic continuity, but
+MUST NOT thereby claim ownership, content addressing, versioning, automatic
+Snapshot inclusion, or mutation linearization of the service-owned live bytes.
+The declaration exists independently from the live object: a Revision MAY
+declare a resource that is currently absent and that the service creates later.
+
+The identity encoding, association schema, access encoding, prerequisite
+encoding, authoring form, wire authority, and durable representation remain
+future-version design gates. This requirement does not classify non-
+ServiceStorage-backed service-owned resources.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0241 - ServiceStorage and resource semantic identity
+
+A ServiceStorage declaration and each ServiceStorage-backed Managed Service
+Resource declaration MUST have separate stable semantic identities within one
+Package lineage. An identity MUST retain one long-lived semantic meaning across
+Revisions and MUST NOT be reused for another storage or resource meaning. The
+same declaration identity in different Instances denotes the same contract role,
+not a shared physical storage or live object, and identities in different
+Packages MUST NOT be treated as implicitly equivalent.
+
+A Managed Service File is a file-shaped subtype of a ServiceStorage-backed
+Managed Service Resource, not a third persistent ownership model. A resource's
+storage-relative locator identifies its contractual logical location within the
+associated storage; it MUST NOT become resource identity, a host-path contract,
+an existence assertion, or evidence of representation compatibility.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0242 - Declaration, existence, and observation
+
+A Revision declaration and the corresponding Instance live resource existence
+MUST remain separate facts. Live existence has the point-in-time semantic states
+`Present`, `Absent`, and `Unknown`. `Present` means only that the resource was
+observed to exist at the relevant observation boundary; it MUST NOT assert that
+the contents are valid, coherent, unchanged afterward, or compatible with a
+Revision. `Unknown` MUST NOT be interpreted as either presence or absence.
+
+Pactrun MAY observe existence only through a capability that can make the
+relevant point-in-time observation. It MUST NOT claim continuous observation,
+advance `InstanceStateVersion` merely because observed existence or live bytes
+change, or apply Managed Input presence and mutation linearization to the live
+resource.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0248 - M1-D metadata boundary
+
+M1-D non-identity metadata persistence MUST be limited to already specified,
+typed descriptive associations and observations such as presentation,
+provenance, labels, reference-label bindings, local aliases, local notes, and
+local trust decisions. It MUST NOT become a backdoor persistence mechanism for
+ServiceStorage or ServiceStorage-backed Managed Service Resource operational
+semantics.
+
+M1-D MUST NOT persist storage or resource declarations or identities, live
+presence, service-owned contents, locators or associations, continuity,
+compatibility, retention or discard, persistent Hook authority, operation
+prerequisites, Cleanup-completion or storage-finalization obligations,
+AbandonManagement non-destruction obligations, or the broader service-owned
+resource taxonomy.
 
 **Verification: Pending automated coverage.**

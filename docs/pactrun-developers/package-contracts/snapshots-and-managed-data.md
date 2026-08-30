@@ -12,6 +12,7 @@ title: Snapshots and Managed Data
 
 A Workspace MUST be execution-scoped staging and MUST NOT become committed
 managed content until the operation-specific validation and commit succeeds.
+It MUST NOT be used or reinterpreted as persistent `ServiceStorage`.
 
 **Verification: Pending automated coverage.**
 
@@ -53,7 +54,7 @@ A Snapshot's immutable authoritative body MUST contain a stable `SnapshotId`,
 integrity format and digest, exact producer Revision identity, authoritative
 origin Instance identity, capture time, complete active and retained managed
 binding state including absence and protection, and logical service Snapshot
-content.
+content selected and submitted through Capture.
 
 **Verification: Pending automated coverage.**
 
@@ -83,7 +84,35 @@ verification boundary are defined by
 
 Pactrun MUST pin one binding view for the Capture Hook and the committed
 Snapshot. A Package MUST NOT observe one active binding version while the
-Snapshot records another.
+Snapshot records another. This binding-view guarantee does not freeze or
+automatically enumerate service-owned live bytes.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0239 - ServiceStorage-backed resource capture boundary
+
+Pactrun MUST NOT automatically scan or Snapshot an entire `ServiceStorage` or
+all declared ServiceStorage-backed Managed Service Resources. A resource
+declaration MUST NOT by itself make the live resource Snapshot content.
+
+The Capture Hook is responsible for selecting recovery-relevant service-owned
+state at an appropriate service consistency boundary, transforming it into a
+`SnapshotCandidate`, and submitting that candidate for Pactrun validation,
+hashing, and commit. Existing automatic inclusion of complete Pactrun-managed
+binding state remains unchanged. The committed service-content closure is the
+Capture Hook's immutable recovery representation, not a live
+`ServiceStorage` mirror.
+
+Capture may merge, split, select, or transform resources into logical recovery
+content, so `SnapshotIntegrityFormatV1` does not require a one-to-one resource-
+identity provenance mapping. Its existing exact producer Revision identity and
+logical service-content descriptors remain sufficient for V1. A future format
+MAY design optional additional provenance, but it is not required by this
+semantic closure.
+
+This requirement does not change `SnapshotIntegrityFormatV1` schema, canonical
+bytes, framing, digest, or vectors and does not classify non-ServiceStorage-
+backed service-owned resources.
 
 **Verification: Pending automated coverage.**
 

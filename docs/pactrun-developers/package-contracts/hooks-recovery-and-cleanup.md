@@ -38,10 +38,39 @@ to that execution. Requests outside Pactrun-mediated authority MUST be rejected.
 The exact Frozen V1 Session authority representation is defined by
 [Hook Protocol V1](./hook-protocol-v1.md).
 
+A future Hook may need explicit authority for persistent `ServiceStorage` or a
+ServiceStorage-backed Managed Service Resource. That authority is distinct from
+an execution-scoped Workspace and is not present in the Frozen V1 authority
+union. Its handles, paths, visibility, access, storage layout, and wire
+representation remain future design work and require a future Hook Protocol
+version if exposed on the wire.
+Revision Core and Hook Protocol versions remain independent, so a future
+Revision Core format does not force every Hook to use a new protocol.
+
 The Session MUST NOT let a Hook browse arbitrary managed stores, read another
 Instance's managed data, delete arbitrary resources, invoke another Action,
 acquire a mutation guard, commit a Snapshot, rewrite a Run, switch the active
 Revision, enlarge authority, or redefine the workflow.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0244 - Persistent storage authority and prerequisites
+
+A future protocol-mediated authority model for ServiceStorage-backed resources
+MUST support both whole-ServiceStorage and individual-resource semantic scopes.
+Each Hook Session MUST receive only the least authority required by its
+operation; resource authority MUST NOT silently expand into storage-wide access,
+and storage-wide authority MUST NOT grant access to another Instance's storage.
+These authority scopes are Pactrun-mediated capabilities, not operating-system
+confinement.
+
+An operation MAY depend on a point-in-time resource presence or absence
+observation, but that prerequisite MUST remain distinct from Managed Input
+readiness and from access authority. When Pactrun is responsible for evaluating
+a definitive presence prerequisite, `Unknown` MUST NOT satisfy it. A Package MAY
+instead perform a service-specific runtime check in its Hook. The authority
+wire shape, observer, admission mechanism, and path mapping remain future
+design work, and Workspace MUST remain execution-scoped scratch.
 
 **Verification: Pending automated coverage.**
 
@@ -80,8 +109,9 @@ host-device sandbox.
 ### PR-REQ-0173 - Risk-entry request
 
 Before crossing a boundary after which permanent Hook loss may leave
-service-owned state incoherent, a Hook MUST request `EnterRecoveryRisk` and wait
-for Pactrun's durable acknowledgment.
+service-owned state, including a ServiceStorage-backed Managed Service Resource,
+incoherent, a Hook MUST request `EnterRecoveryRisk` and wait for Pactrun's
+durable acknowledgment.
 
 **Verification: Pending automated coverage.**
 
@@ -141,7 +171,10 @@ risk on non-success or reported success retains the Instance in
 
 Package Cleanup SHOULD tolerate retries and already-absent external resources
 where practical. Pactrun MUST NOT replace this author responsibility with an
-`idempotent=true` or similarly magical correctness flag.
+`idempotent=true` or similarly magical correctness flag. This guidance MUST NOT
+be interpreted as permission to replay Cleanup after an ambiguous completion;
+the Frozen completion rule in PR-REQ-0216 prohibits inferred replay or
+compensation.
 
 **Verification: Pending automated coverage.**
 
@@ -149,6 +182,11 @@ where practical. Pactrun MUST NOT replace this author responsibility with an
 
 `AbandonManagement` MUST NOT launch the Cleanup Hook or claim external cleanup.
 It records explicit operator intent to stop management and remove Pactrun-owned
-Instance state while external resources may remain.
+Instance state while service-owned state may remain. That intent MUST NOT
+authorize Pactrun to destroy the abandoned service-owned state during the
+operation or later through ordinary garbage collection, unreferenced-storage
+cleanup, or another maintenance path. The durable representation of this
+non-destruction obligation, later discovery, operator handoff, and explicit
+discard remain future persistence and runtime design gates.
 
 **Verification: Pending automated coverage.**

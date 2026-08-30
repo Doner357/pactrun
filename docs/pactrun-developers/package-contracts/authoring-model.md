@@ -10,8 +10,8 @@ title: Authoring Model
 
 A minimal Pack can contain metadata, one Action, and one Hook. Structured
 parameters, persistent Inputs, managed outputs, Snapshots, Migration, Recipes,
-and interactive terminal behavior are optional capabilities and must not burden
-minimal Packs.
+future ServiceStorage-backed Managed Service Resources, and interactive terminal
+behavior are optional capabilities and must not burden minimal Packs.
 
 Authors describe capabilities they provide. They are not required to enumerate
 large sets of negative `supports_x: false` flags.
@@ -60,6 +60,16 @@ In `RevisionCoreFormatV1`, capability-specific fixed prerequisites are
 semantics of the capability kind. They are not an author-configurable generic
 requirements block. The exact identity projection is defined by
 [Revision Core Format V1](./revision-core-format-v1.md).
+
+The displayed normalized model reflects capabilities representable by the
+current Frozen format. The accepted future architecture requires a versioned
+way to declare `ServiceStorage` and stable ServiceStorage-backed Managed Service
+Resources, but this page does not add fields to `RevisionCoreV1` or choose
+authoring syntax, identity encoding, association or locator fields, access or
+prerequisite encoding, compatibility mapping, continuity, retention, discard,
+or persistence representation. Those representations remain formal design
+gates. The broader taxonomy for non-ServiceStorage-backed service-owned
+resources also remains deferred.
 
 ## PR-REQ-0123 - Explicit normalized semantics
 

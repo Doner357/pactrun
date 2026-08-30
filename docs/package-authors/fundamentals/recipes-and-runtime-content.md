@@ -16,4 +16,5 @@ documentation structure only.
 - Recipe inputs and outputs
 - Runtime content roles
 - Reproducible Package materialization
+- Immutable Revision Runtime Content versus service-owned live storage
 - Presentation and provenance

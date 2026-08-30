@@ -18,6 +18,8 @@ consistent model for:
 - immutable installed Revisions;
 - managed Instances;
 - Inputs and Secrets;
+- Pactrun-provided persistent ServiceStorage and service-authoritative resources
+  within it as a future versioned capability;
 - typed invocation parameters;
 - managed data and Snapshots;
 - Revision Migration;
@@ -43,6 +45,16 @@ The authoring surface is designed to be predictable for both human and LLM
 authors: advanced features do not pollute the smallest valid example, and
 authors are not required to understand internal transactions or recovery
 bookkeeping.
+
+Persistent Instance data has two relevant ownership models. A Managed Input
+Binding is a detached opaque value whose authoritative copy is owned by Pactrun.
+A ServiceStorage-backed Managed Service Resource is attached live state whose
+authoritative contents belong to the service even when Pactrun identifies or
+exposes the resource contractually. Pactrun does not keep the two models
+consistent through implicit synchronization. This closure does not classify
+Docker volumes, external databases, remote objects, or other non-ServiceStorage-
+backed state. Formal ServiceStorage authoring and runtime support requires future
+independently versioned contracts and is not a Frozen V1 feature.
 
 ## Core flow
 
