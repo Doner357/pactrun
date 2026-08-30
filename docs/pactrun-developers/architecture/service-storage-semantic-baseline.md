@@ -101,3 +101,7 @@ every ServiceStorage declaration, identity, association, presence observation,
 live content, authority, prerequisite, continuity, retention, discard,
 Cleanup/finalization obligation, Abandon non-destruction obligation, and broader
 resource-taxonomy decision listed there.
+
+The closed metadata contract is navigated from the
+[Non-Identity Metadata Semantic Baseline](./non-identity-metadata-semantic-baseline.md).
+That closure does not narrow or replace any ServiceStorage exclusion above.

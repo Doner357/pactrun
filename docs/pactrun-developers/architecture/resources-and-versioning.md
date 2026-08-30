@@ -73,6 +73,13 @@ Internal persistence migration MUST preserve Pactrun domain identities and
 MUST preserve or transform every non-terminal Run and unresolved recovery
 obligation. It MUST NOT be confused with Revision Migration.
 
+The Candidate V1-to-V2 migration defined by PR-REQ-0257 MUST preserve every
+existing Package and Revision identity, both exact canonical Revision content
+components, and the complete derived runtime-content reference relation. A
+crash before the migration commit MUST leave an exact admissible V1 database;
+a crash after commit MUST expose an exact admissible V2 database. An
+intermediate version marker or partial V2 schema MUST never be accepted.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0079 - Revision Core format ownership
@@ -160,6 +167,29 @@ Package ID MUST form another Revision; the same digest under another Package ID
 MUST remain a distinct Revision identity. Export and import MUST also preserve
 the bundle-defined portable non-identity metadata required by
 [PR-REQ-0021](./identity-and-state.md#pr-req-0021---portable-and-local-metadata).
+
+Pre-M1-D classifies portable-capable metadata but does not define an Export
+Bundle Format, require any metadata kind to be carried, or define application,
+conflict, replacement, or merge semantics for imported metadata. Those choices
+remain owned by the future bundle format and import design.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0254 - Non-identity metadata portability boundary
+
+Current presentation metadata, `ReferenceLabelBinding`, `SourceUriClaim`,
+`PublisherAttributionClaim`, and `AttributionClaim` MUST be semantically
+portable-capable: their Domain meaning is valid across Pactrun installations
+and MUST NOT contain a local database identity, install event, row identity,
+host path, or local trust conclusion.
+
+Local aliases, local current notes, local current trust assessments, local
+install timestamps, and source filesystem paths MUST be local-only.
+Portable-capable MUST NOT be equated with identity-bearing or automatically
+exported. Local persistence MUST NOT be treated as evidence that a kind is
+local-only. Export serialization, selection, carriage, import conflict, and
+merge policy remain future Export Bundle Format work and MUST NOT alter
+Revision identity.
 
 **Verification: Pending automated coverage.**
 

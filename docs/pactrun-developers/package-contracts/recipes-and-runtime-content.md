@@ -71,7 +71,11 @@ resource kinds.
 
 ## Presentation and provenance
 
-Presentation and publisher information can be attached without changing
-Revision identity. Authors must reference stable semantic keys and must not use
-presentation overlays to create Actions, Inputs, or Parameters that are absent
-from the installed `RevisionCore`.
+Presentation, reference labels, and typed provenance claims can be attached
+without changing Revision identity. Presentation is current metadata over the
+closed target and field sets in PR-REQ-0251; provenance is the value-keyed
+typed claim set in PR-REQ-0252. Authoring and persistence MUST NOT infer a
+generic target, key/value map, history, or locale layer from those contracts.
+Authors must reference stable semantic keys and must not use presentation
+overlays to create Actions, Inputs, Parameters, outputs, or operations that are
+absent from the installed `RevisionCore`.

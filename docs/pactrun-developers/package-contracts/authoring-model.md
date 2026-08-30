@@ -28,10 +28,16 @@ contracts directly.
 ## PR-REQ-0122 - Normalized projection boundary
 
 Before installation, Pactrun MUST validate the normalized definition and
-project it into identity-bearing `RevisionCore`, portable presentation
-observations, provenance observations, and local management metadata. The
+project it into identity-bearing `RevisionCore`, typed current presentation
+metadata, typed provenance claims, and typed local management metadata. The
 normalized authoring model MUST NOT itself be treated as the hash or persistence
-object.
+object, and the projection MUST NOT emit a generic metadata map, arbitrary JSON
+payload, or storage row shape.
+
+Presentation projection MUST use the closed targets and fields in PR-REQ-0251;
+provenance projection MUST use the closed claims in PR-REQ-0252. This contract
+does not define an authoring syntax, installation transaction, Export Bundle
+Format, or M1-D production implementation.
 
 **Verification: Pending automated coverage.**
 

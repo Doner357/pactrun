@@ -35,8 +35,11 @@ is Frozen.
 - The accepted `ServiceStorage` and ServiceStorage-backed Managed Service
   Resource direction corrects the earlier assumption that every Pactrun-visible
   persistent file is an Input. Its representation-independent semantic closure
-  is complete in the current working tree without changing Frozen V1 schemas or
-  claiming production support.
+  is integrated into the canonical `develop` baseline without changing Frozen
+  V1 schemas or claiming production support.
+- The non-identity metadata semantic and Candidate PersistenceSchemaV2 closure
+  is implementation-ready design on its integration branch. It does not yet
+  constitute production persistence or automated coverage.
 
 ## Milestone states
 
@@ -61,7 +64,8 @@ milestone state taxonomy above:
 | Cleanup completion/finalization coordination | **Deferred.** |
 | Abandon non-destruction durable representation | **Deferred.** |
 | Broader service-owned resource taxonomy | **Deferred.** |
-| M1-D non-identity metadata persistence | **Next / Proposed.** |
+| Non-identity metadata semantic and persistence closure | **Closed; integration pending.** |
+| M1-D non-identity metadata implementation | **Planned; implementation-ready after integration.** |
 
 The ServiceStorage architecture correction and semantic closure are integrated
 into the canonical `develop` baseline. A later representation or runtime design
@@ -170,12 +174,23 @@ ContentId-to-blob reference index. Both the database and runtime-content roots
 remain pre-provisioned. M1-C does not add installation, Instances, bindings,
 backup UX, garbage collection, or generic repositories.
 
-M1-D is the next proposed slice for non-identity metadata persistence.
-Presentation, provenance, labels, reference bindings, local aliases, local
-notes, local trust decisions, and other already specified typed descriptive
-metadata remain deferred until their canonical or non-canonical persistence
-shapes receive separate approval; M1-C MUST NOT invent an opaque metadata schema
-for them.
+M1-D is the planned implementation slice for the closed non-identity metadata
+contract. It implements exact textual values, reference-label bindings, current
+presentation, typed provenance claims, and local Revision alias, note, and
+trust state through the crate-private typed repository contract and exact
+Candidate PersistenceSchemaV2. The authoritative design is linked from the
+[Non-Identity Metadata Semantic Baseline](../architecture/non-identity-metadata-semantic-baseline.md)
+and [Persistence Schema V2 Candidate](../architecture/persistence-schema-v2.md).
+M1-C MUST NOT be retrofitted with an opaque metadata schema.
+
+M1-D implementation MUST preserve exact UTF-8 values and complete typed
+comparators; implement semantic current-state CAS with the specified absence
+and ABA limits; provide canonical physical representation for optional tuples
+and current absence; state complete SQL ordering; and validate SQL/Domain
+ordering parity. It MUST migrate exact V1 to exact V2 transactionally without
+changing Revision identities, canonical Revision bytes, or runtime-content
+references. The slice has no stable public Rust API, CLI, wire, or Export Bundle
+scope.
 
 `ServiceStorage` is not an M1-D metadata extension. M1-D MUST NOT persist a
 storage or resource declaration or identity, live presence, service-owned
@@ -190,6 +205,14 @@ Completion gate:
 - the production codec reproduces every Frozen Revision Core vector;
 - identity is unchanged after persistence and reload;
 - immutable content and atomic publication invariants have real tests;
+- M1-D tests cover fresh V2, exact V1-to-V2 migration, crash/reopen and
+  concurrent migration, schema-drift rejection, canonical optional tuples and
+  current absence, the complete presentation target-by-field relation,
+  deterministic SQL/Domain comparator parity, idempotency, CAS and its
+  intentional ABA limitation, alias conflicts, deletion cascades, and reload
+  equivalence;
+- M1-D introduces no JSON/EAV metadata store, ServiceStorage representation, or
+  operational-state backdoor;
 - format verifier code is not silently promoted into a production persistence
   contract without an explicit implementation boundary;
 - full remote CI passes.
