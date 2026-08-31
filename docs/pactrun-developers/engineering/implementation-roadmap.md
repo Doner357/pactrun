@@ -38,9 +38,9 @@ is Frozen.
   is integrated into the canonical `develop` baseline without changing Frozen
   V1 schemas or claiming production support.
 - The non-identity metadata semantic and Candidate PersistenceSchemaV2 closure
-  is integrated into the canonical `develop` baseline and is implementation-
-  ready design. It does not yet constitute production persistence or automated
-  coverage.
+  is integrated into the canonical `develop` baseline. M1-D implementation
+  parity is active on an isolated feature branch; until integration, the schema
+  remains Candidate and the work is not part of canonical `develop`.
 
 ## Milestone states
 
@@ -66,7 +66,7 @@ milestone state taxonomy above:
 | Abandon non-destruction durable representation | **Deferred.** |
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
-| M1-D non-identity metadata implementation | **Planned; implementation-ready.** |
+| M1-D non-identity metadata implementation | **In progress.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
@@ -178,7 +178,7 @@ ContentId-to-blob reference index. Both the database and runtime-content roots
 remain pre-provisioned. M1-C does not add installation, Instances, bindings,
 backup UX, garbage collection, or generic repositories.
 
-M1-D is the planned implementation slice for the closed non-identity metadata
+M1-D is the active implementation slice for the closed non-identity metadata
 contract. It implements exact textual values, reference-label bindings, current
 presentation, typed provenance claims, and local Revision alias, note, and
 trust state through the crate-private typed repository contract and exact

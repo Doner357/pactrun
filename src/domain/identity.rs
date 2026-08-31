@@ -7,7 +7,7 @@ const SHA256_HEX_LENGTH: usize = SHA256_BYTES * 2;
 
 macro_rules! opaque_id {
     ($name:ident) => {
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         pub(crate) struct $name([u8; OPAQUE_ID_BYTES]);
 
         impl $name {
@@ -47,7 +47,7 @@ opaque_id!(InstanceId);
 opaque_id!(InstanceStateVersion);
 
 /// The SHA-256 content identity owned by RevisionCoreFormatV1.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct RevisionContentDigest([u8; SHA256_BYTES]);
 
 impl RevisionContentDigest {
@@ -78,7 +78,7 @@ impl FromStr for RevisionContentDigest {
 }
 
 /// Exact Revision identity; no flattened spelling is a second identity form.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct RevisionIdentity {
     pub(crate) package_id: PackageId,
     pub(crate) content_digest: RevisionContentDigest,

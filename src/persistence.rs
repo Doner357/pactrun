@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 mod runtime_content_store;
+mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 
 #[allow(unused_imports)]

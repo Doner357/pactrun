@@ -191,7 +191,7 @@ local-only. Export serialization, selection, carriage, import conflict, and
 merge policy remain future Export Bundle Format work and MUST NOT alter
 Revision identity.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058.**
 
 ### PR-REQ-0085 - Snapshot import identity
 

@@ -10,6 +10,7 @@
 mod error;
 mod identity;
 mod revision_core_v1;
+mod revision_metadata;
 
 pub(crate) use error::PactrunErrorRefV1;
 #[allow(unused_imports)]
@@ -17,3 +18,5 @@ pub(crate) use identity::{
     InstanceId, InstanceStateVersion, PackageId, RevisionContentDigest, RevisionIdentity,
 };
 pub(crate) use revision_core_v1::*;
+#[allow(unused_imports)]
+pub(crate) use revision_metadata::*;

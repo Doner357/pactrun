@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Serialize, Serializer};
 
-use super::PactrunErrorRefV1;
+use super::{PactrunErrorRefV1, PresentationTargetV1};
 
 pub(crate) const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
@@ -205,6 +205,74 @@ pub(crate) struct RevisionCoreV1 {
     migrations: Vec<MigrationV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cleanup: Option<CleanupV1>,
+}
+
+impl RevisionCoreV1 {
+    pub(crate) fn contains_presentation_target(&self, target: &PresentationTargetV1) -> bool {
+        match target {
+            PresentationTargetV1::Revision => true,
+            PresentationTargetV1::Input(input) => {
+                self.inputs.iter().any(|declared| &declared.id == input)
+            }
+            PresentationTargetV1::Action(action) => {
+                self.actions.iter().any(|declared| &declared.id == action)
+            }
+            PresentationTargetV1::ActionParameter { action, parameter } => self
+                .actions
+                .iter()
+                .find(|declared| &declared.id == action)
+                .is_some_and(|declared| {
+                    declared
+                        .parameters
+                        .iter()
+                        .any(|candidate| &candidate.id == parameter)
+                }),
+            PresentationTargetV1::ManagedOutput { action, output } => self
+                .actions
+                .iter()
+                .find(|declared| &declared.id == action)
+                .is_some_and(|declared| {
+                    declared
+                        .outputs
+                        .iter()
+                        .any(|candidate| &candidate.id == output)
+                }),
+            PresentationTargetV1::SnapshotCapture => self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.capture.is_some()),
+            PresentationTargetV1::SnapshotCaptureParameter(parameter) => self
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.capture.as_ref())
+                .is_some_and(|capture| {
+                    capture
+                        .parameters
+                        .iter()
+                        .any(|candidate| &candidate.id == parameter)
+                }),
+            PresentationTargetV1::SnapshotRestore => self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.restore.is_some()),
+            PresentationTargetV1::SnapshotRestoreParameter(parameter) => self
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.restore.as_ref())
+                .is_some_and(|restore| {
+                    restore
+                        .parameters
+                        .iter()
+                        .any(|candidate| &candidate.id == parameter)
+                }),
+            PresentationTargetV1::MigrationEdge(source_digest) => {
+                self.migrations.iter().any(|migration| {
+                    migration.source_revision_digest.to_bytes() == *source_digest.as_bytes()
+                })
+            }
+            PresentationTargetV1::Cleanup => self.cleanup.is_some(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
