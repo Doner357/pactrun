@@ -16,11 +16,11 @@ by modeling service-owned live files as synchronized Inputs or M1-D metadata. If
 a prototype shows that established invariants cannot coexist, the conflict must
 return to design review rather than being hidden by another abstraction.
 
-The M1-D non-identity metadata domain and persistence contract are also closed
-for implementation. The
+The M1-D non-identity metadata domain and persistence contract are implemented
+against the current internal schema. The
 [Non-Identity Metadata Semantic Baseline](../architecture/non-identity-metadata-semantic-baseline.md)
 is the navigation entry point; its linked requirement pages, including the
-[Persistence Schema V2 Candidate](../architecture/persistence-schema-v2.md),
+[Persistence Schema V2](../architecture/persistence-schema-v2.md),
 remain normative.
 
 ## Implementation decisions
@@ -35,7 +35,7 @@ Implementers may choose, without changing Pactrun semantics:
 - Rust crate, module, type, trait, and design-pattern names;
 - PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
 - file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact M1-D Candidate schema;
+- persistence choices outside the exact implemented M1-D internal schema;
 - socket, named-pipe, or other side-channel transport;
 - Hook Protocol framing and encoding;
 - YAML and CLI parsers;
@@ -75,13 +75,13 @@ the closed semantics are summarized in
 - persistence migration skeleton.
 
 For M1-D, use only the closed typed metadata values, complete semantic
-comparators, mutation batch, semantic current-state CAS, and exact Candidate
+comparators, mutation batch, semantic current-state CAS, and exact implemented
 PersistenceSchemaV2. Authoritative strings retain exact UTF-8 bytes; optional
 values order `Absent` before `Present`; every deterministic SQL query states a
 complete `ORDER BY` that is parity-equivalent with the Domain comparator.
 Current-state CAS deliberately does not detect history or ABA.
 
-Do not replace the Candidate with a generic key/value, JSON, EAV, nullable
+Do not replace the internal schema with a generic key/value, JSON, EAV, nullable
 semantic tuple, serialized Rust object, or rowid-ordered repository. Do not
 persist all-NULL presentation rows or nullable note/trust tombstones. Target
 existence for presentation is checked against the exact strict-decoded

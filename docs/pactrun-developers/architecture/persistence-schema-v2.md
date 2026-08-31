@@ -1,16 +1,16 @@
 ---
-title: Persistence Schema V2 Candidate
+title: Persistence Schema V2
 ---
 
-# Persistence Schema V2 Candidate
+# Persistence Schema V2
 
-**Status: Normative internal persistence contract. Candidate with implementation
-parity in progress; non-Frozen, non-public, and not production support.**
+**Status: Current implemented internal persistence schema and normative internal
+contract; non-Frozen, non-public, and not a stable public support contract.**
 
-This page closes the persistence contract that an M1-D implementation must
-follow. It does not implement the schema, expose a public API, define an Export
-Bundle Format, or change any Frozen identity or wire format. The metadata Domain
-semantics remain owned by
+This page defines the persistence contract followed by the integrated M1-D
+implementation. It does not expose a public API, define an Export Bundle Format,
+or change any Frozen identity or wire format. The metadata Domain semantics
+remain owned by
 [Identity and State](./identity-and-state.md); this page owns their exact
 relational representation, repository transaction boundary, and V1-to-V2
 internal migration.
@@ -100,13 +100,13 @@ MUST NOT remove bindings that target another Revision.
 **Verification: PR-TEST-0062, PR-TEST-0063, PR-TEST-0064, PR-TEST-0065,
 PR-TEST-0066, PR-TEST-0067.**
 
-### PR-REQ-0256 - Exact Candidate PersistenceSchemaV2
+### PR-REQ-0256 - Exact PersistenceSchemaV2
 
 PersistenceSchemaV2 MUST retain the exact V1 `packages`, `revisions`, and
 `revision_runtime_content_refs` definitions reproduced below, add exactly the
 new tables below them, use application ID `0x50414354`, and use SQLite user
 version `2`. All tables are `STRICT` and `WITHOUT ROWID`. Correctness does not
-depend on a performance-only index, so no such index is part of the Candidate
+depend on a performance-only index, so no such index is part of the internal
 contract.
 
 Textual Domain values are stored as their exact UTF-8 bytes in BLOB columns.
@@ -584,7 +584,7 @@ CREATE TABLE revision_local_current_trust (
 ) STRICT, WITHOUT ROWID;
 ```
 
-For a pristine database, the complete block above is the exact Candidate
+For a pristine database, the complete block above is the exact implemented
 schema. For an exact V1 database, migration executes only the additions after
 the marked boundary. The presentation operation ranks are Capture `0` and Restore `1`; the trust
 ranks are Trusted `0` and Distrusted `1`. Table identity supplies the remaining
@@ -682,9 +682,9 @@ new metadata from canonical Revision JSON.
 
 Schema validation MUST compare tables, columns, declared types, NOT NULL and
 CHECK constraints, primary keys, foreign keys and delete actions, `STRICT` and
-`WITHOUT ROWID` options, and every correctness-bearing index if one is later
-added before Candidate approval. Markers alone are insufficient. Database and
-WAL durability retain the M1-C platform assumptions; migration does not claim
+`WITHOUT ROWID` options, and every correctness-bearing index that a separately
+approved schema revision adds. Markers alone are insufficient. Database and WAL
+durability retain the M1-C platform assumptions; migration does not claim
 arbitrary hardware power-loss certification.
 
 **Verification: PR-TEST-0060, PR-TEST-0061.**
@@ -723,8 +723,8 @@ stable public Rust API, CLI spelling, or wire contract is created here.
 
 ## Deferred work
 
-This Candidate does not define Export Bundle serialization or merge, Package or
-Instance metadata, `LocalInstall`, generic timestamps, localization, fuzzy
-lookup, additional provenance claims, trust policy or history, note history,
+This internal schema does not define Export Bundle serialization or merge,
+Package or Instance metadata, `LocalInstall`, generic timestamps, localization,
+fuzzy lookup, additional provenance claims, trust policy or history, note history,
 history-sensitive CAS or ABA detection, stable new error codes, cross-domain
 Revision-plus-metadata publication, CLI, or ServiceStorage persistence.

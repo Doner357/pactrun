@@ -37,10 +37,10 @@ is Frozen.
   persistent file is an Input. Its representation-independent semantic closure
   is integrated into the canonical `develop` baseline without changing Frozen
   V1 schemas or claiming production support.
-- The non-identity metadata semantic and Candidate PersistenceSchemaV2 closure
-  is integrated into the canonical `develop` baseline. M1-D implementation
-  parity is active on an isolated feature branch; until integration, the schema
-  remains Candidate and the work is not part of canonical `develop`.
+- The non-identity metadata semantic closure and PersistenceSchemaV2
+  implementation are integrated into the canonical `develop` baseline. The
+  schema is the current implemented internal persistence schema while remaining
+  non-Frozen and non-public.
 
 ## Milestone states
 
@@ -66,13 +66,13 @@ milestone state taxonomy above:
 | Abandon non-destruction durable representation | **Deferred.** |
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
-| M1-D non-identity metadata implementation | **In progress.** |
+| M1-D non-identity metadata implementation | **Complete.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
 `develop` baseline. A later ServiceStorage representation or runtime design
 does not reopen the closed ServiceStorage semantics unless review finds a
-substantive conflict. M1-D implementation starts from the integrated Candidate
+substantive conflict. M1-D is integrated against the current internal
 PersistenceSchemaV2 contract.
 
 ## Milestones
@@ -178,13 +178,13 @@ ContentId-to-blob reference index. Both the database and runtime-content roots
 remain pre-provisioned. M1-C does not add installation, Instances, bindings,
 backup UX, garbage collection, or generic repositories.
 
-M1-D is the active implementation slice for the closed non-identity metadata
+M1-D is the completed implementation slice for the closed non-identity metadata
 contract. It implements exact textual values, reference-label bindings, current
 presentation, typed provenance claims, and local Revision alias, note, and
 trust state through the crate-private typed repository contract and exact
-Candidate PersistenceSchemaV2. The authoritative design is linked from the
+PersistenceSchemaV2. The authoritative design is linked from the
 [Non-Identity Metadata Semantic Baseline](../architecture/non-identity-metadata-semantic-baseline.md)
-and [Persistence Schema V2 Candidate](../architecture/persistence-schema-v2.md).
+and [Persistence Schema V2](../architecture/persistence-schema-v2.md).
 M1-C MUST NOT be retrofitted with an opaque metadata schema.
 
 M1-D implementation MUST preserve exact UTF-8 values and complete typed

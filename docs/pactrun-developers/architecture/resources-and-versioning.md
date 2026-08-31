@@ -73,7 +73,7 @@ Internal persistence migration MUST preserve Pactrun domain identities and
 MUST preserve or transform every non-terminal Run and unresolved recovery
 obligation. It MUST NOT be confused with Revision Migration.
 
-The Candidate V1-to-V2 migration defined by PR-REQ-0257 MUST preserve every
+The implemented V1-to-V2 migration defined by PR-REQ-0257 MUST preserve every
 existing Package and Revision identity, both exact canonical Revision content
 components, and the complete derived runtime-content reference relation. A
 crash before the migration commit MUST leave an exact admissible V1 database;
