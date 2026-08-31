@@ -376,7 +376,7 @@ Resource identity or declaration, live-resource presence, continuity,
 retention, authority, an operation prerequisite, or a storage-lifetime
 obligation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0062, PR-TEST-0063.**
 
 ### PR-REQ-0021 - Portable and local metadata
 
@@ -642,7 +642,7 @@ resource taxonomy. PersistenceSchemaV2 and its repository contract MUST enforce
 this boundary rather than merely hiding excluded operational data behind a
 metadata name.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0059, PR-TEST-0067.**
 
 ## Pre-M1-D non-identity metadata closure
 
@@ -664,12 +664,14 @@ of the preserved UTF-8 bytes. M1-D sets no semantic length cap; a future
 transport limit MUST reject an oversized request rather than truncate or change
 the value.
 
-`SourceUri` MUST be a valid absolute ASCII URI under RFC 3986. URI validity does
-not authorize case normalization, percent-encoding normalization, base
-resolution, or any other canonicalization; its authoritative equality and
-ordering remain those of the preserved exact URI string. A future normalized or
-fuzzy search facility MAY provide non-authoritative discovery but MUST NOT
-change binding identity, equality, conflict, or ambiguity.
+`SourceUri` MUST match the ASCII `URI` production in RFC 3986. It MUST contain a
+scheme, MUST reject a relative reference and non-ASCII input, and MAY contain a
+fragment. URI validity does not authorize case normalization, percent-encoding
+normalization, base resolution, parser-result reserialization, parser semantic
+equality, or any other canonicalization; its authoritative equality and
+ordering remain those of the caller-provided exact URI string. A future
+normalized or fuzzy search facility MAY provide non-authoritative discovery but
+MUST NOT change binding identity, equality, conflict, or ambiguity.
 
 Every optional typed component MUST order `Absent` before `Present(value)`;
 present values use their underlying typed comparator. Every closed union or enum
@@ -677,7 +679,7 @@ used for deterministic ordering MUST publish an explicit stable rank and MUST
 NOT depend on a Rust discriminant, SQL rowid, insertion time, query-plan order,
 SQLite NULL ordering, or locale collation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058, PR-TEST-0066.**
 
 ### PR-REQ-0250 - Reference-label binding, lookup, and ordering
 
@@ -699,7 +701,7 @@ order by label UTF-8 bytes, `PackageId` canonical bytes,
 source fields in their declared tuple order. Optional source fields use the
 ordering in PR-REQ-0249.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058, PR-TEST-0062, PR-TEST-0066.**
 
 ### PR-REQ-0251 - Closed current presentation model
 
@@ -725,7 +727,7 @@ in PR-REQ-0255 and MUST NOT retain an older presentation value. Deterministic
 enumeration MUST order by Revision identity, target rank, target components in
 their declared order, and presentation-field rank.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058, PR-TEST-0063, PR-TEST-0066.**
 
 ### PR-REQ-0252 - Typed provenance claims
 
@@ -745,7 +747,7 @@ order, with optional fields ordered by PR-REQ-0249. M1-D MUST NOT add an opaque
 claim ID, generic claim kind, arbitrary key/value payload, automatic timestamp,
 mutation order, preferred claim, authenticity conclusion, or audit history.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058, PR-TEST-0062, PR-TEST-0066.**
 
 ### PR-REQ-0253 - Local aliases, notes, and trust
 
@@ -769,4 +771,4 @@ future typed installation or source-observation model. M1-D MUST NOT persist
 them as current Revision metadata before `LocalInstall` identity, cardinality,
 and lifecycle are defined.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0058, PR-TEST-0064, PR-TEST-0066.**

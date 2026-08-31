@@ -30,11 +30,12 @@ use crate::{
 const DATABASE_DIRECTORY: &str = "database";
 const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
-const APPLICATION_ID: i64 = 0x5041_4354;
-const SCHEMA_VERSION: i64 = 1;
+pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
+const SCHEMA_V1_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
-const SCHEMA_SQL: &str = r#"
+pub(super) const SCHEMA_V1_SQL: &str = r#"
 CREATE TABLE packages (
     package_id BLOB NOT NULL
         CHECK(length(package_id) = 16),
@@ -89,10 +90,12 @@ CREATE TABLE revision_runtime_content_refs (
     )
 ) STRICT, WITHOUT ROWID;
 "#;
+pub(super) const SCHEMA_V2_ADDITIONS_SQL: &str =
+    include_str!("persistence_schema_v2_additions.sql");
 
 #[derive(Debug)]
 pub(crate) struct PactrunPersistence {
-    database: Mutex<Connection>,
+    pub(super) database: Mutex<Connection>,
     runtime_content: RuntimeContentStore,
 }
 
@@ -113,12 +116,15 @@ pub(crate) enum PersistenceError {
     SchemaMismatch(String),
     PublicationWitness(String),
     CorruptRevision(String),
+    InvalidMetadata(String),
+    MetadataConflict(String),
+    CorruptMetadata(String),
     MissingRevision(RevisionIdentity),
     DatabaseLockPoisoned,
 }
 
 impl PersistenceError {
-    fn sqlite(operation: &'static str, source: rusqlite::Error) -> Self {
+    pub(super) fn sqlite(operation: &'static str, source: rusqlite::Error) -> Self {
         Self::Sqlite { operation, source }
     }
 }
@@ -136,6 +142,9 @@ impl fmt::Display for PersistenceError {
                 write!(formatter, "publication witness: {message}")
             }
             Self::CorruptRevision(message) => write!(formatter, "corrupt Revision: {message}"),
+            Self::InvalidMetadata(message) => write!(formatter, "invalid metadata: {message}"),
+            Self::MetadataConflict(message) => write!(formatter, "metadata conflict: {message}"),
+            Self::CorruptMetadata(message) => write!(formatter, "corrupt metadata: {message}"),
             Self::MissingRevision(identity) => write!(
                 formatter,
                 "Revision {} / {} is not persisted",
@@ -323,25 +332,50 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
     let transaction = database
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| PersistenceError::sqlite("begin schema bootstrap", error))?;
-    match classify_database(&transaction)? {
+    let migrated = match classify_database(&transaction)? {
         DatabaseState::Pristine => {
             transaction
-                .execute_batch(SCHEMA_SQL)
+                .execute_batch(SCHEMA_V1_SQL)
                 .map_err(|error| PersistenceError::sqlite("create PersistenceSchemaV1", error))?;
+            transaction
+                .execute_batch(SCHEMA_V2_ADDITIONS_SQL)
+                .map_err(|error| {
+                    PersistenceError::sqlite("create PersistenceSchemaV2 additions", error)
+                })?;
             transaction
                 .pragma_update(None, "application_id", APPLICATION_ID)
                 .map_err(|error| PersistenceError::sqlite("set application_id", error))?;
             transaction
                 .pragma_update(None, "user_version", SCHEMA_VERSION)
                 .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
-            validate_schema(&transaction)?;
+            validate_schema(&transaction, SCHEMA_VERSION)?;
             fault(FaultPoint::BeforeBootstrapCommit);
+            false
         }
-        DatabaseState::V1 => validate_schema(&transaction)?,
-    }
+        DatabaseState::V1 => {
+            transaction
+                .execute_batch(SCHEMA_V2_ADDITIONS_SQL)
+                .map_err(|error| {
+                    PersistenceError::sqlite("migrate PersistenceSchemaV1 to V2", error)
+                })?;
+            validate_schema(&transaction, SCHEMA_VERSION)?;
+            transaction
+                .pragma_update(None, "user_version", SCHEMA_VERSION)
+                .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
+            fault(FaultPoint::BeforeSchemaV2MigrationCommit);
+            true
+        }
+        DatabaseState::V2 => {
+            validate_schema(&transaction, SCHEMA_VERSION)?;
+            false
+        }
+    };
     transaction
         .commit()
         .map_err(|error| PersistenceError::sqlite("commit schema bootstrap", error))?;
+    if migrated {
+        fault(FaultPoint::AfterSchemaV2MigrationCommit);
+    }
     configure_connection(&database)?;
     Ok(database)
 }
@@ -413,6 +447,7 @@ fn configure_connection(database: &Connection) -> Result<(), PersistenceError> {
 enum DatabaseState {
     Pristine,
     V1,
+    V2,
 }
 
 fn classify_database(database: &Connection) -> Result<DatabaseState, PersistenceError> {
@@ -426,9 +461,13 @@ fn classify_database(database: &Connection) -> Result<DatabaseState, Persistence
 
     match (application_id, user_version, has_user_objects) {
         (0, 0, false) => Ok(DatabaseState::Pristine),
-        (APPLICATION_ID, SCHEMA_VERSION, true) => {
-            validate_schema(database)?;
+        (APPLICATION_ID, SCHEMA_V1_VERSION, true) => {
+            validate_schema(database, SCHEMA_V1_VERSION)?;
             Ok(DatabaseState::V1)
+        }
+        (APPLICATION_ID, SCHEMA_VERSION, true) => {
+            validate_schema(database, SCHEMA_VERSION)?;
+            Ok(DatabaseState::V2)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -489,30 +528,44 @@ struct ForeignKeyRow {
     match_clause: String,
 }
 
-fn validate_schema(database: &Connection) -> Result<(), PersistenceError> {
+fn validate_schema(database: &Connection, version: i64) -> Result<(), PersistenceError> {
     let expected = Connection::open_in_memory()
         .map_err(|error| PersistenceError::sqlite("open expected schema database", error))?;
     expected
-        .execute_batch(SCHEMA_SQL)
+        .execute_batch(SCHEMA_V1_SQL)
         .map_err(|error| PersistenceError::sqlite("construct expected schema", error))?;
+    if version == SCHEMA_VERSION {
+        expected
+            .execute_batch(SCHEMA_V2_ADDITIONS_SQL)
+            .map_err(|error| PersistenceError::sqlite("construct expected V2 schema", error))?;
+    } else if version != SCHEMA_V1_VERSION {
+        return Err(PersistenceError::SchemaMismatch(format!(
+            "unsupported expected schema version {version}"
+        )));
+    }
 
     if schema_objects(database)? != schema_objects(&expected)? {
-        return Err(PersistenceError::SchemaMismatch(
-            "sqlite_schema manifest differs from PersistenceSchemaV1".to_owned(),
-        ));
+        return Err(PersistenceError::SchemaMismatch(format!(
+            "sqlite_schema manifest differs from PersistenceSchemaV{version}"
+        )));
     }
     if table_list(database)? != table_list(&expected)? {
         return Err(PersistenceError::SchemaMismatch(
             "STRICT or WITHOUT ROWID table structure differs".to_owned(),
         ));
     }
-    for table in ["packages", "revisions", "revision_runtime_content_refs"] {
-        if table_columns(database, table)? != table_columns(&expected, table)? {
+    let expected_tables = table_list(&expected)?
+        .into_iter()
+        .filter(|row| row.object_type == "table")
+        .map(|row| row.name)
+        .collect::<Vec<_>>();
+    for table in expected_tables {
+        if table_columns(database, &table)? != table_columns(&expected, &table)? {
             return Err(PersistenceError::SchemaMismatch(format!(
                 "column structure differs for {table}"
             )));
         }
-        if foreign_keys(database, table)? != foreign_keys(&expected, table)? {
+        if foreign_keys(database, &table)? != foreign_keys(&expected, &table)? {
             return Err(PersistenceError::SchemaMismatch(format!(
                 "foreign keys differ for {table}"
             )));
@@ -788,9 +841,13 @@ fn validate_publications(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum FaultPoint {
+pub(super) enum FaultPoint {
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
+    BeforeSchemaV2MigrationCommit,
+    AfterSchemaV2MigrationCommit,
+    BeforeMetadataCommit,
+    AfterMetadataCommit,
     BeforeRevisionCommit,
     AfterRevisionCommit,
 }
@@ -801,6 +858,10 @@ impl FaultPoint {
         match self {
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
+            Self::BeforeSchemaV2MigrationCommit => "before_schema_v2_migration_commit",
+            Self::AfterSchemaV2MigrationCommit => "after_schema_v2_migration_commit",
+            Self::BeforeMetadataCommit => "before_metadata_commit",
+            Self::AfterMetadataCommit => "after_metadata_commit",
             Self::BeforeRevisionCommit => "before_revision_commit",
             Self::AfterRevisionCommit => "after_revision_commit",
         }
@@ -808,11 +869,13 @@ impl FaultPoint {
 }
 
 #[cfg(not(test))]
-fn fault(_point: FaultPoint) {}
+pub(super) fn fault(_point: FaultPoint) {}
 
 #[cfg(test)]
-fn fault(point: FaultPoint) {
-    if std::env::var_os("PACTRUN_M1C_FAULT").is_some_and(|value| value == point.name()) {
+pub(super) fn fault(point: FaultPoint) {
+    if std::env::var_os("PACTRUN_M1C_FAULT").is_some_and(|value| value == point.name())
+        || std::env::var_os("PACTRUN_M1D_FAULT").is_some_and(|value| value == point.name())
+    {
         std::process::exit(87);
     }
 }
@@ -1024,7 +1087,7 @@ mod tests {
                 .unwrap(),
             1
         );
-        validate_schema(&database).unwrap();
+        validate_schema(&database, SCHEMA_VERSION).unwrap();
         assert!(
             database
                 .execute(
@@ -1081,7 +1144,12 @@ mod tests {
         assert!(PactrunPersistence::open(&unmarked_root).is_err());
 
         let (_newer_temporary, newer_root) = test_root();
-        initialize_direct(&newer_root, APPLICATION_ID, 2, SCHEMA_SQL);
+        initialize_direct(
+            &newer_root,
+            APPLICATION_ID,
+            SCHEMA_VERSION + 1,
+            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
+        );
         assert!(PactrunPersistence::open(&newer_root).is_err());
 
         let (_drift_temporary, drift_root) = test_root();
@@ -1089,7 +1157,9 @@ mod tests {
             &drift_root,
             APPLICATION_ID,
             SCHEMA_VERSION,
-            &format!("{SCHEMA_SQL}\nCREATE TABLE drift(value TEXT) STRICT;"),
+            &format!(
+                "{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}\nCREATE TABLE drift(value TEXT) STRICT;"
+            ),
         );
         assert!(PactrunPersistence::open(&drift_root).is_err());
 

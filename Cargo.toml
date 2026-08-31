@@ -15,6 +15,7 @@ unsafe_code = "forbid"
 workspace = true
 
 [dependencies]
+fluent-uri = { version = "=0.4.1", default-features = false }
 getrandom = "0.4"
 hex = "0.4"
 serde = { version = "1", features = ["derive"] }
