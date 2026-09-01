@@ -41,8 +41,8 @@ is Frozen.
   implementation are integrated into the canonical `develop` baseline. The
   schema is the current implemented internal persistence schema while remaining
   non-Frozen and non-public.
-- The Pre-M2 installation, Instance, and Managed Input binding design is closed
-  in the current feature working tree and awaits integration. Candidate
+- The Pre-M2 installation, Instance, and Managed Input binding design is
+  integrated into the canonical `develop` baseline. Candidate
   `PackSourceYamlV1` and Candidate `PersistenceSchemaV3` are implementation-
   ready but are not yet current implemented contracts.
 
@@ -71,9 +71,9 @@ milestone state taxonomy above:
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
 | M1-D non-identity metadata implementation | **Complete.** |
-| Pre-M2 installation, Instance, and binding closure | **Closed; integration pending.** |
-| PackSourceYamlV1 authoring projection | **Closed; integration pending.** |
-| PersistenceSchemaV3 internal contract | **Closed; integration pending.** |
+| Pre-M2 installation, Instance, and binding closure | **Closed.** |
+| PackSourceYamlV1 authoring projection | **Closed.** |
+| PersistenceSchemaV3 internal contract | **Closed.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
@@ -82,10 +82,10 @@ does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D is integrated against the current internal
 PersistenceSchemaV2 contract.
 
-The Pre-M2 closure remains on its feature branch. Only after merge may these
-three integration-pending rows become `Closed`, M2 become `Planned`, and V3 be
-described as the current implementation target. That later status change does
-not make either Candidate a Frozen or public compatibility contract.
+The Pre-M2 closure is integrated. M2 is now `Planned`, and Candidate V3 is the
+current implementation target. Neither Candidate is a Frozen or public
+compatibility contract, and V3 does not become the current implemented internal
+schema until successful M2 integration.
 
 ## Milestones
 
@@ -235,7 +235,7 @@ Completion gate:
 
 ### M2 - Packs, Instances, and managed bindings
 
-**State: Proposed.**
+**State: Planned.**
 
 Implement minimal YAML authoring, Revision installation, incomplete Instance
 creation, the single active/retained managed-binding registry, Input operations,

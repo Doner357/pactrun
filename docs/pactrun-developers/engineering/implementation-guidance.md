@@ -23,13 +23,14 @@ is the navigation entry point; its linked requirement pages, including the
 [Persistence Schema V2](../architecture/persistence-schema-v2.md),
 remain normative.
 
-The Pre-M2 design is closed on the current feature branch and synthesized by
-the [Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
+The Pre-M2 design is integrated into the canonical `develop` baseline and
+synthesized by the
+[Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
 Its linked pages, including Candidate
 [Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and Candidate
 [Persistence Schema V3](../architecture/persistence-schema-v3.md), own the
-implementation-ready contract. Integration and production implementation have
-not occurred yet.
+implementation-ready contract. Production implementation has not occurred yet;
+V3 remains non-Frozen, non-public, and Candidate until M2 integration.
 
 ## Implementation decisions
 
