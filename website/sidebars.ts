@@ -14,8 +14,10 @@ const sidebars: SidebarsConfig = {
           items: [
             'pactrun-developers/architecture/system-model',
             'pactrun-developers/architecture/identity-and-state',
+            'pactrun-developers/architecture/pre-m2-installation-instance-binding-baseline',
             'pactrun-developers/architecture/non-identity-metadata-semantic-baseline',
             'pactrun-developers/architecture/persistence-schema-v2',
+            'pactrun-developers/architecture/persistence-schema-v3',
             'pactrun-developers/architecture/service-storage-semantic-baseline',
             'pactrun-developers/architecture/execution-and-concurrency',
             'pactrun-developers/architecture/recovery-and-reconciliation',
@@ -39,6 +41,7 @@ const sidebars: SidebarsConfig = {
           label: 'Package Contracts',
           items: [
             'pactrun-developers/package-contracts/authoring-model',
+            'pactrun-developers/package-contracts/pack-source-yaml-v1',
             'pactrun-developers/package-contracts/revision-core-format-v1',
             'pactrun-developers/package-contracts/snapshot-integrity-format-v1',
             'pactrun-developers/package-contracts/hook-protocol-v1',
@@ -55,6 +58,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'pactrun-developers/engineering/development-and-verification',
             'pactrun-developers/engineering/implementation-guidance',
+            'pactrun-developers/engineering/implementation-roadmap',
             'pactrun-developers/engineering/design-references',
           ],
         },

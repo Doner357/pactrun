@@ -53,6 +53,10 @@ MUST NOT be confused with Instance-scoped `ServiceStorage` or ServiceStorage-
 backed Managed Service Resources whose live contents are service-authoritative
 and may change across Runs.
 
+For M2, `SourceRelativePathV1` acquisition and same-object staging are defined
+by PR-REQ-0259, and durable blob publication precedes the atomic installation
+reference boundary in PR-REQ-0261.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0142 - Logical content roles
@@ -60,6 +64,9 @@ and may change across Runs.
 Authors and frontends MUST provide enough normalized information for Pactrun to
 bind immutable content to logical runtime roles and paths. Reassigning identical
 blobs to different semantic roles MAY produce a different Revision digest.
+
+Candidate `PackSourceYamlV1` therefore keeps `source` acquisition separate from
+the identity-bearing logical `path`, `id`, and `executable` descriptor fields.
 
 This runtime-content closure does not content-address, copy, version, or
 automatically Snapshot service-owned live state. A formal identity-bearing

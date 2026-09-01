@@ -57,6 +57,10 @@ materialize owned runtime content, and commit an immutable Installed Revision.
 Only an Installed Revision may serve as the execution definition for an
 Instance.
 
+M2 closes one minimal source frontend and installation path in PR-REQ-0258
+through PR-REQ-0261. Its YAML is authoring input and MUST pass through this
+Candidate boundary rather than becoming an installed contract directly.
+
 **Verification: Pending automated coverage.**
 
 ## PR-REQ-0004 - Source independence
@@ -65,12 +69,20 @@ A Package Source MUST remain mutable authoring input and MUST NOT be treated as
 an execution identity. An Instance execution MUST NOT depend on the original
 Source remaining available after Revision installation.
 
+M2 source acquisition MUST bind identity to the exact staged bytes, normalized
+core, and runtime-content closure, not to a source pathname or filesystem
+object identity.
+
 **Verification: Pending automated coverage.**
 
 ## PR-REQ-0005 - Installation and Instance creation
 
 Installing Package content MUST create or associate an immutable Revision and
 MUST NOT implicitly create an Instance.
+
+M2 Revision installation and Instance creation are separate typed requests and
+separate atomic database publications, as defined by PR-REQ-0261 and
+PR-REQ-0265.
 
 **Verification: Pending automated coverage.**
 

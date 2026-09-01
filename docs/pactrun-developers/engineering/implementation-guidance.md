@@ -23,6 +23,14 @@ is the navigation entry point; its linked requirement pages, including the
 [Persistence Schema V2](../architecture/persistence-schema-v2.md),
 remain normative.
 
+The Pre-M2 design is closed on the current feature branch and synthesized by
+the [Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
+Its linked pages, including Candidate
+[Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and Candidate
+[Persistence Schema V3](../architecture/persistence-schema-v3.md), own the
+implementation-ready contract. Integration and production implementation have
+not occurred yet.
+
 ## Implementation decisions
 
 Implementers may choose, without changing Pactrun semantics:
@@ -35,10 +43,12 @@ Implementers may choose, without changing Pactrun semantics:
 - Rust crate, module, type, trait, and design-pattern names;
 - PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
 - file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact implemented M1-D internal schema;
+- persistence choices outside the exact implemented V2 and Candidate V3
+  internal schemas;
 - socket, named-pipe, or other side-channel transport;
 - Hook Protocol framing and encoding;
-- YAML and CLI parsers;
+- YAML and CLI parser libraries that preserve the exact Candidate source and
+  fixed minimal-CLI semantics;
 - compression, archive layout, blob storage, refcount, or mark-and-sweep GC;
 - buffering, batching, caching, test, and mock libraries;
 - exact machine-readable CLI schema spelling.
@@ -90,16 +100,32 @@ closed `PresentationTargetV1` variant.
 
 ### Phase 2 - Packs, Instances, and bindings
 
-- minimal YAML authoring;
-- Revision installation and incomplete Instance creation;
-- active and retained binding derivation;
-- active and retained Input operations;
-- Secret redaction and protection;
-- Observe and Mutate guard.
+- strict Candidate `PackSourceYamlV1` authoring with schema-directed scalars,
+  closed portable metadata unions, explicit Package lineage, and Windows/Linux
+  exact-object source-root acquisition;
+- durable-content-first Revision installation with one atomic Revision and
+  typed metadata publication;
+- exact Candidate PersistenceSchemaV3, including transactional V1/V2 migration;
+- bounded-memory, file-backed staging below the dedicated Pactrun storage root;
+- incomplete Instance creation and one chunked immutable payload registry;
+- active and retained binding derivation and mutation;
+- strict token-first state-version CAS and per-Instance Mutate exclusivity;
+- Observe-only exact-payload export with atomic no-clobber file publication and
+  explicitly non-atomic stdout;
+- persisted sticky Secret floors, effective active/retained protection,
+  structural redaction, and purpose-specific export authorization under an
+  explicit plaintext-at-rest and no-secure-erasure limitation;
+- the fixed minimal M2 human CLI with an empty installation local-metadata
+  batch.
 
 This phase implements Pactrun-authoritative bindings only. It must not
 materialize a Managed Input into a service file and synchronize it as a
 substitute for `ServiceStorage`.
+
+It also must not add Action execution, durable pins, Run/recovery state,
+Instance deletion, advanced authoring, stable machine APIs, new Frozen errors,
+or cryptographic Secret storage. Authoring all Frozen capability declarations
+does not claim their runtime implementation.
 
 ### Phase 3 - Action execution
 
@@ -185,7 +211,9 @@ Runtime integration remains Phase 3 and later work.
 The Frozen identity spelling, normalization, framing, and verification
 boundary are defined by
 [Revision Core Format V1](../package-contracts/revision-core-format-v1.md).
-Production projection and persistence remain Phase 1 implementation work.
+The Candidate M2 source spelling and projection into that unchanged boundary
+are defined separately by PackSourceYamlV1. Raw Core JSON remains an internal
+codec/conformance input rather than Package authoring.
 
 ### Closed ServiceStorage semantics; deferred representation
 
@@ -209,18 +237,22 @@ chosen here.
 
 ### Persistence and concurrency encoding
 
-Choose state-version representation, atomic publication, execution ownership,
-durable pins, recovery-state storage, checkpoints, and failure-injection points.
-These choices do not reopen the exact M1-D schema, typed batch/CAS boundary, or
-deterministic comparator contract. History-sensitive metadata concurrency,
-metadata versions, and ABA detection remain deferred.
+M2 fixes random 128-bit state tokens, token-first compare-and-set, per-Instance
+Mutate exclusivity, Observe coexistence, chunked payload persistence, and
+operation-local export acquisition in PR-REQ-0264 through PR-REQ-0270. These
+choices do not reopen the exact M1-D schema, typed metadata batch/CAS boundary,
+or deterministic comparator contract. Execution ownership, durable pins,
+recovery storage, checkpoints, history-sensitive metadata concurrency, metadata
+versions, and metadata ABA detection remain later work.
 
 ### CLI and structured output
 
-Choose deterministic initial Input acquisition spelling separately from the
-purpose-specific authorization spelling for sensitive Snapshot export, Secret
-export and declassification, recovery override, and AbandonManagement. Also
-choose completeness diagnostics and versioned machine-output spelling.
+PR-REQ-0271 fixes the minimal M2 human spelling for Package ID generation,
+installation, Instance create/list/show, and Input list/set/export/delete. It
+has no install-time local-metadata options, force/overwrite export, or stable
+machine envelope. Snapshot export and declassification, recovery override,
+AbandonManagement, later lifecycle commands, completeness presentation details,
+and a versioned machine-output format remain future work.
 
 ## Deferred beyond the initial product scope
 

@@ -18,6 +18,10 @@ and managed binding invariants. User-visible behavior is summarized in the
 Revision changes, presentation or publisher changes, export, and import. A fork
 that becomes a new lineage MUST be explicitly re-identified.
 
+For the closed M2 frontend, that declaration is the required exact
+`package_id` in `PackSourceYamlV1`; installation MUST NOT derive a lineage from
+source location or content. ID generation is a separate non-mutating operation.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0012 - Operational content digest
@@ -55,6 +59,8 @@ local-management data MUST remain outside it.
 `RevisionCoreFormatV1` is already Frozen and contains no `ServiceStorage` or
 ServiceStorage-backed Managed Service Resource declaration. The accepted future
 architecture does not retroactively add those concepts to its closed schema.
+Candidate `PackSourceYamlV1` is an authoring projection into this unchanged
+format, not another Revision identity or a raw-Core authoring route.
 
 **Verification: Pending automated coverage.**
 
@@ -74,6 +80,11 @@ Pactrun MUST apply semantic defaults, validate, and normalize equivalent forms
 before projecting and encoding `RevisionCore`. Unordered domain collections
 MUST be sorted by a stable semantic key; ordered collections MUST preserve their
 order; duplicate semantic keys MUST be rejected.
+
+M2 MUST use the schema-directed scalar decoder in PR-REQ-0258 before this
+normalization. A YAML library's implicit resolver or eager Boolean, null, or
+numeric representation MUST NOT decide Revision meaning. Raw numeric source
+tokens remain available until the target Frozen semantic type is known.
 
 **Verification: Pending automated coverage.**
 
@@ -302,6 +313,11 @@ ContentIds that share one blob require one witness for that physical digest.
 Witnesses authorize durable-content-before-reference ordering only and MUST NOT
 be persisted or affect any Pactrun identity.
 
+M2 `InstallPackSource` MUST obtain the current same-store witness for every
+distinct staged runtime blob before entering the installation transaction in
+PR-REQ-0261. The additional metadata publication does not weaken or replace a
+witness.
+
 An exact Revision record that was already committed MAY be returned
 idempotently without an old witness, including after a process crash and store
 reopen. If blob publication succeeds but the database transaction does not,
@@ -327,6 +343,10 @@ point. M1-C MUST NOT manually sync the database, WAL, or SHM around each
 transaction, and its durability guarantee assumes the platform storage stack
 honors successful persistence operations. Process-crash tests do not certify
 arbitrary hardware power-loss behavior.
+
+M2 extends that same transaction to source-projected portable metadata and any
+explicit crate-private local metadata accepted for the installation. The exact
+retry and no-partial-publication rules in PR-REQ-0261 preserve this boundary.
 
 **Verification: PR-TEST-0052, PR-TEST-0054, PR-TEST-0056, PR-TEST-0057.**
 
@@ -429,6 +449,7 @@ it. Recreating a deleted Instance name MUST produce a new `InstanceId`.
 `InstanceName` MUST be a human reference that is unique among live Instances in
 one management environment. Names MAY be reused after deletion, but durable
 provenance MUST use `InstanceId` as its authoritative historical referent.
+M2 exact syntax and ordering are closed by PR-REQ-0263.
 
 **Verification: Pending automated coverage.**
 
@@ -512,6 +533,10 @@ binding MUST be one atomic management commit. Any acquisition or validation
 failure for such a binding MUST fail the whole create request; Pactrun MUST NOT
 silently omit it and create an Instance more incomplete than requested.
 
+For M2, acquisition and bounded file-backed staging finish before the database
+transaction, and the exact atomic publication and cleanup contract is
+PR-REQ-0265.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0033 - Binding mutation invariants
@@ -526,12 +551,30 @@ directly set or replaced by the operator.
 
 ### PR-REQ-0034 - Secret protection
 
-Secret protection MUST be sticky. Normal data MAY be promoted to Secret
-automatically, but Secret data MUST NOT be implicitly downgraded. Declassification
-requires an explicit Migration transition and explicit operator authorization.
-Retained Secrets MUST retain protection, and ordinary inspection, diagnostics,
-Run records, and user-visible metadata MUST NOT disclose their values or
-value-derived digests.
+Secret protection MUST be sticky. The immutable payload's persisted
+`Normal | Secret` protection is the stored protection floor for a binding. For
+an active binding, effective protection is the stronger of that stored floor
+and the active declaration. For a retained binding, which has no active
+declaration, effective protection is the stored floor. An active Secret
+declaration therefore requires a committed Secret payload, while an active
+Normal declaration with a Secret payload is valid and remains effectively
+Secret.
+
+Normal data MAY be promoted to Secret automatically, but Secret data MUST NOT
+be implicitly downgraded. Declassification requires an explicit Migration
+transition and explicit operator authorization. Retained Secrets MUST retain
+protection, and ordinary inspection, diagnostics, Run records, and user-visible
+metadata MUST NOT disclose their values or value-derived digests.
+
+Only a deletion already permitted by PR-REQ-0033 ends the old binding's sticky
+continuity. An active required binding remains non-deletable once bound. A
+later bind after an allowed deletion is a newly acquired binding whose initial
+protection follows the then-active declaration; it MUST NOT be described as
+declassifying the old Secret payload and does not add a secure-erasure claim.
+
+M2 publication, persistence validation, storage, staging, and disclosure apply
+this rule through PR-REQ-0264, PR-REQ-0266, PR-REQ-0268, and PR-REQ-0269.
+Secret classification MUST NOT be confused with cryptographic storage.
 
 **Verification: Pending automated coverage.**
 
@@ -643,6 +686,32 @@ this boundary rather than merely hiding excluded operational data behind a
 metadata name.
 
 **Verification: PR-TEST-0059, PR-TEST-0067.**
+
+### PR-REQ-0272 - M2 scope and anti-backdoor boundary
+
+M2 MUST implement only minimal Pack authoring and Revision installation,
+Instance creation and inspection, Pactrun-authoritative Managed Input bindings,
+Secret disclosure controls, and their internal persistence and concurrency
+boundaries. It MUST NOT reinterpret a Managed Input, M1-D metadata value,
+transient staging file, payload chunk, Instance state token, or database row as
+ServiceStorage or a ServiceStorage-backed Managed Service Resource.
+
+M2 MUST NOT add Action execution, Hook launch, durable execution pins, Run
+ownership, Snapshot runtime, Migration execution, recovery state, Instance
+deletion workflow, advanced Recipe authoring, stable machine APIs, new Frozen
+error codes, `LocalInstall` history, or cryptographic Secret storage. The
+ability to author all `RevisionCoreV1` capability declarations establishes
+installation projection only and MUST NOT be presented as runtime support for
+those later milestones.
+
+Candidate `PackSourceYamlV1` and `PersistenceSchemaV3` are independently
+versioned internal contracts. They MUST NOT modify or acquire the compatibility
+status of Frozen Revision Core, Snapshot Integrity, Hook Protocol, or Error
+Taxonomy V1. A future ServiceStorage design MUST enter through its own approved
+Revision, authority, persistence, and runtime gates rather than an M2
+authoring, binding, or metadata extension.
+
+**Verification: Pending automated coverage.**
 
 ## Pre-M1-D non-identity metadata closure
 

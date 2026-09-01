@@ -16,6 +16,11 @@ handled directly by Application and Domain services. Instance mutations MUST
 still use the mutation guard and atomically publish a new state version. A
 management operation MUST NOT create an Execution Plan or Run.
 
+In M2, Instance creation and Input set/delete are Mutate management operations;
+Input export and list/show are Observe. Install publication uses its own
+Revision transaction and does not acquire an Instance guard. The exact CAS and
+Observe coexistence rules are PR-REQ-0267.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0036 - Managed executions
@@ -116,6 +121,32 @@ Pactrun MUST model access as `Observe` or `Mutate`. Observe executions MAY
 coexist with other Observe and Mutate operations. Mutate operations on the same
 Instance MUST serialize or conflict. The same mutation guard MUST protect both
 managed execution and management mutations.
+
+**Verification: Pending automated coverage.**
+
+### PR-REQ-0267 - M2 Instance CAS and mutation guard
+
+Every typed M2 Instance mutation request MUST carry one exact expected
+`InstanceStateVersion`. Inside the write transaction Pactrun MUST compare the
+current token before evaluating desired state. A mismatch is always a stale
+conflict, even when the requested desired binding already exists. When the
+token matches, Pactrun validates and applies the mutation. Every actual
+publication MUST generate a fresh opaque token from the operating-system
+cryptographic random source; a semantic no-op MUST leave the token unchanged.
+
+This is token-first Instance concurrency and MUST NOT be implemented with the
+M1-D desired-first semantic CAS rule. Pactrun MUST NOT automatically refresh and
+retry a typed request, create a request-idempotency key, or use current field
+equality as mutation history. Returning to earlier field values still publishes
+a new token, preventing ABA for Pactrun-authoritative Instance state.
+
+M2 MUST provide per-Instance Mutate exclusivity: management mutations on the
+same Instance serialize or conflict. Observe operations, including
+`ExportInput`, MUST NOT acquire a reader guard and MAY coexist with Mutate.
+Their exact-byte lifetime is provided by transient observation and staging, not
+by holding the mutation guard. SQLite token comparison is the cross-process
+correctness boundary. M2 MUST NOT create M3 durable execution pins, Run
+ownership, or Action Admission state.
 
 **Verification: Pending automated coverage.**
 

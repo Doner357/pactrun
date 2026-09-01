@@ -41,6 +41,10 @@ durably pinned by an accepted Run. A compile-only Plan MUST NOT prevent
 deletion. Historical Run identity and Snapshot provenance MUST NOT permanently
 prevent Revision deletion.
 
+Candidate PersistenceSchemaV3 represents the active-Instance guard as an exact
+`ON DELETE RESTRICT` foreign key. This relational guard does not define the
+future M7 Instance deletion workflow.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0076 - Physical content reachability
@@ -65,6 +69,10 @@ integrity format and hash domain, export bundle format, Hook Protocol, Recipe
 Authoring API, and structured CLI output MUST be independently versioned. They
 MUST NOT share one generalized Pactrun schema version.
 
+`PackSourceYamlV1` and `PersistenceSchemaV3` are two additional independent
+internal version domains. Their `V1` and `V3` labels do not couple them to
+Revision Core, Hook Protocol, Snapshot Integrity, or a future CLI format.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0078 - Persistence migrations
@@ -79,6 +87,11 @@ components, and the complete derived runtime-content reference relation. A
 crash before the migration commit MUST leave an exact admissible V1 database;
 a crash after commit MUST expose an exact admissible V2 database. An
 intermediate version marker or partial V2 schema MUST never be accepted.
+
+The Candidate V1/V2-to-V3 extension in PR-REQ-0270 additionally preserves all
+M1-D metadata and adds no inferred Instance, binding, payload, source, or
+installation-history rows. Until M2 integration, V3 is not the current
+implemented schema.
 
 **Verification: Pending automated coverage.**
 
