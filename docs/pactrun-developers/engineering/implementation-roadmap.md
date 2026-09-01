@@ -41,6 +41,10 @@ is Frozen.
   implementation are integrated into the canonical `develop` baseline. The
   schema is the current implemented internal persistence schema while remaining
   non-Frozen and non-public.
+- The Pre-M2 installation, Instance, and Managed Input binding design is closed
+  in the current feature working tree and awaits integration. Candidate
+  `PackSourceYamlV1` and Candidate `PersistenceSchemaV3` are implementation-
+  ready but are not yet current implemented contracts.
 
 ## Milestone states
 
@@ -52,7 +56,7 @@ is Frozen.
 - **Complete:** every completion gate has passed and the result has been merged
   into `develop`.
 
-## Pre-M1-D design gates
+## Design gates
 
 These design-gate states describe semantic and documentation closure, not the
 milestone state taxonomy above:
@@ -67,6 +71,9 @@ milestone state taxonomy above:
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
 | M1-D non-identity metadata implementation | **Complete.** |
+| Pre-M2 installation, Instance, and binding closure | **Closed; integration pending.** |
+| PackSourceYamlV1 authoring projection | **Closed; integration pending.** |
+| PersistenceSchemaV3 internal contract | **Closed; integration pending.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
@@ -74,6 +81,11 @@ and non-identity metadata persistence closure are integrated into the canonical
 does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D is integrated against the current internal
 PersistenceSchemaV2 contract.
+
+The Pre-M2 closure remains on its feature branch. Only after merge may these
+three integration-pending rows become `Closed`, M2 become `Planned`, and V3 be
+described as the current implementation target. That later status change does
+not make either Candidate a Frozen or public compatibility contract.
 
 ## Milestones
 
@@ -234,11 +246,39 @@ MUST NOT model a service-generated editable persistent file as an Input, an
 Input rematerialization target, or an implicitly synchronized binding in order
 to simulate `ServiceStorage`.
 
+The approved implementation entry point is the
+[Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
+M2 uses Candidate `PackSourceYamlV1`, exact Candidate PersistenceSchemaV3,
+file-backed operation-local staging below the dedicated Pactrun storage root,
+strict token-first Instance CAS, and the fixed minimal human CLI. The source
+frontend can project all Frozen `RevisionCoreV1` declarations but M2 does not
+execute Action, Snapshot, Migration, or Cleanup capabilities.
+
 Completion gate:
 
 - Package Source can produce and install an exact immutable Revision;
+- schema-directed plain/quoted string and Boolean projection, all-explicit-tag
+  rejection, all-decimal Package IDs, and JSON-number-only numeric projection
+  have negative and parity tests;
+- every portable metadata union and presentation target, implicit installed-
+  Revision targeting, and duplicate semantic-key rejection have tests;
+- Windows and Linux exact-object source acquisition have no-follow,
+  no-mount-crossing, alias, manifest, and TOCTOU tests;
 - Instance creation and incomplete readiness are explicit;
 - active and retained remain roles over one registry;
+- payloads are chunked, bounded, random-identified, immutable, and tested across
+  exact V1/V2-to-V3 migration and crash boundaries;
+- export observes one exact payload without blocking Mutate and tests
+  reclamation, atomic no-clobber file publication, and non-atomic stdout;
+- strict state-version CAS and file-backed staging cleanup have positive and
+  negative tests;
+- persisted sticky Secret floors, Normal-to-Secret promotion, active-Normal
+  with stored-Secret acceptance, active-Secret with stored-Normal corruption,
+  retained effective protection, permitted-deletion continuity, structural
+  redaction, and the explicit plaintext-at-rest limitation have positive and
+  negative tests;
+- the fixed M2 human CLI carries no installation-time local metadata, generic
+  overwrite, stable machine envelope, or new Frozen error-code promise;
 - Input and Secret behavior has positive and negative tests;
 - no Action runtime behavior is claimed by this milestone.
 

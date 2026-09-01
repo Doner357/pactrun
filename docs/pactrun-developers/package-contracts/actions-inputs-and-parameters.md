@@ -31,7 +31,9 @@ as Actions even when they ultimately launch Hooks.
 
 Every Input declaration MUST have a stable semantic `InputIdentity`. Within one
 Package lineage, an author MUST NOT reuse an identity for a different meaning.
-The exact authoring spelling remains open specification work.
+Candidate `PackSourceYamlV1` supplies the fixed M2 authoring spelling while
+reusing the Frozen ASCII semantic grammar. Other future authoring frontends
+remain independently versioned.
 
 **Verification: Pending automated coverage.**
 

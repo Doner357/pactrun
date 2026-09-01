@@ -18,6 +18,11 @@ source Revision in the same Package lineage. Each normalized edge MUST contain
 explicit Input transitions, source and target requirements, mandatory target
 outputs, and an optional Package Migration implementation.
 
+M2 installation evaluates the separate repository-context relation in
+PR-REQ-0262. A missing source is `NotEvaluated`, not an intrinsic target error;
+an installed incompatible source is `Invalid`, and only `Valid` is eligible for
+later execution.
+
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0154 - Separate predicates
@@ -104,6 +109,8 @@ The V1 identity spelling and the boundary between intrinsic target validation,
 exact-source relational validation, and Admission are defined by
 [Revision Core Format V1](./revision-core-format-v1.md). Source availability is
 not made an installation prerequisite by that format specification.
+PR-REQ-0262 fixes the M2 inspection and installation-order behavior without
+changing the Frozen format.
 
 **Verification: Pending automated coverage.**
 

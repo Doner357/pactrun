@@ -23,21 +23,36 @@ Every authoring frontend MUST produce a `RevisionCandidate` containing a
 Recipe ASTs, and SDK-specific values MUST NOT become installed execution
 contracts directly.
 
+Candidate `PackSourceYamlV1` is the closed minimal M2 frontend. Its exact source
+profile, schema-directed scalar rules, portable metadata shapes, source
+acquisition, and projection are owned by PR-REQ-0258 through PR-REQ-0260.
+
 **Verification: Pending automated coverage.**
 
 ## PR-REQ-0122 - Normalized projection boundary
 
 Before installation, Pactrun MUST validate the normalized definition and
-project it into identity-bearing `RevisionCore`, typed current presentation
-metadata, typed provenance claims, and typed local management metadata. The
-normalized authoring model MUST NOT itself be treated as the hash or persistence
-object, and the projection MUST NOT emit a generic metadata map, arbitrary JSON
-payload, or storage row shape.
+project it into identity-bearing `RevisionCore`, the runtime-content closure,
+typed reference-label bindings, typed current presentation metadata, and typed
+provenance claims. The normalized authoring model MUST NOT itself be treated as
+the hash or persistence object, and the projection MUST NOT emit a generic
+metadata map, arbitrary JSON payload, or storage row shape.
 
-Presentation projection MUST use the closed targets and fields in PR-REQ-0251;
-provenance projection MUST use the closed claims in PR-REQ-0252. This contract
-does not define an authoring syntax, installation transaction, Export Bundle
-Format, or M1-D production implementation.
+Reference-label projection MUST use PR-REQ-0250, presentation projection MUST
+use the closed targets and fields in PR-REQ-0251, and provenance projection
+MUST use the closed claims in PR-REQ-0252. Revision-scoped portable metadata
+MUST acquire the exact installed Revision target only after identity projection;
+an authoring source MUST NOT be required or permitted to restate that derived
+identity.
+
+Local aliases, notes, and trust assessments are not part of
+`NormalizedPackDefinition`. A crate-private installation orchestrator MAY
+supply a separate explicit local M1-D mutation batch, but Candidate
+`PackSourceYamlV1` carries portable metadata only and the M2 human install
+command supplies an empty local batch. This contract does not itself redefine
+the M2 source syntax or installation transaction, which are owned by
+PR-REQ-0258 through PR-REQ-0261. It does not define an Export Bundle Format or
+change the M1-D production implementation.
 
 **Verification: Pending automated coverage.**
 
@@ -48,6 +63,7 @@ The model may contain:
 ```text
 NormalizedPackDefinition
 |- PackageIdentityDeclaration
+|- ReferenceLabelMetadata
 |- PresentationMetadata
 |- ProvenanceMetadata
 |- InputDeclarations
@@ -59,8 +75,10 @@ NormalizedPackDefinition
 ```
 
 Each Action and lifecycle capability owns its own parameters, requirements, and
-implementation. Presentation may coexist with semantics in the authoring model,
-but the installation projection separates their identity roles.
+implementation. Reference labels, presentation, and provenance may coexist with
+semantics in the authoring model, but the installation projection separates
+their identity roles. A separate orchestration-supplied local metadata batch is
+installation context, not authoring content.
 
 In `RevisionCoreFormatV1`, capability-specific fixed prerequisites are
 semantics of the capability kind. They are not an author-configurable generic
