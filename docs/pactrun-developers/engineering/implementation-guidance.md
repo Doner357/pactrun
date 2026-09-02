@@ -27,11 +27,11 @@ The Pre-M2 design is integrated into the canonical `develop` baseline and
 synthesized by the
 [Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
 Its linked pages, including Candidate
-[Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and Candidate
+[Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and the
+implemented internal
 [Persistence Schema V3](../architecture/persistence-schema-v3.md), own the
-implementation-ready contract. M2 implementation parity is in progress on its
-feature branch; V3 remains non-Frozen, non-public, and Candidate until M2
-integration.
+M2 contract. M2 is integrated into `develop`; V3 is the current implemented
+internal schema while remaining non-Frozen and non-public.
 
 ## Implementation decisions
 
@@ -45,8 +45,8 @@ Implementers may choose, without changing Pactrun semantics:
 - Rust crate, module, type, trait, and design-pattern names;
 - PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
 - file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact implemented V2 and Candidate V3
-  internal schemas;
+- persistence choices outside the exact implemented V2 and V3 internal
+  schemas;
 - socket, named-pipe, or other side-channel transport;
 - Hook Protocol framing and encoding;
 - YAML and CLI parser libraries that preserve the exact Candidate source and
@@ -108,7 +108,7 @@ closed `PresentationTargetV1` variant.
 - exact-object staging and hashing, followed by intrinsic validation, Frozen
   projection, and typed metadata-plan validation before durable M1-B blob
   publication and one atomic Revision/metadata database publication;
-- exact Candidate PersistenceSchemaV3, including transactional V1/V2 migration;
+- exact PersistenceSchemaV3, including transactional V1/V2 migration;
 - bounded-memory, file-backed staging below the dedicated Pactrun storage root;
 - incomplete Instance creation and one chunked immutable payload registry;
 - active and retained binding derivation and mutation;

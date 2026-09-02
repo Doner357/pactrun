@@ -704,8 +704,9 @@ ability to author all `RevisionCoreV1` capability declarations establishes
 installation projection only and MUST NOT be presented as runtime support for
 those later milestones.
 
-Candidate `PackSourceYamlV1` and `PersistenceSchemaV3` are independently
-versioned internal contracts. They MUST NOT modify or acquire the compatibility
+Candidate `PackSourceYamlV1` and the implemented internal
+`PersistenceSchemaV3` are independently versioned internal contracts. They MUST
+NOT modify or acquire the compatibility
 status of Frozen Revision Core, Snapshot Integrity, Hook Protocol, or Error
 Taxonomy V1. A future ServiceStorage design MUST enter through its own approved
 Revision, authority, persistence, and runtime gates rather than an M2

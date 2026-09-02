@@ -4,15 +4,15 @@ title: Persistence Schema V3
 
 # Persistence Schema V3
 
-**Status: Candidate normative internal persistence contract; implementation
-parity in progress, non-Frozen, and non-public.**
+**Status: Current implemented normative internal persistence contract;
+non-Frozen and non-public.**
 
 This page extends the exact implemented
 [PersistenceSchemaV2](./persistence-schema-v2.md) for M2. It does not modify
-the V1/V2 tables or any Frozen identity or wire format. Until M2 is integrated,
-V2 remains the current implemented schema and V3 remains Candidate.
+the V1/V2 tables or any Frozen identity or wire format. PersistenceSchemaV3 is
+the current implemented internal schema after M2 integration.
 
-### PR-REQ-0269 - Exact Candidate PersistenceSchemaV3
+### PR-REQ-0269 - Exact PersistenceSchemaV3
 
 PersistenceSchemaV3 MUST contain the exact V2 schema followed by exactly the
 four tables below, retain application ID `0x50414354`, and set SQLite

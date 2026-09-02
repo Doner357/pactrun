@@ -2,10 +2,10 @@
 
 Pactrun is a local-first package management and execution product implemented in
 Rust. The repository uses a modular-monolith architecture. Canonical `develop`
-contains the completed M1 persistence foundations; M2 Pack installation,
-Instances, and Managed Input bindings are currently establishing implementation
-parity on their feature branch. The Rust application, domain, and repository
-surfaces remain internal and do not constitute a stable public Rust API.
+contains the completed M1 persistence foundations and the integrated M2 Pack
+installation, Instance, and Managed Input binding implementation. The Rust
+application, domain, and repository surfaces remain internal and do not
+constitute a stable public Rust API.
 
 ## Repository layout
 

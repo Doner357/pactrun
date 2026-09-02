@@ -13,11 +13,11 @@ service-specific behavior to trusted Hooks.
 :::warning Implementation status
 
 The repository uses a Rust modular-monolith architecture. Canonical `develop`
-contains the completed M1 persistence foundations, while M2 Pack installation,
-Instances, and Managed Input bindings are establishing implementation parity on
-their feature branch. The Pactrun Developer documentation distinguishes current
-implementation from deferred contracts. Pactrun User and Package Author
-documentation is reserved for completion after the initial release.
+contains the completed M1 persistence foundations and the integrated M2 Pack
+installation, Instance, and Managed Input binding implementation. The Pactrun
+Developer documentation distinguishes current implementation from deferred
+contracts. Pactrun User and Package Author documentation is reserved for
+completion after the initial release.
 
 :::
 

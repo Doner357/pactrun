@@ -20,8 +20,8 @@ is Frozen.
 
 - `RevisionCoreFormatV1` is Frozen with Rust verification, an independent Node
   24 oracle, golden vectors, and requirement/test traceability.
-- The production crate remains a modular monolith. M2 implementation is active
-  on an isolated feature branch and is not yet integrated into `develop`.
+- The production crate remains a modular monolith. M2 Pack installation,
+  Instance, and Managed Input binding support is integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -42,10 +42,10 @@ is Frozen.
   implementation are integrated into the canonical `develop` baseline. The
   schema is the current implemented internal persistence schema while remaining
   non-Frozen and non-public.
-- The Pre-M2 installation, Instance, and Managed Input binding design is
-  integrated into the canonical `develop` baseline. Candidate
-  `PackSourceYamlV1` and Candidate `PersistenceSchemaV3` are currently gaining
-  implementation parity on the M2 feature branch; they remain non-Frozen and
+- The Pre-M2 installation, Instance, and Managed Input binding design and M2
+  implementation are integrated into the canonical `develop` baseline.
+  Candidate `PackSourceYamlV1` remains non-Frozen; PersistenceSchemaV3 is the
+  current implemented internal schema while remaining non-Frozen and
   non-public.
 
 ## Milestone states
@@ -84,11 +84,10 @@ does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D is integrated against the current internal
 PersistenceSchemaV2 contract.
 
-The Pre-M2 closure is integrated. M2 is now `In progress`, and Candidate V3 is
-the current implementation target with parity work active on the feature
-branch. Neither Candidate is a Frozen or public compatibility contract, and V3
-does not become the current canonical implemented internal schema until
-successful M2 integration.
+The Pre-M2 closure and M2 implementation are integrated. M2 is `Complete`.
+Candidate `PackSourceYamlV1` remains a non-Frozen authoring contract, and
+PersistenceSchemaV3 is the current canonical implemented internal schema while
+remaining non-Frozen and non-public.
 
 ## Milestones
 
@@ -238,7 +237,7 @@ Completion gate:
 
 ### M2 - Packs, Instances, and managed bindings
 
-**State: In progress.**
+**State: Complete.**
 
 Implement minimal YAML authoring, Revision installation, incomplete Instance
 creation, the single active/retained managed-binding registry, Input operations,
@@ -251,7 +250,7 @@ to simulate `ServiceStorage`.
 
 The approved implementation entry point is the
 [Pre-M2 Installation, Instance, and Binding Baseline](../architecture/pre-m2-installation-instance-binding-baseline.md).
-M2 uses Candidate `PackSourceYamlV1`, exact Candidate PersistenceSchemaV3,
+M2 uses Candidate `PackSourceYamlV1`, exact PersistenceSchemaV3,
 file-backed operation-local staging below the dedicated Pactrun storage root,
 strict token-first Instance CAS, and the fixed minimal human CLI. The source
 frontend can project all Frozen `RevisionCoreV1` declarations but M2 does not

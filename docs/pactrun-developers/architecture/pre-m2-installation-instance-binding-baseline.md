@@ -37,7 +37,7 @@ normative authority, and their text wins if a summary here is ambiguous.
 
 | Topic | Synthesis | Normative authority |
 | --- | --- | --- |
-| Internal schema | Candidate `PersistenceSchemaV3` preserves exact V2 and adds Instances, payload headers/chunks, and bindings with canonical representation. | [PR-REQ-0269](./persistence-schema-v3.md#pr-req-0269---exact-candidate-persistenceschemav3) |
+| Internal schema | The implemented internal `PersistenceSchemaV3` preserves exact V2 and adds Instances, payload headers/chunks, and bindings with canonical representation. | [PR-REQ-0269](./persistence-schema-v3.md#pr-req-0269---exact-persistenceschemav3) |
 | Migration | Pristine, V1, and V2 databases converge transactionally on exact V3; drifted, partial, foreign, and newer databases fail. | [PR-REQ-0270](./persistence-schema-v3.md#pr-req-0270---persistence-migration-to-v3) |
 | Interface | The application contract is crate-private. The fixed M2 human CLI is narrow and is normative without becoming a Frozen format. | [PR-REQ-0271](../product-behavior/command-and-output-reference.md#pr-req-0271---m2-application-and-minimal-human-cli) |
 | Scope gate | M2 cannot use Inputs, metadata, transient staging, or schema rows as a ServiceStorage, execution, recovery, or stable-public-API backdoor. | [PR-REQ-0272](./identity-and-state.md#pr-req-0272---m2-scope-and-anti-backdoor-boundary) |
