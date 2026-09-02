@@ -90,10 +90,11 @@ intermediate version marker or partial V2 schema MUST never be accepted.
 
 The Candidate V1/V2-to-V3 extension in PR-REQ-0270 additionally preserves all
 M1-D metadata and adds no inferred Instance, binding, payload, source, or
-installation-history rows. Until M2 integration, V3 is not the current
+installation-history rows. During M2 feature work it has implementation parity
+in progress; until successful M2 integration, V3 is not the current canonical
 implemented schema.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0073.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 

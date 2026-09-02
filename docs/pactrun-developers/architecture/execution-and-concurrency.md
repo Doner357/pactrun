@@ -148,7 +148,7 @@ by holding the mutation guard. SQLite token comparison is the cross-process
 correctness boundary. M2 MUST NOT create M3 durable execution pins, Run
 ownership, or Action Admission state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0076, PR-TEST-0077.**
 
 ### PR-REQ-0046 - Immutable Pactrun-owned admitted context
 

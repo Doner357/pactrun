@@ -89,7 +89,16 @@ fn build_docs(workspace_root: &Path) -> Result<(), String> {
 fn run(workspace_root: &Path, program: &str, arguments: &[&str]) -> Result<(), String> {
     eprintln!("> {program} {}", arguments.join(" "));
 
-    let status = Command::new(program)
+    #[cfg(windows)]
+    let executable = if program == "pnpm" {
+        "pnpm.cmd"
+    } else {
+        program
+    };
+    #[cfg(not(windows))]
+    let executable = program;
+
+    let status = Command::new(executable)
         .args(arguments)
         .current_dir(workspace_root)
         .status()

@@ -42,6 +42,14 @@ pub(crate) fn decode_canonical_revision_core_v1(
     Ok(core)
 }
 
+/// Project schema-directed authoring JSON through the Frozen semantic model
+/// without requiring the source bytes themselves to be canonical JSON.
+pub(crate) fn project_revision_core_source_v1(
+    bytes: &[u8],
+) -> Result<RevisionCoreV1, RevisionCoreV1Error> {
+    decode_semantic_revision_core_internal_v1(bytes)
+}
+
 pub(crate) fn decode_canonical_runtime_content_v1(
     bytes: &[u8],
 ) -> Result<RuntimeContentClosureIdentityV1, RevisionCoreV1Error> {

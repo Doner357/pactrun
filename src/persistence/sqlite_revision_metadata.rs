@@ -35,14 +35,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin metadata transaction", error))?;
-        let core = load_revision_core(&transaction, revision)?;
-
-        // Reject pre-existing non-canonical metadata before applying another mutation.
-        load_revision_metadata_from(&transaction, revision, &core)?;
-        for operation in batch.operations() {
-            apply_operation(&transaction, revision, &core, operation)?;
-        }
-        load_revision_metadata_from(&transaction, revision, &core)?;
+        apply_revision_metadata_in_transaction(&transaction, revision, batch)?;
         fault(FaultPoint::BeforeMetadataCommit);
         transaction
             .commit()
@@ -125,6 +118,21 @@ impl PactrunPersistence {
         }
         Ok(identity)
     }
+}
+
+pub(super) fn apply_revision_metadata_in_transaction(
+    transaction: &Transaction<'_>,
+    revision: &RevisionIdentity,
+    batch: &RevisionMetadataMutationBatch,
+) -> Result<(), PersistenceError> {
+    let core = load_revision_core(transaction, revision)?;
+    // Reject pre-existing non-canonical metadata before applying another mutation.
+    load_revision_metadata_from(transaction, revision, &core)?;
+    for operation in batch.operations() {
+        apply_operation(transaction, revision, &core, operation)?;
+    }
+    load_revision_metadata_from(transaction, revision, &core)?;
+    Ok(())
 }
 
 fn validate_reference_label_lookup_rows(
@@ -1666,7 +1674,7 @@ mod tests {
     // Test-ID: PR-TEST-0059
     // Verifies: PR-REQ-0248, PR-REQ-0256
     #[test]
-    fn fresh_v2_schema_is_exact_and_rejects_noncanonical_physical_states() {
+    fn current_schema_preserves_v2_metadata_and_rejects_noncanonical_physical_states() {
         let (_temporary, root) = test_root();
         let persistence = PactrunPersistence::open(&root).unwrap();
         let (revision, _) = persist_full(&persistence, 1);
@@ -1675,7 +1683,7 @@ mod tests {
             database
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            2
+            3
         );
         assert_eq!(
             database
@@ -1686,7 +1694,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            19
+            23
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
@@ -1748,7 +1756,7 @@ mod tests {
     // Test-ID: PR-TEST-0060
     // Verifies: PR-REQ-0257
     #[test]
-    fn exact_v1_migration_preserves_content_and_has_atomic_crash_boundaries() {
+    fn exact_v1_to_current_migration_preserves_content_and_has_atomic_crash_boundaries() {
         let (_temporary, root) = test_root();
         let digest = blob_digest(b"migration fixture");
         let content = full_content(&digest);
@@ -1773,7 +1781,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            2
+            3
         );
 
         let (_before_temporary, before_root) = test_root();
@@ -1781,7 +1789,7 @@ mod tests {
         assert!(!run_worker(
             &before_root,
             "open",
-            Some("before_schema_v2_migration_commit"),
+            Some("before_schema_v3_migration_commit"),
             None,
         ));
         let before_database = Connection::open(database_path(&before_root)).unwrap();
@@ -1810,7 +1818,7 @@ mod tests {
         assert!(!run_worker(
             &after_root,
             "open",
-            Some("after_schema_v2_migration_commit"),
+            Some("after_schema_v3_migration_commit"),
             None,
         ));
         assert_eq!(
@@ -1818,7 +1826,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            2
+            3
         );
         PactrunPersistence::open(&after_root).unwrap();
     }

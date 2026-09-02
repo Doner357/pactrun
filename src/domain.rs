@@ -9,14 +9,18 @@
 
 mod error;
 mod identity;
+mod managed_input;
 mod revision_core_v1;
 mod revision_metadata;
 
 pub(crate) use error::PactrunErrorRefV1;
 #[allow(unused_imports)]
 pub(crate) use identity::{
-    InstanceId, InstanceStateVersion, PackageId, RevisionContentDigest, RevisionIdentity,
+    InstanceId, InstanceStateVersion, ManagedInputPayloadId, PackageId, RevisionContentDigest,
+    RevisionIdentity,
 };
+#[allow(unused_imports)]
+pub(crate) use managed_input::*;
 pub(crate) use revision_core_v1::*;
 #[allow(unused_imports)]
 pub(crate) use revision_metadata::*;
