@@ -208,6 +208,14 @@ pub(crate) struct RevisionCoreV1 {
 }
 
 impl RevisionCoreV1 {
+    pub(crate) fn inputs(&self) -> &[InputDeclarationV1] {
+        &self.inputs
+    }
+
+    pub(crate) fn migrations(&self) -> &[MigrationV1] {
+        &self.migrations
+    }
+
     pub(crate) fn contains_presentation_target(&self, target: &PresentationTargetV1) -> bool {
         match target {
             PresentationTargetV1::Revision => true,

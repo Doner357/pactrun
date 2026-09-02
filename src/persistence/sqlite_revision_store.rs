@@ -7,7 +7,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Mutex,
     thread,
     time::{Duration, Instant},
@@ -19,8 +19,12 @@ use super::runtime_content_store::{
     RuntimeContentStore, RuntimeContentStoreError, StoredRuntimeBlob,
     validate_existing_regular_entry, validate_supported_storage_root,
 };
+use super::sqlite_revision_metadata::apply_revision_metadata_in_transaction;
 use crate::{
-    domain::{PackageId, RevisionIdentity, Sha256Digest, ValidatedRevisionContentV1},
+    domain::{
+        PackageId, RevisionIdentity, RevisionMetadataMutationBatch, Sha256Digest,
+        ValidatedRevisionContentV1,
+    },
     revision_core_v1::{
         calculate_revision_content_digest_v1, decode_canonical_revision_content_v1,
         encode_canonical_revision_core_v1, encode_canonical_runtime_content_v1,
@@ -32,7 +36,8 @@ const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
 pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
 const SCHEMA_V1_VERSION: i64 = 1;
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_V2_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -92,10 +97,13 @@ CREATE TABLE revision_runtime_content_refs (
 "#;
 pub(super) const SCHEMA_V2_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v2_additions.sql");
+pub(super) const SCHEMA_V3_ADDITIONS_SQL: &str =
+    include_str!("persistence_schema_v3_additions.sql");
 
 #[derive(Debug)]
 pub(crate) struct PactrunPersistence {
     pub(super) database: Mutex<Connection>,
+    pub(super) database_path: PathBuf,
     runtime_content: RuntimeContentStore,
 }
 
@@ -112,6 +120,10 @@ pub(crate) enum PersistenceError {
         operation: &'static str,
         source: rusqlite::Error,
     },
+    Io {
+        operation: &'static str,
+        source: std::io::Error,
+    },
     DatabaseOwnership(String),
     SchemaMismatch(String),
     PublicationWitness(String),
@@ -119,6 +131,11 @@ pub(crate) enum PersistenceError {
     InvalidMetadata(String),
     MetadataConflict(String),
     CorruptMetadata(String),
+    MissingInstance(String),
+    StaleInstanceState,
+    InvalidManagedInput(String),
+    UnauthorizedSecretExport,
+    CorruptManagedInput(String),
     MissingRevision(RevisionIdentity),
     DatabaseLockPoisoned,
 }
@@ -134,6 +151,7 @@ impl fmt::Display for PersistenceError {
         match self {
             Self::RuntimeContent(source) => write!(formatter, "runtime content: {source}"),
             Self::Sqlite { operation, source } => write!(formatter, "{operation}: {source}"),
+            Self::Io { operation, source } => write!(formatter, "{operation}: {source}"),
             Self::DatabaseOwnership(message) => {
                 write!(formatter, "database ownership: {message}")
             }
@@ -145,6 +163,17 @@ impl fmt::Display for PersistenceError {
             Self::InvalidMetadata(message) => write!(formatter, "invalid metadata: {message}"),
             Self::MetadataConflict(message) => write!(formatter, "metadata conflict: {message}"),
             Self::CorruptMetadata(message) => write!(formatter, "corrupt metadata: {message}"),
+            Self::MissingInstance(name) => write!(formatter, "Instance {name:?} is not persisted"),
+            Self::StaleInstanceState => formatter.write_str("stale InstanceStateVersion"),
+            Self::InvalidManagedInput(message) => {
+                write!(formatter, "invalid Managed Input: {message}")
+            }
+            Self::UnauthorizedSecretExport => {
+                formatter.write_str("Secret export is not authorized")
+            }
+            Self::CorruptManagedInput(message) => {
+                write!(formatter, "corrupt Managed Input: {message}")
+            }
             Self::MissingRevision(identity) => write!(
                 formatter,
                 "Revision {} / {} is not persisted",
@@ -160,6 +189,7 @@ impl std::error::Error for PersistenceError {
         match self {
             Self::RuntimeContent(source) => Some(source),
             Self::Sqlite { source, .. } => Some(source),
+            Self::Io { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -185,6 +215,7 @@ impl PactrunPersistence {
 
         Ok(Self {
             database: Mutex::new(database),
+            database_path,
             runtime_content,
         })
     }
@@ -204,6 +235,26 @@ impl PactrunPersistence {
         package_id: PackageId,
         content: &ValidatedRevisionContentV1,
         publications: &[StoredRuntimeBlob],
+    ) -> Result<RevisionIdentity, PersistenceError> {
+        self.persist_revision_internal(package_id, content, publications, None)
+    }
+
+    pub(crate) fn persist_revision_with_metadata(
+        &self,
+        package_id: PackageId,
+        content: &ValidatedRevisionContentV1,
+        publications: &[StoredRuntimeBlob],
+        metadata: &RevisionMetadataMutationBatch,
+    ) -> Result<RevisionIdentity, PersistenceError> {
+        self.persist_revision_internal(package_id, content, publications, Some(metadata))
+    }
+
+    fn persist_revision_internal(
+        &self,
+        package_id: PackageId,
+        content: &ValidatedRevisionContentV1,
+        publications: &[StoredRuntimeBlob],
+        metadata: Option<&RevisionMetadataMutationBatch>,
     ) -> Result<RevisionIdentity, PersistenceError> {
         let core_jcs = encode_canonical_revision_core_v1(&content.core)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
@@ -234,6 +285,9 @@ impl PactrunPersistence {
                 ));
             }
             validate_raw_revision(&identity, raw, actual_references)?;
+            if let Some(metadata) = metadata {
+                apply_revision_metadata_in_transaction(&transaction, &identity, metadata)?;
+            }
             transaction
                 .commit()
                 .map_err(|error| PersistenceError::sqlite("commit idempotent retry", error))?;
@@ -282,6 +336,9 @@ impl PactrunPersistence {
                     PersistenceError::sqlite("persist Revision runtime-content reference", error)
                 })?;
         }
+        if let Some(metadata) = metadata {
+            apply_revision_metadata_in_transaction(&transaction, &identity, metadata)?;
+        }
         fault(FaultPoint::BeforeRevisionCommit);
         transaction
             .commit()
@@ -319,6 +376,23 @@ impl PactrunPersistence {
     }
 }
 
+impl PactrunPersistence {
+    pub(super) fn open_read_connection(&self) -> Result<Connection, PersistenceError> {
+        let database = Connection::open(&self.database_path)
+            .map_err(|error| PersistenceError::sqlite("open SQLite read connection", error))?;
+        configure_connection(&database)?;
+        let journal_mode: String = database
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .map_err(|error| PersistenceError::sqlite("verify WAL journal mode", error))?;
+        if journal_mode != "wal" {
+            return Err(PersistenceError::DatabaseOwnership(format!(
+                "read connection journal_mode is {journal_mode:?}, expected WAL"
+            )));
+        }
+        Ok(database)
+    }
+}
+
 fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
     let mut database = Connection::open(path)
         .map_err(|error| PersistenceError::sqlite("open SQLite database", error))?;
@@ -343,6 +417,11 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
                     PersistenceError::sqlite("create PersistenceSchemaV2 additions", error)
                 })?;
             transaction
+                .execute_batch(SCHEMA_V3_ADDITIONS_SQL)
+                .map_err(|error| {
+                    PersistenceError::sqlite("create PersistenceSchemaV3 additions", error)
+                })?;
+            transaction
                 .pragma_update(None, "application_id", APPLICATION_ID)
                 .map_err(|error| PersistenceError::sqlite("set application_id", error))?;
             transaction
@@ -358,14 +437,32 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
                 .map_err(|error| {
                     PersistenceError::sqlite("migrate PersistenceSchemaV1 to V2", error)
                 })?;
+            transaction
+                .execute_batch(SCHEMA_V3_ADDITIONS_SQL)
+                .map_err(|error| {
+                    PersistenceError::sqlite("migrate PersistenceSchemaV1 to V3", error)
+                })?;
             validate_schema(&transaction, SCHEMA_VERSION)?;
             transaction
                 .pragma_update(None, "user_version", SCHEMA_VERSION)
                 .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
-            fault(FaultPoint::BeforeSchemaV2MigrationCommit);
+            fault(FaultPoint::BeforeSchemaV3MigrationCommit);
             true
         }
         DatabaseState::V2 => {
+            transaction
+                .execute_batch(SCHEMA_V3_ADDITIONS_SQL)
+                .map_err(|error| {
+                    PersistenceError::sqlite("migrate PersistenceSchemaV2 to V3", error)
+                })?;
+            validate_schema(&transaction, SCHEMA_VERSION)?;
+            transaction
+                .pragma_update(None, "user_version", SCHEMA_VERSION)
+                .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
+            fault(FaultPoint::BeforeSchemaV3MigrationCommit);
+            true
+        }
+        DatabaseState::V3 => {
             validate_schema(&transaction, SCHEMA_VERSION)?;
             false
         }
@@ -374,7 +471,7 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
         .commit()
         .map_err(|error| PersistenceError::sqlite("commit schema bootstrap", error))?;
     if migrated {
-        fault(FaultPoint::AfterSchemaV2MigrationCommit);
+        fault(FaultPoint::AfterSchemaV3MigrationCommit);
     }
     configure_connection(&database)?;
     Ok(database)
@@ -448,6 +545,7 @@ enum DatabaseState {
     Pristine,
     V1,
     V2,
+    V3,
 }
 
 fn classify_database(database: &Connection) -> Result<DatabaseState, PersistenceError> {
@@ -465,9 +563,13 @@ fn classify_database(database: &Connection) -> Result<DatabaseState, Persistence
             validate_schema(database, SCHEMA_V1_VERSION)?;
             Ok(DatabaseState::V1)
         }
+        (APPLICATION_ID, SCHEMA_V2_VERSION, true) => {
+            validate_schema(database, SCHEMA_V2_VERSION)?;
+            Ok(DatabaseState::V2)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V2)
+            Ok(DatabaseState::V3)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -534,11 +636,16 @@ fn validate_schema(database: &Connection, version: i64) -> Result<(), Persistenc
     expected
         .execute_batch(SCHEMA_V1_SQL)
         .map_err(|error| PersistenceError::sqlite("construct expected schema", error))?;
-    if version == SCHEMA_VERSION {
+    if version >= SCHEMA_V2_VERSION {
         expected
             .execute_batch(SCHEMA_V2_ADDITIONS_SQL)
             .map_err(|error| PersistenceError::sqlite("construct expected V2 schema", error))?;
-    } else if version != SCHEMA_V1_VERSION {
+    }
+    if version == SCHEMA_VERSION {
+        expected
+            .execute_batch(SCHEMA_V3_ADDITIONS_SQL)
+            .map_err(|error| PersistenceError::sqlite("construct expected V3 schema", error))?;
+    } else if version != SCHEMA_V1_VERSION && version != SCHEMA_V2_VERSION {
         return Err(PersistenceError::SchemaMismatch(format!(
             "unsupported expected schema version {version}"
         )));
@@ -844,8 +951,8 @@ fn validate_publications(
 pub(super) enum FaultPoint {
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
-    BeforeSchemaV2MigrationCommit,
-    AfterSchemaV2MigrationCommit,
+    BeforeSchemaV3MigrationCommit,
+    AfterSchemaV3MigrationCommit,
     BeforeMetadataCommit,
     AfterMetadataCommit,
     BeforeRevisionCommit,
@@ -858,8 +965,8 @@ impl FaultPoint {
         match self {
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
-            Self::BeforeSchemaV2MigrationCommit => "before_schema_v2_migration_commit",
-            Self::AfterSchemaV2MigrationCommit => "after_schema_v2_migration_commit",
+            Self::BeforeSchemaV3MigrationCommit => "before_schema_v3_migration_commit",
+            Self::AfterSchemaV3MigrationCommit => "after_schema_v3_migration_commit",
             Self::BeforeMetadataCommit => "before_metadata_commit",
             Self::AfterMetadataCommit => "after_metadata_commit",
             Self::BeforeRevisionCommit => "before_revision_commit",
@@ -1190,6 +1297,94 @@ mod tests {
             assert!(marker.exists());
         }
         PactrunPersistence::open(&concurrent_root).unwrap();
+    }
+
+    // Test-ID: PR-TEST-0073
+    // Verifies: PR-REQ-0078, PR-REQ-0269, PR-REQ-0270
+    #[test]
+    fn exact_v2_migrates_transactionally_to_v3_and_preserves_wal() {
+        let (_temporary, root) = test_root();
+        initialize_direct(
+            &root,
+            APPLICATION_ID,
+            SCHEMA_V2_VERSION,
+            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
+        );
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let database = persistence.database.lock().unwrap();
+        assert_eq!(
+            database
+                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                .unwrap(),
+            SCHEMA_VERSION
+        );
+        assert_eq!(
+            database
+                .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+                .unwrap(),
+            "wal"
+        );
+        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        drop(database);
+
+        let (before_temporary, before_root) = test_root();
+        initialize_direct(
+            &before_root,
+            APPLICATION_ID,
+            SCHEMA_V2_VERSION,
+            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
+        );
+        let before_marker = before_temporary.path().join("v3-before.success");
+        assert!(!run_worker(
+            &before_root,
+            "open",
+            Some(FaultPoint::BeforeSchemaV3MigrationCommit),
+            &before_marker,
+        ));
+        let database = raw_database(&before_root);
+        assert_eq!(
+            database
+                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                .unwrap(),
+            SCHEMA_V2_VERSION
+        );
+        assert_eq!(
+            database
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name='instances'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+        drop(database);
+        PactrunPersistence::open(&before_root).unwrap();
+
+        let (after_temporary, after_root) = test_root();
+        initialize_direct(
+            &after_root,
+            APPLICATION_ID,
+            SCHEMA_V2_VERSION,
+            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
+        );
+        let after_marker = after_temporary.path().join("v3-after.success");
+        assert!(!run_worker(
+            &after_root,
+            "open",
+            Some(FaultPoint::AfterSchemaV3MigrationCommit),
+            &after_marker,
+        ));
+        let database = raw_database(&after_root);
+        assert_eq!(
+            database
+                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                .unwrap(),
+            SCHEMA_VERSION
+        );
+        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        drop(database);
+        PactrunPersistence::open(&after_root).unwrap();
     }
 
     // Test-ID: PR-TEST-0053

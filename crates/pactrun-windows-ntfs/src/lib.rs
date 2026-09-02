@@ -13,22 +13,35 @@ mod implementation {
         os::windows::{
             ffi::OsStrExt,
             fs::{MetadataExt, OpenOptionsExt},
-            io::AsRawHandle,
+            io::{AsRawHandle, FromRawHandle},
         },
         path::Path,
         ptr,
     };
 
-    use windows_sys::Win32::{
-        Foundation::{GENERIC_READ, GENERIC_WRITE},
-        Storage::FileSystem::{
-            DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
-            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH,
-            FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE, FILE_SHARE_READ,
-            FILE_SHARE_WRITE, FileRenameInfo, FlushFileBuffers, GetDriveTypeW,
-            GetVolumeInformationByHandleW, GetVolumePathNameW, SetFileInformationByHandle,
+    use windows_sys::{
+        Wdk::{
+            Foundation::OBJECT_ATTRIBUTES,
+            Storage::FileSystem::{
+                FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_REPARSE_POINT,
+                FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+            },
         },
-        System::WindowsProgramming::DRIVE_FIXED,
+        Win32::{
+            Foundation::{
+                GENERIC_READ, GENERIC_WRITE, HANDLE, RtlNtStatusToDosError, UNICODE_STRING,
+            },
+            Storage::FileSystem::{
+                DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
+                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH,
+                FILE_NAME_NORMALIZED, FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE,
+                FILE_SHARE_READ, FILE_SHARE_WRITE, FileRenameInfo, FlushFileBuffers, GetDriveTypeW,
+                GetFinalPathNameByHandleW, GetVolumeInformationByHandleW, GetVolumePathNameW,
+                SYNCHRONIZE, SetFileInformationByHandle, VOLUME_NAME_DOS,
+            },
+            System::IO::IO_STATUS_BLOCK,
+            System::WindowsProgramming::DRIVE_FIXED,
+        },
     };
 
     const SHARE_ALL: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -42,6 +55,34 @@ mod implementation {
         validate_entry(&file, EntryKind::Directory)?;
         validate_local_fixed_ntfs(path, &file)?;
         Ok(file)
+    }
+
+    /// Opens one exact source-root-relative path without reparsing any
+    /// component. Every intermediate handle is validated before it becomes the
+    /// root of the next lookup.
+    pub fn open_source_file(root: &File, segments: &[&str]) -> io::Result<File> {
+        if segments.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "source path has no components",
+            ));
+        }
+        let mut current = root.try_clone()?;
+        for (index, segment) in segments.iter().enumerate() {
+            let final_component = index + 1 == segments.len();
+            let next = open_relative_component(&current, segment, final_component)?;
+            validate_exact_opened_name(&next, segment)?;
+            validate_entry(
+                &next,
+                if final_component {
+                    EntryKind::RegularFile
+                } else {
+                    EntryKind::Directory
+                },
+            )?;
+            current = next;
+        }
+        Ok(current)
     }
 
     pub fn open_lock(path: &Path) -> io::Result<File> {
@@ -238,6 +279,110 @@ mod implementation {
             ));
         }
         Ok(())
+    }
+
+    fn open_relative_component(
+        root: &File,
+        segment: &str,
+        final_component: bool,
+    ) -> io::Result<File> {
+        let mut name = segment.encode_utf16().collect::<Vec<_>>();
+        let name_bytes = name
+            .len()
+            .checked_mul(size_of::<u16>())
+            .and_then(|length| u16::try_from(length).ok())
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "source name is too long")
+            })?;
+        let maximum_length = u16::try_from(name_bytes as usize + size_of::<u16>())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "source name is too long"))?;
+        let unicode = UNICODE_STRING {
+            Length: name_bytes,
+            MaximumLength: maximum_length,
+            Buffer: name.as_mut_ptr(),
+        };
+        let attributes = OBJECT_ATTRIBUTES {
+            Length: u32::try_from(size_of::<OBJECT_ATTRIBUTES>())
+                .expect("OBJECT_ATTRIBUTES size fits u32"),
+            RootDirectory: root.as_raw_handle().cast(),
+            ObjectName: &unicode,
+            Attributes: 0,
+            SecurityDescriptor: ptr::null_mut(),
+            SecurityQualityOfService: ptr::null_mut(),
+        };
+        let mut handle: HANDLE = ptr::null_mut();
+        let mut status_block = IO_STATUS_BLOCK::default();
+        let kind = if final_component {
+            FILE_NON_DIRECTORY_FILE
+        } else {
+            FILE_DIRECTORY_FILE
+        };
+        // SAFETY: every pointer references initialized stack storage for the
+        // duration of the synchronous call. `root` owns a valid directory
+        // handle, and ownership of a successful returned handle is immediately
+        // transferred to `File`.
+        let status = unsafe {
+            NtCreateFile(
+                &mut handle,
+                GENERIC_READ | SYNCHRONIZE,
+                &attributes,
+                &mut status_block,
+                ptr::null(),
+                FILE_ATTRIBUTE_NORMAL,
+                SHARE_ALL,
+                FILE_OPEN,
+                kind | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+                ptr::null(),
+                0,
+            )
+        };
+        if status < 0 {
+            // SAFETY: conversion is a pure status-code mapping.
+            let error = unsafe { RtlNtStatusToDosError(status) };
+            Err(io::Error::from_raw_os_error(error as i32))
+        } else {
+            // SAFETY: successful NtCreateFile returned a newly owned handle.
+            Ok(unsafe { File::from_raw_handle(handle.cast()) })
+        }
+    }
+
+    fn validate_exact_opened_name(file: &File, requested: &str) -> io::Result<()> {
+        let flags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+        // SAFETY: the handle is valid and the null buffer is used only for the
+        // documented size query.
+        let required = unsafe {
+            GetFinalPathNameByHandleW(file.as_raw_handle().cast(), ptr::null_mut(), 0, flags)
+        };
+        if required == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut path = vec![0_u16; required as usize];
+        // SAFETY: `path` is writable for the exact supplied capacity.
+        let written = unsafe {
+            GetFinalPathNameByHandleW(
+                file.as_raw_handle().cast(),
+                path.as_mut_ptr(),
+                required,
+                flags,
+            )
+        };
+        if written == 0 || written >= required {
+            return Err(io::Error::last_os_error());
+        }
+        path.truncate(written as usize);
+        let actual = path
+            .rsplit(|unit| *unit == b'\\' as u16 || *unit == b'/' as u16)
+            .next()
+            .unwrap_or(&path);
+        let requested = requested.encode_utf16().collect::<Vec<_>>();
+        if actual == requested {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "source lookup did not resolve the exact requested long entry name",
+            ))
+        }
     }
 
     fn wide(value: &OsStr) -> Vec<u16> {

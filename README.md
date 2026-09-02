@@ -1,9 +1,11 @@
 # Pactrun
 
 Pactrun is a local-first package management and execution product implemented in
-Rust. This repository currently contains a compile-oriented modular-monolith
-scaffold; it does not yet implement the documented product behavior or publish a
-stable Rust library API.
+Rust. The repository uses a modular-monolith architecture. Canonical `develop`
+contains the completed M1 persistence foundations; M2 Pack installation,
+Instances, and Managed Input bindings are currently establishing implementation
+parity on their feature branch. The Rust application, domain, and repository
+surfaces remain internal and do not constitute a stable public Rust API.
 
 ## Repository layout
 
@@ -16,9 +18,9 @@ The English Markdown under `docs/` is the canonical semantic source. Start with
 the [documentation home](docs/index.md). The Pactrun Developer path contains the
 current normative product and engineering specifications. Pactrun User and
 Package Author paths reserve the public guide structure for completion after the
-initial release. Requirements already have stable IDs; implementation tests,
-vectors, and traceability tooling remain future work and are reported honestly
-as pending coverage.
+initial release. Requirements, implementation tests, vectors, and traceability
+are recorded with stable IDs and report actual coverage without implying support
+for deferred milestones.
 
 ## Validation
 

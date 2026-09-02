@@ -497,13 +497,13 @@ impl RuntimeContentStore {
     }
 }
 
-pub(super) fn validate_supported_storage_root(
+pub(crate) fn validate_supported_storage_root(
     root: &Path,
 ) -> Result<PathBuf, RuntimeContentStoreError> {
     open_supported_root(root).map(|(canonical, _)| canonical)
 }
 
-pub(super) fn validate_existing_regular_entry(
+pub(crate) fn validate_existing_regular_entry(
     root: &Path,
     name: &str,
 ) -> Result<(), RuntimeContentStoreError> {

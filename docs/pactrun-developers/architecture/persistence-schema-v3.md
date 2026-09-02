@@ -4,8 +4,8 @@ title: Persistence Schema V3
 
 # Persistence Schema V3
 
-**Status: Candidate / implementation-ready normative internal persistence
-contract; non-Frozen, non-public, and not yet the implemented schema.**
+**Status: Candidate normative internal persistence contract; implementation
+parity in progress, non-Frozen, and non-public.**
 
 This page extends the exact implemented
 [PersistenceSchemaV2](./persistence-schema-v2.md) for M2. It does not modify
@@ -196,7 +196,7 @@ Current bindings, in-progress ExportInput observations, and future durable pin
 or recovery references govern payload reachability. V3 does not add those
 future reference kinds or a generic GC table.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0073, PR-TEST-0075.**
 
 ### PR-REQ-0270 - Persistence migration to V3
 
@@ -227,9 +227,9 @@ value. It MUST NOT infer an Instance, binding, payload, source observation, or
 local installation event from existing rows, and it MUST NOT rewrite Frozen
 canonical content.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0073.**
 
-## Planned crate-private repository contract
+## Candidate crate-private repository contract
 
 The M2 implementation derives typed operations equivalent to:
 

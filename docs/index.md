@@ -12,11 +12,12 @@ service-specific behavior to trusted Hooks.
 
 :::warning Implementation status
 
-The repository currently contains a compile-oriented Rust modular-monolith
-scaffold. The Pactrun Developer documentation describes the normative product
-contract; it does not imply that the documented behavior is implemented yet.
-Pactrun User and Package Author documentation is reserved for completion after
-the initial release.
+The repository uses a Rust modular-monolith architecture. Canonical `develop`
+contains the completed M1 persistence foundations, while M2 Pack installation,
+Instances, and Managed Input bindings are establishing implementation parity on
+their feature branch. The Pactrun Developer documentation distinguishes current
+implementation from deferred contracts. Pactrun User and Package Author
+documentation is reserved for completion after the initial release.
 
 :::
 

@@ -20,7 +20,8 @@ is Frozen.
 
 - `RevisionCoreFormatV1` is Frozen with Rust verification, an independent Node
   24 oracle, golden vectors, and requirement/test traceability.
-- The production crate remains a compile-oriented modular-monolith scaffold.
+- The production crate remains a modular monolith. M2 implementation is active
+  on an isolated feature branch and is not yet integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -43,8 +44,9 @@ is Frozen.
   non-Frozen and non-public.
 - The Pre-M2 installation, Instance, and Managed Input binding design is
   integrated into the canonical `develop` baseline. Candidate
-  `PackSourceYamlV1` and Candidate `PersistenceSchemaV3` are implementation-
-  ready but are not yet current implemented contracts.
+  `PackSourceYamlV1` and Candidate `PersistenceSchemaV3` are currently gaining
+  implementation parity on the M2 feature branch; they remain non-Frozen and
+  non-public.
 
 ## Milestone states
 
@@ -82,10 +84,11 @@ does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D is integrated against the current internal
 PersistenceSchemaV2 contract.
 
-The Pre-M2 closure is integrated. M2 is now `Planned`, and Candidate V3 is the
-current implementation target. Neither Candidate is a Frozen or public
-compatibility contract, and V3 does not become the current implemented internal
-schema until successful M2 integration.
+The Pre-M2 closure is integrated. M2 is now `In progress`, and Candidate V3 is
+the current implementation target with parity work active on the feature
+branch. Neither Candidate is a Frozen or public compatibility contract, and V3
+does not become the current canonical implemented internal schema until
+successful M2 integration.
 
 ## Milestones
 
@@ -235,7 +238,7 @@ Completion gate:
 
 ### M2 - Packs, Instances, and managed bindings
 
-**State: Planned.**
+**State: In progress.**
 
 Implement minimal YAML authoring, Revision installation, incomplete Instance
 creation, the single active/retained managed-binding registry, Input operations,

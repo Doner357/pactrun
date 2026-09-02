@@ -547,7 +547,7 @@ bindings MAY be set, replaced, or removed. Replacements MUST be atomic. Retained
 bindings MAY be inspected, explicitly exported, or deleted, but MUST NOT be
 directly set or replaced by the operator.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0076.**
 
 ### PR-REQ-0034 - Secret protection
 
@@ -576,7 +576,7 @@ M2 publication, persistence validation, storage, staging, and disclosure apply
 this rule through PR-REQ-0264, PR-REQ-0266, PR-REQ-0268, and PR-REQ-0269.
 Secret classification MUST NOT be confused with cryptographic storage.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0076.**
 
 ## ServiceStorage-backed semantic closure
 
@@ -711,7 +711,7 @@ Taxonomy V1. A future ServiceStorage design MUST enter through its own approved
 Revision, authority, persistence, and runtime gates rather than an M2
 authoring, binding, or metadata extension.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0079.**
 
 ## Pre-M1-D non-identity metadata closure
 

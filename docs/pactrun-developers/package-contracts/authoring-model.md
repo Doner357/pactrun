@@ -16,20 +16,28 @@ behavior are optional capabilities and must not burden minimal Packs.
 Authors describe capabilities they provide. They are not required to enumerate
 large sets of negative `supports_x: false` flags.
 
-## PR-REQ-0121 - Revision Candidate output
+### PR-REQ-0121 - Revision Candidate output
 
-Every authoring frontend MUST produce a `RevisionCandidate` containing a
-`NormalizedPackDefinition` and Pactrun-owned runtime content. Source YAML,
-Recipe ASTs, and SDK-specific values MUST NOT become installed execution
-contracts directly.
+Every authoring frontend MUST ultimately produce a `RevisionCandidate`
+containing a host-source-independent `NormalizedPackDefinition` and
+Pactrun-owned staged runtime content. Source YAML, Recipe ASTs, SDK-specific
+values, host source locators, opened handles, and staging paths MUST NOT become
+installed execution contracts directly.
+
+An authoring frontend MAY first produce an internal source-stage candidate
+whose runtime records still contain validated host source locators. Such a
+candidate is an acquisition input, not a weakened `NormalizedPackDefinition`.
+The final normalized definition MUST contain resolved semantic runtime
+descriptors with author-declared `ContentId` values and content-derived
+`blob_digest` values before it crosses this boundary.
 
 Candidate `PackSourceYamlV1` is the closed minimal M2 frontend. Its exact source
 profile, schema-directed scalar rules, portable metadata shapes, source
 acquisition, and projection are owned by PR-REQ-0258 through PR-REQ-0260.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069.**
 
-## PR-REQ-0122 - Normalized projection boundary
+### PR-REQ-0122 - Normalized projection boundary
 
 Before installation, Pactrun MUST validate the normalized definition and
 project it into identity-bearing `RevisionCore`, the runtime-content closure,
@@ -54,7 +62,14 @@ the M2 source syntax or installation transaction, which are owned by
 PR-REQ-0258 through PR-REQ-0261. It does not define an Export Bundle Format or
 change the M1-D production implementation.
 
-**Verification: Pending automated coverage.**
+Source-stage locators, directory handles, acquisition evidence, and transient
+staging identities MUST be consumed before `NormalizedPackDefinition` is
+constructed. They MUST NOT enter Frozen canonical components, Revision
+identity, metadata values, or repository rows. `ContentId` remains the
+author-declared semantic identifier; only `blob_digest` is derived from staged
+bytes.
+
+**Verification: PR-TEST-0069.**
 
 ## Normalized Pack Definition
 

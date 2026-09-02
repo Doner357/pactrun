@@ -29,8 +29,9 @@ synthesized by the
 Its linked pages, including Candidate
 [Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and Candidate
 [Persistence Schema V3](../architecture/persistence-schema-v3.md), own the
-implementation-ready contract. Production implementation has not occurred yet;
-V3 remains non-Frozen, non-public, and Candidate until M2 integration.
+implementation-ready contract. M2 implementation parity is in progress on its
+feature branch; V3 remains non-Frozen, non-public, and Candidate until M2
+integration.
 
 ## Implementation decisions
 
@@ -104,8 +105,9 @@ closed `PresentationTargetV1` variant.
 - strict Candidate `PackSourceYamlV1` authoring with schema-directed scalars,
   closed portable metadata unions, explicit Package lineage, and Windows/Linux
   exact-object source-root acquisition;
-- durable-content-first Revision installation with one atomic Revision and
-  typed metadata publication;
+- exact-object staging and hashing, followed by intrinsic validation, Frozen
+  projection, and typed metadata-plan validation before durable M1-B blob
+  publication and one atomic Revision/metadata database publication;
 - exact Candidate PersistenceSchemaV3, including transactional V1/V2 migration;
 - bounded-memory, file-backed staging below the dedicated Pactrun storage root;
 - incomplete Instance creation and one chunked immutable payload registry;

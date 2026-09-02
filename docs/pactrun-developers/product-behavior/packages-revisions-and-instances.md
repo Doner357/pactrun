@@ -83,8 +83,17 @@ active Revision's required bindings are present.
 
 ### PR-REQ-0261 - Revision installation publication
 
-M2 installation MUST durably publish every distinct runtime-content blob before
-creating its database reference. After blob publication, one `BEGIN IMMEDIATE`
+M2 installation MUST first acquire and hash exact source objects without
+durably publishing them. It MUST complete intrinsic candidate validation,
+Frozen projection, and construction and validation of the typed metadata plan
+before entering durable runtime-blob publication. A semantically invalid Pack
+Source MUST therefore create no durable runtime blob.
+
+After that boundary, M2 MUST durably publish every distinct runtime-content
+blob before creating its database reference. Physical publication and witness
+acquisition are deduplicated by `blob_digest`, not by author-declared
+`ContentId`; different semantic entries with identical bytes share one
+physical blob and one current same-store witness. After blob publication, one `BEGIN IMMEDIATE`
 transaction MUST atomically create or reuse the Package, publish the exact
 immutable Revision and closure-derived references, and apply the source-
 projected portable metadata plus any crate-private explicitly accepted local
@@ -103,14 +112,15 @@ MUST NOT gain implicit last-write-wins authority. An exact Revision retry is
 identity-idempotent; a committed Revision with different canonical components
 or derived references is corruption or collision.
 
-Failure before database commit MUST leave no Package-dependent partial
-Revision, reference, or metadata publication. It MAY leave a correct
-unreferenced immutable runtime blob. A crash after commit but before response
+Failure before the explicit durable-blob boundary MUST leave no runtime blob.
+Failure after that boundary but before database commit MUST leave no
+Package-dependent partial Revision, reference, or metadata publication, but MAY
+leave only complete, valid, unreferenced immutable runtime blobs. A crash after commit but before response
 MUST converge under exact retry. The mutable source root, source paths,
 filesystem timestamps, install time, and install history MUST NOT be persisted
 as a `LocalInstall` record in M2.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0072.**
 
 ### PR-REQ-0262 - Migration relational installation policy
 
@@ -131,7 +141,7 @@ distinguishable from both validity and invalidity. In M5, only `Valid` may enter
 an executable Plan. `NotEvaluated` and `Invalid` each block execution of that
 edge without retroactively invalidating the installed target Revision.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0072.**
 
 ### PR-REQ-0263 - Instance name and inspection order
 
@@ -151,7 +161,7 @@ order. Inspection MUST show the exact active Revision, state version, derived
 active/retained Input roles, missing required Inputs, and local Revision trust
 without exposing managed payload bytes.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0078, PR-TEST-0079.**
 
 ## ServiceStorage-backed live resources
 

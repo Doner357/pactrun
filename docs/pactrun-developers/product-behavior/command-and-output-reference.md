@@ -93,7 +93,7 @@ is the payload stream boundary in PR-REQ-0266.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0271 - M2 application and minimal human CLI
+### PR-REQ-0271 - M2 application and minimal human CLI
 
 M2 MUST expose crate-private typed orchestration equivalent to:
 
@@ -108,6 +108,14 @@ SetInput(instance, input_id, expected_version, source)
 DeleteInput(instance, input_id, expected_version)
 ExportInput(instance, input_id, destination, secret_authorization?)
 ```
+
+Every stateful M2 command MUST obtain a non-empty absolute caller-provisioned
+storage root from `PACTRUN_STORAGE_ROOT` and use its fixed `database/`,
+`runtime-content/`, and `staging/` children. A missing or invalid value MUST
+fail before data acquisition, schema migration, or persistent side effects.
+M2 has no `--storage-root` spelling or platform default. `pack generate-id`,
+root `--help`, and root `--version` do not need the variable; the variable is
+process configuration and is not an Input acquisition channel.
 
 These operations are not a stable public Rust API. In particular,
 `InstallPackSource(..., explicit_local_metadata)` is an intentional internal
@@ -147,6 +155,19 @@ applies only source-projected portable metadata. Duplicate initial Input
 identities and multiple stdin sources fail before acquisition. File and stdin
 sources preserve exact bytes.
 
+The M2 `<reference>` grammar is closed to
+`label:<ReferenceLabel>`, `alias:<LocalAlias>`, or
+`exact:<PackageId>/sha256:<RevisionContentDigest-hex>`. Bare tokens, digest
+prefixes, uppercase spellings, missing Package identity or algorithm, and
+repository guessing are invalid. Resolution MUST produce one exact
+`RevisionIdentity` before the typed operation begins.
+
+Every M2 `<instance>` operand accepts only exact `InstanceName`. Comparison
+uses the preserved UTF-8 bytes with no trimming, normalization, case folding,
+prefix lookup, or locale comparison. M2 exposes no human `InstanceId` spelling;
+successful name resolution MUST produce the exact `InstanceId` before entering
+the typed application operation.
+
 The typed set and delete requests always require an expected state version. At
 the human boundary only, omission of `--if-version` makes the CLI read the
 current token once and submit that strict request; an explicit token is never
@@ -158,7 +179,7 @@ authorization and has the narrow meaning in PR-REQ-0268.
 M2 defines no machine-readable envelope, stable public error catalog, or
 automation API, and it does not change Frozen Error Taxonomy V1.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0078, PR-TEST-0079.**
 
 ## Remaining open spelling
 

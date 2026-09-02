@@ -207,7 +207,7 @@ complete typed claim tuple; an identical claim is invalid while distinct claims
 may coexist. Local alias, note, and trust values MUST NOT occur in source.
 YAML syntax and bytes are not Revision identity.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0068, PR-TEST-0069.**
 
 ### PR-REQ-0259 - SourceRelativePathV1 and safe source acquisition
 
@@ -266,7 +266,7 @@ a mutable source root reproduces the same Revision; identity is determined by
 the normalized core and the bytes actually acquired into the runtime-content
 closure.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0070, PR-TEST-0071.**
 
 ### PR-REQ-0260 - RevisionCandidate projection and metadata boundary
 
@@ -274,9 +274,11 @@ M2 installation MUST use this typed pipeline:
 
 ```text
 PackSourceYamlV1
--> strict parse
--> NormalizedPackDefinition
--> safe local-content staging
+-> strict schema-directed decode
+-> crate-private NormalizedPackSourceCandidate
+-> exact-object acquisition, staging, and hashing
+-> resolve semantic runtime-content descriptors
+-> final host-source-independent NormalizedPackDefinition plus staged content
 -> intrinsic validation
 -> RevisionCoreV1 and RuntimeContentClosureIdentityV1 projection
 -> attach the derived RevisionIdentity to the typed portable metadata plan
@@ -285,12 +287,27 @@ PackSourceYamlV1
 -> one SQLite installation publication
 ```
 
-The `NormalizedPackDefinition` MUST materialize semantic defaults and stable
-ordering before projection. The authoring AST, source bytes, source paths,
-filesystem timestamps, storage rows, and runtime-content acquisition handles
-MUST NOT enter Revision identity. Projection MUST produce the complete Frozen
-semantic model and its sibling runtime-content closure rather than treating raw
-Core JSON as authoring input.
+The crate-private source-stage candidate MAY retain validated
+`SourceRelativePathV1` locators and source-level runtime declarations while it
+materializes defaults and ordering that do not depend on acquired content. Each
+runtime source record already contains its author-declared `ContentId`, logical
+path, and executable semantics. Acquisition derives only a checked-`u64`
+length and SHA-256 `blob_digest` from the exact opened bytes; it MUST NOT derive
+or replace `ContentId`.
+
+Resolving those records MUST construct the final `NormalizedPackDefinition`
+with semantic runtime descriptors of `{ authored ContentId, logical path,
+regular_file, derived blob_digest, executable }`. The final normalized model
+MUST be host-source-independent: source root, source locator, opened handle,
+staging path, nonce, acquisition evidence, and operation-local state MUST NOT
+survive that boundary or enter Revision identity or persistence. A separate
+operation-local staged set MUST have exact semantic coverage by declared
+`ContentId`, while durable physical publication is deduplicated only by
+distinct `blob_digest`. Different `ContentId` values MAY legally refer to the
+same bytes and physical blob.
+
+Projection MUST produce the complete Frozen semantic model and its sibling
+runtime-content closure rather than treating raw Core JSON as authoring input.
 
 The source-projected metadata plan contains reference-label, current
 presentation, and provenance metadata only. It MUST validate presentation
@@ -311,7 +328,7 @@ context Migration relation described by PR-REQ-0262. An exact source Revision
 need not already be installed for the target candidate to be intrinsically
 valid or installable.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0072.**
 
 ## Candidate evolution and exclusions
 
