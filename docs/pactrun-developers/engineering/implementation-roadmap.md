@@ -165,7 +165,7 @@ Completion gate:
 
 ### M1 - Identity and persistence foundation
 
-**State: In progress.**
+**State: Complete.**
 
 Implement production Package, Revision, and Instance identities; opaque Instance
 state versions; immutable runtime content; production `RevisionCoreV1`
@@ -174,9 +174,9 @@ migration skeleton.
 
 The completed M1-A slice implements production identity primitives, the two
 Frozen Revision content semantic components, pure projection, strict canonical
-codec, framing, digest, and Error Taxonomy conformance. Persistence, immutable
-content-store availability, authoring and installation, and runtime launcher
-integration remain later slices.
+codec, framing, digest, and Error Taxonomy conformance. M1-B through M1-D close
+the remaining M1 persistence foundation. Authoring and installation are
+implemented by M2; runtime launcher integration remains owned by M3.
 
 M1-B implements the crate-private immutable runtime-content blob store against
 an already-existing dedicated root. Durable creation and provisioning of that
@@ -217,6 +217,22 @@ discard, persistent Hook authority, operation prerequisite, Cleanup or storage-
 finalization obligation, Abandon non-destruction obligation, or broader resource
 taxonomy. It MUST NOT add a service-resource table, retained-resource registry,
 or another operational durable representation.
+
+M1 closes through these integrated implementation slices:
+
+| Slice | Closed implementation requirements | Automated coverage |
+| --- | --- | --- |
+| M1-A | `PR-REQ-0225`–`PR-REQ-0227` | `PR-TEST-0039`–`PR-TEST-0046` |
+| M1-B | `PR-REQ-0228`–`PR-REQ-0230` | `PR-TEST-0047`–`PR-TEST-0051` |
+| M1-C | `PR-REQ-0231`–`PR-REQ-0234` | `PR-TEST-0052`–`PR-TEST-0057` |
+| M1-D | `PR-REQ-0248`–`PR-REQ-0257` | `PR-TEST-0058`–`PR-TEST-0067` |
+
+This aggregate completion closes the identity and persistence foundation, not
+future operation implementations. Broad requirements whose remaining clauses
+depend on Action execution, Snapshot Restore, Migration, recovery, or Instance
+deletion retain their later milestone ownership and verification status.
+`PR-REQ-0194` runtime launcher integration is explicitly an M3 completion
+obligation and does not keep M1 open.
 
 Completion gate:
 
