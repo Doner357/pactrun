@@ -33,6 +33,11 @@ implemented internal
 M2 contract. M2 is integrated into `develop`; V3 is the current implemented
 internal schema while remaining non-Frozen and non-public.
 
+The M3 scope and dependency review is complete and synthesized by the
+[M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
+M3 is the next approved implementation milestone. This approval does not claim
+runtime support or choose the still-open exact human spelling.
+
 ## Implementation decisions
 
 Implementers may choose, without changing Pactrun semantics:
@@ -136,7 +141,14 @@ does not claim their runtime implementation.
 - typed sequential compilation;
 - stale-state admission and durable pins;
 - Hook Runtime and Session authority;
-- I/O transitions and Run records.
+- I/O transitions, Action outputs, and Run records;
+- exact launcher revalidation and native/interpreter process execution;
+- cancellation, timeout, EOF, protocol failure, and process-loss finalization;
+- the minimum Action recovery substrate required for durable HookProtocolV1
+  risk acknowledgments and open-risk consequences;
+- crash/failure injection and end-to-end runtime integration;
+- requirement-backed minimal invocation, plan, Run, sensitive-parameter,
+  cancellation, and manual-recovery spelling before M3 completion.
 
 Workspace remains execution-scoped scratch. Persistent service-resource
 authority is not part of Frozen Hook Protocol V1 or this phase.
@@ -165,9 +177,11 @@ into an unapproved Service Resource transition or persistence schema.
 
 ### Phase 6 - Recovery
 
-- execution ownership;
-- risk-entry and risk-resolution protocol;
-- durable self-sufficient recovery state;
+- complete and generalize execution ownership beyond the Action substrate in
+  Phase 3;
+- complete risk-entry and risk-resolution handling for later managed-execution
+  types and their commit boundaries;
+- complete durable self-sufficient recovery state across those workflows;
 - crash-boundary injection tests;
 - orphan reconciliation and manual recovery.
 
@@ -208,6 +222,15 @@ recovery-risk state machine, cancellation, completion handshake, and protocol
 errors are defined by
 [Hook Protocol V1](../package-contracts/hook-protocol-v1.md). Production Hook
 Runtime integration remains Phase 3 and later work.
+
+### M3 Action execution
+
+M3 is approved and ordered by the linked Action execution baseline. The
+normative execution, Hook Protocol, Run, pin, recovery-risk, launcher, and
+sensitive-data contracts are sufficient to begin bounded internal
+implementation. The exact persistence encoding and process mechanisms are
+implementation choices. Exact new CLI spelling remains externally observable
+and must be closed by a requirement before M3 can be marked complete.
 
 ### RevisionCoreV1 authoring spelling
 
