@@ -47,6 +47,9 @@ is Frozen.
   Candidate `PackSourceYamlV1` remains non-Frozen; PersistenceSchemaV3 is the
   current implemented internal schema while remaining non-Frozen and
   non-public.
+- The M3 Action execution scope and dependency review is complete. M3 is
+  approved and ordered as the next implementation milestone without claiming
+  runtime support or changing any Frozen contract.
 
 ## Milestone states
 
@@ -76,6 +79,8 @@ milestone state taxonomy above:
 | Pre-M2 installation, Instance, and binding closure | **Closed.** |
 | PackSourceYamlV1 authoring projection | **Closed.** |
 | PersistenceSchemaV3 internal contract | **Closed.** |
+| M3 Action execution scope and dependency review | **Closed.** |
+| M3 exact new CLI spelling | **Required before M3 completion.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
@@ -88,6 +93,11 @@ The Pre-M2 closure and M2 implementation are integrated. M2 is `Complete`.
 Candidate `PackSourceYamlV1` remains a non-Frozen authoring contract, and
 PersistenceSchemaV3 is the current canonical implemented internal schema while
 remaining non-Frozen and non-public.
+
+The M3 review is recorded in the
+[M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
+M3 is `Planned`; implementation must remain within that baseline and its linked
+normative requirements.
 
 ## Milestones
 
@@ -302,15 +312,28 @@ Completion gate:
 
 ### M3 - Action execution
 
-**State: Proposed.**
+**State: Planned.**
 
 Implement resolution, `InvokeAction` intent, typed sequential compilation,
 Admission, stale-state checks, durable pins, Hook Runtime and Session authority,
 I/O transitions, Executor behavior, and Run records.
 
+The approved scope and work ordering are synthesized by the
+[M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
+Exact new CLI spelling remains a required M3 closure item and is not invented by
+this informative roadmap.
+
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority
 or linearization over service-owned live bytes.
+
+Because recovery-risk requests are mandatory HookProtocolV1 facilities, M3
+also owns the minimum durable Action recovery slice needed to acknowledge those
+requests safely: Action Run ownership, durable risk entry and resolution,
+self-sufficient Action recovery state, confirmed-owner-loss finalization, the
+open-risk `ManualRecoveryRequired` consequence, and retained recovery
+references. M6 completes and generalizes recovery for later managed-execution
+types; it does not postpone the safety prerequisite for executing V1 Actions.
 
 This milestone owns the first real automated coverage for `PR-REQ-0194`. It must
 test host launcher lookup, Plan binding, Admission revalidation, exact process
@@ -322,9 +345,24 @@ Completion gate:
 - native and interpreter Hooks execute through the same typed lifecycle;
 - Compiler, Admission, and Executor responsibilities remain distinct;
 - stale Plans fail before launch and accepted execution continuity is tested;
-- Run creation, phase, outcome, cancellation, and I/O transitions are durable;
+- Run creation, phase, outcome, cancellation, timeout, process loss, and I/O
+  transitions are durable;
+- accepted Runs retain exact Revision, runtime-content, Input, and Secret pins
+  across current-binding replacement and process failure until every execution
+  or recovery reference permits release;
+- real HookProtocolV1 integration covers Session construction, binding and
+  output authorities, completion, cancellation, EOF, protocol failure, and
+  terminal-channel separation;
+- durable risk acknowledgments and crash injection prove that open-risk failure
+  or owner loss cannot be reported as safe and cannot replay the Hook;
+- sensitive parameters, Secrets, and revealing derivatives do not enter Run
+  history, ordinary diagnostics, or default terminal transcripts;
+- exact M3 human spelling is requirement-backed before the milestone is marked
+  complete;
 - runtime integration tests, not Revision Core vectors, verify launcher
-  behavior.
+  behavior;
+- no Snapshot, Migration, Cleanup, ServiceStorage authority, generic DAG,
+  public Rust API, or stable machine-output contract is claimed.
 
 ### M4 - Snapshot lifecycle
 
@@ -372,9 +410,11 @@ Completion gate:
 
 **State: Proposed.**
 
-Implement execution ownership, recovery-risk entry and resolution, durable
-self-sufficient recovery state, crash-boundary injection, orphan reconciliation,
-and manual recovery.
+Complete and generalize execution ownership, recovery-risk entry and resolution,
+durable self-sufficient recovery state, crash-boundary injection, orphan
+reconciliation, and manual recovery across Snapshot, Migration, Restore,
+Cleanup, and their commit boundaries. Reuse the Action recovery substrate that
+M3 must implement for HookProtocolV1 rather than creating a parallel model.
 
 Recovery of a Pactrun-owned boundary MUST NOT be presented as rollback or proof
 of coherence for service-owned live resources.

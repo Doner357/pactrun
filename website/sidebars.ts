@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
             'pactrun-developers/architecture/system-model',
             'pactrun-developers/architecture/identity-and-state',
             'pactrun-developers/architecture/pre-m2-installation-instance-binding-baseline',
+            'pactrun-developers/architecture/m3-action-execution-approval-baseline',
             'pactrun-developers/architecture/non-identity-metadata-semantic-baseline',
             'pactrun-developers/architecture/persistence-schema-v2',
             'pactrun-developers/architecture/persistence-schema-v3',
