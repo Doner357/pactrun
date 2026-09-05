@@ -38,8 +38,10 @@ is Frozen.
   deferred.
 - The structured error taxonomy is Frozen and merged into `develop` with
   negative fixtures and requirement/test traceability.
-- Runtime launcher integration under `PR-REQ-0194` remains pending until real
-  Compiler, Admission, and Executor integration tests exist.
+- Runtime launcher integration under `PR-REQ-0194` has Compiler, Admission,
+  and POSIX Executor coverage; the Windows Executor launch path is not yet the
+  approved `CreateProcessW` adapter and is corrected by the M3 Slice 4 Windows
+  launch correction ordered before Slice 5.
 - The accepted `ServiceStorage` and ServiceStorage-backed Managed Service
   Resource direction corrects the earlier assumption that every Pactrun-visible
   persistent file is an Input. Its representation-independent semantic closure
@@ -391,8 +393,9 @@ materializes `runtime/`, `workspace/`, `bindings/`, and `outputs/` beneath its
 own `StagingSession` by copying pinned bytes rather than hard-linking or
 re-resolving selectors, creates one owner-private Hook Protocol listener that
 the Hook discovers through the `PR-REQ-0280` environment contract, launches the
-exact admitted path without an implicit shell (POSIX process groups; Windows
-`CreateProcessW` plus Job Object process-tree control), and drives the
+exact admitted path without an implicit shell (POSIX process groups; on
+Windows a Job Object assigned after `std::process::Command` spawn, which the
+Windows launch correction below replaces), and drives the
 production Frozen `HookProtocolV1` Action state machine over a stream that is
 separate from the declared `none | output | interactive` terminal streams. One
 outcome arbiter locks the first winning event (accepted completion, requested
@@ -423,6 +426,70 @@ the durable publication of the resulting `Cancelled` or `TimedOut` disposition
 is written by Slice 5. Managed Output publication, durable Run terminalization
 and inspection, consumption of owner continuations, owner-loss reconciliation,
 and human spelling remain owned by Slices 5 and 6.
+
+**M3 Slice 4 Windows launch correction (open; ordered before Slice 5).** A
+post-integration review on 2026-09-06 found that the Windows Executor does not
+implement the launch path the Slice 4 work order approved. The approved order
+required a narrow native adapter that calls `CreateProcessW` with the exact
+admitted path as `lpApplicationName`, creates the process with
+`CREATE_SUSPENDED`, assigns the kill-on-close Job Object, and only then resumes
+the main thread, explicitly excluding `std::process::Command` because its
+Windows resolver may rewrite the program path. The integrated code instead
+calls `std::process::Command::spawn` in `src/hook/platform.rs` and assigns the
+Job Object afterwards through `ProcessJob::assign` in
+`crates/pactrun-windows-ntfs`; no production code calls `CreateProcessW`
+directly. Verified against the Rust 1.98 standard library
+(`library/std/src/sys/process/windows.rs`), this deviates from `PR-REQ-0194`
+in three observable ways:
+
+- a non-`.exe` admitted path is first probed as `<path>.exe`, and that sibling
+  file is launched when it exists, so the Executor can launch a file Admission
+  never validated;
+- a `.bat` or `.cmd` admitted path is rewritten to run through `cmd.exe`,
+  which is an implicit shell;
+- the Hook runs before it is inside the Job Object, so descendants it creates
+  in that window escape `TerminateJobObject` process-tree control.
+
+`PR-TEST-0095` exercises real direct and interpreter launches, argument-tail
+delivery, the `PR-REQ-0280` environment, and no-fallback launch failure, but
+its Windows fixtures are always named `*.exe`, so it never reaches the rewrite
+branches above. The Windows Executor clause of `PR-REQ-0194` is therefore
+currently over-claimed as verified; its POSIX Executor clause and its Compiler
+and Admission clauses are unaffected.
+
+Required correction, to be implemented and verified before Slice 5 starts:
+
+1. Add a narrow Windows launch adapter to `pactrun-windows-ntfs` (the needed
+   `windows-sys` features are already enabled): build the UTF-16 command line
+   with MSVC CRT quoting equivalent to the standard library's
+   `make_command_line`, build the environment block from the parent
+   environment plus the two `PR-REQ-0280` variables, populate `STARTUPINFOW`
+   standard handles for the fixed `none | output | interactive` mappings with
+   an explicit `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, call `CreateProcessW` with
+   the exact admitted path as `lpApplicationName` and
+   `CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT`, assign the Job Object,
+   resume the main thread, and terminate the suspended process if assignment
+   fails. Do not set a working directory or add behavior the runtime does not
+   set today.
+2. Make the Windows `ProcessSupervisor` own the process handle and implement
+   `try_wait` and `wait` over `WaitForSingleObject` and `GetExitCodeProcess`
+   (`exit_status_from_code` already exists); keep the POSIX branch unchanged.
+3. Extend `PR-TEST-0095` or add one Windows-only test covering: a direct PE
+   without an `.exe` extension launches; when both `hook` and `hook.exe` exist
+   the admitted `hook` is launched; a `.cmd` admitted path is launched or
+   refused by `CreateProcessW` without `cmd.exe`; a descendant spawned by the
+   Hook at startup does not survive `terminate_tree`. Update the test's
+   `// Verifies:` list and the `PR-REQ-0194` Verification line together so
+   traceability stays bidirectional.
+4. Restore the Slice 4 wording above to "Windows `CreateProcessW` plus Job
+   Object process-tree control" only after the tests pass, and remove this
+   correction block in the same change.
+
+Do not take the shortcut of `CommandExt::creation_flags(CREATE_SUSPENDED)` on
+`std::process::Command`: it closes the main-thread handle before returning and
+leaves the path-rewrite and `cmd.exe` behaviors in place. The remote CI host is
+POSIX, so this adapter is verified only by local Windows `cargo test`; report
+that limitation with the validation result.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority
