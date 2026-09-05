@@ -15,9 +15,11 @@ pub(crate) use installation::{InstallPackResult, MigrationRelationState};
 use crate::{
     authoring::{AuthoringError, SourceAcquisitionError},
     domain::{
+        ActionCompilationObservation, ActionExecutionPlan, ActionIdentity, ActionResolutionError,
         InputIdentity, InstanceId, InstanceName, InstanceStateVersion, InstanceSummary,
-        InstanceView, LocalAlias, ReferenceLabel, RevisionCoreV1Error, RevisionIdentity,
-        RevisionMetadataMutationBatch,
+        InstanceView, InvokeAction, LocalAlias, PlanCompilationError, RawParameterInput,
+        ReferenceLabel, RevisionCoreV1Error, RevisionIdentity, RevisionMetadataMutationBatch,
+        bind_action_parameters,
     },
     managed_data::{StagedFile, StagingError, StagingSession},
     persistence::{
@@ -48,6 +50,8 @@ pub(crate) enum ApplicationError {
     Staging(StagingError),
     Revision(RevisionCoreV1Error),
     Persistence(PersistenceError),
+    ActionResolution(ActionResolutionError),
+    PlanCompilation(PlanCompilationError),
     InvalidInstallation(String),
     InvalidRequest(String),
     LockPoisoned,
@@ -65,6 +69,8 @@ impl fmt::Display for ApplicationError {
             Self::Staging(source) => write!(formatter, "staging: {source}"),
             Self::Revision(source) => write!(formatter, "Revision candidate: {source}"),
             Self::Persistence(source) => write!(formatter, "persistence: {source}"),
+            Self::ActionResolution(source) => write!(formatter, "resolution: {source}"),
+            Self::PlanCompilation(source) => write!(formatter, "compilation: {source}"),
             Self::LockPoisoned => formatter.write_str("Instance mutation lock is poisoned"),
         }
     }
@@ -79,6 +85,8 @@ impl std::error::Error for ApplicationError {
             Self::Staging(source) => Some(source),
             Self::Revision(source) => Some(source),
             Self::Persistence(source) => Some(source),
+            Self::ActionResolution(source) => Some(source),
+            Self::PlanCompilation(source) => Some(source),
             Self::Configuration(_)
             | Self::InvalidInstallation(_)
             | Self::InvalidRequest(_)
@@ -117,6 +125,17 @@ impl From<PersistenceError> for ApplicationError {
     }
 }
 
+impl From<ActionResolutionError> for ApplicationError {
+    fn from(source: ActionResolutionError) -> Self {
+        Self::ActionResolution(source)
+    }
+}
+
+impl From<PlanCompilationError> for ApplicationError {
+    fn from(source: PlanCompilationError) -> Self {
+        Self::PlanCompilation(source)
+    }
+}
 pub(crate) struct PactrunApplication {
     persistence: PactrunPersistence,
     staging: StagingSession,
@@ -246,6 +265,91 @@ impl PactrunApplication {
         Ok(self.persistence.load_instance_by_id(instance)?)
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn resolve_action(
+        &self,
+        instance_name: &InstanceName,
+        action_id: &ActionIdentity,
+        parameters: Vec<RawParameterInput>,
+    ) -> Result<InvokeAction, ApplicationError> {
+        let instance_id = self
+            .persistence
+            .resolve_instance_name(instance_name)?
+            .ok_or(ActionResolutionError::InstanceNotFound)?;
+        let instance = self
+            .persistence
+            .load_instance_by_id(instance_id)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant(
+                    "resolved Instance disappeared while resolving Action".to_owned(),
+                )
+            })?;
+        let revision = self
+            .persistence
+            .load_revision(&instance.active_revision)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant("active Revision is missing".to_owned())
+            })?;
+        let action = revision
+            .content
+            .core
+            .actions()
+            .iter()
+            .find(|candidate| &candidate.id == action_id)
+            .ok_or(ActionResolutionError::ActionNotFound)?;
+        let parameters = bind_action_parameters(action, parameters)?;
+        Ok(InvokeAction {
+            instance: instance.id,
+            expected_state_version: instance.state_version,
+            active_revision: instance.active_revision,
+            action: action_id.clone(),
+            parameters,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn compile_action(
+        &self,
+        intent: &InvokeAction,
+        launcher_search_directories: &[std::path::PathBuf],
+    ) -> Result<ActionExecutionPlan, ApplicationError> {
+        crate::workflow::compile_action(
+            self,
+            &crate::workflow::PlatformHostLauncherLookup,
+            intent,
+            launcher_search_directories,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn observe_action_compilation(
+        &self,
+        intent: &InvokeAction,
+    ) -> Result<ActionCompilationObservation, PersistenceError> {
+        let before = self
+            .persistence
+            .observe_instance_compilation_state(intent.instance)?
+            .ok_or_else(|| PersistenceError::MissingInstance(intent.instance.to_string()))?;
+        let revision = self
+            .persistence
+            .load_revision(&before.active_revision)?
+            .ok_or_else(|| PersistenceError::MissingRevision(before.active_revision.clone()))?;
+        let after = self
+            .persistence
+            .observe_instance_compilation_state(intent.instance)?
+            .ok_or_else(|| PersistenceError::MissingInstance(intent.instance.to_string()))?;
+        if before != after {
+            return Err(PersistenceError::CompilationObservationChanged);
+        }
+        Ok(ActionCompilationObservation {
+            instance: before.instance,
+            state_version: before.state_version,
+            active_revision: before.active_revision,
+            active_bindings: before.active_bindings,
+            required_inputs_satisfied: before.required_inputs_satisfied,
+            revision_content: revision.content,
+        })
+    }
     pub(crate) fn set_input(
         &self,
         instance: InstanceId,
@@ -319,4 +423,148 @@ fn reject_duplicate_acquisitions(initial: &[InputAcquisition<'_>]) -> Result<(),
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod action_tests {
+    use super::*;
+    use std::{fs, io::Cursor};
+    use tempfile::TempDir;
+
+    fn roots() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice1-tests");
+        fs::create_dir_all(&parent).unwrap();
+        let temporary = tempfile::Builder::new()
+            .prefix("action-")
+            .tempdir_in(parent)
+            .unwrap();
+        let storage = temporary.path().join("storage");
+        let source = temporary.path().join("source");
+        fs::create_dir(&storage).unwrap();
+        fs::create_dir(storage.join("database")).unwrap();
+        fs::create_dir(storage.join("runtime-content")).unwrap();
+        fs::create_dir(storage.join("staging")).unwrap();
+        fs::create_dir(&source).unwrap();
+        (temporary, storage, source)
+    }
+
+    fn empty_metadata() -> RevisionMetadataMutationBatch {
+        RevisionMetadataMutationBatch::new(Vec::<crate::domain::RevisionMetadataMutation>::new())
+            .unwrap()
+    }
+
+    #[test]
+    fn application_resolves_exact_action_and_compilation_is_persistently_read_only() {
+        let (_temporary, storage, source) = roots();
+        fs::write(source.join("tool.bin"), b"tool").unwrap();
+        fs::write(source.join("config.bin"), b"secret config").unwrap();
+        fs::write(
+            source.join("pactrun.yaml"),
+            r#"source_format: 1
+package_id: 00000000000000000000000000000031
+revision:
+  inputs:
+    - { id: config, required: true, protection: secret }
+  actions:
+    - id: inspect
+      access: observe
+      parameters:
+        - { id: count, type: integer, sensitive: false }
+      hook:
+        protocol_version: 1
+        launch: { kind: direct, executable: tool }
+        args: [fixed]
+        io: { terminal: output }
+      outputs: [{ id: report }]
+  migrations: []
+runtime_content:
+  files:
+    - { id: tool, source: tool.bin, path: bin/tool, executable: true }
+"#,
+        )
+        .unwrap();
+        let application = PactrunApplication::open(&storage).unwrap();
+        let installed = application
+            .install_pack_source(&source, &empty_metadata())
+            .unwrap();
+        let name = InstanceName::parse("node").unwrap();
+        assert!(matches!(
+            application.resolve_action(
+                &name,
+                &ActionIdentity::parse("inspect").unwrap(),
+                Vec::new(),
+            ),
+            Err(ApplicationError::ActionResolution(
+                ActionResolutionError::InstanceNotFound
+            ))
+        ));
+        let config = fs::File::open(source.join("config.bin")).unwrap();
+        let instance = application
+            .create_instance(
+                name.clone(),
+                installed.revision,
+                vec![InputAcquisition {
+                    input_id: InputIdentity::parse("config").unwrap(),
+                    source: Box::new(config),
+                }],
+            )
+            .unwrap();
+        assert!(matches!(
+            application.resolve_action(
+                &name,
+                &ActionIdentity::parse("missing").unwrap(),
+                Vec::new(),
+            ),
+            Err(ApplicationError::ActionResolution(
+                ActionResolutionError::ActionNotFound
+            ))
+        ));
+        let database_path = storage.join("database/pactrun.sqlite3");
+        let before_database = fs::read(&database_path).unwrap();
+        let before_runtime = fs::read_dir(storage.join("runtime-content"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        let intent = application
+            .resolve_action(
+                &name,
+                &ActionIdentity::parse("inspect").unwrap(),
+                vec![RawParameterInput {
+                    id: crate::domain::ParameterIdentity::parse("count").unwrap(),
+                    text: "3".to_owned(),
+                    source: crate::domain::ParameterTextSource::Ordinary,
+                }],
+            )
+            .unwrap();
+        let plan = application.compile_action(&intent, &[]).unwrap();
+        assert_eq!(plan.expected_state_version(), intent.expected_state_version);
+        assert_eq!(plan.active_bindings().len(), 1);
+        assert_eq!(plan.active_bindings()[0].input.as_str(), "config");
+        assert_eq!(
+            plan.active_bindings()[0].protection,
+            crate::domain::ManagedInputProtection::Secret
+        );
+        assert_eq!(fs::read(&database_path).unwrap(), before_database);
+        let after_runtime = fs::read_dir(storage.join("runtime-content"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(after_runtime, before_runtime);
+        assert!(!storage.join("staging/workspace").exists());
+
+        application
+            .set_input(
+                instance.id,
+                InputIdentity::parse("config").unwrap(),
+                instance.state_version,
+                Box::new(Cursor::new(b"replacement config".to_vec())),
+            )
+            .unwrap();
+        assert!(matches!(
+            application.compile_action(&intent, &[]),
+            Err(ApplicationError::PlanCompilation(
+                PlanCompilationError::InconsistentFacts
+            ))
+        ));
+    }
 }

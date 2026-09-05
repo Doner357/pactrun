@@ -10,11 +10,11 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use super::{PactrunPersistence, PersistenceError};
 use crate::{
     domain::{
-        InputDeclarationV1, InputIdentity, InputProtectionV1, InstanceId, InstanceName,
-        InstanceStateVersion, InstanceSummary, InstanceView, MANAGED_INPUT_CHUNK_BYTES_V1,
-        MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputBindingView, ManagedInputPayloadId,
-        ManagedInputProtection, ManagedInputRole, RevisionContentDigest, RevisionCoreV1,
-        RevisionIdentity,
+        ActiveInstanceBindingReference, InputDeclarationV1, InputIdentity, InputProtectionV1,
+        InstanceCompilationState, InstanceId, InstanceName, InstanceStateVersion, InstanceSummary,
+        InstanceView, MANAGED_INPUT_CHUNK_BYTES_V1, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
+        ManagedInputBindingView, ManagedInputPayloadId, ManagedInputProtection, ManagedInputRole,
+        RevisionContentDigest, RevisionCoreV1, RevisionIdentity,
     },
     revision_core_v1::decode_canonical_revision_core_v1,
 };
@@ -102,16 +102,7 @@ impl PactrunPersistence {
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        database
-            .query_row(
-                "SELECT instance_id FROM instances WHERE instance_name=?1",
-                [name.as_bytes()],
-                |row| row.get::<_, Vec<u8>>(0),
-            )
-            .optional()
-            .map_err(|error| PersistenceError::sqlite("resolve Instance name", error))?
-            .map(instance_id)
-            .transpose()
+        resolve_instance_name_from(&database, name)
     }
 
     pub(crate) fn list_instances(&self) -> Result<Vec<InstanceSummary>, PersistenceError> {
@@ -188,6 +179,58 @@ impl PactrunPersistence {
         .transpose()
     }
 
+    pub(crate) fn observe_instance_compilation_state(
+        &self,
+        id: InstanceId,
+    ) -> Result<Option<InstanceCompilationState>, PersistenceError> {
+        let database = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let row = database
+            .query_row(
+                "SELECT active_package_id, active_revision_content_digest, instance_state_version \
+                 FROM instances WHERE instance_id=?1",
+                [id.as_bytes().as_slice()],
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, Vec<u8>>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| {
+                PersistenceError::sqlite("observe Instance compilation state", error)
+            })?;
+        let Some((package, digest, version)) = row else {
+            return Ok(None);
+        };
+        let active_revision = revision_identity(package, digest)?;
+        let state_version = state_version(version)?;
+        let core = load_revision_core(&database, &active_revision)?;
+        let mut active_bindings = Vec::new();
+        let mut required_inputs_satisfied = true;
+        for declaration in core.inputs() {
+            match binding_payload(&database, id, &declaration.id)? {
+                Some((payload, stored)) => active_bindings.push(ActiveInstanceBindingReference {
+                    input: declaration.id.clone(),
+                    payload,
+                    protection: stored.sticky(declaration_protection(declaration.protection)),
+                }),
+                None if declaration.required => required_inputs_satisfied = false,
+                None => {}
+            }
+        }
+        Ok(Some(InstanceCompilationState {
+            instance: id,
+            state_version,
+            active_revision,
+            active_bindings,
+            required_inputs_satisfied,
+        }))
+    }
     pub(crate) fn set_input(
         &self,
         instance: InstanceId,
@@ -333,6 +376,38 @@ impl PactrunPersistence {
             .map_err(|error| PersistenceError::sqlite("close ExportInput snapshot", error))?;
         Ok(version)
     }
+}
+
+fn resolve_instance_name_from(
+    database: &Connection,
+    name: &InstanceName,
+) -> Result<Option<InstanceId>, PersistenceError> {
+    let mut statement = database
+        .prepare("SELECT instance_id FROM instances WHERE instance_name=?1")
+        .map_err(|error| PersistenceError::sqlite("prepare Instance name resolution", error))?;
+    let mut rows = statement
+        .query([name.as_bytes()])
+        .map_err(|error| PersistenceError::sqlite("resolve Instance name", error))?;
+    let Some(first) = rows
+        .next()
+        .map_err(|error| PersistenceError::sqlite("read Instance name resolution", error))?
+    else {
+        return Ok(None);
+    };
+    let id = first
+        .get::<_, Vec<u8>>(0)
+        .map_err(|error| PersistenceError::sqlite("read resolved Instance id", error))?;
+    if rows
+        .next()
+        .map_err(|error| PersistenceError::sqlite("check Instance name uniqueness", error))?
+        .is_some()
+    {
+        return Err(PersistenceError::CorruptInstance(format!(
+            "multiple rows have InstanceName {:?}",
+            name.as_str()
+        )));
+    }
+    Ok(Some(instance_id(id)?))
 }
 
 fn insert_payload(
@@ -798,6 +873,37 @@ mod tests {
         fs::create_dir(root.join("runtime-content")).unwrap();
         fs::create_dir(root.join("staging")).unwrap();
         (temporary, root)
+    }
+
+    #[test]
+    fn duplicate_instance_name_rows_are_repository_corruption() {
+        let database = Connection::open_in_memory().unwrap();
+        database
+            .execute_batch(
+                "CREATE TABLE instances( \
+                     instance_id BLOB NOT NULL, \
+                     instance_name BLOB NOT NULL \
+                 ) STRICT;",
+            )
+            .unwrap();
+        let name = InstanceName::parse("duplicate-name").unwrap();
+        database
+            .execute(
+                "INSERT INTO instances(instance_id, instance_name) VALUES(?1, ?2)",
+                params![vec![1_u8; 16], name.as_bytes()],
+            )
+            .unwrap();
+        database
+            .execute(
+                "INSERT INTO instances(instance_id, instance_name) VALUES(?1, ?2)",
+                params![vec![2_u8; 16], name.as_bytes()],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            resolve_instance_name_from(&database, &name),
+            Err(PersistenceError::CorruptInstance(_))
+        ));
     }
 
     fn revision(persistence: &PactrunPersistence) -> RevisionIdentity {

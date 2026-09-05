@@ -158,3 +158,33 @@ Actions and Snapshot operations MAY reuse parameter parsing and binding
 machinery, but this MUST NOT turn them into the same domain operation.
 
 **Verification: Pending automated coverage.**
+
+### PR-REQ-0273 - Primitive invocation-text lexical profile
+
+A textual Invocation Parameter source MUST present one complete UTF-8 string to
+the Application parameter boundary. This boundary MUST NOT trim whitespace,
+normalize Unicode, apply shell or CLI quoting, or reuse an authoring frontend's
+scalar grammar.
+
+Integer text MUST match `-?(0|[1-9][0-9]*)`, then parse as its exact
+mathematical value within the safe-integer range. Fraction and exponent forms,
+a leading plus, invalid leading zeroes, and surrounding whitespace are invalid.
+Negative zero normalizes to typed integer zero.
+
+Float text MUST match
+`-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`; an integral token is valid
+when the declared target type is Float. Conversion MUST occur once to finite
+IEEE-754 binary64 using round-to-nearest, ties-to-even. Overflow is invalid,
+underflow to zero is valid, and negative zero normalizes to positive zero.
+NaN, Infinity, a leading plus, invalid leading zeroes, `.5`, `1.`, and
+surrounding whitespace are invalid.
+
+Boolean text MUST be exactly lowercase ASCII `true` or `false`. String text is
+the exact supplied Unicode scalar sequence, including an empty or
+number-looking string.
+
+This requirement defines reusable invocation semantics only. It does not define
+CLI flags, positional arguments, prompting, files, standard input, escaping,
+quoting, or shell syntax, and it is independent of `PackSourceYamlV1`.
+
+**Verification: PR-TEST-0080.**

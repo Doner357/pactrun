@@ -131,8 +131,10 @@ pub(crate) enum PersistenceError {
     InvalidMetadata(String),
     MetadataConflict(String),
     CorruptMetadata(String),
+    CorruptInstance(String),
     MissingInstance(String),
     StaleInstanceState,
+    CompilationObservationChanged,
     InvalidManagedInput(String),
     UnauthorizedSecretExport,
     CorruptManagedInput(String),
@@ -163,8 +165,12 @@ impl fmt::Display for PersistenceError {
             Self::InvalidMetadata(message) => write!(formatter, "invalid metadata: {message}"),
             Self::MetadataConflict(message) => write!(formatter, "metadata conflict: {message}"),
             Self::CorruptMetadata(message) => write!(formatter, "corrupt metadata: {message}"),
+            Self::CorruptInstance(message) => write!(formatter, "corrupt Instance: {message}"),
             Self::MissingInstance(name) => write!(formatter, "Instance {name:?} is not persisted"),
             Self::StaleInstanceState => formatter.write_str("stale InstanceStateVersion"),
+            Self::CompilationObservationChanged => {
+                formatter.write_str("Instance compilation observation changed")
+            }
             Self::InvalidManagedInput(message) => {
                 write!(formatter, "invalid Managed Input: {message}")
             }
