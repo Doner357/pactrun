@@ -19,9 +19,10 @@ use crate::{
         ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName, InstanceStateVersion,
         InstanceSummary, InstanceView, InvokeAction, LocalAlias, PlanCompilationError,
         RawParameterInput, ReferenceLabel, RevisionCoreV1Error, RevisionIdentity,
-        RevisionMetadataMutationBatch, bind_action_parameters,
+        RevisionMetadataMutationBatch, RunId, bind_action_parameters,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
+    hook::{ActionCancellation, ContinuationGuard, HookRuntimePolicy, OwnerContinuationRegistry},
     managed_data::{StagedFile, StagingError, StagingSession},
     persistence::{
         ManagedInputWrite, PactrunPersistence, PersistenceError, validate_supported_storage_root,
@@ -149,6 +150,7 @@ impl From<ExecutorError> for ApplicationError {
 pub(crate) struct PactrunApplication {
     persistence: PactrunPersistence,
     staging: StagingSession,
+    continuations: OwnerContinuationRegistry,
     mutation_locks: Mutex<BTreeMap<InstanceId, Arc<Mutex<()>>>>,
 }
 
@@ -171,6 +173,7 @@ impl PactrunApplication {
         Ok(Self {
             persistence,
             staging,
+            continuations: OwnerContinuationRegistry::default(),
             mutation_locks: Mutex::new(BTreeMap::new()),
         })
     }
@@ -429,6 +432,66 @@ impl PactrunApplication {
             plan,
             options,
         )?)
+    }
+
+    /// Consumes one admitted Action and guarantees that every outward path
+    /// leaves an owner-held continuation while this process owns the Run.
+    #[allow(dead_code)]
+    pub(crate) fn execute_admitted_action(
+        &self,
+        admitted: AdmittedExecution,
+        policy: HookRuntimePolicy,
+        cancellation: ActionCancellation,
+    ) -> RunId {
+        crate::hook::execute_admitted_action(
+            &self.persistence,
+            &self.staging,
+            &self.continuations,
+            admitted,
+            policy,
+            cancellation,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn execute_admitted_action_with_risk_failures(
+        &self,
+        admitted: AdmittedExecution,
+        policy: HookRuntimePolicy,
+        cancellation: ActionCancellation,
+        remaining_failures: &std::sync::atomic::AtomicUsize,
+    ) -> RunId {
+        crate::hook::execute_admitted_action_with_risk_failures(
+            &self.persistence,
+            &self.staging,
+            &self.continuations,
+            admitted,
+            policy,
+            cancellation,
+            remaining_failures,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn take_owner_continuation(&self, run: RunId) -> Option<ContinuationGuard<'_>> {
+        self.continuations.take(run)
+    }
+
+    /// Simulates this owner process dying: the volatile continuation registry
+    /// disappears and the staging lease is released without cleanup.
+    #[cfg(test)]
+    pub(crate) fn abandon_execution_owner(self) {
+        let Self { staging, .. } = self;
+        staging.abandon();
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn resume_owner_continuation(&self, run: RunId) -> bool {
+        let Some(guard) = self.continuations.take(run) else {
+            return false;
+        };
+        crate::hook::resume_owner_continuation(&self.persistence, guard);
+        true
     }
 
     /// `ResolveManualRecovery` is a no-Hook, no-Compiler, no-Run management
@@ -1366,7 +1429,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0090
-    // Verifies: PR-REQ-0043
+    // Verifies: PR-REQ-0043, PR-REQ-0194
     // Supporting coverage for the Action clause of PR-REQ-0091 (readiness at
     // Admission); the requirement itself remains Pending until its Capture,
     // Migration, Cleanup, and Restore clauses are implemented.

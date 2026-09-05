@@ -12,6 +12,7 @@ mod hook;
 mod managed_data;
 mod persistence;
 mod revision_core_v1;
+mod strict_json;
 mod workflow;
 
 /// Internal binary composition entry point. This is deliberately not a stable

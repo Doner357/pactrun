@@ -82,6 +82,12 @@ impl fmt::Debug for ParameterBinding {
     }
 }
 
+impl ParameterBinding {
+    pub(crate) fn value(&self) -> &InvocationParameterValue {
+        &self.value
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct InvokeAction {
     pub(crate) instance: InstanceId,
@@ -200,6 +206,14 @@ impl ActionExecutionPlan {
         &self.action
     }
 
+    pub(crate) fn access(&self) -> OperationAccessV1 {
+        self.access
+    }
+
+    pub(crate) fn parameters(&self) -> &[ParameterBinding] {
+        &self.parameters
+    }
+
     pub(crate) fn active_bindings(&self) -> &[ActiveInstanceBindingReference] {
         &self.active_bindings
     }
@@ -210,6 +224,22 @@ impl ActionExecutionPlan {
 
     pub(crate) fn launch(&self) -> &CompiledHookLaunch {
         &self.launch
+    }
+
+    pub(crate) fn protocol_version(&self) -> PositiveVersion {
+        self.protocol_version
+    }
+
+    pub(crate) fn terminal(&self) -> TerminalContractV1 {
+        self.terminal
+    }
+
+    pub(crate) fn hook_args(&self) -> &[String] {
+        &self.hook_args
+    }
+
+    pub(crate) fn outputs(&self) -> &[ManagedOutputIdentity] {
+        &self.outputs
     }
 
     pub(crate) fn steps(&self) -> &[ActionPlanStep] {

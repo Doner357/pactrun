@@ -323,6 +323,8 @@ load_run(run) -> RunView
 load_instance_recovery_guard(instance) -> RecoveryGuardView?
 open_run_artifact(run, output) -> streamed bytes
 delete_run_artifact(run, output)
+stream_admitted_payload(run, input) -> streamed pinned bytes
+open_admitted_runtime_blob(run, runtime_file) -> verified pinned bytes
 ```
 
 Every mutation uses `BEGIN IMMEDIATE`. Run creation records the accepted state
@@ -340,9 +342,13 @@ that same transaction; success inserts the pins. Terminal publication computes t
 consequence before writing, deletes the execution row, writes the outcome and
 its records, releases pins, reclaims unreferenced payloads, and publishes the
 guard and state version only when a consequence exists. Artifact bytes stream
-from transient staging in one-megabyte chunks. A transaction failure publishes
-no Run, pin, risk transition, outcome, Artifact, guard, or state version. The
-concrete Rust names remain crate-private and are not a stable API.
+from transient staging in one-megabyte chunks. The two pinned-view readers
+added by M3 Slice 4 resolve an admitted Run's payload and runtime-content pins
+from the existing `run_payload_pins`, `run_revision_pins`, and
+`revision_runtime_content_refs` rows and refuse a Run that is not Running and
+Admitted; they add no schema. A transaction failure publishes no Run, pin,
+risk transition, outcome, Artifact, guard, or state version. The concrete Rust
+names remain crate-private and are not a stable API.
 
 ## Deferred work
 

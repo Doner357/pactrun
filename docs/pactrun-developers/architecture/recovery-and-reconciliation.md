@@ -35,7 +35,7 @@ that acknowledgment. A crash around acknowledgment MAY conservatively produce
 a false-positive manual-recovery obligation, but MUST NOT create a false claim
 that an unrecorded risky boundary is safe.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0096.**
 
 ### PR-REQ-0056 - Risk resolution
 
@@ -44,7 +44,7 @@ coherent enough for ordinary Pactrun management. It MUST NOT imply rollback to
 the original value or require the Run itself to succeed. Pactrun MUST durably
 clear risk before acknowledging resolution.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0096.**
 
 ### PR-REQ-0057 - Terminal recovery consequence
 
@@ -82,7 +82,7 @@ Every Running Run MUST have exactly one execution owner. Reconciliation MUST NOT
 mark a Run interrupted until owner loss is established by the selected ownership
 mechanism.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0100.**
 
 ### PR-REQ-0277 - Action execution owner mechanism
 

@@ -212,7 +212,7 @@ mutate live contents while an execution is running, and Pactrun MUST NOT treat a
 bytes were frozen or linearized. How a future Plan binds resource declarations,
 associations, and operation prerequisites remains design work.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0094.**
 
 ### PR-REQ-0047 - Durable execution pins
 
@@ -222,7 +222,7 @@ is terminal and no execution or recovery reference remains. This Pactrun-owned
 content lifetime guarantee does not content-address, copy, or freeze a
 ServiceStorage-backed Managed Service Resource's live bytes.
 
-**Verification: PR-TEST-0083.**
+**Verification: PR-TEST-0083, PR-TEST-0100.**
 
 ### PR-REQ-0048 - Pin and guard separation
 
@@ -270,4 +270,4 @@ request cancellation, propagate it, observe Hook termination, perform required
 finalization, and only then publish a terminal outcome. `TimedOut` MUST identify
 termination caused by Pactrun policy.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0097.**

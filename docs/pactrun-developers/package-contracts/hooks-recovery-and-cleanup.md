@@ -18,7 +18,7 @@ Node.js, Go, Rust, or another executable supported by the host.
 file associations and excludes launcher `argv[0]` from the Pack-facing
 contract. See [Revision Core Format V1](./revision-core-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0095.**
 
 ### PR-REQ-0168 - One language-neutral protocol
 
@@ -27,7 +27,7 @@ language-neutral canonical Hook Protocol. An adapter MUST NOT define a second
 semantic API. The exact Frozen V1 wire and state-machine contract is defined by
 [Hook Protocol V1](./hook-protocol-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0093.**
 
 ### PR-REQ-0169 - Session authority
 
@@ -52,7 +52,7 @@ Instance's managed data, delete arbitrary resources, invoke another Action,
 acquire a mutation guard, commit a Snapshot, rewrite a Run, switch the active
 Revision, enlarge authority, or redefine the workflow.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0094.**
 
 ### PR-REQ-0244 - Persistent storage authority and prerequisites
 
@@ -102,7 +102,43 @@ Protocol messages MUST NOT be mixed into standard output. `IOContract` MUST
 describe channels and transition policy without pretending to be a complete
 host-device sandbox.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0098.**
+
+### PR-REQ-0280 - Hook Protocol runtime transport discovery
+
+Hook Protocol transport discovery is a stable Pack-facing runtime-integration
+contract that selects the dedicated stream required by PR-REQ-0205 without
+changing the Frozen `HookProtocolV1` framing, message schema, or state machine.
+Before launching a Hook, Pactrun MUST create one owner-private listener and MUST
+replace both of these variables in the exact child environment:
+
+```text
+PACTRUN_HOOK_PROTOCOL_TRANSPORT
+PACTRUN_HOOK_PROTOCOL_ENDPOINT
+```
+
+Ambient values MUST NOT be trusted. The closed transport values and endpoint
+meanings are:
+
+- `unix-domain-socket`: the endpoint is an absolute pathname for an
+  owner-private reliable ordered full-duplex Unix-domain stream socket;
+- `windows-named-pipe`: the endpoint is a complete Windows named-pipe pathname
+  whose access is restricted to the execution owner.
+
+The variables are injected into the launched Hook process. Descendants receive
+them only through ordinary operating-system environment inheritance; Pactrun
+does not provision a second endpoint for descendants. The listener accepts one
+connection for one Session and MUST NOT be reused. It exists from before process
+creation until that connection is accepted or launch/startup termination makes
+the Session impossible, and Pactrun MUST close and remove it on every terminal
+or cleanup path.
+
+The endpoint is a capability locator, not a Run, Session, Hook, or Package
+identity and not an alternative authentication or protocol-version mechanism.
+The first bytes in each direction after connection remain the exact Frozen V1
+preamble from PR-REQ-0205.
+
+**Verification: PR-TEST-0095, PR-TEST-0098, PR-TEST-0099.**
 
 ## Recovery-risk duty
 

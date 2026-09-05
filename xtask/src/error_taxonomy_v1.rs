@@ -37,13 +37,17 @@ const INITIAL_OWNERS: &[&str] = &[
     "snapshot_integrity_format_v1",
 ];
 
+/// Initial owners that still have no appended code. `execution` left this set
+/// when M3 Slice 4 appended its runtime codes under PR-REQ-0222.
 const EMPTY_INITIAL_OWNERS: &[&str] = &[
     "compilation",
     "domain_validation",
-    "execution",
     "persistence",
     "recovery",
 ];
+
+/// PR-REQ-0221: no owner receives a placeholder code.
+const PLACEHOLDER_CODES: &[&str] = &["failed", "internal_failure", "unknown_failure"];
 
 const EXCLUDED_REVISION_CORE_VOCABULARY: &[&str] = &[
     "duplicate_semantic_key",
@@ -428,6 +432,16 @@ fn verify_initial_registry(catalog: &Catalog, sources: &SourceIndex) -> Result<(
                 format!("initial owner {owner} must remain intentionally empty"),
             ));
         }
+    }
+    if let Some(entry) = catalog
+        .codes
+        .iter()
+        .find(|entry| PLACEHOLDER_CODES.contains(&entry.code.as_str()))
+    {
+        return Err(Violation::new(
+            "placeholder_runtime_code",
+            format!("{}.{} is a placeholder code", entry.owner, entry.code),
+        ));
     }
 
     for (owner, suite) in [

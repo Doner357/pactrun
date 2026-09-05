@@ -64,9 +64,11 @@ octets. A JSON payload MUST be no larger than 16 MiB (`16 * 1024 * 1024`
 octets). A wrong, truncated, or repeated preamble, a truncated frame, or an
 oversized declared length terminates the protocol. Transport selection, pipe or
 socket spelling, buffering, and process-launch integration are not part of the
-wire contract.
+wire contract. The separate Pack-facing runtime discovery ABI is defined by
+[PR-REQ-0280](./hooks-recovery-and-cleanup.md#pr-req-0280---hook-protocol-runtime-transport-discovery);
+it selects this stream without changing Frozen V1 bytes or messages.
 
-**Verification: PR-TEST-0020, PR-TEST-0031.**
+**Verification: PR-TEST-0020, PR-TEST-0031, PR-TEST-0093.**
 
 ### PR-REQ-0206 - Strict JSON message profile
 
@@ -84,7 +86,7 @@ arrays retain order. Negative conformance fixtures SHOULD isolate one fault.
 Unless this specification explicitly says otherwise, a multi-fault message
 does not establish a stable global first-error precedence.
 
-**Verification: PR-TEST-0021.**
+**Verification: PR-TEST-0021, PR-TEST-0093.**
 
 ### PR-REQ-0207 - Exact version confirmation
 
@@ -98,7 +100,7 @@ version MUST reject it and terminate without treating another version as V1.
 structured diagnostics are mandatory V1 protocol facilities, not optional
 features that can form undefined combinations with version `1`.
 
-**Verification: PR-TEST-0022.**
+**Verification: PR-TEST-0022, PR-TEST-0093.**
 
 ## Message envelope and session schema
 
@@ -117,7 +119,7 @@ A `cancel_ack` confirms receipt only; Pactrun still owns termination, Run
 outcome, and finalization. Cancellation does not bypass recovery-risk or
 completion validation.
 
-**Verification: PR-TEST-0023, PR-TEST-0030.**
+**Verification: PR-TEST-0023, PR-TEST-0030, PR-TEST-0093.**
 
 ### PR-REQ-0209 - Exact Session identity and values
 
@@ -199,7 +201,7 @@ SnapshotContent are distinct Domain authorities even if a future runtime shares
 filesystem primitives among them. A Hook cannot request a new authority or
 enlarge an existing one.
 
-**Verification: PR-TEST-0025, PR-TEST-0027, PR-TEST-0029.**
+**Verification: PR-TEST-0025, PR-TEST-0027, PR-TEST-0029, PR-TEST-0094.**
 
 ### PR-REQ-0211 - Operation-specific binding visibility
 
@@ -265,7 +267,7 @@ ACLs. Active and retained remain roles over one `ManagedInputBindings` registry.
 
 Binding arrays are semantic sets unique and sorted by `(role, input_id)`.
 
-**Verification: PR-TEST-0026.**
+**Verification: PR-TEST-0026, PR-TEST-0094.**
 
 ### PR-REQ-0212 - Managed output authorities and completion
 
@@ -300,7 +302,7 @@ target binding bytes. Successful Migration completion MUST submit every target
 output handle exactly once. Failure MUST submit none and MUST NOT publish staged
 target bindings. Restore and Cleanup publish no managed output.
 
-**Verification: PR-TEST-0027.**
+**Verification: PR-TEST-0027, PR-TEST-0094.**
 
 ### PR-REQ-0213 - Snapshot candidate and content authorities
 
@@ -427,7 +429,7 @@ crash boundaries for Action execution are an M3 responsibility under
 PR-REQ-0055 and PR-REQ-0056 and require M3 persistence and runtime integration
 tests; M6 generalizes them to later managed-execution types.
 
-**Verification: PR-TEST-0028.**
+**Verification: PR-TEST-0028, PR-TEST-0093.**
 
 ### PR-REQ-0216 - Operation completion and terminal states
 
@@ -492,7 +494,7 @@ failure before accepted completion prevents protocol success. Their Run and
 Instance consequences remain Pactrun-owned and depend on the durable risk state;
 Pactrun MUST NOT infer replay or compensation.
 
-**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030.**
+**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093, PR-TEST-0097.**
 
 ### PR-REQ-0217 - Local protocol errors and ownership
 
@@ -525,7 +527,7 @@ A Pactrun-originated `protocol_error` MUST use one of these codes; a
 Hook-originated `protocol_error` uses a Hook-owned code. Sender and state make
 the two closed message forms unambiguous.
 
-**Verification: PR-TEST-0021, PR-TEST-0023, PR-TEST-0028, PR-TEST-0030.**
+**Verification: PR-TEST-0021, PR-TEST-0023, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093.**
 
 ### PR-REQ-0218 - Authority is not isolation and verification is layered
 

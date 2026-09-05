@@ -356,7 +356,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0081
-    // Verifies: PR-REQ-0274
+    // Verifies: PR-REQ-0194, PR-REQ-0274
     #[test]
     fn interpreter_launcher_selection_and_plan_facts_are_exact() {
         let (intent, repository) = setup(true);

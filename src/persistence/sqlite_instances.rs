@@ -456,7 +456,7 @@ fn insert_payload(
     Ok(payload)
 }
 
-fn stream_payload(
+pub(super) fn stream_payload(
     database: &Connection,
     instance: InstanceId,
     payload: ManagedInputPayloadId,
