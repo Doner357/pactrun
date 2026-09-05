@@ -1413,7 +1413,7 @@ mod tests {
         project_revision_core_v1, project_runtime_content_closure_v1, validate_revision_content_v1,
     };
     use crate::persistence::sqlite_revision_store::{
-        APPLICATION_ID, SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL,
+        APPLICATION_ID, SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL, SCHEMA_VERSION,
     };
     use crate::revision_core_v1::{
         encode_canonical_revision_core_v1, encode_canonical_runtime_content_v1,
@@ -1683,7 +1683,7 @@ mod tests {
             database
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            3
+            SCHEMA_VERSION
         );
         assert_eq!(
             database
@@ -1694,7 +1694,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            23
+            35
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
@@ -1781,7 +1781,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            3
+            SCHEMA_VERSION
         );
 
         let (_before_temporary, before_root) = test_root();
@@ -1789,7 +1789,7 @@ mod tests {
         assert!(!run_worker(
             &before_root,
             "open",
-            Some("before_schema_v3_migration_commit"),
+            Some("before_schema_migration_commit"),
             None,
         ));
         let before_database = Connection::open(database_path(&before_root)).unwrap();
@@ -1818,7 +1818,7 @@ mod tests {
         assert!(!run_worker(
             &after_root,
             "open",
-            Some("after_schema_v3_migration_commit"),
+            Some("after_schema_migration_commit"),
             None,
         ));
         assert_eq!(
@@ -1826,7 +1826,7 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            3
+            SCHEMA_VERSION
         );
         PactrunPersistence::open(&after_root).unwrap();
     }
@@ -1879,7 +1879,9 @@ mod tests {
         newer
             .pragma_update(None, "application_id", APPLICATION_ID)
             .unwrap();
-        newer.pragma_update(None, "user_version", 3).unwrap();
+        newer
+            .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+            .unwrap();
         drop(newer);
         assert!(PactrunPersistence::open(&newer_root).is_err());
 

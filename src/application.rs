@@ -16,10 +16,10 @@ use crate::{
     authoring::{AuthoringError, SourceAcquisitionError},
     domain::{
         ActionCompilationObservation, ActionExecutionPlan, ActionIdentity, ActionResolutionError,
-        InputIdentity, InstanceId, InstanceName, InstanceStateVersion, InstanceSummary,
-        InstanceView, InvokeAction, LocalAlias, PlanCompilationError, RawParameterInput,
-        ReferenceLabel, RevisionCoreV1Error, RevisionIdentity, RevisionMetadataMutationBatch,
-        bind_action_parameters,
+        ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName, InstanceStateVersion,
+        InstanceSummary, InstanceView, InvokeAction, LocalAlias, PlanCompilationError,
+        RawParameterInput, ReferenceLabel, RevisionCoreV1Error, RevisionIdentity,
+        RevisionMetadataMutationBatch, bind_action_parameters,
     },
     managed_data::{StagedFile, StagingError, StagingSession},
     persistence::{
@@ -400,6 +400,28 @@ impl PactrunApplication {
         })
     }
 
+    /// `ResolveManualRecovery` is a no-Hook, no-Compiler, no-Run management
+    /// mutation: it takes the per-Instance mutation guard, clears the trust
+    /// guard with a token-first comparison, and publishes a fresh state version.
+    #[allow(dead_code)]
+    pub(crate) fn resolve_manual_recovery(
+        &self,
+        instance: InstanceId,
+        expected: InstanceStateVersion,
+    ) -> Result<InstanceStateVersion, ApplicationError> {
+        let lock = self.mutation_lock(instance)?;
+        let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+        Ok(self
+            .persistence
+            .resolve_manual_recovery(instance, expected)?)
+    }
+
+    /// The execution owner identity this process records on accepted Runs.
+    #[allow(dead_code)]
+    pub(crate) fn execution_owner(&self) -> ExecutionOwnerSession {
+        self.staging.owner()
+    }
+
     fn mutation_lock(&self, instance: InstanceId) -> Result<Arc<Mutex<()>>, ApplicationError> {
         let mut locks = self
             .mutation_locks
@@ -564,6 +586,178 @@ runtime_content:
             application.compile_action(&intent, &[]),
             Err(ApplicationError::PlanCompilation(
                 PlanCompilationError::InconsistentFacts
+            ))
+        ));
+    }
+
+    // Test-ID: PR-TEST-0088
+    // Verifies: PR-REQ-0069
+    #[test]
+    fn resolve_manual_recovery_is_a_guarded_no_run_management_mutation() {
+        use std::{
+            sync::{Arc, mpsc},
+            thread,
+            time::Duration,
+        };
+
+        use crate::domain::{ActionRunIdentity, ExecutionOwnerSession, RunFinish, RunOutcome};
+
+        let (_temporary, storage, source) = roots();
+        fs::write(source.join("config.bin"), b"config").unwrap();
+        fs::write(
+            source.join("pactrun.yaml"),
+            r#"source_format: 1
+package_id: 00000000000000000000000000000032
+revision:
+  inputs:
+    - { id: config, required: true }
+  actions: []
+  migrations: []
+runtime_content:
+  files: []
+"#,
+        )
+        .unwrap();
+        let application = Arc::new(PactrunApplication::open(&storage).unwrap());
+        let installed = application
+            .install_pack_source(&source, &empty_metadata())
+            .unwrap();
+        let instance = application
+            .create_instance(
+                InstanceName::parse("guarded").unwrap(),
+                installed.revision.clone(),
+                vec![InputAcquisition {
+                    input_id: InputIdentity::parse("config").unwrap(),
+                    source: Box::new(fs::File::open(source.join("config.bin")).unwrap()),
+                }],
+            )
+            .unwrap();
+
+        // Publish a ManualRecoveryRequired guard through the persistence
+        // substrate: an admitted Run fails with open risk.
+        let owner = application.execution_owner();
+        assert!(ExecutionOwnerSession::is_session_name(owner.as_str()));
+        let run = application
+            .persistence
+            .create_accepted_run(
+                instance.id,
+                instance.state_version,
+                &ActionRunIdentity {
+                    revision: installed.revision.clone(),
+                    action: ActionIdentity::parse("deploy").unwrap(),
+                },
+                &owner,
+            )
+            .unwrap();
+        let bindings = application
+            .persistence
+            .observe_instance_compilation_state(instance.id)
+            .unwrap()
+            .unwrap()
+            .active_bindings;
+        application
+            .persistence
+            .establish_run_pins(run, instance.state_version, &bindings, false)
+            .unwrap();
+        application.persistence.open_recovery_risk(run).unwrap();
+        let receipt = application
+            .persistence
+            .finish_run(
+                run,
+                &RunFinish {
+                    outcome: RunOutcome::Failed,
+                    primary_failure: None,
+                    secondary_failures: Vec::new(),
+                    hook_completion: None,
+                },
+                &mut [],
+            )
+            .unwrap();
+        let guarded = receipt.published_state_version.unwrap();
+        assert!(
+            application
+                .persistence
+                .load_instance_recovery_guard(instance.id)
+                .unwrap()
+                .is_some()
+        );
+        let runs_before = application
+            .persistence
+            .list_runs(instance.id)
+            .unwrap()
+            .len();
+
+        // A stale token is rejected before anything changes.
+        assert!(matches!(
+            application.resolve_manual_recovery(instance.id, instance.state_version),
+            Err(ApplicationError::Persistence(
+                PersistenceError::StaleInstanceState
+            ))
+        ));
+        assert!(
+            application
+                .persistence
+                .load_instance_recovery_guard(instance.id)
+                .unwrap()
+                .is_some()
+        );
+
+        // The mutation guard serializes ResolveManualRecovery with other
+        // management mutations on the same Instance.
+        let held = application.mutation_lock(instance.id).unwrap();
+        let holder = held.lock().unwrap();
+        let (started, observe) = mpsc::channel();
+        let resolver = {
+            let application = Arc::clone(&application);
+            thread::spawn(move || {
+                started.send(()).unwrap();
+                application.resolve_manual_recovery(instance.id, guarded)
+            })
+        };
+        observe.recv().unwrap();
+        thread::sleep(Duration::from_millis(200));
+        assert!(
+            application
+                .persistence
+                .load_instance_recovery_guard(instance.id)
+                .unwrap()
+                .is_some(),
+            "resolution must wait for the mutation guard"
+        );
+        drop(holder);
+        let resolved = resolver.join().unwrap().unwrap();
+        assert_ne!(resolved, guarded);
+        assert_eq!(
+            application
+                .load_instance(instance.id)
+                .unwrap()
+                .unwrap()
+                .state_version,
+            resolved
+        );
+        assert!(
+            application
+                .persistence
+                .load_instance_recovery_guard(instance.id)
+                .unwrap()
+                .is_none()
+        );
+
+        // No Run, Plan, or Hook was involved: the Run history is unchanged and
+        // no staging workspace appeared.
+        assert_eq!(
+            application
+                .persistence
+                .list_runs(instance.id)
+                .unwrap()
+                .len(),
+            runs_before
+        );
+        assert!(!storage.join("staging/workspace").exists());
+        assert!(matches!(
+            application.resolve_manual_recovery(instance.id, resolved),
+            Err(ApplicationError::Persistence(
+                PersistenceError::MissingRecoveryGuard
             ))
         ));
     }

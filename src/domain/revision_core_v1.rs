@@ -34,6 +34,7 @@ semantic_id!(ActionIdentity);
 semantic_id!(ParameterIdentity);
 semantic_id!(ManagedOutputIdentity);
 semantic_id!(ContentId);
+semantic_id!(HookCodeV1);
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]

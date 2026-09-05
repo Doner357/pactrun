@@ -4,13 +4,16 @@ title: Persistence Schema V3
 
 # Persistence Schema V3
 
-**Status: Current implemented normative internal persistence contract;
-non-Frozen and non-public.**
+**Status: Implemented normative internal persistence contract; non-Frozen and
+non-public. Superseded as the current schema by PersistenceSchemaV4.**
 
 This page extends the exact implemented
 [PersistenceSchemaV2](./persistence-schema-v2.md) for M2. It does not modify
-the V1/V2 tables or any Frozen identity or wire format. PersistenceSchemaV3 is
-the current implemented internal schema after M2 integration.
+the V1/V2 tables or any Frozen identity or wire format. PersistenceSchemaV3 was
+the current implemented internal schema after M2 integration; the implemented
+[PersistenceSchemaV4](./persistence-schema-v4.md) extends it after M3 Slice 2
+integration, and this page remains the exact V3 classification manifest for
+migration.
 
 ### PR-REQ-0269 - Exact PersistenceSchemaV3
 
