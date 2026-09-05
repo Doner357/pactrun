@@ -14,7 +14,9 @@
     {"owner":"snapshot_integrity_format_v1","normative_sources":[{"kind":"requirement","id":"PR-REQ-0080"},{"kind":"requirement","id":"PR-REQ-0203"}]}
   ],
   "codes": [
+    {"owner":"admission","code":"mutation_conflict","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0045"},{"kind":"requirement","id":"PR-REQ-0278"},{"kind":"requirement","id":"PR-REQ-0279"}]},
     {"owner":"admission","code":"plan_invalidated","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0043"},{"kind":"requirement","id":"PR-REQ-0096"}]},
+    {"owner":"admission","code":"recovery_guard_active","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0067"},{"kind":"requirement","id":"PR-REQ-0068"},{"kind":"requirement","id":"PR-REQ-0279"}]},
 
     {"owner":"hook_protocol_v1","code":"completion_with_open_risk","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"success_with_open_risk"}]},
     {"owner":"hook_protocol_v1","code":"duplicate_property","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"duplicate_property"}]},

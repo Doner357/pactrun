@@ -6,9 +6,12 @@
 use std::fmt;
 
 use super::{
-    ActionIdentity, ActionPlanStep, HookCodeV1, InstanceId, InstanceStateVersion,
-    ManagedOutputIdentity, PactrunErrorRefV1, RevisionIdentity, RunId,
+    ActionIdentity, ActionPlanStep, ActiveInstanceBindingReference, CompiledHookLaunch, HookCodeV1,
+    InstanceId, InstanceStateVersion, ManagedOutputIdentity, PactrunErrorRefV1, RevisionIdentity,
+    RunId, RuntimeFileV1,
 };
+
+const ADMISSION_ERROR_OWNER: &str = "admission";
 
 const SESSION_NAME_PREFIX: &str = "session-";
 const SESSION_NAME_HEX_LENGTH: usize = 32;
@@ -258,6 +261,62 @@ pub(crate) struct RunFinish {
     pub(crate) primary_failure: Option<RunPrimaryFailure>,
     pub(crate) secondary_failures: Vec<RunFailureRecord>,
     pub(crate) hook_completion: Option<HookCompletionRecord>,
+}
+
+/// The compile-time facts an Admission transaction revalidates against
+/// persisted state. Access mode and readiness are deliberately absent: both
+/// are re-derived from persisted authority inside the transaction.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AdmissionFacts<'a> {
+    pub(crate) expected_state_version: InstanceStateVersion,
+    pub(crate) active_bindings: &'a [ActiveInstanceBindingReference],
+    pub(crate) runtime_content: &'a [RuntimeFileV1],
+    pub(crate) launch: &'a CompiledHookLaunch,
+}
+
+/// The typed Admission refusal, evaluated in the precedence of PR-REQ-0279.
+/// The conflicting `RunId` is typed detail; messages carry no normative
+/// content.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum AdmissionRefusal {
+    RecoveryGuardActive,
+    PlanInvalidated(String),
+    MutationConflict(RunId),
+}
+
+impl AdmissionRefusal {
+    pub(crate) fn error_ref(&self) -> PactrunErrorRefV1 {
+        let code = match self {
+            Self::RecoveryGuardActive => "recovery_guard_active",
+            Self::PlanInvalidated(_) => "plan_invalidated",
+            Self::MutationConflict(_) => "mutation_conflict",
+        };
+        PactrunErrorRefV1::new(ADMISSION_ERROR_OWNER, code)
+            .expect("admission error identities are lexically valid")
+    }
+
+    pub(crate) fn message(&self) -> String {
+        match self {
+            Self::RecoveryGuardActive => {
+                "the Instance is in ManualRecoveryRequired and no recovery override was supplied"
+                    .to_owned()
+            }
+            Self::PlanInvalidated(reason) => format!("the Plan is invalidated: {reason}"),
+            Self::MutationConflict(_) => {
+                "another Mutate Action Run is admitted on this Instance".to_owned()
+            }
+        }
+    }
+
+    pub(crate) fn primary_failure(&self) -> RunPrimaryFailure {
+        RunPrimaryFailure {
+            failure: RunFailureRecord {
+                error: self.error_ref(),
+                message: self.message(),
+            },
+            step: RunFailedStep::Admission,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

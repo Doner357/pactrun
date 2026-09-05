@@ -196,8 +196,16 @@ impl ActionExecutionPlan {
         &self.active_revision
     }
 
+    pub(crate) fn action(&self) -> &ActionIdentity {
+        &self.action
+    }
+
     pub(crate) fn active_bindings(&self) -> &[ActiveInstanceBindingReference] {
         &self.active_bindings
+    }
+
+    pub(crate) fn runtime_content(&self) -> &[RuntimeFileV1] {
+        &self.runtime_content
     }
 
     pub(crate) fn launch(&self) -> &CompiledHookLaunch {

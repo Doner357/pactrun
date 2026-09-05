@@ -197,7 +197,7 @@ While an Instance is in `ManualRecoveryRequired`, ordinary managed executions
 MUST be blocked by default. Read-only inspection and otherwise legal
 Pactrun-owned Input management MAY continue without clearing the guard.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0091.**
 
 ### PR-REQ-0068 - One-execution recovery override
 
@@ -206,7 +206,7 @@ execution. It MUST NOT clear the guard or bypass exact compatibility,
 operation-specific requirements, stale-plan checks, exact references, Secret
 declassification authorization, mutation conflicts, or other invariants.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0091.**
 
 ### PR-REQ-0069 - ResolveManualRecovery
 

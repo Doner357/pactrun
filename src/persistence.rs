@@ -20,7 +20,7 @@ pub(crate) use runtime_content_store::{
 pub(crate) use sqlite_instances::ManagedInputWrite;
 #[allow(unused_imports)]
 pub(crate) use sqlite_revision_store::{
-    PactrunPersistence, PersistenceError, StoredRevisionContentV1,
+    FaultPoint, PactrunPersistence, PersistenceError, StoredRevisionContentV1, fault,
 };
 #[allow(unused_imports)]
 pub(crate) use sqlite_runs::{RunArtifactWrite, RunFinishReceipt};
