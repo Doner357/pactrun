@@ -158,6 +158,10 @@ impl PositiveVersion {
         }
         Ok(Self(value))
     }
+
+    pub(crate) fn get(self) -> i64 {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -174,6 +178,10 @@ impl SafeIntegerV1 {
         }
         Ok(Self(value))
     }
+
+    pub(crate) fn get(self) -> i64 {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -188,6 +196,10 @@ impl FiniteF64 {
             ));
         }
         Ok(Self(if value == 0.0 { 0.0 } else { value }))
+    }
+
+    pub(crate) fn get(self) -> f64 {
+        self.0
     }
 }
 

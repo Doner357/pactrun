@@ -10,7 +10,7 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::{
-    domain::{ExecutionOwnerSession, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, Sha256Digest},
+    domain::{ExecutionOwnerSession, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, RunId, Sha256Digest},
     persistence::validate_supported_storage_root,
 };
 
@@ -30,6 +30,36 @@ pub(crate) struct StagedFile {
     file: File,
     path: PathBuf,
     byte_len: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct ExecutionDirectory {
+    root: PathBuf,
+}
+
+impl ExecutionDirectory {
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) fn create_directory(&self, relative: &Path) -> Result<PathBuf, StagingError> {
+        let path = checked_descendant(&self.root, relative)?;
+        create_private_directories(&self.root, relative)?;
+        Ok(path)
+    }
+
+    pub(crate) fn create_file(&self, relative: &Path) -> Result<(PathBuf, File), StagingError> {
+        let path = checked_descendant(&self.root, relative)?;
+        if let Some(parent) = relative
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            create_private_directories(&self.root, parent)?;
+        }
+        let file = create_private_file(&path)
+            .map_err(|error| StagingError::io("create execution file", error))?;
+        Ok((path, file))
+    }
 }
 
 impl StagedFile {
@@ -177,6 +207,16 @@ impl StagingSession {
         ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
     }
 
+    pub(crate) fn create_execution_directory(
+        &self,
+        run: RunId,
+    ) -> Result<ExecutionDirectory, StagingError> {
+        let root = self.session.join(format!("execution-{run}"));
+        create_private_directory(&root)
+            .map_err(|error| StagingError::io("create execution directory", error))?;
+        Ok(ExecutionDirectory { root })
+    }
+
     pub(crate) fn stage_managed_input(
         &self,
         source: &mut impl Read,
@@ -266,6 +306,20 @@ impl StagingSession {
         Err(StagingError::Unsupported(
             "could not allocate a unique staging file".to_owned(),
         ))
+    }
+}
+
+impl StagingSession {
+    /// Simulates confirmed owner loss: the lease is released as the operating
+    /// system would on process death, while the session directory and every
+    /// execution tree beneath it are left behind for stale-session cleanup.
+    #[cfg(test)]
+    pub(crate) fn abandon(mut self) {
+        if let Some(lease) = self.lease.take() {
+            let _ = File::unlock(&lease);
+            drop(lease);
+        }
+        std::mem::forget(self);
     }
 }
 
@@ -363,8 +417,61 @@ fn remove_session_contents(session: &Path) -> io::Result<()> {
     for entry in fs::read_dir(session)? {
         let entry = entry?;
         let metadata = fs::symlink_metadata(entry.path())?;
-        if metadata.is_file() && !metadata.file_type().is_symlink() {
-            fs::remove_file(entry.path())?;
+        if metadata.file_type().is_symlink() {
+            if fs::remove_file(entry.path()).is_err() {
+                fs::remove_dir(entry.path())?;
+            }
+        } else if metadata.is_dir() {
+            remove_session_contents(&entry.path())?;
+            fs::remove_dir(entry.path())?;
+        } else if metadata.is_file() {
+            remove_file_force(&entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+/// Materialized binding files are read-only; on Windows that attribute also
+/// refuses deletion until it is cleared.
+fn remove_file_force(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+            let mut permissions = fs::metadata(path)?.permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            permissions.set_readonly(false);
+            fs::set_permissions(path, permissions)?;
+            fs::remove_file(path)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn checked_descendant(root: &Path, relative: &Path) -> Result<PathBuf, StagingError> {
+    if relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(StagingError::Unsupported(
+            "execution path must contain only relative normal components".to_owned(),
+        ));
+    }
+    Ok(root.join(relative))
+}
+
+fn create_private_directories(root: &Path, relative: &Path) -> Result<(), StagingError> {
+    let _ = checked_descendant(root, relative)?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let std::path::Component::Normal(component) = component else {
+            unreachable!("checked execution path contains only normal components")
+        };
+        current.push(component);
+        match create_private_directory(&current) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists && current.is_dir() => {}
+            Err(error) => return Err(StagingError::io("create execution subdirectory", error)),
         }
     }
     Ok(())

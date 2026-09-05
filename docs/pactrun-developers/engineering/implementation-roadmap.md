@@ -26,8 +26,9 @@ is Frozen.
   integrated into `develop`. M3 Slice 2 exact PersistenceSchemaV4 Runs,
   durable pins, Action recovery state, ownership, and Run Artifacts are
   integrated into `develop`. M3 Slice 3 transactional Run acceptance and
-  Admission are integrated into `develop`; the remaining M3 slices are not yet
-  implemented.
+  Admission are integrated into `develop`. M3 Slice 4 Hook process launch,
+  execution materialization, and the HookProtocolV1 runtime are complete on an
+  isolated feature branch and are not yet integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -384,6 +385,44 @@ Admission holds the Instance's Mutate exclusivity until Slice 5 reconciliation
 finishes it as `Interrupted`. Process launch, Workspace materialization,
 HookProtocolV1 runtime, output publication, reconciliation, and human spelling
 remain owned by Slices 4 through 6.
+
+The completed M3 Slice 4 executes an admitted Action once. The execution owner
+materializes `runtime/`, `workspace/`, `bindings/`, and `outputs/` beneath its
+own `StagingSession` by copying pinned bytes rather than hard-linking or
+re-resolving selectors, creates one owner-private Hook Protocol listener that
+the Hook discovers through the `PR-REQ-0280` environment contract, launches the
+exact admitted path without an implicit shell (POSIX process groups; Windows
+`CreateProcessW` plus Job Object process-tree control), and drives the
+production Frozen `HookProtocolV1` Action state machine over a stream that is
+separate from the declared `none | output | interactive` terminal streams. One
+outcome arbiter locks the first winning event (accepted completion, requested
+cancellation, startup or action deadline, or premature Hook loss); a later
+valid `complete` is still protocol-accepted but cannot override a locked
+`Cancelled` or `TimedOut`; deadlines and the termination grace are
+caller-supplied optional policy with no normative defaults; and pre-spawn
+materialization, listener, or launch failure is `Failed`, never `TimedOut`.
+Every post-Admission path leaves an owner-held continuation (`ReadyForSlice5`,
+`RetryProcessControl`, or `RetryDurableOperation`) in a volatile registry owned
+by the live process, and terminal facts exist only after the supervised process
+tree has been observed terminated. The execution tree is ephemeral owner state:
+it is cleanup-eligible after confirmed owner loss and unpublished output slots
+are never recovered from it. The Frozen error taxonomy gained the appended codes
+`execution.session_materialization_failed`, `execution.launch_failed`,
+`execution.protocol_transport_failed`, and
+`execution.hook_reported_protocol_error` under `PR-REQ-0222`. `PR-TEST-0093`
+through `PR-TEST-0100` provide automated coverage for `PR-REQ-0046`,
+`PR-REQ-0052`, `PR-REQ-0055`, `PR-REQ-0056`, `PR-REQ-0060`, `PR-REQ-0098`,
+`PR-REQ-0167` through `PR-REQ-0169`, `PR-REQ-0172`, and `PR-REQ-0280`; add
+runtime coverage to `PR-REQ-0047` and to the Frozen protocol requirements
+`PR-REQ-0205` through `PR-REQ-0208`, `PR-REQ-0210` through `PR-REQ-0212`, and
+`PR-REQ-0215` through `PR-REQ-0217`; and complete `PR-REQ-0194` together with
+the Compiler coverage of `PR-TEST-0081` and the Admission coverage of
+`PR-TEST-0090`. `PR-TEST-0097` covers the request, propagate, observe
+termination, finalize ordering and the `TimedOut` identity of `PR-REQ-0052`;
+the durable publication of the resulting `Cancelled` or `TimedOut` disposition
+is written by Slice 5. Managed Output publication, durable Run terminalization
+and inspection, consumption of owner continuations, owner-loss reconciliation,
+and human spelling remain owned by Slices 5 and 6.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority

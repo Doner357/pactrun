@@ -1,9 +1,9 @@
 //! Execution-plan runtime ownership.
 //!
-//! Slice 3 owns Run acceptance and Admission: it turns an ephemeral
-//! `ActionExecutionPlan` into a durable Run and either admits it (durable
-//! pins) or records the refusal in that same Run. Process launch, Workspace
-//! materialization, and HookProtocolV1 runtime belong to later slices.
+//! Run acceptance and Admission turn an ephemeral `ActionExecutionPlan` into a
+//! durable Run and either admit it with durable pins or record the refusal in
+//! that same Run. An admitted value is a one-shot capability consumed by the
+//! Hook runtime.
 
 // Later M3 slices add the production callers.
 #![allow(dead_code)]
@@ -28,7 +28,7 @@ pub(crate) struct AdmissionOptions {
 
 /// A Run that is durably Admitted with its pins established. The Plan is the
 /// exact compiled Plan; Admission never re-resolves or recompiles it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct AdmittedExecution {
     run: RunId,
     plan: ActionExecutionPlan,

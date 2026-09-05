@@ -63,7 +63,7 @@ Secret values, or value-derived digests intended to reveal them. Interactive
 terminal sessions MUST NOT be retained as complete transcripts by default;
 structured Hook diagnostics MAY be retained.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0099.**
 
 ## Concurrent operations
 

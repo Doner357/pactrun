@@ -15,25 +15,26 @@ use std::{
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use super::{
-    PactrunPersistence, PersistenceError,
+    PactrunPersistence, PersistenceError, VerifiedRuntimeBlob,
     chunked_blob::{ChunkedBlobTable, insert_chunks, stream_chunks},
     runtime_content_store::{RuntimeContentStore, RuntimeContentStoreError},
     sqlite_instances::{
         binding_payload, ensure_ordered, fresh_state_version, instance_header, instance_id,
         load_revision_core, payload_id, reclaim_payload_if_unreferenced, revision_identity,
-        state_version, update_state_version,
+        state_version, stream_payload, update_state_version,
     },
     sqlite_revision_store::{FaultPoint, fault},
 };
 use crate::domain::{
     ActionIdentity, ActionRunBoundary, ActionRunIdentity, AdmissionFacts, AdmissionRefusal,
     CompiledHookLaunch, ExecutionOwnerSession, HookCodeV1, HookCompletionRecord,
-    HookCompletionStatus, InstanceId, InstanceStateVersion, InterpreterLauncherObservation,
-    MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputPayloadId, ManagedOutputIdentity,
-    ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1, RecoveryGuardView,
-    RecoveryRiskState, RevisionCoreV1, RevisionIdentity, RunArtifactSummary, RunExecutionView,
-    RunFailedStep, RunFailureRecord, RunFinish, RunId, RunOutcome, RunOutcomeView,
-    RunPrimaryFailure, RunState, RunSummary, RunView, risk_transition, terminal_consequence,
+    HookCompletionStatus, InputIdentity, InstanceId, InstanceStateVersion,
+    InterpreterLauncherObservation, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputPayloadId,
+    ManagedOutputIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1,
+    RecoveryGuardView, RecoveryRiskState, RevisionCoreV1, RevisionIdentity, RunArtifactSummary,
+    RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunOutcome,
+    RunOutcomeView, RunPrimaryFailure, RunState, RunSummary, RunView, RuntimeFileV1, Sha256Digest,
+    risk_transition, terminal_consequence,
 };
 
 /// Re-runs the ordered interpreter launcher selection bound into a Plan. The
@@ -228,6 +229,95 @@ impl PactrunPersistence {
 
     pub(crate) fn clear_recovery_risk(&self, run: RunId) -> Result<(), PersistenceError> {
         self.transition_recovery_risk(run, RecoveryRiskState::Clear)
+    }
+
+    pub(crate) fn stream_admitted_payload(
+        &self,
+        run: RunId,
+        input: &InputIdentity,
+        destination: &mut impl Write,
+    ) -> Result<(), PersistenceError> {
+        let mut database = self.open_read_connection()?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|error| PersistenceError::sqlite("begin admitted payload read", error))?;
+        execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
+        if !has_revision_pin(&transaction, run)? {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Run is not admitted".to_owned(),
+            ));
+        }
+        let row = transaction
+            .query_row(
+                "SELECT instance_id, payload_id FROM run_payload_pins \
+                 WHERE run_id=?1 AND input_identity=?2",
+                params![run.as_bytes().as_slice(), input.as_str().as_bytes()],
+                |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?)),
+            )
+            .optional()
+            .map_err(|error| PersistenceError::sqlite("load admitted payload pin", error))?
+            .ok_or_else(|| {
+                PersistenceError::CorruptRun(format!(
+                    "admitted Run has no payload pin for {}",
+                    input.as_str()
+                ))
+            })?;
+        stream_payload(
+            &transaction,
+            instance_id(row.0)?,
+            payload_id(row.1)?,
+            destination,
+        )?;
+        transaction
+            .commit()
+            .map_err(|error| PersistenceError::sqlite("close admitted payload read", error))?;
+        Ok(())
+    }
+
+    pub(crate) fn open_admitted_runtime_blob(
+        &self,
+        run: RunId,
+        file: &RuntimeFileV1,
+    ) -> Result<VerifiedRuntimeBlob, PersistenceError> {
+        let digest = {
+            let database = self
+                .database
+                .lock()
+                .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+            execution_row(&database, run)?.ok_or(PersistenceError::RunNotRunning)?;
+            let bytes = database
+                .query_row(
+                    "SELECT refs.blob_digest \
+                     FROM run_revision_pins AS pins \
+                     JOIN revision_runtime_content_refs AS refs \
+                       ON refs.package_id=pins.package_id \
+                      AND refs.revision_content_digest=pins.revision_content_digest \
+                     WHERE pins.run_id=?1 AND refs.content_id=?2",
+                    params![run.as_bytes().as_slice(), file.id.as_str()],
+                    |row| row.get::<_, Vec<u8>>(0),
+                )
+                .optional()
+                .map_err(|error| PersistenceError::sqlite("load admitted runtime pin", error))?
+                .ok_or_else(|| {
+                    PersistenceError::CorruptRun(format!(
+                        "admitted Run has no runtime pin for {}",
+                        file.id.as_str()
+                    ))
+                })?;
+            let bytes: [u8; 32] = bytes.try_into().map_err(|_| {
+                PersistenceError::CorruptRun("runtime pin digest length is invalid".to_owned())
+            })?;
+            Sha256Digest::from_bytes(bytes)
+        };
+        if digest != file.blob_digest {
+            return Err(PersistenceError::CorruptRun(format!(
+                "admitted runtime pin changed for {}",
+                file.id.as_str()
+            )));
+        }
+        self.runtime_content
+            .open_verified(&digest)
+            .map_err(PersistenceError::from)
     }
 
     fn transition_recovery_risk(

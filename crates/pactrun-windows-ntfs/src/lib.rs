@@ -7,15 +7,18 @@ mod implementation {
 
     use std::{
         ffi::OsStr,
+        fmt,
         fs::{File, OpenOptions},
         io,
         mem::size_of,
         os::windows::{
             ffi::OsStrExt,
             fs::{MetadataExt, OpenOptionsExt},
-            io::{AsRawHandle, FromRawHandle},
+            io::{AsRawHandle, FromRawHandle, OwnedHandle},
+            process::ExitStatusExt,
         },
         path::Path,
+        process::{Child, ExitStatus},
         ptr,
     };
 
@@ -29,22 +32,332 @@ mod implementation {
         },
         Win32::{
             Foundation::{
-                GENERIC_READ, GENERIC_WRITE, HANDLE, RtlNtStatusToDosError, UNICODE_STRING,
+                CloseHandle, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED,
+                GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
+                RtlNtStatusToDosError, UNICODE_STRING,
+            },
+            Security::{
+                Authorization::{
+                    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+                },
+                PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
             },
             Storage::FileSystem::{
                 DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
-                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_WRITE_THROUGH,
+                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_FIRST_PIPE_INSTANCE,
+                FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_OVERLAPPED, FILE_FLAG_WRITE_THROUGH,
                 FILE_NAME_NORMALIZED, FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE,
                 FILE_SHARE_READ, FILE_SHARE_WRITE, FileRenameInfo, FlushFileBuffers, GetDriveTypeW,
                 GetFinalPathNameByHandleW, GetVolumeInformationByHandleW, GetVolumePathNameW,
-                SYNCHRONIZE, SetFileInformationByHandle, VOLUME_NAME_DOS,
+                PIPE_ACCESS_DUPLEX, ReadFile, SYNCHRONIZE, SetFileInformationByHandle,
+                VOLUME_NAME_DOS, WriteFile,
             },
-            System::IO::IO_STATUS_BLOCK,
             System::WindowsProgramming::DRIVE_FIXED,
+            System::{
+                IO::{CancelIoEx, GetOverlappedResult, IO_STATUS_BLOCK, OVERLAPPED},
+                JobObjects::{
+                    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+                    SetInformationJobObject, TerminateJobObject,
+                },
+                Pipes::{
+                    ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE,
+                    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+                },
+                Threading::CreateEventW,
+            },
         },
     };
 
+    use windows_sys::core::BOOL;
+
     const SHARE_ALL: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+
+    /// One owner-restricted server instance of a named pipe that accepts
+    /// exactly one client.
+    ///
+    /// The instance is created for overlapped I/O: a synchronous pipe handle
+    /// serialises every operation on its file object, so a read blocked on
+    /// one duplicate would also block a concurrent write on another.
+    pub struct NamedPipeListener {
+        endpoint: String,
+        pipe: Option<OwnedHandle>,
+        pending: Option<PendingConnect>,
+    }
+
+    struct PendingConnect {
+        overlapped: Box<OVERLAPPED>,
+        _event: OwnedHandle,
+    }
+
+    // SAFETY: the OVERLAPPED block is heap-owned by this value and `hEvent`
+    // is an owned kernel handle; both are usable from whichever thread owns
+    // the listener, and the block outlives the operation (see `Drop`).
+    unsafe impl Send for PendingConnect {}
+
+    impl fmt::Debug for NamedPipeListener {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("NamedPipeListener")
+        }
+    }
+
+    impl NamedPipeListener {
+        pub fn bind(endpoint: &str) -> io::Result<Self> {
+            let wide_endpoint = wide_nul(OsStr::new(endpoint));
+            let descriptor_text = wide_nul(OsStr::new("D:P(A;;GA;;;SY)(A;;GA;;;OW)"));
+            let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+            if unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    descriptor_text.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    ptr::null_mut(),
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: u32::try_from(size_of::<SECURITY_ATTRIBUTES>())
+                    .expect("SECURITY_ATTRIBUTES size fits u32"),
+                lpSecurityDescriptor: descriptor,
+                bInheritHandle: 0,
+            };
+            let handle = unsafe {
+                CreateNamedPipeW(
+                    wide_endpoint.as_ptr(),
+                    PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
+                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                    1,
+                    64 * 1024,
+                    64 * 1024,
+                    0,
+                    &attributes,
+                )
+            };
+            unsafe {
+                LocalFree(descriptor.cast());
+            }
+            if handle == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(Self {
+                endpoint: endpoint.to_owned(),
+                pipe: Some(unsafe { OwnedHandle::from_raw_handle(handle.cast()) }),
+                pending: None,
+            })
+        }
+
+        pub fn endpoint(&self) -> &str {
+            &self.endpoint
+        }
+
+        /// Polls for the single client without blocking. The first call
+        /// starts an overlapped `ConnectNamedPipe`; later calls observe it.
+        pub fn try_accept(&mut self) -> io::Result<Option<NamedPipeStream>> {
+            let pipe = self.pipe.as_ref().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotConnected,
+                    "named pipe was already accepted",
+                )
+            })?;
+            let handle: HANDLE = pipe.as_raw_handle().cast();
+            let connected = match &self.pending {
+                None => {
+                    let event = create_event()?;
+                    let mut overlapped = Box::new(OVERLAPPED {
+                        hEvent: event.as_raw_handle().cast(),
+                        ..Default::default()
+                    });
+                    if unsafe { ConnectNamedPipe(handle, &mut *overlapped) } != 0 {
+                        true
+                    } else {
+                        let error = io::Error::last_os_error();
+                        match error.raw_os_error().map(|code| code as u32) {
+                            Some(ERROR_PIPE_CONNECTED) => true,
+                            Some(ERROR_IO_PENDING) => {
+                                self.pending = Some(PendingConnect {
+                                    overlapped,
+                                    _event: event,
+                                });
+                                false
+                            }
+                            _ => return Err(error),
+                        }
+                    }
+                }
+                Some(pending) => {
+                    let mut transferred = 0_u32;
+                    if unsafe {
+                        GetOverlappedResult(handle, &*pending.overlapped, &mut transferred, 0)
+                    } != 0
+                    {
+                        true
+                    } else {
+                        let error = io::Error::last_os_error();
+                        match error.raw_os_error().map(|code| code as u32) {
+                            Some(ERROR_IO_INCOMPLETE) => false,
+                            Some(ERROR_PIPE_CONNECTED) => true,
+                            _ => return Err(error),
+                        }
+                    }
+                }
+            };
+            if !connected {
+                return Ok(None);
+            }
+            self.pending = None;
+            Ok(self.pipe.take().map(|handle| NamedPipeStream { handle }))
+        }
+    }
+
+    impl Drop for NamedPipeListener {
+        fn drop(&mut self) {
+            // A pending connect must complete before its OVERLAPPED is freed.
+            if let (Some(pipe), Some(pending)) = (&self.pipe, &self.pending) {
+                let handle: HANDLE = pipe.as_raw_handle().cast();
+                let mut transferred = 0_u32;
+                unsafe {
+                    CancelIoEx(handle, &*pending.overlapped);
+                    GetOverlappedResult(handle, &*pending.overlapped, &mut transferred, 1);
+                }
+            }
+        }
+    }
+
+    /// The server end of one accepted named-pipe connection.
+    ///
+    /// Every read and write is an overlapped operation with its own event,
+    /// so a duplicate blocked in a read never serialises a concurrent write.
+    pub struct NamedPipeStream {
+        handle: OwnedHandle,
+    }
+
+    impl fmt::Debug for NamedPipeStream {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("NamedPipeStream")
+        }
+    }
+
+    impl NamedPipeStream {
+        pub fn try_clone(&self) -> io::Result<Self> {
+            Ok(Self {
+                handle: self.handle.try_clone()?,
+            })
+        }
+
+        fn overlapped_io(
+            &self,
+            operation: impl FnOnce(HANDLE, *mut OVERLAPPED) -> BOOL,
+        ) -> io::Result<usize> {
+            let event = create_event()?;
+            let mut overlapped = OVERLAPPED {
+                hEvent: event.as_raw_handle().cast(),
+                ..Default::default()
+            };
+            let handle: HANDLE = self.handle.as_raw_handle().cast();
+            if operation(handle, &mut overlapped) == 0 {
+                let error = io::Error::last_os_error();
+                if error.raw_os_error().map(|code| code as u32) != Some(ERROR_IO_PENDING) {
+                    return Err(error);
+                }
+            }
+            let mut transferred = 0_u32;
+            if unsafe { GetOverlappedResult(handle, &overlapped, &mut transferred, 1) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(transferred as usize)
+        }
+    }
+
+    impl io::Read for NamedPipeStream {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            let length = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+            let pointer = buffer.as_mut_ptr();
+            self.overlapped_io(|handle, overlapped| unsafe {
+                ReadFile(handle, pointer, length, ptr::null_mut(), overlapped)
+            })
+        }
+    }
+
+    impl io::Write for NamedPipeStream {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            let length = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
+            let pointer = buffer.as_ptr();
+            self.overlapped_io(|handle, overlapped| unsafe {
+                WriteFile(handle, pointer, length, ptr::null_mut(), overlapped)
+            })
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn create_event() -> io::Result<OwnedHandle> {
+        let handle = unsafe { CreateEventW(ptr::null(), 1, 0, ptr::null()) };
+        if handle.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(unsafe { OwnedHandle::from_raw_handle(handle.cast()) })
+    }
+
+    #[derive(Debug)]
+    pub struct ProcessJob {
+        handle: OwnedHandle,
+    }
+
+    impl ProcessJob {
+        pub fn assign(child: &Child) -> io::Result<Self> {
+            let handle = unsafe { CreateJobObjectW(ptr::null(), ptr::null()) };
+            if handle.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let configured = unsafe {
+                SetInformationJobObject(
+                    handle,
+                    JobObjectExtendedLimitInformation,
+                    (&raw const limits).cast(),
+                    u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
+                        .expect("job information size fits u32"),
+                )
+            };
+            if configured == 0 {
+                unsafe {
+                    CloseHandle(handle);
+                }
+                return Err(io::Error::last_os_error());
+            }
+            if unsafe { AssignProcessToJobObject(handle, child.as_raw_handle().cast()) } == 0 {
+                unsafe {
+                    CloseHandle(handle);
+                }
+                return Err(io::Error::last_os_error());
+            }
+            Ok(Self {
+                handle: unsafe { OwnedHandle::from_raw_handle(handle.cast()) },
+            })
+        }
+
+        pub fn terminate(&self) -> io::Result<()> {
+            if unsafe { TerminateJobObject(self.handle.as_raw_handle().cast(), 1) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        }
+    }
+
+    pub fn exit_status_from_code(code: u32) -> ExitStatus {
+        ExitStatus::from_raw(code)
+    }
 
     pub fn open_root(path: &Path) -> io::Result<File> {
         let file = OpenOptions::new()

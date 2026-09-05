@@ -18,6 +18,11 @@
     {"owner":"admission","code":"plan_invalidated","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0043"},{"kind":"requirement","id":"PR-REQ-0096"}]},
     {"owner":"admission","code":"recovery_guard_active","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0067"},{"kind":"requirement","id":"PR-REQ-0068"},{"kind":"requirement","id":"PR-REQ-0279"}]},
 
+    {"owner":"execution","code":"hook_reported_protocol_error","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"}]},
+    {"owner":"execution","code":"launch_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0007"},{"kind":"requirement","id":"PR-REQ-0194"}]},
+    {"owner":"execution","code":"protocol_transport_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0172"},{"kind":"requirement","id":"PR-REQ-0280"}]},
+    {"owner":"execution","code":"session_materialization_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0007"},{"kind":"requirement","id":"PR-REQ-0046"}]},
+
     {"owner":"hook_protocol_v1","code":"completion_with_open_risk","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"success_with_open_risk"}]},
     {"owner":"hook_protocol_v1","code":"duplicate_property","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"duplicate_property"}]},
     {"owner":"hook_protocol_v1","code":"duplicate_semantic_key","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"capture_duplicate_role_path"}]},
