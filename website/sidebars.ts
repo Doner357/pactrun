@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
             'pactrun-developers/architecture/non-identity-metadata-semantic-baseline',
             'pactrun-developers/architecture/persistence-schema-v2',
             'pactrun-developers/architecture/persistence-schema-v3',
+            'pactrun-developers/architecture/persistence-schema-v4',
             'pactrun-developers/architecture/service-storage-semantic-baseline',
             'pactrun-developers/architecture/execution-and-concurrency',
             'pactrun-developers/architecture/recovery-and-reconciliation',

@@ -423,7 +423,9 @@ Run success. There is one `clear | open` state, not a nested or graded risk
 taxonomy.
 
 Fixtures verify message order and modeled state only. Durable publication and
-crash boundaries require M6 integration tests.
+crash boundaries for Action execution are an M3 responsibility under
+PR-REQ-0055 and PR-REQ-0056 and require M3 persistence and runtime integration
+tests; M6 generalizes them to later managed-execution types.
 
 **Verification: PR-TEST-0028.**
 

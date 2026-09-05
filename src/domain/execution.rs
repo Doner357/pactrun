@@ -155,7 +155,7 @@ pub(crate) struct CompilationFacts {
     pub(crate) launch: CompiledHookLaunch,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ActionPlanStep {
     EstablishSession,
     LaunchHook,

@@ -69,8 +69,8 @@ integrity format and hash domain, export bundle format, Hook Protocol, Recipe
 Authoring API, and structured CLI output MUST be independently versioned. They
 MUST NOT share one generalized Pactrun schema version.
 
-`PackSourceYamlV1` and `PersistenceSchemaV3` are two additional independent
-internal version domains. Their `V1` and `V3` labels do not couple them to
+`PackSourceYamlV1` and `PersistenceSchemaV4` are two additional independent
+internal version domains. Their `V1` and `V4` labels do not couple them to
 Revision Core, Hook Protocol, Snapshot Integrity, or a future CLI format.
 
 **Verification: Pending automated coverage.**
@@ -90,10 +90,19 @@ intermediate version marker or partial V2 schema MUST never be accepted.
 
 The implemented V1/V2-to-V3 extension in PR-REQ-0270 additionally preserves all
 M1-D metadata and adds no inferred Instance, binding, payload, source, or
-installation-history rows. After M2 integration, V3 is the current canonical
-implemented internal schema while remaining non-Frozen and non-public.
+installation-history rows.
 
-**Verification: PR-TEST-0073.**
+The implemented V1/V2/V3-to-V4 extension in PR-REQ-0276 additionally preserves
+every Instance, binding, payload header, and payload chunk and adds no inferred
+Run, invocation, execution owner, pin, outcome, failure, Hook completion,
+Artifact, or recovery-guard rows. V4 is the first schema that represents Runs;
+a later migration MUST preserve or transform every `run_executions` row as a
+non-terminal Run and every `instance_recovery_guards` row as an unresolved
+recovery obligation rather than inferring their disposition. After M3 Slice 2
+integration, V4 is the current canonical implemented internal schema while
+remaining non-Frozen and non-public.
+
+**Verification: PR-TEST-0073, PR-TEST-0082.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 

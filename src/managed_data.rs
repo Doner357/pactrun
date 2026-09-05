@@ -10,7 +10,7 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::{
-    domain::{MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, Sha256Digest},
+    domain::{ExecutionOwnerSession, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, Sha256Digest},
     persistence::validate_supported_storage_root,
 };
 
@@ -154,6 +154,17 @@ impl StagingSession {
         ))
     }
 
+    /// The exact session directory name; it is the execution owner identity
+    /// of every Run this process accepts.
+    pub(crate) fn owner(&self) -> ExecutionOwnerSession {
+        let name = self
+            .session
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("staging session names are generated ASCII");
+        ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
+    }
+
     pub(crate) fn stage_managed_input(
         &self,
         source: &mut impl Read,
@@ -258,6 +269,37 @@ impl Drop for StagingSession {
     }
 }
 
+/// Observes whether the recorded owner session still holds its lease.
+///
+/// Only the lock observation decides: a missing session or an acquirable
+/// lease is loss, a held lease is liveness. The probe releases any lock it
+/// acquires immediately and never removes the session.
+#[allow(dead_code)]
+pub(crate) fn session_is_live(
+    storage_root: &Path,
+    owner: &ExecutionOwnerSession,
+) -> Result<bool, StagingError> {
+    let lease_path = storage_root
+        .join(STAGING_DIRECTORY)
+        .join(owner.as_str())
+        .join(LEASE_NAME);
+    let lease = match OpenOptions::new().read(true).write(true).open(&lease_path) {
+        Ok(lease) => lease,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(StagingError::io("open execution owner lease", error)),
+    };
+    match lease.try_lock() {
+        Ok(()) => {
+            let _ = File::unlock(&lease);
+            Ok(false)
+        }
+        Err(std::fs::TryLockError::WouldBlock) => Ok(true),
+        Err(std::fs::TryLockError::Error(error)) => {
+            Err(StagingError::io("probe execution owner lease", error))
+        }
+    }
+}
+
 fn cleanup_stale_sessions(root: &Path) -> Result<(), StagingError> {
     for entry in fs::read_dir(root).map_err(|error| StagingError::io("scan staging root", error))? {
         let entry = entry.map_err(|error| StagingError::io("read staging entry", error))?;
@@ -308,11 +350,7 @@ fn remove_session_contents(session: &Path) -> io::Result<()> {
 }
 
 fn is_session_name(name: &str) -> bool {
-    name.len() == "session-".len() + 32
-        && name.starts_with("session-")
-        && name["session-".len()..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+    ExecutionOwnerSession::is_session_name(name)
 }
 
 fn random_hex() -> Result<String, StagingError> {

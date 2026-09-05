@@ -4,10 +4,12 @@
 // application caller.
 #![allow(dead_code)]
 
+mod chunked_blob;
 mod runtime_content_store;
 mod sqlite_instances;
 mod sqlite_revision_metadata;
 mod sqlite_revision_store;
+mod sqlite_runs;
 
 #[allow(unused_imports)]
 pub(crate) use runtime_content_store::{
@@ -20,3 +22,5 @@ pub(crate) use sqlite_instances::ManagedInputWrite;
 pub(crate) use sqlite_revision_store::{
     PactrunPersistence, PersistenceError, StoredRevisionContentV1,
 };
+#[allow(unused_imports)]
+pub(crate) use sqlite_runs::{RunArtifactWrite, RunFinishReceipt};

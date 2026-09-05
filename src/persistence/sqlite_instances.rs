@@ -7,16 +7,28 @@ use std::{
 
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-use super::{PactrunPersistence, PersistenceError};
+use super::{
+    PactrunPersistence, PersistenceError,
+    chunked_blob::{ChunkedBlobTable, insert_chunks, stream_chunks},
+};
 use crate::{
     domain::{
         ActiveInstanceBindingReference, InputDeclarationV1, InputIdentity, InputProtectionV1,
         InstanceCompilationState, InstanceId, InstanceName, InstanceStateVersion, InstanceSummary,
-        InstanceView, MANAGED_INPUT_CHUNK_BYTES_V1, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
-        ManagedInputBindingView, ManagedInputPayloadId, ManagedInputProtection, ManagedInputRole,
-        RevisionContentDigest, RevisionCoreV1, RevisionIdentity,
+        InstanceView, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputBindingView,
+        ManagedInputPayloadId, ManagedInputProtection, ManagedInputRole, RevisionContentDigest,
+        RevisionCoreV1, RevisionIdentity,
     },
     revision_core_v1::decode_canonical_revision_core_v1,
+};
+
+const PAYLOAD_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
+    insert_chunk_sql: "INSERT INTO managed_input_payload_chunks(        instance_id, payload_id, chunk_index, chunk_bytes     ) VALUES (?1, ?2, ?3, ?4)",
+    select_chunks_sql: "SELECT chunk_index, chunk_bytes FROM managed_input_payload_chunks          WHERE instance_id=?1 AND payload_id=?2 ORDER BY chunk_index",
+    read_operation: "read Managed Input staging",
+    write_operation: "write Managed Input chunk",
+    invalid: PersistenceError::InvalidManagedInput,
+    corrupt: PersistenceError::CorruptManagedInput,
 };
 
 pub(crate) struct ManagedInputWrite<'a> {
@@ -277,7 +289,7 @@ impl PactrunPersistence {
             )
             .map_err(|error| PersistenceError::sqlite("publish Managed Input binding", error))?;
         if let Some((old, _)) = previous {
-            delete_payload(&transaction, instance, old)?;
+            reclaim_payload_if_unreferenced(&transaction, instance, old)?;
         }
         let next = fresh_state_version()?;
         update_state_version(&transaction, instance, next)?;
@@ -327,7 +339,7 @@ impl PactrunPersistence {
                 params![instance.as_bytes().as_slice(), input.as_str().as_bytes()],
             )
             .map_err(|error| PersistenceError::sqlite("delete Managed Input binding", error))?;
-        delete_payload(&transaction, instance, payload)?;
+        reclaim_payload_if_unreferenced(&transaction, instance, payload)?;
         let next = fresh_state_version()?;
         update_state_version(&transaction, instance, next)?;
         transaction
@@ -431,51 +443,16 @@ fn insert_payload(
             params![instance.as_bytes().as_slice(), payload.as_bytes().as_slice(), i64::from(protection.rank()), i64::try_from(input.byte_len).expect("M2 payload length fits i64")],
         )
         .map_err(|error| PersistenceError::sqlite("insert Managed Input payload", error))?;
-    let mut total = 0_u64;
-    let mut chunk_index = 0_i64;
-    loop {
-        let mut chunk = vec![0_u8; MANAGED_INPUT_CHUNK_BYTES_V1];
-        let mut used = 0;
-        while used < chunk.len() {
-            let read =
-                input
-                    .reader
-                    .read(&mut chunk[used..])
-                    .map_err(|source| PersistenceError::Io {
-                        operation: "read Managed Input staging",
-                        source,
-                    })?;
-            if read == 0 {
-                break;
-            }
-            used += read;
-        }
-        if used == 0 {
-            break;
-        }
-        chunk.truncate(used);
-        total = total
-            .checked_add(u64::try_from(used).expect("chunk length fits u64"))
-            .ok_or_else(|| {
-                PersistenceError::InvalidManagedInput("payload length overflow".to_owned())
-            })?;
-        if total > input.byte_len || total > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
-            return Err(PersistenceError::InvalidManagedInput(
-                "staged payload length changed".to_owned(),
-            ));
-        }
-        transaction.execute(
-            "INSERT INTO managed_input_payload_chunks(instance_id, payload_id, chunk_index, chunk_bytes) \
-             VALUES (?1, ?2, ?3, ?4)",
-            params![instance.as_bytes().as_slice(), payload.as_bytes().as_slice(), chunk_index, chunk],
-        ).map_err(|error| PersistenceError::sqlite("insert Managed Input chunk", error))?;
-        chunk_index += 1;
-    }
-    if total != input.byte_len {
-        return Err(PersistenceError::InvalidManagedInput(
-            "staged payload length changed".to_owned(),
-        ));
-    }
+    insert_chunks(
+        transaction,
+        &PAYLOAD_CHUNKS,
+        [
+            instance.as_bytes().as_slice(),
+            payload.as_bytes().as_slice(),
+        ],
+        input.reader,
+        input.byte_len,
+    )?;
     Ok(payload)
 }
 
@@ -499,60 +476,16 @@ fn stream_payload(
             "oversize payload header".to_owned(),
         ));
     }
-    let mut statement = database
-        .prepare(
-            "SELECT chunk_index, chunk_bytes FROM managed_input_payload_chunks \
-         WHERE instance_id=?1 AND payload_id=?2 ORDER BY chunk_index",
-        )
-        .map_err(|error| PersistenceError::sqlite("prepare Managed Input chunks", error))?;
-    let rows = statement
-        .query_map(
-            params![
-                instance.as_bytes().as_slice(),
-                payload.as_bytes().as_slice()
-            ],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?)),
-        )
-        .map_err(|error| PersistenceError::sqlite("query Managed Input chunks", error))?;
-    let mut expected_index = 0_i64;
-    let mut total = 0_u64;
-    let mut previous_length = None;
-    for row in rows {
-        let (index, bytes) =
-            row.map_err(|error| PersistenceError::sqlite("read Managed Input chunk", error))?;
-        if index != expected_index
-            || bytes.is_empty()
-            || bytes.len() > MANAGED_INPUT_CHUNK_BYTES_V1
-            || previous_length.is_some_and(|length| length != MANAGED_INPUT_CHUNK_BYTES_V1)
-        {
-            return Err(PersistenceError::CorruptManagedInput(
-                "invalid chunk sequence".to_owned(),
-            ));
-        }
-        total = total
-            .checked_add(u64::try_from(bytes.len()).expect("chunk length fits u64"))
-            .ok_or_else(|| {
-                PersistenceError::CorruptManagedInput("payload length overflow".to_owned())
-            })?;
-        if total > declared_length {
-            return Err(PersistenceError::CorruptManagedInput(
-                "chunk length exceeds header".to_owned(),
-            ));
-        }
-        destination
-            .write_all(&bytes)
-            .map_err(|source| PersistenceError::Io {
-                operation: "write ExportInput staging",
-                source,
-            })?;
-        previous_length = Some(bytes.len());
-        expected_index += 1;
-    }
-    if total != declared_length || (declared_length == 0 && expected_index != 0) {
-        return Err(PersistenceError::CorruptManagedInput(
-            "payload length mismatch".to_owned(),
-        ));
-    }
+    stream_chunks(
+        database,
+        &PAYLOAD_CHUNKS,
+        [
+            instance.as_bytes().as_slice(),
+            payload.as_bytes().as_slice(),
+        ],
+        declared_length,
+        destination,
+    )?;
     Ok(())
 }
 
@@ -658,7 +591,7 @@ fn load_instance_from(
     })
 }
 
-fn instance_header(
+pub(super) fn instance_header(
     database: &Connection,
     instance: InstanceId,
 ) -> Result<(InstanceName, RevisionIdentity, InstanceStateVersion), PersistenceError> {
@@ -680,7 +613,7 @@ fn instance_header(
     ))
 }
 
-fn load_revision_core(
+pub(super) fn load_revision_core(
     database: &Connection,
     identity: &RevisionIdentity,
 ) -> Result<RevisionCoreV1, PersistenceError> {
@@ -716,7 +649,7 @@ fn declaration_protection(value: InputProtectionV1) -> ManagedInputProtection {
     }
 }
 
-fn binding_payload(
+pub(super) fn binding_payload(
     database: &Connection,
     instance: InstanceId,
     input: &InputIdentity,
@@ -745,11 +678,27 @@ fn insert_binding(
     Ok(())
 }
 
-fn delete_payload(
+/// Reclaims a payload only when no current binding and no execution pin
+/// references it. The decision is an explicit lookup: a foreign-key failure
+/// would abort the enclosing mutation instead of retaining the payload.
+pub(super) fn reclaim_payload_if_unreferenced(
     transaction: &Transaction<'_>,
     instance: InstanceId,
     payload: ManagedInputPayloadId,
-) -> Result<(), PersistenceError> {
+) -> Result<bool, PersistenceError> {
+    let referenced: bool = transaction
+        .query_row(
+            "SELECT EXISTS(                SELECT 1 FROM managed_input_bindings WHERE instance_id=?1 AND payload_id=?2             ) OR EXISTS(                SELECT 1 FROM run_payload_pins WHERE instance_id=?1 AND payload_id=?2             )",
+            params![
+                instance.as_bytes().as_slice(),
+                payload.as_bytes().as_slice()
+            ],
+            |row| row.get(0),
+        )
+        .map_err(|error| PersistenceError::sqlite("check Managed Input payload references", error))?;
+    if referenced {
+        return Ok(false);
+    }
     transaction
         .execute(
             "DELETE FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",
@@ -759,10 +708,10 @@ fn delete_payload(
             ],
         )
         .map_err(|error| PersistenceError::sqlite("reclaim Managed Input payload", error))?;
-    Ok(())
+    Ok(true)
 }
 
-fn update_state_version(
+pub(super) fn update_state_version(
     transaction: &Transaction<'_>,
     instance: InstanceId,
     version: InstanceStateVersion,
@@ -779,13 +728,13 @@ fn update_state_version(
     Ok(())
 }
 
-fn fresh_state_version() -> Result<InstanceStateVersion, PersistenceError> {
+pub(super) fn fresh_state_version() -> Result<InstanceStateVersion, PersistenceError> {
     InstanceStateVersion::generate().map_err(|error| {
         PersistenceError::InvalidManagedInput(format!("generate state version: {error}"))
     })
 }
 
-fn revision_identity(
+pub(super) fn revision_identity(
     package: Vec<u8>,
     digest: Vec<u8>,
 ) -> Result<RevisionIdentity, PersistenceError> {
@@ -801,19 +750,19 @@ fn revision_identity(
     ))
 }
 
-fn instance_id(bytes: Vec<u8>) -> Result<InstanceId, PersistenceError> {
+pub(super) fn instance_id(bytes: Vec<u8>) -> Result<InstanceId, PersistenceError> {
     bytes
         .try_into()
         .map(InstanceId::from_bytes)
         .map_err(|_| PersistenceError::CorruptManagedInput("invalid InstanceId length".to_owned()))
 }
-fn payload_id(bytes: Vec<u8>) -> Result<ManagedInputPayloadId, PersistenceError> {
+pub(super) fn payload_id(bytes: Vec<u8>) -> Result<ManagedInputPayloadId, PersistenceError> {
     bytes
         .try_into()
         .map(ManagedInputPayloadId::from_bytes)
         .map_err(|_| PersistenceError::CorruptManagedInput("invalid payload ID length".to_owned()))
 }
-fn state_version(bytes: Vec<u8>) -> Result<InstanceStateVersion, PersistenceError> {
+pub(super) fn state_version(bytes: Vec<u8>) -> Result<InstanceStateVersion, PersistenceError> {
     bytes
         .try_into()
         .map(InstanceStateVersion::from_bytes)
@@ -822,7 +771,7 @@ fn state_version(bytes: Vec<u8>) -> Result<InstanceStateVersion, PersistenceErro
         })
 }
 
-fn ensure_ordered<T>(
+pub(super) fn ensure_ordered<T>(
     values: &[T],
     compare: impl Fn(&T, &T) -> std::cmp::Ordering,
 ) -> Result<(), PersistenceError> {
@@ -853,8 +802,8 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            RevisionCoreProjectionInputV1, RuntimeContentProjectionInputV1,
-            ValidatedRevisionContentV1, project_revision_core_v1,
+            MANAGED_INPUT_CHUNK_BYTES_V1, RevisionCoreProjectionInputV1,
+            RuntimeContentProjectionInputV1, ValidatedRevisionContentV1, project_revision_core_v1,
             project_runtime_content_closure_v1, validate_revision_content_v1,
         },
         persistence::PactrunPersistence,

@@ -174,7 +174,7 @@ is terminal and no execution or recovery reference remains. This Pactrun-owned
 content lifetime guarantee does not content-address, copy, or freeze a
 ServiceStorage-backed Managed Service Resource's live bytes.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0083.**
 
 ### PR-REQ-0048 - Pin and guard separation
 
@@ -183,7 +183,7 @@ treated as a mutation guard or user-visible lease. Releasing a current binding
 MAY make it unreachable from the Instance, but physical content MUST remain
 until its last strong reference disappears.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0083.**
 
 ## Run records
 
@@ -204,7 +204,7 @@ A Run MUST distinguish `Running` from `Finished`. A finished Run MUST use one of
 failure details, failed logical step, Hook result, diagnostics, outputs, and
 timing. `ManualRecoveryRequired` MUST NOT be a Run outcome.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0084.**
 
 ### PR-REQ-0051 - Failure detail ordering
 

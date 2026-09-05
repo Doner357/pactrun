@@ -24,7 +24,7 @@ Recovery consequence MUST be determined by the runtime protocol state
 `Clear | Open`, not by Action names, Observe or Mutate classification,
 operation category, or a Package-authored recovery-safety flag.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085.**
 
 ### PR-REQ-0055 - Durable risk entry before acknowledgment
 
@@ -84,6 +84,29 @@ mechanism.
 
 **Verification: Pending automated coverage.**
 
+### PR-REQ-0277 - Action execution owner mechanism
+
+The selected ownership mechanism for an Action Run is the accepting process's
+staging session lease: the exclusive operating-system file lock that the
+process holds on `staging/session-<hex>/.lease` below the dedicated Pactrun
+storage root for its whole lifetime. The durable Run execution record MUST
+store the exact staging session directory name of that owner, and a Running Run
+MUST have exactly one such record.
+
+Owner loss MUST be confirmed only by observing that the recorded session's lease
+is not held: the lease file can be locked by the observer, or the session
+directory no longer exists. A held lease MUST never be interpreted as loss, and
+a timestamp, heartbeat age, process identifier, or hostname MUST NOT substitute
+for the lock observation. The owner record MUST be removed only by the terminal
+publication of the Run, so a Run whose owner process disappeared remains
+Running with its stale owner record until reconciliation confirms the loss and
+finishes it.
+
+This requirement selects the mechanism for Action Runs. M6 MAY generalize it to
+later managed-execution types without introducing a parallel ownership model.
+
+**Verification: PR-TEST-0086.**
+
 ### PR-REQ-0061 - Plan is not a replay contract
 
 An Execution Plan MUST remain ephemeral. Recovery MUST NOT require durable Plan
@@ -113,7 +136,7 @@ transaction with a service filesystem, database, Docker volume, or external
 resource, and it does not predefine how future ServiceStorage-backed Managed
 Service Resource continuity or retention is durably represented.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085.**
 
 ### PR-REQ-0246 - Service transformation target-publication boundary
 
@@ -155,7 +178,7 @@ unresolved recovery obligation may need them. Execution-only recovery state MAY
 be removed or compacted only after terminal reconciliation and after no managed
 object requires the references.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085.**
 
 ## ManualRecoveryRequired
 
@@ -166,7 +189,7 @@ consistent but Pactrun cannot assert that service-owned state matches it. It
 MUST be an Instance trust guard, not a Run outcome, persistence-corruption
 marker, or synonym for a failed Run.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0084.**
 
 ### PR-REQ-0067 - Guard behavior
 
@@ -192,7 +215,7 @@ no-Hook, no-Compiler, no-Run management mutation. It MUST acquire the mutation
 guard, clear the trust guard, and publish a new Instance state version. Pactrun
 MUST NOT infer resolution by running an Action with a particular name.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0088.**
 
 ### PR-REQ-0070 - Automatic recovery resolution
 
@@ -208,4 +231,4 @@ An unresolved manual-recovery obligation MUST retain durable trigger and reason
 information sufficient for operator diagnosis without depending on an
 ephemeral Execution Plan.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085.**

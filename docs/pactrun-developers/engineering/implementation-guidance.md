@@ -30,8 +30,11 @@ Its linked pages, including Candidate
 [Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md) and the
 implemented internal
 [Persistence Schema V3](../architecture/persistence-schema-v3.md), own the
-M2 contract. M2 is integrated into `develop`; V3 is the current implemented
-internal schema while remaining non-Frozen and non-public.
+M2 contract. M2 is integrated into `develop`. The implemented internal
+[Persistence Schema V4](../architecture/persistence-schema-v4.md) extends V3
+with M3 Slice 2 Runs, durable pins, Action recovery state, ownership, and Run
+Artifacts and is the current implemented internal schema while remaining
+non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
@@ -50,7 +53,7 @@ Implementers may choose, without changing Pactrun semantics:
 - Rust crate, module, type, trait, and design-pattern names;
 - PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
 - file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact implemented V2 and V3 internal
+- persistence choices outside the exact implemented V2, V3, and V4 internal
   schemas;
 - socket, named-pipe, or other side-channel transport;
 - Hook Protocol framing and encoding;

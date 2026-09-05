@@ -134,7 +134,7 @@ is lost during service-owned transformation while risk is open, recovery of the
 Pactrun-owned committed boundary does not prove that service state remains
 coherent with the source Revision.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085.**
 
 ### PR-REQ-0110 - Recovery options
 

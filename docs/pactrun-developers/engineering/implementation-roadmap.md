@@ -23,7 +23,10 @@ is Frozen.
 - The production crate remains a modular monolith. M2 Pack installation,
   Instance, and Managed Input binding support is integrated into `develop`.
   M3 Slice 1 typed resolution and side-effect-free Plan compilation are
-  integrated into `develop`; the remaining M3 slices are not yet implemented.
+  integrated into `develop`. M3 Slice 2 exact PersistenceSchemaV4 Runs,
+  durable pins, Action recovery state, ownership, and Run Artifacts are
+  complete on an isolated feature branch and are not yet integrated into
+  `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -82,6 +85,7 @@ milestone state taxonomy above:
 | PackSourceYamlV1 authoring projection | **Closed.** |
 | PersistenceSchemaV3 internal contract | **Closed.** |
 | M3 Action execution scope and dependency review | **Closed.** |
+| PersistenceSchemaV4 internal contract | **Closed.** |
 | M3 exact new CLI spelling | **Required before M3 completion.** |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
@@ -334,6 +338,25 @@ process launch, HookProtocolV1 runtime, output publication, recovery, and human
 CLI spelling remain owned by later approved slices. `PR-REQ-0194` therefore
 remains Pending automated coverage until its Admission and Executor clauses are
 implemented and tested.
+
+The completed M3 Slice 2 implements exact
+[PersistenceSchemaV4](../architecture/persistence-schema-v4.md): transactional
+V1/V2/V3-to-V4 migration, durable Run records with a Running-only execution
+owner selected by `PR-REQ-0277`, execution pins released only in the terminal
+transaction, live and terminal recovery risk state, the `ManualRecoveryRequired`
+Instance trust guard published atomically with a fresh state version, chunked
+Run Artifacts, and the crate-private repository operations later slices
+compose. `PR-TEST-0082` through `PR-TEST-0088` provide automated coverage for
+`PR-REQ-0047`, `PR-REQ-0048`, `PR-REQ-0050`, `PR-REQ-0054`, `PR-REQ-0063`,
+`PR-REQ-0065`, `PR-REQ-0066`, `PR-REQ-0069`, `PR-REQ-0071`, `PR-REQ-0078`,
+`PR-REQ-0109`, and `PR-REQ-0275` through `PR-REQ-0277`. Run acceptance and
+Admission composition (`PR-REQ-0042`, `PR-REQ-0043`, `PR-REQ-0049`), the
+before-acknowledgment ordering of durable risk publication (`PR-REQ-0055`,
+`PR-REQ-0056`), the runtime terminal consequence (`PR-REQ-0057`), cancellation
+and failure ordering (`PR-REQ-0051`, `PR-REQ-0052`), owner-loss reconciliation
+(`PR-REQ-0060` through `PR-REQ-0062`, `PR-REQ-0064`), output publication
+(`PR-REQ-0073`, `PR-REQ-0144`), Run inspection, and human spelling remain owned
+by Slices 3 through 6 and keep their `Pending automated coverage` status.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority
