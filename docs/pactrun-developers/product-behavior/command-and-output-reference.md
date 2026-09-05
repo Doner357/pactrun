@@ -21,7 +21,7 @@ pactrun
 `- run
 ```
 
-## PR-REQ-0114 - Action and Run namespaces
+### PR-REQ-0114 - Action and Run namespaces
 
 Package-defined operations MUST use `pactrun invoke <instance> <action>`. The
 `run` namespace MUST be reserved for Run history inspection, including list and
@@ -30,7 +30,7 @@ invocation.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0115 - Instance operations
+### PR-REQ-0115 - Instance operations
 
 The CLI MUST provide conceptual operations to create, list, show, migrate, and
 delete Instances. Creation MUST permit an incomplete Instance. Inspection MUST
@@ -42,7 +42,7 @@ deletion remain later milestone commands.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0116 - Input operations
+### PR-REQ-0116 - Input operations
 
 The CLI MUST provide conceptual operations to list, set, export, and delete
 Instance Inputs according to active, retained, required, optional, and Secret
@@ -56,7 +56,7 @@ PR-REQ-0266 through PR-REQ-0268.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0117 - Snapshot operations
+### PR-REQ-0117 - Snapshot operations
 
 The CLI MUST provide conceptual create, list, show, restore, export, import, and
 delete operations for Snapshots. Filtering Snapshots by Instance MUST first
@@ -65,7 +65,7 @@ MUST NOT imply ownership.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0118 - Revision operations
+### PR-REQ-0118 - Revision operations
 
 The CLI MUST provide conceptual list, show, export, import, and delete
 operations for Revisions. Human references MUST be resolved to exact identity,
@@ -73,7 +73,7 @@ and ambiguity MUST fail.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0119 - Security-sensitive authorization spelling
+### PR-REQ-0119 - Security-sensitive authorization spelling
 
 Secret export, sensitive Snapshot export, Secret declassification, recovery
 override, and `AbandonManagement` MUST each use explicit, purpose-specific
@@ -82,7 +82,7 @@ disclosure, declassification, recovery bypass, or abandonment.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0120 - Structured output boundary
+### PR-REQ-0120 - Structured output boundary
 
 Management and inspection commands SHOULD provide versioned machine-readable
 output. Raw and interactive Hook terminal channels MUST remain direct streams

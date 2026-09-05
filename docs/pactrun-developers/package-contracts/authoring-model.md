@@ -110,7 +110,7 @@ or persistence representation. Those representations remain formal design
 gates. The broader taxonomy for non-ServiceStorage-backed service-owned
 resources also remains deferred.
 
-## PR-REQ-0123 - Explicit normalized semantics
+### PR-REQ-0123 - Explicit normalized semantics
 
 An authoring frontend MAY offer conservative shorthand, including implicit
 Carry for the same stable Input identity and Keep for a source-only Input.
@@ -119,7 +119,7 @@ execution MUST NOT guess authoring defaults again.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0124 - Separate authoring capabilities
+### PR-REQ-0124 - Separate authoring capabilities
 
 Action, Snapshot, Migration, and Cleanup MUST have separate author-facing
 models. A frontend MUST NOT expose a catch-all operation type with optional

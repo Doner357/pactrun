@@ -13,7 +13,7 @@ An Action is a Package-defined operation such as `start`, `status`, `logs`, or
 `backup`, for example, does not create a Pactrun Snapshot unless the Package
 also uses the Snapshot capability.
 
-## PR-REQ-0094 - Action invocation
+### PR-REQ-0094 - Action invocation
 
 Users MUST invoke a Package-defined Action through the managed execution path.
 Pactrun MUST resolve the exact Instance and Action, normalize parameters,
@@ -22,7 +22,7 @@ before launching the Hook.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0095 - Plan preview
+### PR-REQ-0095 - Plan preview
 
 A managed execution command SHOULD offer a side-effect-free plan view showing
 exact references, requirements, Migration paths, projected incomplete state,
@@ -31,7 +31,7 @@ create a Run, reservation, lock, pin, or GC root.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0096 - Plan staleness
+### PR-REQ-0096 - Plan staleness
 
 A displayed plan MUST be treated as a preview rather than a guarantee. Actual
 execution MUST revalidate the expected Instance state version, exact resources,
@@ -47,7 +47,7 @@ before admission checks. Resolution and compile errors therefore do not create
 Runs. Admission invalidation and later execution failures are durable history
 in that Run.
 
-## PR-REQ-0097 - User-visible Run detail
+### PR-REQ-0097 - User-visible Run detail
 
 Run inspection MUST distinguish terminal outcome from detailed failures and
 from the Instance trust consequence. It MUST be able to report the primary
@@ -56,7 +56,7 @@ diagnostics, output references, and timing when available.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0098 - Sensitive Run data
+### PR-REQ-0098 - Sensitive Run data
 
 Run records and ordinary diagnostics MUST NOT store sensitive parameter values,
 Secret values, or value-derived digests intended to reveal them. Interactive

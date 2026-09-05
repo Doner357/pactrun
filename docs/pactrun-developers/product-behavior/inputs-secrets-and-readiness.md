@@ -60,7 +60,7 @@ compatibility representation, retention persistence, and durable representation
 remain future-version design gates. The example does not classify non-
 ServiceStorage-backed resources.
 
-## PR-REQ-0090 - Ordinary execution context
+### PR-REQ-0090 - Ordinary execution context
 
 An ordinary Action or Snapshot Capture MUST receive the active Revision's
 current active Input and Secret bindings as one Instance context. Retained
@@ -72,7 +72,7 @@ future execution context are derived from the strict active Revision.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0091 - Readiness admission
+### PR-REQ-0091 - Readiness admission
 
 Ordinary Actions and Snapshot Capture MUST require
 `RequiredInputsSatisfied == true` before launching a Hook. Missing bindings MUST
@@ -300,7 +300,7 @@ destination boundaries are defined by PR-REQ-0266 and PR-REQ-0268.
 
 **Verification: PR-TEST-0078.**
 
-## PR-REQ-0093 - Secret deletion disclaimer
+### PR-REQ-0093 - Secret deletion disclaimer
 
 Deleting or discarding a Secret MUST remove its managed reference according to
 the operation contract, but Pactrun MUST NOT claim physical secure erasure of

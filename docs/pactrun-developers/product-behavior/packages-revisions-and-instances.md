@@ -22,7 +22,7 @@ an Instance. Exact internal identity rules are defined in
 The closed M2 source and installation flow is defined by
 [Pack Source YAML V1](../package-contracts/pack-source-yaml-v1.md).
 
-## PR-REQ-0086 - Exact resolution before operation
+### PR-REQ-0086 - Exact resolution before operation
 
 Every operation that accepts a human Package, Revision, Instance, Snapshot, or
 Run reference MUST resolve it to the appropriate exact identity before
@@ -38,7 +38,7 @@ installation, insertion, timestamp, locale, or database query order.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0087 - Instance presentation
+### PR-REQ-0087 - Instance presentation
 
 User-facing Instance inspection MUST distinguish the stable managed object, its
 human name, active exact Revision, current trust state, and configuration
@@ -50,7 +50,7 @@ defined by PR-REQ-0263.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0088 - Historical identity after name reuse
+### PR-REQ-0088 - Historical identity after name reuse
 
 Run and Snapshot history MUST remain associated with the original opaque
 Instance identity after the Instance is deleted. Reusing the same human name
@@ -60,7 +60,7 @@ required in the initial product scope; if added later, it MUST preserve
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0089 - Revision labels remain references
+### PR-REQ-0089 - Revision labels remain references
 
 User-visible version strings and labels MUST be presented as human references,
 not immutable Revision identity. Inspection MUST be able to show every

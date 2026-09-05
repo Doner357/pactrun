@@ -31,7 +31,7 @@ appear executable.
 - Pactrun MUST claim only security properties enforced by its actual authority
   or isolation mechanisms.
 
-## PR-REQ-0001 - Product boundary
+### PR-REQ-0001 - Product boundary
 
 Pactrun MUST remain a local-first, install-managed, command-driven,
 single-executable modular monolith. It MUST NOT require a daemon and MUST NOT
@@ -40,7 +40,7 @@ replacement for service-specific tools.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0002 - Package taxonomy
+### PR-REQ-0002 - Package taxonomy
 
 `Package` MUST be the core package abstraction, and `Pack` MUST be the only
 Package kind in the initial product scope. Pactrun MUST NOT infer Package,
@@ -49,7 +49,7 @@ semantics for a `Stack` concept.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0003 - Source-to-Instance boundary
+### PR-REQ-0003 - Source-to-Instance boundary
 
 Pactrun MUST transform a Package Source into a Revision Candidate, validate and
 semantically normalize it, project identity-bearing semantics, canonicalize and
@@ -63,7 +63,7 @@ Candidate boundary rather than becoming an installed contract directly.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0004 - Source independence
+### PR-REQ-0004 - Source independence
 
 A Package Source MUST remain mutable authoring input and MUST NOT be treated as
 an execution identity. An Instance execution MUST NOT depend on the original
@@ -75,7 +75,7 @@ object identity.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0005 - Installation and Instance creation
+### PR-REQ-0005 - Installation and Instance creation
 
 Installing Package content MUST create or associate an immutable Revision and
 MUST NOT implicitly create an Instance.
@@ -86,7 +86,7 @@ PR-REQ-0265.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0006 - Distinct operation concepts
+### PR-REQ-0006 - Distinct operation concepts
 
 Action, Snapshot Capture, Snapshot Restore, Migration, and Cleanup MUST remain
 distinct domain concepts. Sharing compiler or execution primitives MUST NOT
@@ -94,7 +94,7 @@ collapse them into a catch-all authoring-level `Operation` model.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0007 - Managed execution pipeline
+### PR-REQ-0007 - Managed execution pipeline
 
 Every managed execution MUST pass through Resolution, Workflow Compilation, an
 immutable Execution Plan, acceptance as an execution attempt with durable Run
@@ -104,7 +104,7 @@ workflow MUST NOT be forced through that pipeline.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0008 - Compiler and Executor ownership
+### PR-REQ-0008 - Compiler and Executor ownership
 
 The Workflow Compiler MUST own interpretation of resolved domain semantics and
 production of a typed plan. The Executor MUST execute that plan without
@@ -112,7 +112,7 @@ reinterpreting authoring files, CLI syntax, Action names, or workflow policy.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0009 - Modular-monolith dependency direction
+### PR-REQ-0009 - Modular-monolith dependency direction
 
 The architecture MUST maintain explicit ownership and a central composition
 root. Core domain code MUST NOT depend on CLI, persistence-adapter, or
@@ -122,7 +122,7 @@ plumbing for domain contracts.
 
 **Verification: Pending automated coverage.**
 
-## PR-REQ-0010 - Policy and mechanism separation
+### PR-REQ-0010 - Policy and mechanism separation
 
 Pactrun-specific semantics MUST be owned by Pactrun domain code. Stable
 third-party libraries MAY supply commodity mechanisms, but library behavior and
