@@ -61,6 +61,10 @@ impl RuntimePath {
 pub(crate) struct HostExecutableName(String);
 
 impl HostExecutableName {
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+
     pub(crate) fn parse(value: impl Into<String>) -> Result<Self, RevisionCoreV1Error> {
         let value = value.into();
         let valid_length = !value.is_empty() && value.len() <= 128;
@@ -210,6 +214,10 @@ pub(crate) struct RevisionCoreV1 {
 impl RevisionCoreV1 {
     pub(crate) fn inputs(&self) -> &[InputDeclarationV1] {
         &self.inputs
+    }
+
+    pub(crate) fn actions(&self) -> &[ActionV1] {
+        &self.actions
     }
 
     pub(crate) fn migrations(&self) -> &[MigrationV1] {

@@ -22,6 +22,9 @@ is Frozen.
   24 oracle, golden vectors, and requirement/test traceability.
 - The production crate remains a modular monolith. M2 Pack installation,
   Instance, and Managed Input binding support is integrated into `develop`.
+  M3 Slice 1 typed resolution and side-effect-free Plan compilation are
+  complete on an isolated feature branch and are not yet integrated into
+  `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -96,8 +99,8 @@ remaining non-Frozen and non-public.
 
 The M3 review is recorded in the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 is `Planned`; implementation must remain within that baseline and its linked
-normative requirements.
+M3 is `In progress`; implementation must remain within that baseline and its
+linked normative requirements.
 
 ## Milestones
 
@@ -312,7 +315,7 @@ Completion gate:
 
 ### M3 - Action execution
 
-**State: Planned.**
+**State: In progress.**
 
 Implement resolution, `InvokeAction` intent, typed sequential compilation,
 Admission, stale-state checks, durable pins, Hook Runtime and Session authority,
@@ -322,6 +325,16 @@ The approved scope and work ordering are synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
 Exact new CLI spelling remains a required M3 closure item and is not invented by
 this informative roadmap.
+
+The completed M3 Slice 1 implements exact Instance and Action resolution,
+`InvokeAction`, typed primitive parameter binding, side-effect-free immutable
+Plan compilation, compile-time fact consistency, and exact interpreter launcher
+selection. `PR-TEST-0080` and `PR-TEST-0081` provide automated coverage for
+`PR-REQ-0273` and `PR-REQ-0274`. Admission, Run persistence, durable pins,
+process launch, HookProtocolV1 runtime, output publication, recovery, and human
+CLI spelling remain owned by later approved slices. `PR-REQ-0194` therefore
+remains Pending automated coverage until its Admission and Executor clauses are
+implemented and tested.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority

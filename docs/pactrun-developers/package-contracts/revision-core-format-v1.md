@@ -297,24 +297,71 @@ evolution. This format does not define Snapshot authoritative bodies or
 
 ### PR-REQ-0194 - Runtime launcher integration
 
-For an interpreter Hook, the Compiler MUST resolve `command` against a
-Pactrun-provided ordered list of absolute launcher-search directories. It MUST
-append the exact filename and select the first executable regular file. It MUST
-NOT use a current-directory fallback, shell lookup, `PATHEXT`, extension
-inference, or file associations. The Compiler MUST bind the resolved absolute
-path into the Execution Plan, Admission MUST revalidate it, and Executor MUST
-launch that exact path without searching again. Search directories and the
-resolved host binary are execution-environment facts, not Revision identity.
+For an interpreter Hook, the Compiler MUST perform the ordered host-launcher
+selection defined by PR-REQ-0274 and bind the ordered search configuration,
+`HostExecutableName`, and selected exact absolute candidate path into the
+Execution Plan. Search directories and the selected candidate path are
+execution-environment facts, not Revision identity.
+
+Admission MUST repeat the same ordered selection and host eligibility check and
+confirm that it still selects the exact candidate path bound into the Plan. It
+MUST NOT silently select another search directory. This revalidation does not
+compare a symlink or reparse target object identity, inode, file ID, canonical
+target path, metadata snapshot, content digest, or any other replacement
+witness. On Windows, Admission MUST apply the same non-directory target rule
+without parsing PE or another image type and without using `GetBinaryType` or a
+similar executable-image probe.
+
+Executor MUST launch the exact admitted path without searching again. On
+Windows it MUST pass that exact path as the `CreateProcessW` application path;
+actual image launchability is decided by `CreateProcessW`. If process launch
+fails, Pactrun MUST report launch or execution failure and MUST NOT fall back to
+a later launcher-search directory.
 
 Direct launch selects the materialized owned executable. Runtime implementations
 must deliver the specified argument tail while treating `argv[0]` as
 platform-controlled and outside the Pack-facing contract.
+
+Any future requirement to detect in-place candidate replacement, symlink or
+reparse retargeting, or a changed object behind the same candidate path requires
+a separate launcher object-identity and replacement-detection semantic closure.
+This requirement does not implicitly define one.
 
 This requirement defines runtime behavior but is intentionally not claimed by
 Revision Core golden vectors. It requires future Compiler, Admission, and
 Executor integration tests.
 
 **Verification: Pending automated coverage.**
+
+### PR-REQ-0274 - Host launcher candidate eligibility
+
+Interpreter launcher pathname resolution MUST follow the host operating
+system's normal filesystem pathname semantics for every component. A symlink or
+reparse point is not by itself a rejection reason. Candidate eligibility is
+evaluated against the target reached by normal pathname resolution, including
+when an intermediate component is a symlink or reparse point.
+
+The Compiler MUST append the exact `HostExecutableName` to each
+Pactrun-provided absolute search directory in order and select the first
+eligible candidate. The selected Plan path MUST remain that exact absolute
+candidate path. Pactrun MUST NOT canonicalize it to a symlink or reparse target
+path or derive filesystem object identity, canonical-target identity, inode,
+file ID, metadata, content-digest, or replacement-detection semantics from the
+selection.
+
+On POSIX, the resolved target MUST be a regular file and MUST have execute
+access under the same execution credentials and host access-control semantics
+used for the Hook process. The Compiler MUST NOT prevalidate ELF, Mach-O,
+shebang, or another executable image format.
+
+On Windows, the resolved target MUST be a non-directory file. The Compiler MUST
+NOT parse PE or another image type and MUST NOT use `GetBinaryType` or a similar
+API to create an additional executable-image contract. The
+`HostExecutableName` and candidate filename MUST match exactly; Pactrun MUST
+NOT append `.exe`, use `PATH` or `PATHEXT`, invoke file associations, or perform
+extension inference.
+
+**Verification: PR-TEST-0081.**
 
 ## Runtime content, canonical bytes, and digest
 
