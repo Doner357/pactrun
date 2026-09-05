@@ -25,8 +25,7 @@ is Frozen.
   M3 Slice 1 typed resolution and side-effect-free Plan compilation are
   integrated into `develop`. M3 Slice 2 exact PersistenceSchemaV4 Runs,
   durable pins, Action recovery state, ownership, and Run Artifacts are
-  complete on an isolated feature branch and are not yet integrated into
-  `develop`.
+  integrated into `develop`; the remaining M3 slices are not yet implemented.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
