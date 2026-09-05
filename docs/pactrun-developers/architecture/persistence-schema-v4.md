@@ -313,7 +313,7 @@ The M3 Slice 2 implementation derives typed operations equivalent to:
 
 ```text
 create_accepted_run(instance, accepted_state_version, action_identity, owner_session) -> RunId
-establish_run_pins(run, expected_state_version, active_bindings, override_guard)
+admit_run(run, admission_facts, launcher_check, override_guard) -> admitted | refusal
 open_recovery_risk(run)
 clear_recovery_risk(run)
 finish_run(run, outcome, failures, hook_completion, staged_artifacts) -> published state version?
@@ -326,10 +326,17 @@ delete_run_artifact(run, output)
 ```
 
 Every mutation uses `BEGIN IMMEDIATE`. Run creation records the accepted state
-version without comparing it; pin establishment compares the current Instance
-state version, the accepted state version, the active Revision, and every
-referenced current binding inside the transaction and rejects a stale
-observation without publishing anything. Terminal publication computes the
+version without comparing it. Admission evaluates, inside one transaction and in
+the order of PR-REQ-0279, the recovery guard, the current Instance state
+version against the expected and accepted versions, the active Revision, every
+referenced current binding, readiness derived from the persisted bindings and
+Revision declarations, runtime-content availability, interpreter launcher
+re-selection, and the Mutate-conflict predicate. Both access modes the predicate
+compares are read from the persisted `run_action_invocations` identity and the
+decoded Revision core, and the predicate itself is derived from existing
+`run_executions`, `run_revision_pins`, and `run_action_invocations` rows, so no
+schema change is needed. A refusal publishes the terminal `Failed` outcome in
+that same transaction; success inserts the pins. Terminal publication computes the
 consequence before writing, deletes the execution row, writes the outcome and
 its records, releases pins, reclaims unreferenced payloads, and publishes the
 guard and state version only when a consequence exists. Artifact bytes stream

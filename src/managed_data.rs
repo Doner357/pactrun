@@ -132,22 +132,34 @@ impl StagingSession {
         for _ in 0..32 {
             let session = root.join(format!("session-{}", random_hex()?));
             match create_private_directory(&session) {
-                Ok(()) => {
-                    let lease_path = session.join(LEASE_NAME);
-                    let lease = create_private_file(&lease_path)
-                        .map_err(|error| StagingError::io("create staging lease", error))?;
-                    lease
-                        .lock()
-                        .map_err(|error| StagingError::io("lock staging session", error))?;
-                    return Ok(Self {
-                        root,
-                        session,
-                        lease: Some(lease),
-                    });
-                }
+                Ok(()) => {}
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
                 Err(error) => return Err(StagingError::io("create staging session", error)),
             }
+            // Another process's stale-session scan may observe this directory
+            // before its lease is locked and treat it as abandoned. Creation
+            // therefore verifies that the locked lease and its directory still
+            // exist and otherwise retries with a fresh name.
+            let lease_path = session.join(LEASE_NAME);
+            let lease = match create_private_file(&lease_path) {
+                Ok(lease) => lease,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(StagingError::io("create staging lease", error)),
+            };
+            lease
+                .lock()
+                .map_err(|error| StagingError::io("lock staging session", error))?;
+            if fs::metadata(&lease_path).is_err() || !session.is_dir() {
+                let _ = File::unlock(&lease);
+                drop(lease);
+                let _ = fs::remove_dir(&session);
+                continue;
+            }
+            return Ok(Self {
+                root,
+                session,
+                lease: Some(lease),
+            });
         }
         Err(StagingError::Unsupported(
             "could not allocate a unique staging session".to_owned(),
@@ -300,6 +312,10 @@ pub(crate) fn session_is_live(
     }
 }
 
+/// Removes abandoned sessions whose lease is no longer held. The scan is
+/// housekeeping: a session that appears, locks its lease, or vanishes while
+/// the scan runs belongs to a concurrent live process, so per-entry failures
+/// are skipped rather than failing the caller's own session creation.
 fn cleanup_stale_sessions(root: &Path) -> Result<(), StagingError> {
     for entry in fs::read_dir(root).map_err(|error| StagingError::io("scan staging root", error))? {
         let entry = entry.map_err(|error| StagingError::io("read staging entry", error))?;
@@ -308,34 +324,39 @@ fn cleanup_stale_sessions(root: &Path) -> Result<(), StagingError> {
         if !is_session_name(name) {
             continue;
         }
-        let metadata = fs::symlink_metadata(entry.path())
-            .map_err(|error| StagingError::io("inspect staging session", error))?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() {
-            continue;
-        }
-        let lease_path = entry.path().join(LEASE_NAME);
-        let lease = match OpenOptions::new().read(true).write(true).open(&lease_path) {
-            Ok(lease) => lease,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(StagingError::io("open stale staging lease", error)),
-        };
-        match lease.try_lock() {
-            Ok(()) => {}
-            Err(std::fs::TryLockError::WouldBlock) => continue,
-            Err(std::fs::TryLockError::Error(error)) => {
-                return Err(StagingError::io("lock stale staging session", error));
-            }
-        }
-        remove_session_contents(&entry.path())
-            .map_err(|error| StagingError::io("remove stale staging contents", error))?;
-        drop(lease);
-        match fs::remove_dir(entry.path()) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(StagingError::io("remove stale staging session", error)),
-        }
+        let _ = cleanup_session_entry(&entry.path());
     }
     Ok(())
+}
+
+fn cleanup_session_entry(session: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(session)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Ok(());
+    }
+    let lease_path = session.join(LEASE_NAME);
+    let lease = match OpenOptions::new().read(true).write(true).open(&lease_path) {
+        Ok(lease) => lease,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            // Either a session still being created or an abandoned empty
+            // directory; removal succeeds only for the latter.
+            let _ = fs::remove_dir(session);
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
+    match lease.try_lock() {
+        Ok(()) => {}
+        Err(std::fs::TryLockError::WouldBlock) => return Ok(()),
+        Err(std::fs::TryLockError::Error(error)) => return Err(error),
+    }
+    remove_session_contents(session)?;
+    drop(lease);
+    match fs::remove_dir(session) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 fn remove_session_contents(session: &Path) -> io::Result<()> {

@@ -60,7 +60,7 @@ start a Hook, mutate an Instance, create a Run, or create a lease, pin, GC root,
 or reservation. It SHOULD reject every statically detectable error before the
 first workflow side effect.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0089.**
 
 ### PR-REQ-0040 - Typed immutable plan
 
@@ -81,7 +81,7 @@ Exact references in a compiled Plan MUST NOT reserve resource lifetime. Only an
 accepted Run may establish durable execution pins. A compile-only plan MUST NOT
 create a Run, lock, lease, pin, GC root, or reservation and MAY become stale.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0089.**
 
 ## Admission
 
@@ -93,7 +93,7 @@ version with the Plan token, validate exact resources and all remaining
 preconditions, and atomically establish durable pins before the first workflow
 side effect.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0089.**
 
 ### PR-REQ-0043 - Plan invalidation
 
@@ -102,7 +102,7 @@ preconditions fail at admission, the existing Run MUST report
 `PlanInvalidated`. The Executor MUST NOT silently re-resolve or recompile the
 workflow.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0090.**
 
 ### PR-REQ-0044 - Accepted execution continuity
 
@@ -122,7 +122,55 @@ coexist with other Observe and Mutate operations. Mutate operations on the same
 Instance MUST serialize or conflict. The same mutation guard MUST protect both
 managed execution and management mutations.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0092.**
+
+### PR-REQ-0278 - Action admission exclusivity
+
+Action Admission MUST acquire the process-local mutation guard only for the
+acceptance and Admission call and MUST NOT hold it across Hook execution. The
+Mutate-conflict predicate and durable pin establishment MUST occur atomically
+in the same Admission `BEGIN IMMEDIATE` transaction, so that two concurrent
+Mutate Admissions on one Instance cannot both succeed in any process
+arrangement.
+
+The access mode of every Run the predicate considers, including the Run being
+admitted, MUST be derived from the persisted Action declaration of that Run's
+Revision: the active Revision for the Run being admitted and the pinned
+Revision for a competing Run. A caller-supplied access flag MUST NOT be
+correctness authority.
+
+A Mutate Action Run conflicts only with another Mutate Action Run on the same
+Instance that is both Running and Admitted. An Accepted Run that has not been
+admitted occupies no exclusivity, so a process failure between acceptance and
+Admission blocks nothing. Observe Action Runs never conflict in either
+direction. Management mutations remain admissible while a Run is Running: the
+same guard serializes them per transaction, and they cannot alter the Run's
+pinned context. The refusal is reported as `admission.mutation_conflict`, and
+the one-execution recovery override MUST NOT bypass it.
+
+**Verification: PR-TEST-0092.**
+
+### PR-REQ-0279 - Admission refusal precedence
+
+Any check performed outside the Admission transaction is advisory only and MUST
+NOT publish a refusal, pin, or outcome. Inside one Admission `BEGIN IMMEDIATE`
+transaction Admission MUST evaluate the following in order and MUST publish the
+first refusal that applies as the Run's terminal `Failed` outcome, with the
+`PrimaryFailure` recorded at the Admission step, in that same transaction:
+
+1. the Instance is in `ManualRecoveryRequired` and no explicit one-execution
+   override was supplied: `admission.recovery_guard_active`;
+2. a stale compilation or state fact: the expected `InstanceStateVersion`, an
+   exact Revision or binding reference, readiness, interpreter launcher
+   re-selection, or runtime-content availability: `admission.plan_invalidated`;
+3. after successful revalidation, a conflicting Running and Admitted Mutate
+   Action Run: `admission.mutation_conflict`.
+
+Only when no refusal applies MUST Admission establish durable pins and make the
+Run Admitted, in the same transaction. Human-readable refusal messages are
+diagnostics and carry no normative content.
+
+**Verification: PR-TEST-0091.**
 
 ### PR-REQ-0267 - M2 Instance CAS and mutation guard
 
@@ -195,7 +243,7 @@ admission checks. Admission failures, including stale
 `InstanceStateVersion`, missing exact references, and failed remaining
 preconditions, and all later execution failures MUST be recorded in that Run.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0089.**
 
 ### PR-REQ-0050 - Run phase and outcome
 

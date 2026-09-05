@@ -116,7 +116,7 @@ const SCHEMA_LADDER: [(&str, &str); 4] = [
 pub(crate) struct PactrunPersistence {
     pub(super) database: Mutex<Connection>,
     pub(super) database_path: PathBuf,
-    runtime_content: RuntimeContentStore,
+    pub(super) runtime_content: RuntimeContentStore,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -982,7 +982,7 @@ fn validate_publications(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum FaultPoint {
+pub(crate) enum FaultPoint {
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
     BeforeSchemaMigrationCommit,
@@ -991,8 +991,10 @@ pub(super) enum FaultPoint {
     AfterMetadataCommit,
     BeforeRevisionCommit,
     AfterRevisionCommit,
-    BeforeRunPinsCommit,
-    AfterRunPinsCommit,
+    BeforeRunAcceptCommit,
+    AfterRunAcceptCommit,
+    BeforeRunAdmitCommit,
+    AfterRunAdmitCommit,
     BeforeRecoveryRiskCommit,
     AfterRecoveryRiskCommit,
     BeforeRunFinishCommit,
@@ -1001,7 +1003,7 @@ pub(super) enum FaultPoint {
 
 impl FaultPoint {
     #[cfg(test)]
-    pub(super) fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
@@ -1011,8 +1013,10 @@ impl FaultPoint {
             Self::AfterMetadataCommit => "after_metadata_commit",
             Self::BeforeRevisionCommit => "before_revision_commit",
             Self::AfterRevisionCommit => "after_revision_commit",
-            Self::BeforeRunPinsCommit => "before_run_pins_commit",
-            Self::AfterRunPinsCommit => "after_run_pins_commit",
+            Self::BeforeRunAcceptCommit => "before_run_accept_commit",
+            Self::AfterRunAcceptCommit => "after_run_accept_commit",
+            Self::BeforeRunAdmitCommit => "before_run_admit_commit",
+            Self::AfterRunAdmitCommit => "after_run_admit_commit",
             Self::BeforeRecoveryRiskCommit => "before_recovery_risk_commit",
             Self::AfterRecoveryRiskCommit => "after_recovery_risk_commit",
             Self::BeforeRunFinishCommit => "before_run_finish_commit",
@@ -1022,10 +1026,10 @@ impl FaultPoint {
 }
 
 #[cfg(not(test))]
-pub(super) fn fault(_point: FaultPoint) {}
+pub(crate) fn fault(_point: FaultPoint) {}
 
 #[cfg(test)]
-pub(super) fn fault(point: FaultPoint) {
+pub(crate) fn fault(point: FaultPoint) {
     if ["PACTRUN_M1C_FAULT", "PACTRUN_M1D_FAULT", "PACTRUN_M3_FAULT"]
         .iter()
         .any(|variable| std::env::var_os(variable).is_some_and(|value| value == point.name()))

@@ -25,7 +25,9 @@ is Frozen.
   M3 Slice 1 typed resolution and side-effect-free Plan compilation are
   integrated into `develop`. M3 Slice 2 exact PersistenceSchemaV4 Runs,
   durable pins, Action recovery state, ownership, and Run Artifacts are
-  integrated into `develop`; the remaining M3 slices are not yet implemented.
+  integrated into `develop`. M3 Slice 3 transactional Run acceptance and
+  Admission are complete on an isolated feature branch and are not yet
+  integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -356,6 +358,32 @@ and failure ordering (`PR-REQ-0051`, `PR-REQ-0052`), owner-loss reconciliation
 (`PR-REQ-0060` through `PR-REQ-0062`, `PR-REQ-0064`), output publication
 (`PR-REQ-0073`, `PR-REQ-0144`), Run inspection, and human spelling remain owned
 by Slices 3 through 6 and keep their `Pending automated coverage` status.
+
+The completed M3 Slice 3 composes acceptance and Admission over that substrate:
+a compiled Plan becomes a durable Run before any check, and one Admission
+`BEGIN IMMEDIATE` transaction evaluates the trust guard, stale compilation and
+state facts (state version, exact references, readiness, runtime-content
+availability, interpreter launcher re-selection), and Mutate exclusivity in the
+normative precedence of `PR-REQ-0279`, publishing either the pins or the
+`Failed` refusal outcome in that same transaction. `PR-REQ-0278` selects the
+Mutate exclusivity model: the process-local mutation guard is held only for the
+acceptance and Admission call, and only Running and Admitted Mutate Action Runs
+conflict, with both access modes read from persisted Revision declarations.
+The Frozen error taxonomy gained the appended codes
+`admission.mutation_conflict` and `admission.recovery_guard_active` under
+`PR-REQ-0222`. `PR-TEST-0089` through `PR-TEST-0092` provide automated coverage
+for `PR-REQ-0039`, `PR-REQ-0041`, `PR-REQ-0042`, `PR-REQ-0043`, `PR-REQ-0045`,
+`PR-REQ-0049`, `PR-REQ-0067`, `PR-REQ-0068`, `PR-REQ-0278`, and `PR-REQ-0279`.
+`PR-TEST-0090` exercises the Action clause of `PR-REQ-0091` (readiness at
+Admission) while that requirement remains `Pending automated coverage` for its
+Capture, Migration, Cleanup, and Restore clauses. `PR-REQ-0194` remains Pending
+until its Executor clause is implemented in Slice 4. Two known costs are
+recorded: runtime-content verification re-hashes blobs under the SQLite write
+lock during Admission, and a Mutate Run whose owner process is lost after
+Admission holds the Instance's Mutate exclusivity until Slice 5 reconciliation
+finishes it as `Interrupted`. Process launch, Workspace materialization,
+HookProtocolV1 runtime, output publication, reconciliation, and human spelling
+remain owned by Slices 4 through 6.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority
