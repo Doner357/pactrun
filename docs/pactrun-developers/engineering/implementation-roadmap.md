@@ -27,8 +27,8 @@ is Frozen.
   durable pins, Action recovery state, ownership, and Run Artifacts are
   integrated into `develop`. M3 Slice 3 transactional Run acceptance and
   Admission are integrated into `develop`. M3 Slice 4 Hook process launch,
-  execution materialization, and the HookProtocolV1 runtime are complete on an
-  isolated feature branch and are not yet integrated into `develop`.
+  execution materialization, and the HookProtocolV1 runtime are integrated
+  into `develop`; the remaining M3 slices are not yet implemented.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
