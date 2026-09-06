@@ -4,9 +4,11 @@ Pactrun is a local-first package management and execution product implemented in
 Rust. The repository uses a modular-monolith architecture. Canonical `develop`
 contains the completed M1 persistence foundations and the integrated M2 Pack
 installation, Instance, and Managed Input binding implementation. M3 Action
-execution is the next approved implementation milestone and is not yet
-implemented. The Rust application, domain, and repository surfaces remain
-internal and do not constitute a stable public Rust API.
+execution is in progress, with Slices 1 through 4 integrated. Managed output
+publication, durable Run finalization, recovery reconciliation, and the M3 human
+CLI remain assigned to Slices 5 and 6. The Rust application, domain, and
+repository surfaces remain internal and do not constitute a stable public Rust
+API.
 
 ## Repository layout
 
