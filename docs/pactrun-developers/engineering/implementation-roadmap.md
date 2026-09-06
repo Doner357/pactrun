@@ -28,8 +28,8 @@ is Frozen.
   integrated into `develop`. M3 Slice 3 transactional Run acceptance and
   Admission are integrated into `develop`. M3 Slice 4 Hook process launch,
   execution materialization, and the HookProtocolV1 runtime are integrated
-  into `develop`; the Slice 5 crate-private finalization substrate is present
-  on the current feature work but is not integrated into `develop`.
+  into `develop`; M3 Slice 5's crate-private finalization substrate is also
+  integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -61,11 +61,11 @@ is Frozen.
   preserves the earlier metadata, Instance, and binding contracts and remains
   non-Frozen and non-public.
 - The M3 Action execution scope and dependency review is complete. M3 is
-  `In progress`, with Slices 1 through 4 integrated, including the Action Hook
-  runtime. Slice 5's crate-private managed-output, finalization, cleanup,
-  owner-loss reconciliation, and inspection-data substrate is implemented on
-  the current feature work; Slice 6's user-visible inspection and spelling
-  remain within the approved baseline and existing Frozen contracts.
+  `In progress`, with Slices 1 through 5 integrated into `develop`, including
+  the Action Hook runtime and Slice 5's crate-private managed-output,
+  finalization, cleanup, owner-loss reconciliation, and inspection-data
+  substrate. Slice 6's user-visible inspection and spelling remain within the
+  approved baseline and existing Frozen contracts.
 
 ## Milestone states
 
@@ -459,10 +459,12 @@ boundary. The additional inspection snapshot test is supporting coverage for
 the crate-private substrate and has no user-visible inspection verification
 edge. `PR-REQ-0097` remains Pending automated coverage until Slice 6.
 
-M3 Slice 4, including the Windows launch correction, is closed and integrated
-into `develop`. Slice 5's crate-private finalization substrate is complete on
-the current feature work but is not integrated into `develop`; the overall M3
-milestone remains `In progress` and Slice 6 remains pending.
+M3 Slices 1 through 5 are closed and integrated into `develop`. Slice 5
+completed Managed Action Output atomic publication, owner-held finalization and
+retry, durable Run terminalization, Action owner-loss reconciliation, and the
+crate-private Run/artifact/inspection substrate. The overall M3 milestone
+remains `In progress`; Slice 6 is the next and final ordered M3 slice.
+User-visible Run inspection and `PR-REQ-0097` remain deferred to Slice 6.
 
 The Windows launch correction uses the narrow `pactrun-windows-ntfs` adapter:
 the exact admitted path is `lpApplicationName`, the primary thread starts

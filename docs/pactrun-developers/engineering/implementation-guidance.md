@@ -38,11 +38,11 @@ non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 implementation is in progress: Slices 1 through 4 are integrated, and the
-Slice 5 crate-private managed-output, Run finalization, cleanup, owner-loss
-reconciliation, and inspection-data substrate is implemented on the feature
-work. User-visible Run inspection, exact human spelling, and `PR-REQ-0097`
-verification remain deferred to Slice 6.
+M3 implementation is in progress: Slices 1 through 5 are integrated into
+`develop`, including the Slice 5 crate-private managed-output, Run finalization,
+cleanup, owner-loss reconciliation, and inspection-data substrate. User-visible
+Run inspection, exact human spelling, and `PR-REQ-0097` verification remain
+deferred to Slice 6.
 
 ## Implementation decisions
 

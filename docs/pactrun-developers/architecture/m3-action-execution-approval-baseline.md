@@ -14,12 +14,12 @@ ambiguous.
 
 M3 was approved as the next implementation milestone. That approval permitted
 bounded implementation of Action execution on an isolated feature branch. As of
-2026-09-06, M3 implementation is in progress: Slices 1 through 4 are
-integrated, and Slice 5's crate-private managed-output, finalization, cleanup,
-owner-loss reconciliation, and inspection-data substrate is implemented on the
-current feature work. User-visible Run inspection, exact human and machine
-interface spelling, and `PR-REQ-0097` verification remain deferred to Slice 6;
-the milestone is not yet complete.
+2026-09-07, M3 implementation is in progress: Slices 1 through 5 are
+integrated into `develop`, and Slice 5's crate-private managed-output,
+finalization, cleanup, owner-loss reconciliation, and inspection-data substrate
+is complete. User-visible Run inspection, exact human and machine interface
+spelling, and `PR-REQ-0097` verification remain deferred to Slice 6; the
+milestone is not yet complete.
 
 ## Approved managed-execution path
 
