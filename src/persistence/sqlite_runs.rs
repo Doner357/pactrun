@@ -32,9 +32,9 @@ use crate::domain::{
     InterpreterLauncherObservation, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputPayloadId,
     ManagedOutputIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1,
     RecoveryGuardView, RecoveryRiskState, RevisionCoreV1, RevisionIdentity, RunArtifactSummary,
-    RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunOutcome,
-    RunOutcomeView, RunPrimaryFailure, RunState, RunSummary, RunView, RuntimeFileV1, Sha256Digest,
-    risk_transition, terminal_consequence,
+    RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunInspectionData,
+    RunOutcome, RunOutcomeView, RunPrimaryFailure, RunState, RunSummary, RunView, RuntimeFileV1,
+    Sha256Digest, risk_transition, terminal_consequence, validate_running_action_state,
 };
 
 /// Re-runs the ordered interpreter launcher selection bound into a Plan. The
@@ -159,8 +159,16 @@ impl PactrunPersistence {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Run admission", error))?;
         let header = run_header(&transaction, run)?;
-        execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
-        if has_revision_pin(&transaction, run)? {
+        let (_, risk_state) =
+            execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
+        let boundary = if has_revision_pin(&transaction, run)? {
+            ActionRunBoundary::Admitted
+        } else {
+            ActionRunBoundary::Accepted
+        };
+        validate_running_action_state(boundary, risk_state)
+            .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+        if boundary == ActionRunBoundary::Admitted {
             return Err(PersistenceError::InvalidRunTransition(
                 "Run is already admitted".to_owned(),
             ));
@@ -335,7 +343,14 @@ impl PactrunPersistence {
         run_header(&transaction, run)?;
         let (_, current) =
             execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
-        if !has_revision_pin(&transaction, run)? {
+        let boundary = if has_revision_pin(&transaction, run)? {
+            ActionRunBoundary::Admitted
+        } else {
+            ActionRunBoundary::Accepted
+        };
+        validate_running_action_state(boundary, current)
+            .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+        if boundary != ActionRunBoundary::Admitted {
             return Err(PersistenceError::InvalidRunTransition(
                 "recovery risk requires an admitted Run".to_owned(),
             ));
@@ -375,6 +390,42 @@ impl PactrunPersistence {
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("commit Run finish", error))?;
+        fault(FaultPoint::AfterRunFinishCommit);
+        Ok(receipt)
+    }
+
+    /// Owner-authorized terminal publication used by the Action finalizer.
+    /// The owner check, Running-state matrix, and submitted-output eligibility
+    /// are all evaluated inside the same transaction as terminal publication.
+    pub(crate) fn finish_run_owned(
+        &self,
+        owner: &ExecutionOwnerSession,
+        run: RunId,
+        finish: &RunFinish,
+        submitted_outputs: &[ManagedOutputIdentity],
+        artifacts: &mut [RunArtifactWrite<'_>],
+    ) -> Result<RunFinishReceipt, PersistenceError> {
+        let mut database = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|error| PersistenceError::sqlite("begin owned Run finish", error))?;
+        let header = run_header(&transaction, run)?;
+        let receipt = finish_run_in_transaction_owned(
+            &transaction,
+            run,
+            &header,
+            finish,
+            artifacts,
+            Some(owner),
+            Some(submitted_outputs),
+        )?;
+        fault(FaultPoint::BeforeRunFinishCommit);
+        transaction
+            .commit()
+            .map_err(|error| PersistenceError::sqlite("commit owned Run finish", error))?;
         fault(FaultPoint::AfterRunFinishCommit);
         Ok(receipt)
     }
@@ -459,6 +510,149 @@ impl PactrunPersistence {
         }
     }
 
+    pub(crate) fn load_run_inspection(
+        &self,
+        run: RunId,
+    ) -> Result<Option<RunInspectionData>, PersistenceError> {
+        self.load_run_inspection_with_hook(run, || {})
+    }
+
+    fn load_run_inspection_with_hook(
+        &self,
+        run: RunId,
+        after_run_loaded: impl FnOnce(),
+    ) -> Result<Option<RunInspectionData>, PersistenceError> {
+        let mut database = self.open_read_connection()?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|error| PersistenceError::sqlite("begin Run inspection snapshot", error))?;
+        let view = match load_run_from(&transaction, run) {
+            Ok(view) => view,
+            Err(PersistenceError::MissingRun(_)) => {
+                transaction.commit().map_err(|error| {
+                    PersistenceError::sqlite("close Run inspection snapshot", error)
+                })?;
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
+        after_run_loaded();
+        let current_recovery_guard =
+            load_instance_recovery_guard_from(&transaction, view.instance)?;
+        transaction
+            .commit()
+            .map_err(|error| PersistenceError::sqlite("close Run inspection snapshot", error))?;
+        Ok(Some(RunInspectionData {
+            run: view,
+            current_recovery_guard,
+        }))
+    }
+
+    /// Lists the durable owner records that may need owner-loss
+    /// reconciliation. The caller must confirm lease loss before mutating any
+    /// candidate returned here.
+    pub(crate) fn list_running_action_runs(
+        &self,
+    ) -> Result<Vec<(InstanceId, RunId, ExecutionOwnerSession)>, PersistenceError> {
+        let database = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let mut statement = database
+            .prepare(
+                "SELECT runs.instance_id, runs.run_id, run_executions.owner_session \
+                 FROM runs JOIN run_executions ON run_executions.run_id=runs.run_id \
+                 ORDER BY runs.instance_id, runs.run_id",
+            )
+            .map_err(|error| {
+                PersistenceError::sqlite("prepare Running Action enumeration", error)
+            })?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })
+            .map_err(|error| PersistenceError::sqlite("enumerate Running Actions", error))?;
+        let mut result = Vec::new();
+        for row in rows {
+            let (instance, run, owner) =
+                row.map_err(|error| PersistenceError::sqlite("read Running Action", error))?;
+            let owner = String::from_utf8(owner).map_err(|_| {
+                PersistenceError::CorruptRun("owner session is not UTF-8".to_owned())
+            })?;
+            let run = run_id(run)?;
+            let admitted = has_revision_pin(&database, run)?;
+            let (_, risk_state) = execution_row(&database, run)?.ok_or_else(|| {
+                PersistenceError::CorruptRun(
+                    "Running Action enumeration lost its execution row".to_owned(),
+                )
+            })?;
+            let boundary = if admitted {
+                ActionRunBoundary::Admitted
+            } else {
+                ActionRunBoundary::Accepted
+            };
+            validate_running_action_state(boundary, risk_state)
+                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+            result.push((
+                instance_id(instance)?,
+                run,
+                ExecutionOwnerSession::parse(owner)
+                    .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?,
+            ));
+        }
+        Ok(result)
+    }
+
+    /// Atomically converts a confirmed-lost owner Run into Interrupted. A
+    /// second reconciler simply observes that the execution row is gone.
+    pub(crate) fn reconcile_action_run(
+        &self,
+        run: RunId,
+        owner: &ExecutionOwnerSession,
+    ) -> Result<bool, PersistenceError> {
+        let mut database = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|error| {
+                PersistenceError::sqlite("begin Action owner reconciliation", error)
+            })?;
+        let Some((actual_owner, _)) = execution_row(&transaction, run)? else {
+            return Ok(false);
+        };
+        if actual_owner != *owner {
+            return Ok(false);
+        }
+        let header = run_header(&transaction, run)?;
+        let finish = RunFinish {
+            outcome: RunOutcome::Interrupted,
+            primary_failure: None,
+            secondary_failures: Vec::new(),
+            hook_completion: None,
+        };
+        finish_run_in_transaction_owned(
+            &transaction,
+            run,
+            &header,
+            &finish,
+            &mut [],
+            Some(owner),
+            Some(&[]),
+        )?;
+        fault(FaultPoint::BeforeRunFinishCommit);
+        transaction.commit().map_err(|error| {
+            PersistenceError::sqlite("commit Action owner reconciliation", error)
+        })?;
+        fault(FaultPoint::AfterRunFinishCommit);
+        Ok(true)
+    }
+
     pub(crate) fn load_instance_recovery_guard(
         &self,
         instance: InstanceId,
@@ -467,20 +661,7 @@ impl PactrunPersistence {
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        let Some(guard) = guard_row(&database, instance)? else {
-            return Ok(None);
-        };
-        let outcome = outcome_row(&database, guard.run)?.ok_or_else(|| {
-            PersistenceError::CorruptRun(
-                "recovery guard references a Run without an outcome".to_owned(),
-            )
-        })?;
-        if outcome.terminal_risk != RecoveryRiskState::Open {
-            return Err(PersistenceError::CorruptRun(
-                "recovery guard references a Run with clear terminal risk".to_owned(),
-            ));
-        }
-        Ok(Some(guard))
+        load_instance_recovery_guard_from(&database, instance)
     }
 
     pub(crate) fn open_run_artifact(
@@ -730,12 +911,50 @@ fn finish_run_in_transaction(
     finish: &RunFinish,
     artifacts: &mut [RunArtifactWrite<'_>],
 ) -> Result<RunFinishReceipt, PersistenceError> {
-    let (_, live_risk) = execution_row(transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
+    finish_run_in_transaction_owned(transaction, run, header, finish, artifacts, None, None)
+}
+
+fn finish_run_in_transaction_owned(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    header: &RunHeader,
+    finish: &RunFinish,
+    artifacts: &mut [RunArtifactWrite<'_>],
+    expected_owner: Option<&ExecutionOwnerSession>,
+    submitted_outputs: Option<&[ManagedOutputIdentity]>,
+) -> Result<RunFinishReceipt, PersistenceError> {
+    let (live_owner, live_risk) =
+        execution_row(transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
     let boundary = if has_revision_pin(transaction, run)? {
         ActionRunBoundary::Admitted
     } else {
         ActionRunBoundary::Accepted
     };
+    validate_running_action_state(boundary, live_risk)
+        .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+    if let Some(expected_owner) = expected_owner
+        && live_owner != *expected_owner
+    {
+        return Err(PersistenceError::InvalidRunTransition(
+            "Run finalization owner does not match the persisted owner".to_owned(),
+        ));
+    }
+    if let Some(submitted_outputs) = submitted_outputs {
+        let submitted = submitted_outputs.iter().collect::<BTreeSet<_>>();
+        if submitted.len() != submitted_outputs.len() {
+            return Err(PersistenceError::InvalidRunArtifact(
+                "duplicate submitted output identity".to_owned(),
+            ));
+        }
+        if artifacts
+            .iter()
+            .any(|artifact| !submitted.contains(&artifact.output))
+        {
+            return Err(PersistenceError::InvalidRunArtifact(
+                "Run Artifact was not submitted by the Hook".to_owned(),
+            ));
+        }
+    }
     let trigger = terminal_consequence(finish.outcome, live_risk, finish.hook_completion.as_ref())
         .map_err(|error| PersistenceError::InvalidRunTransition(error.to_string()))?;
     if finish.outcome == RunOutcome::Succeeded
@@ -1103,6 +1322,32 @@ fn guard_row(
         .transpose()
 }
 
+fn load_instance_recovery_guard_from(
+    database: &Connection,
+    instance: InstanceId,
+) -> Result<Option<RecoveryGuardView>, PersistenceError> {
+    let Some(guard) = guard_row(database, instance)? else {
+        return Ok(None);
+    };
+    let triggering_header = run_header(database, guard.run)?;
+    if triggering_header.instance != instance {
+        return Err(PersistenceError::CorruptRun(
+            "recovery guard references a Run from another Instance".to_owned(),
+        ));
+    }
+    let outcome = outcome_row(database, guard.run)?.ok_or_else(|| {
+        PersistenceError::CorruptRun(
+            "recovery guard references a Run without an outcome".to_owned(),
+        )
+    })?;
+    if outcome.terminal_risk != RecoveryRiskState::Open {
+        return Err(PersistenceError::CorruptRun(
+            "recovery guard references a Run with clear terminal risk".to_owned(),
+        ));
+    }
+    Ok(Some(guard))
+}
+
 fn error_ref(owner: Vec<u8>, code: Vec<u8>) -> Result<PactrunErrorRefV1, PersistenceError> {
     let owner = String::from_utf8(owner)
         .map_err(|_| PersistenceError::CorruptRun("error owner is not UTF-8".to_owned()))?;
@@ -1124,15 +1369,20 @@ fn load_run_from(database: &Connection, run: RunId) -> Result<RunView, Persisten
     let admitted = has_revision_pin(database, run)?;
     validate_pin_instances(database, run, header.instance)?;
     let state = match (execution, outcome) {
-        (Some((owner, risk_state)), None) => RunState::Running(RunExecutionView {
-            owner,
-            boundary: if admitted {
+        (Some((owner, risk_state)), None) => {
+            let boundary = if admitted {
                 ActionRunBoundary::Admitted
             } else {
                 ActionRunBoundary::Accepted
-            },
-            risk_state,
-        }),
+            };
+            validate_running_action_state(boundary, risk_state)
+                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+            RunState::Running(RunExecutionView {
+                owner,
+                boundary,
+                risk_state,
+            })
+        }
         (None, Some(outcome)) => {
             if admitted {
                 return Err(PersistenceError::CorruptRun(
@@ -1346,6 +1596,9 @@ mod tests {
         io::Cursor,
         path::{Path, PathBuf},
         process::{Command, Stdio},
+        sync::mpsc,
+        thread,
+        time::Duration,
     };
 
     use sha2::{Digest, Sha256};
@@ -1585,6 +1838,211 @@ mod tests {
             secondary_failures: Vec::new(),
             hook_completion: None,
         }
+    }
+
+    // Supporting coverage for the Slice 5 inspection substrate. This is not
+    // verification of the user-visible Run-detail requirement.
+    #[test]
+    fn run_inspection_uses_one_read_snapshot_for_run_and_current_guard() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+        let view = instance(&persistence, &revision, "inspection-snapshot");
+
+        let historical_run = admitted(&persistence, &view);
+        persistence
+            .finish_run(
+                historical_run,
+                &plain_finish(RunOutcome::Cancelled),
+                &mut [],
+            )
+            .unwrap();
+        let guard_run = admitted(&persistence, &view);
+        persistence.open_recovery_risk(guard_run).unwrap();
+        persistence
+            .finish_run(guard_run, &plain_finish(RunOutcome::Failed), &mut [])
+            .unwrap();
+        let guarded_token = token(&persistence, view.id);
+
+        let inspection_persistence = PactrunPersistence::open(&root).unwrap();
+        let (snapshot_started_tx, snapshot_started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let inspection = thread::spawn(move || {
+            inspection_persistence.load_run_inspection_with_hook(historical_run, || {
+                snapshot_started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            })
+        });
+        snapshot_started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("inspection acquired its read snapshot");
+
+        let resolver_root = root.clone();
+        let (mutation_started_tx, mutation_started_rx) = mpsc::channel();
+        let (mutation_done_tx, mutation_done_rx) = mpsc::channel();
+        let resolver = thread::spawn(move || {
+            mutation_started_tx.send(()).unwrap();
+            let resolver = PactrunPersistence::open(&resolver_root).unwrap();
+            mutation_done_tx
+                .send(
+                    resolver
+                        .resolve_manual_recovery(view.id, guarded_token)
+                        .is_ok(),
+                )
+                .unwrap();
+        });
+        mutation_started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("recovery-guard resolver started");
+        assert!(
+            mutation_done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("recovery-guard mutation committed while inspection stayed open")
+        );
+        release_tx.send(()).unwrap();
+
+        let inspection = inspection.join().unwrap().unwrap().unwrap();
+        resolver.join().unwrap();
+        let RunState::Finished(outcome) = &inspection.run.state else {
+            panic!("expected the inspected Run to be terminal");
+        };
+        assert_eq!(outcome.outcome, RunOutcome::Cancelled);
+        assert_eq!(outcome.terminal_risk, RecoveryRiskState::Clear);
+        assert_eq!(
+            inspection
+                .current_recovery_guard
+                .as_ref()
+                .expect("the old snapshot still contains the current guard")
+                .run,
+            guard_run
+        );
+
+        let next = persistence
+            .load_run_inspection(historical_run)
+            .unwrap()
+            .unwrap();
+        assert_eq!(next.run.state, RunState::Finished(outcome.clone()));
+        assert!(next.current_recovery_guard.is_none());
+    }
+
+    // Test-ID: PR-TEST-0105
+    // Verifies: PR-REQ-0275
+    #[test]
+    fn accepted_open_risk_corruption_fails_closed_without_mutation() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+        let view = instance(&persistence, &revision, "accepted-open-corrupt");
+        let run = accepted(&persistence, &view);
+        let stored = persistence
+            .load_revision(&revision)
+            .unwrap()
+            .expect("revision is persisted");
+        let files = stored.content.runtime_content.files();
+        let launch = CompiledHookLaunch::Direct {
+            executable: files[0].clone(),
+        };
+        let active_bindings = bindings(&persistence, view.id);
+        let facts = AdmissionFacts {
+            expected_state_version: view.state_version,
+            active_bindings: &active_bindings,
+            runtime_content: files,
+            launch: &launch,
+        };
+        let before_version = token(&persistence, view.id);
+        execute(
+            &persistence,
+            "UPDATE run_executions SET risk_state=1 WHERE run_id=?1",
+            &[run.as_bytes().as_slice()],
+        )
+        .unwrap();
+
+        assert!(matches!(
+            persistence.load_run(run),
+            Err(PersistenceError::CorruptRun(_))
+        ));
+        assert!(matches!(
+            persistence.admit_run(run, &facts, &|_| Ok(()), false),
+            Err(PersistenceError::CorruptRun(_))
+        ));
+        assert_eq!(token(&persistence, view.id), before_version);
+        assert_eq!(count(&persistence, "SELECT COUNT(*) FROM run_outcomes"), 0);
+        assert_eq!(
+            count(
+                &persistence,
+                "SELECT COUNT(*) FROM instance_recovery_guards"
+            ),
+            0
+        );
+        assert_eq!(
+            count(&persistence, "SELECT COUNT(*) FROM run_revision_pins"),
+            0
+        );
+        assert_eq!(
+            persistence
+                .database
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT risk_state FROM run_executions WHERE run_id=?1",
+                    [run.as_bytes().as_slice()],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            1
+        );
+    }
+
+    // Test-ID: PR-TEST-0112
+    // Verifies: PR-REQ-0064, PR-REQ-0275
+    #[test]
+    fn owner_reconciliation_finishes_clear_risk_runs_by_boundary() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+
+        let accepted_view = instance(&persistence, &revision, "reconcile-accepted");
+        let accepted_run = accepted(&persistence, &accepted_view);
+        assert!(
+            persistence
+                .reconcile_action_run(accepted_run, &owner())
+                .unwrap()
+        );
+        let accepted_outcome = finished(&persistence, accepted_run);
+        assert_eq!(accepted_outcome.outcome, RunOutcome::Interrupted);
+        assert_eq!(accepted_outcome.boundary, ActionRunBoundary::Accepted);
+        assert_eq!(accepted_outcome.terminal_risk, RecoveryRiskState::Clear);
+        assert!(
+            !persistence
+                .reconcile_action_run(accepted_run, &owner())
+                .unwrap()
+        );
+
+        let admitted_view = instance(&persistence, &revision, "reconcile-admitted");
+        let admitted_run = admitted(&persistence, &admitted_view);
+        assert!(
+            persistence
+                .reconcile_action_run(admitted_run, &owner())
+                .unwrap()
+        );
+        let admitted_outcome = finished(&persistence, admitted_run);
+        assert_eq!(admitted_outcome.outcome, RunOutcome::Interrupted);
+        assert_eq!(admitted_outcome.boundary, ActionRunBoundary::Admitted);
+        assert_eq!(admitted_outcome.terminal_risk, RecoveryRiskState::Clear);
+        assert_eq!(
+            count(&persistence, "SELECT COUNT(*) FROM run_revision_pins"),
+            0
+        );
+        assert_eq!(
+            count(&persistence, "SELECT COUNT(*) FROM run_payload_pins"),
+            0
+        );
+        assert!(
+            persistence
+                .load_instance_recovery_guard(admitted_view.id)
+                .unwrap()
+                .is_none()
+        );
     }
 
     fn state(persistence: &PactrunPersistence, run: RunId) -> RunState {
@@ -1830,7 +2288,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0084
-    // Verifies: PR-REQ-0050, PR-REQ-0066, PR-REQ-0275
+    // Verifies: PR-REQ-0050, PR-REQ-0066, PR-REQ-0275, PR-REQ-0283
     #[test]
     fn run_phase_outcome_and_failure_records_are_exact() {
         let (_temporary, root) = root();
@@ -1906,6 +2364,7 @@ mod tests {
                 message: Some("done".to_owned()),
             }),
         ];
+        let mut legacy_completions = Vec::new();
         for completion in &completions {
             let run = admitted(&persistence, &view);
             let finish = RunFinish {
@@ -1919,6 +2378,11 @@ mod tests {
             assert_eq!(outcome.outcome, RunOutcome::Succeeded);
             assert_eq!(outcome.boundary, ActionRunBoundary::Admitted);
             assert_eq!(outcome.hook_completion, *completion);
+            legacy_completions.push((run, completion.clone()));
+        }
+        let reopened = PactrunPersistence::open(&root).unwrap();
+        for (run, completion) in legacy_completions {
+            assert_eq!(finished(&reopened, run).hook_completion, completion);
         }
         for outcome in [
             RunOutcome::Cancelled,

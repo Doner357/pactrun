@@ -7,6 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -17,6 +20,9 @@ use crate::{
 const BUFFER_BYTES: usize = 64 * 1024;
 const STAGING_DIRECTORY: &str = "staging";
 const LEASE_NAME: &str = ".lease";
+
+#[cfg(test)]
+static CLEANUP_FAILURES: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 pub(crate) struct StagingSession {
@@ -60,6 +66,42 @@ impl ExecutionDirectory {
             .map_err(|error| StagingError::io("create execution file", error))?;
         Ok((path, file))
     }
+
+    /// Removes only this Run's execution tree. The owner session, its lease,
+    /// and operation-local staging files are outside this directory.
+    pub(crate) fn cleanup(&self) -> Result<(), StagingError> {
+        #[cfg(test)]
+        if CLEANUP_FAILURES
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(StagingError::io(
+                "clean execution workspace",
+                io::Error::other("injected cleanup failure"),
+            ));
+        }
+        if !self.root.exists() {
+            return Ok(());
+        }
+        let metadata = fs::symlink_metadata(&self.root)
+            .map_err(|error| StagingError::io("inspect execution cleanup root", error))?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(StagingError::Unsupported(
+                "execution cleanup root is not an owned directory".to_owned(),
+            ));
+        }
+        remove_session_contents(&self.root)
+            .map_err(|error| StagingError::io("clean execution workspace", error))?;
+        fs::remove_dir(&self.root)
+            .map_err(|error| StagingError::io("remove execution workspace", error))
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_execution_cleanup() {
+    CLEANUP_FAILURES.fetch_add(1, Ordering::AcqRel);
 }
 
 impl StagedFile {
@@ -207,6 +249,10 @@ impl StagingSession {
         ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
     }
 
+    pub(crate) fn storage_root(&self) -> &Path {
+        self.root.parent().unwrap_or(&self.root)
+    }
+
     pub(crate) fn create_execution_directory(
         &self,
         run: RunId,
@@ -243,6 +289,38 @@ impl StagingSession {
             path,
             byte_len: 0,
         })
+    }
+
+    /// Copies an owner-authorized Action output into operation-local staging.
+    /// The source is checked as a regular, non-link file before and after it
+    /// is opened; the destination is always a newly-created private file.
+    pub(crate) fn stage_action_output(&self, source: &Path) -> Result<StagedFile, StagingError> {
+        let metadata = fs::symlink_metadata(source)
+            .map_err(|error| StagingError::io("inspect Action output", error))?;
+        if !is_safe_regular_file(&metadata) {
+            return Err(StagingError::Unsupported(
+                "Action output is not a regular non-reparse file".to_owned(),
+            ));
+        }
+        let mut input =
+            File::open(source).map_err(|error| StagingError::io("open Action output", error))?;
+        let opened = input
+            .metadata()
+            .map_err(|error| StagingError::io("inspect opened Action output", error))?;
+        if !is_safe_regular_file(&opened) {
+            return Err(StagingError::Unsupported(
+                "Action output changed to a non-regular file".to_owned(),
+            ));
+        }
+        let staged = self.stage(&mut input, Some(MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1));
+        let after = fs::symlink_metadata(source)
+            .map_err(|error| StagingError::io("verify Action output", error))?;
+        if !is_safe_regular_file(&after) {
+            return Err(StagingError::Unsupported(
+                "Action output changed to a link or reparse point".to_owned(),
+            ));
+        }
+        staged.map(|(bytes, _)| bytes)
     }
 
     fn stage(
@@ -366,6 +444,63 @@ pub(crate) fn session_is_live(
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SessionOwnerProbe {
+    Live,
+    ConfirmedLoss,
+    Unknown,
+}
+
+/// Probes the recorded owner without using PID, timestamps, or host identity.
+/// A missing lease is inconclusive while its session directory still exists.
+pub(crate) fn probe_session_owner(
+    storage_root: &Path,
+    owner: &ExecutionOwnerSession,
+) -> SessionOwnerProbe {
+    let session = storage_root.join(STAGING_DIRECTORY).join(owner.as_str());
+    let metadata = match fs::symlink_metadata(&session) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return SessionOwnerProbe::ConfirmedLoss;
+        }
+        Err(_) => return SessionOwnerProbe::Unknown,
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return SessionOwnerProbe::Unknown;
+    }
+    let lease_path = session.join(LEASE_NAME);
+    let lease = match OpenOptions::new().read(true).write(true).open(&lease_path) {
+        Ok(lease) => lease,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return if session.exists() {
+                SessionOwnerProbe::Unknown
+            } else {
+                SessionOwnerProbe::ConfirmedLoss
+            };
+        }
+        Err(_) => return SessionOwnerProbe::Unknown,
+    };
+    match lease.try_lock() {
+        Ok(()) => {
+            let _ = File::unlock(&lease);
+            SessionOwnerProbe::ConfirmedLoss
+        }
+        Err(std::fs::TryLockError::WouldBlock) => SessionOwnerProbe::Live,
+        Err(std::fs::TryLockError::Error(_)) => SessionOwnerProbe::Unknown,
+    }
+}
+
+/// Best-effort cleanup after a confirmed owner loss. It is intentionally not
+/// used for an inconclusive lease probe.
+pub(crate) fn cleanup_lost_session(
+    storage_root: &Path,
+    owner: &ExecutionOwnerSession,
+) -> Result<(), StagingError> {
+    let session = storage_root.join(STAGING_DIRECTORY).join(owner.as_str());
+    cleanup_session_entry(&session)
+        .map_err(|error| StagingError::io("clean abandoned staging session", error))
+}
+
 /// Removes abandoned sessions whose lease is no longer held. The scan is
 /// housekeeping: a session that appears, locks its lease, or vanishes while
 /// the scan runs belongs to a concurrent live process, so per-entry failures
@@ -392,9 +527,9 @@ fn cleanup_session_entry(session: &Path) -> io::Result<()> {
     let lease = match OpenOptions::new().read(true).write(true).open(&lease_path) {
         Ok(lease) => lease,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            // Either a session still being created or an abandoned empty
-            // directory; removal succeeds only for the latter.
-            let _ = fs::remove_dir(session);
+            // A session directory without its lease is inconclusive. It may
+            // still be in the middle of creation, so do not remove it or
+            // infer owner loss from this observation.
             return Ok(());
         }
         Err(error) => return Err(error),
@@ -445,6 +580,21 @@ fn remove_file_force(path: &Path) -> io::Result<()> {
         }
         Err(error) => Err(error),
     }
+}
+
+fn is_safe_regular_file(metadata: &fs::Metadata) -> bool {
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return false;
+        }
+    }
+    true
 }
 
 fn checked_descendant(root: &Path, relative: &Path) -> Result<PathBuf, StagingError> {
@@ -671,5 +821,26 @@ runtime_content:
             .read_to_end(&mut committed)
             .unwrap();
         assert_eq!(committed, b"committed");
+    }
+
+    // Test-ID: PR-TEST-0111
+    // Verifies: PR-REQ-0060, PR-REQ-0277
+    #[test]
+    fn missing_lease_with_existing_session_is_inconclusive_and_not_cleaned() {
+        let (_temporary, root) = root();
+        let owner = ExecutionOwnerSession::parse(format!("session-{}", "1".repeat(32))).unwrap();
+        let session = root.join(STAGING_DIRECTORY).join(owner.as_str());
+        fs::create_dir(&session).unwrap();
+        fs::write(session.join("residue"), b"owner may still be creating").unwrap();
+
+        assert_eq!(
+            probe_session_owner(&root, &owner),
+            SessionOwnerProbe::Unknown
+        );
+        let opened = StagingSession::open(&root).unwrap();
+        assert!(session.is_dir());
+        assert!(session.join("residue").is_file());
+        drop(opened);
+        assert!(session.is_dir());
     }
 }

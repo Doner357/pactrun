@@ -28,7 +28,8 @@ is Frozen.
   integrated into `develop`. M3 Slice 3 transactional Run acceptance and
   Admission are integrated into `develop`. M3 Slice 4 Hook process launch,
   execution materialization, and the HookProtocolV1 runtime are integrated
-  into `develop`; the remaining M3 slices are not yet implemented.
+  into `develop`; the Slice 5 crate-private finalization substrate is present
+  on the current feature work but is not integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -61,8 +62,10 @@ is Frozen.
   non-Frozen and non-public.
 - The M3 Action execution scope and dependency review is complete. M3 is
   `In progress`, with Slices 1 through 4 integrated, including the Action Hook
-  runtime. Slices 5 and 6 remain to be implemented within the approved M3
-  baseline and existing Frozen contracts.
+  runtime. Slice 5's crate-private managed-output, finalization, cleanup,
+  owner-loss reconciliation, and inspection-data substrate is implemented on
+  the current feature work; Slice 6's user-visible inspection and spelling
+  remain within the approved baseline and existing Frozen contracts.
 
 ## Milestone states
 
@@ -363,9 +366,10 @@ Admission composition (`PR-REQ-0042`, `PR-REQ-0043`, `PR-REQ-0049`), the
 before-acknowledgment ordering of durable risk publication (`PR-REQ-0055`,
 `PR-REQ-0056`), the runtime terminal consequence (`PR-REQ-0057`), cancellation
 and failure ordering (`PR-REQ-0051`, `PR-REQ-0052`), owner-loss reconciliation
-(`PR-REQ-0060` through `PR-REQ-0062`, `PR-REQ-0064`), output publication
-(`PR-REQ-0073`, `PR-REQ-0144`), Run inspection, and human spelling remain owned
-by Slices 3 through 6 and keep their `Pending automated coverage` status.
+(`PR-REQ-0060` through `PR-REQ-0062`, `PR-REQ-0064`), and output publication
+(`PR-REQ-0073`, `PR-REQ-0144`) are now composed by the Slice 5 crate-private
+substrate. Run inspection and human spelling remain owned by Slice 6 and keep
+their `Pending automated coverage` status where not closed by this slice.
 
 The completed M3 Slice 3 composes acceptance and Admission over that substrate:
 a compiled Plan becomes a durable Run before any check, and one Admission
@@ -390,8 +394,8 @@ recorded: runtime-content verification re-hashes blobs under the SQLite write
 lock during Admission, and a Mutate Run whose owner process is lost after
 Admission holds the Instance's Mutate exclusivity until Slice 5 reconciliation
 finishes it as `Interrupted`. Process launch, Workspace materialization,
-HookProtocolV1 runtime, output publication, reconciliation, and human spelling
-remain owned by Slices 4 through 6.
+HookProtocolV1 runtime is owned by Slice 4; output publication and owner-loss
+reconciliation are composed by Slice 5; human spelling remains owned by Slice 6.
 
 The completed M3 Slice 4 executes an admitted Action once. The execution owner
 materializes `runtime/`, `workspace/`, `bindings/`, and `outputs/` beneath its
@@ -408,8 +412,9 @@ valid `complete` is still protocol-accepted but cannot override a locked
 `Cancelled` or `TimedOut`; deadlines and the termination grace are
 caller-supplied optional policy with no normative defaults; and pre-spawn
 materialization, listener, or launch failure is `Failed`, never `TimedOut`.
-Every post-Admission path leaves an owner-held continuation (`ReadyForSlice5`,
-`RetryProcessControl`, or `RetryDurableOperation`) in a volatile registry owned
+Every post-Admission path leaves an owner-held continuation (`ReadyToFinalize`,
+`RetryProcessControl`, `RetryDurableOperation`, or `RetryFinalization`) in a
+volatile registry owned
 by the live process, and terminal facts exist only after the supervised process
 tree has been observed terminated. The execution tree is ephemeral owner state:
 it is cleanup-eligible after confirmed owner loss and unpublished output slots
@@ -426,14 +431,38 @@ runtime coverage to `PR-REQ-0047` and to the Frozen protocol requirements
 the Compiler coverage of `PR-TEST-0081` and the Admission coverage of
 `PR-TEST-0090`. `PR-TEST-0097` covers the request, propagate, observe
 termination, finalize ordering and the `TimedOut` identity of `PR-REQ-0052`;
-the durable publication of the resulting `Cancelled` or `TimedOut` disposition
-is written by Slice 5. Managed Output publication, durable Run terminalization
-and inspection, consumption of owner continuations, owner-loss reconciliation,
-and human spelling remain owned by Slices 5 and 6.
+Slice 5 now supplies the durable publication of the resulting `Cancelled` or
+`TimedOut` disposition, managed-output publication, owner-continuation
+consumption, and explicit owner-loss reconciliation. User-visible Run
+inspection and human spelling remain owned by Slice 6.
+
+The completed M3 Slice 5 implementation composes the crate-private finalizer
+over PersistenceSchemaV4. After observed process-tree termination it stages the
+valid submitted output subset independently, attempts cleanup of only the
+current Run execution tree, records cleanup or publication errors without
+changing the established causal outcome, and publishes the Run terminal record
+and Artifacts in one transaction. Persistence failures retain an owner-held
+finalization retry; confirmed owner loss is reconciled explicitly by staging
+lease observation and finishes valid orphaned Runs as `Interrupted` without
+replaying or salvaging output slots. The internal substrate also exposes
+ordered Run listing/loading and a single-snapshot Run-plus-current-recovery-guard
+inspection substrate, artifact streaming, and independent artifact expiry; it
+does not expose user-visible Run inspection.
+
+`PR-TEST-0104`, `PR-TEST-0105`, `PR-TEST-0106`, `PR-TEST-0107`,
+`PR-TEST-0109`, `PR-TEST-0110`, `PR-TEST-0111`, `PR-TEST-0112`, and
+`PR-TEST-0113` provide focused coverage for the running-state matrix,
+corruption fail-closed behavior, output subset publication, late completion,
+publication failure ordering, cleanup residue, owner/session lease probing,
+Action orphan reconciliation, and the production Hook text finalization
+boundary. The additional inspection snapshot test is supporting coverage for
+the crate-private substrate and has no user-visible inspection verification
+edge. `PR-REQ-0097` remains Pending automated coverage until Slice 6.
 
 M3 Slice 4, including the Windows launch correction, is closed and integrated
-into `develop`. Slice 5 is the next ordered implementation target under the
-existing M3 approval baseline; the overall M3 milestone remains `In progress`.
+into `develop`. Slice 5's crate-private finalization substrate is complete on
+the current feature work but is not integrated into `develop`; the overall M3
+milestone remains `In progress` and Slice 6 remains pending.
 
 The Windows launch correction uses the narrow `pactrun-windows-ntfs` adapter:
 the exact admitted path is `lpApplicationName`, the primary thread starts

@@ -226,6 +226,11 @@ An incompatible change to `PactrunErrorRefV1`, owner/code grammar, identity
 meaning, the closed category vocabulary, or catalog structural semantics
 requires taxonomy version evolution. A new owner or code alone does not.
 
+M3 Slice 5 appends the execution-owned references
+`execution.managed_output_publication_failed` from PR-REQ-0281 and
+`execution.workspace_cleanup_failed` from PR-REQ-0282. These references do not
+reclassify Hook-owned completion codes or add a synthetic Hook-failure code.
+
 **Verification: PR-TEST-0034, PR-TEST-0036.**
 
 ### PR-REQ-0223 - Error identity is not outcome or precedence
@@ -240,7 +245,8 @@ translated into a Pactrun-owned identity.
 Resolution and compilation failures do not create a Run. The established
 `admission.plan_invalidated` error occurs after durable Run creation. Catalog
 fixtures verify only these semantic mappings; actual Resolver, Admission, Run
-publication, persistence, and recovery behavior remain later integration work.
+publication, persistence, and recovery behavior are owned by their runtime
+implementations, including the current crate-private M3 Slice 5 substrate.
 
 `PrimaryFailure` ordering is workflow-causal ordering under PR-REQ-0051, not a
 global validation-precedence contract. Negative fixtures SHOULD isolate one

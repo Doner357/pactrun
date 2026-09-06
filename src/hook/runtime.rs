@@ -25,9 +25,9 @@ use crate::{
 };
 
 use super::{
-    ActionCancellation, DurableOperationRetry, FailureKind, HookRuntimePolicy, OutcomeWinner,
-    OwnerContinuation, PendingDurableOperation, ProcessControlOperation, ProcessControlRetry,
-    RuntimeTerminalFacts,
+    ActionCancellation, DurableOperationRetry, FailureKind, FinalizationState, HookRuntimePolicy,
+    OutcomeWinner, OwnerContinuation, PendingDurableOperation, ProcessControlOperation,
+    ProcessControlRetry, RuntimeTerminalFacts,
     materialize::MaterializedAction,
     outcome_and_failure,
     platform::{ProcessSupervisor, ProtocolListener},
@@ -66,6 +66,7 @@ pub(crate) struct LiveExecution {
     winner: OutcomeArbiter,
     hook_completion: Option<HookCompletionRecord>,
     completion_accepted: bool,
+    submitted_handles: Vec<String>,
     exit_status: Option<ExitStatus>,
     startup_deadline: Option<Instant>,
     action_deadline: Option<Instant>,
@@ -130,15 +131,17 @@ pub(super) fn execute_registered(
     let run = admitted.run();
     let materialized = match MaterializedAction::create(persistence, staging, &admitted) {
         Ok(materialized) => materialized,
-        Err(_) => return ready_failure(run, FailureKind::SessionMaterialization, Vec::new()),
+        Err(_) => return ready_failure(run, FailureKind::SessionMaterialization, Vec::new(), None),
     };
     let listener = match ProtocolListener::bind() {
         Ok(listener) => listener,
         Err(_) => {
+            let (execution, outputs) = materialized.into_execution();
             return ready_failure(
                 run,
                 FailureKind::ProtocolTransport,
-                materialized.into_output_slots(),
+                outputs,
+                Some(execution),
             );
         }
     };
@@ -150,7 +153,8 @@ pub(super) fn execute_registered(
     ) {
         Ok(supervisor) => supervisor,
         Err(_) => {
-            return ready_failure(run, FailureKind::Launch, materialized.into_output_slots());
+            let (execution, outputs) = materialized.into_execution();
+            return ready_failure(run, FailureKind::Launch, outputs, Some(execution));
         }
     };
     let started = Instant::now();
@@ -169,6 +173,7 @@ pub(super) fn execute_registered(
             winner: OutcomeArbiter::default(),
             hook_completion: None,
             completion_accepted: false,
+            submitted_handles: Vec::new(),
             exit_status: None,
             startup_deadline: policy.startup_timeout.map(|timeout| started + timeout),
             action_deadline: policy.action_timeout.map(|timeout| started + timeout),
@@ -276,6 +281,20 @@ fn handle_wire_event(
 ) -> Flow {
     match event {
         WireEvent::Message(message) => {
+            if let super::protocol::HookMessage::Complete(completion) = &message
+                && completion.status == HookCompletionStatus::Success
+                && live.state.risk() == RecoveryRiskState::Open
+            {
+                // Preserve the Hook-owned structural fact for the terminal
+                // recovery consequence, but reject the completion at the
+                // Frozen protocol boundary and publish no submitted handles.
+                live.hook_completion = Some(HookCompletionRecord {
+                    status: completion.status,
+                    code: completion.code.clone(),
+                    message: completion.message.clone(),
+                });
+                live.submitted_handles.clear();
+            }
             let step = match live.state.accept(message) {
                 Ok(step) => step,
                 Err(failure) => return Flow::Fail(FailureKind::Protocol(failure)),
@@ -334,6 +353,7 @@ fn apply_step(
                 return Flow::Fail(FailureKind::ProtocolTransport);
             }
             live.completion_accepted = true;
+            live.submitted_handles = completion.produced_outputs.clone();
             live.hook_completion = Some(HookCompletionRecord {
                 status: completion.status,
                 code: completion.code,
@@ -434,7 +454,8 @@ pub(super) fn resume_registered(
     continuation: OwnerContinuation,
 ) -> OwnerContinuation {
     match continuation {
-        OwnerContinuation::ReadyForSlice5(facts) => OwnerContinuation::ReadyForSlice5(facts),
+        OwnerContinuation::ReadyToFinalize(state) => OwnerContinuation::ReadyToFinalize(state),
+        OwnerContinuation::RetryFinalization(state) => OwnerContinuation::RetryFinalization(state),
         OwnerContinuation::RetryProcessControl(retry) => {
             resume_process_control(risk_persistence, retry)
         }
@@ -574,14 +595,24 @@ fn finish_after_exit(
         .take()
         .expect("process exit establishes an outcome winner");
     let (outcome, primary_failure) = outcome_and_failure(winner);
-    OwnerContinuation::ReadyForSlice5(RuntimeTerminalFacts {
-        run: live.run,
-        outcome,
-        primary_failure,
-        hook_completion: live.hook_completion,
-        completion_accepted: live.completion_accepted,
-        process_terminated: true,
-        outputs: live.materialized.into_output_slots(),
+    let submitted_outputs = live.materialized.submitted_outputs(&live.submitted_handles);
+    let (execution, outputs) = live.materialized.into_execution();
+    OwnerContinuation::ReadyToFinalize(FinalizationState {
+        facts: RuntimeTerminalFacts {
+            run: live.run,
+            outcome,
+            primary_failure,
+            hook_completion: live.hook_completion,
+            completion_accepted: live.completion_accepted,
+            process_terminated: true,
+            submitted_outputs,
+            outputs,
+            execution: Some(execution),
+        },
+        prepared: None,
+        cleanup_attempted: false,
+        publication_failed: false,
+        cleanup_failed: false,
     })
 }
 

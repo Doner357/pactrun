@@ -38,11 +38,11 @@ non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 implementation is in progress: Slices 1 through 4 are integrated, and Slice
-5 is the next ordered implementation target. The remaining managed output,
-Run finalization, recovery reconciliation, and human CLI work is not yet
-complete, and exact human spelling remains open until it is closed by a
-requirement.
+M3 implementation is in progress: Slices 1 through 4 are integrated, and the
+Slice 5 crate-private managed-output, Run finalization, cleanup, owner-loss
+reconciliation, and inspection-data substrate is implemented on the feature
+work. User-visible Run inspection, exact human spelling, and `PR-REQ-0097`
+verification remain deferred to Slice 6.
 
 ## Implementation decisions
 
@@ -234,9 +234,14 @@ Runtime integration remains Phase 3 and later work.
 M3 is approved and ordered by the linked Action execution baseline. The
 normative execution, Hook Protocol, Run, pin, recovery-risk, launcher, and
 sensitive-data contracts are sufficient to begin bounded internal
-implementation. The exact persistence encoding and process mechanisms are
-implementation choices. Exact new CLI spelling remains externally observable
-and must be closed by a requirement before M3 can be marked complete.
+implementation. Slice 5 now provides owner-held finalization, atomic eligible
+Action output publication, execution-workspace cleanup, explicit confirmed
+owner-loss reconciliation, and crate-private Run inspection/data access over
+PersistenceSchemaV4. It does not expose user-visible Run inspection or close
+`PR-REQ-0097`; those remain Slice 6 work. The exact persistence encoding and
+process mechanisms are implementation choices. Exact new CLI spelling remains
+externally observable and must be closed by a requirement before M3 can be
+marked complete.
 
 ### RevisionCoreV1 authoring spelling
 

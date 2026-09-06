@@ -15,9 +15,11 @@ ambiguous.
 M3 was approved as the next implementation milestone. That approval permitted
 bounded implementation of Action execution on an isolated feature branch. As of
 2026-09-06, M3 implementation is in progress: Slices 1 through 4 are
-integrated, Slice 5 is the next ordered target, and the milestone is not yet
-complete. Exact human and machine interface spelling remains subject to its
-requirement-bearing specifications.
+integrated, and Slice 5's crate-private managed-output, finalization, cleanup,
+owner-loss reconciliation, and inspection-data substrate is implemented on the
+current feature work. User-visible Run inspection, exact human and machine
+interface spelling, and `PR-REQ-0097` verification remain deferred to Slice 6;
+the milestone is not yet complete.
 
 ## Approved managed-execution path
 
@@ -39,7 +41,7 @@ requirement-bearing specifications.
 | Protocol | Production execution uses the exact Frozen HookProtocolV1 framing, strict message profile, version confirmation, ordering, completion, cancellation, and error state machine. | [PR-REQ-0204](../package-contracts/hook-protocol-v1.md#pr-req-0204---candidate-and-frozen-protocol-contract) through [PR-REQ-0218](../package-contracts/hook-protocol-v1.md#pr-req-0218---authority-is-not-isolation-and-verification-is-layered), [PR-REQ-0280](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0280---hook-protocol-runtime-transport-discovery) |
 | Session authority | Construct only the exact Action Session: typed parameters, execution Workspace, active pinned bindings, authorized Action output slots, and the declared terminal contract. Authority is Pactrun-mediated capability, not an OS sandbox claim. | [PR-REQ-0169](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0169---session-authority), [PR-REQ-0170](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0170---session-authority-is-not-host-isolation), [PR-REQ-0210](../package-contracts/hook-protocol-v1.md#pr-req-0210---workspace-and-authority-boundaries), [PR-REQ-0211](../package-contracts/hook-protocol-v1.md#pr-req-0211---operation-specific-binding-visibility) |
 | Terminal I/O | Keep terminal streams separate from the protocol stream and enforce the declared `none | output | interactive` contract. Structured output never wraps raw or interactive Hook channels. | [PR-REQ-0172](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0172---terminal-and-protocol-channels), [PR-REQ-0120](../product-behavior/command-and-output-reference.md#pr-req-0120---structured-output-boundary) |
-| Outputs | Preallocate only declared Action output slots. A completion may submit a valid subset; managed publication and Run Artifact retention remain Pactrun-owned after protocol acceptance. | [PR-REQ-0212](../package-contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion), [PR-REQ-0073](./resources-and-versioning.md#pr-req-0073---run-artifact-and-workspace-lifetime) |
+| Outputs | Preallocate only declared Action output slots. A completion may submit a valid subset; only successfully staged and atomically committed submissions become Run-owned Artifacts. | [PR-REQ-0212](../package-contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion), [PR-REQ-0281](../product-behavior/actions-plans-and-runs.md#pr-req-0281---atomic-managed-output-publication-and-late-completion) |
 | Sensitive values | Do not persist sensitive parameters, Secret bytes, revealing digests, or default full interactive transcripts in Runs or ordinary diagnostics. | [PR-REQ-0098](../product-behavior/actions-plans-and-runs.md#pr-req-0098---sensitive-run-data), [PR-REQ-0135](../package-contracts/actions-inputs-and-parameters.md#pr-req-0135---sensitive-parameter-channel), [PR-REQ-0214](../package-contracts/hook-protocol-v1.md#pr-req-0214---structured-hook-authored-text) |
 
 ## Action recovery required in M3
@@ -86,6 +88,12 @@ M3 implementation is ordered as these reviewable slices:
    recovery reconciliation, and end-to-end positive and negative tests;
 6. the minimal human invocation, plan, Run inspection, cancellation, sensitive
    parameter, and manual-recovery spellings required to complete M3.
+
+Slice 5 closes only the internal substrate for item 5: owner-held continuation
+advancement, atomic eligible-output publication, execution-workspace cleanup,
+and explicit confirmed-owner-loss reconciliation, together with crate-private
+Run inspection data access. It does not expose the human Run inspection surface
+or complete `PR-REQ-0097`; Slice 6 remains pending.
 
 The internal persistence encoding and platform mechanisms remain implementation
 decisions, but they must preserve the linked durable and crash-visible meaning.

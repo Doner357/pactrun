@@ -18,11 +18,27 @@ It MUST NOT be used or reinterpreted as persistent `ServiceStorage`.
 
 ### PR-REQ-0144 - Run Artifact
 
-An ordinary Action's declared managed output MUST become a Run Artifact owned by
-that Run. The initial product scope MUST NOT expose Artifact as a global
-top-level resource taxonomy.
+An ordinary Action's managed-output declarations define the maximum authorized
+output vocabulary. Declaration alone MUST NOT require submission or publication
+of an output. An Action completion MAY submit a valid subset, including the
+empty set, as defined by [PR-REQ-0212](./hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion).
 
-**Verification: Pending automated coverage.**
+Only outputs validly submitted through a protocol-accepted completion and
+successfully published by Pactrun's managed-output commit become Run Artifacts.
+Pactrun MUST represent each such successfully published output as a Run
+Artifact owned by that Run.
+
+Pactrun MUST NOT create a Run Artifact merely because an output was declared, a
+slot was preallocated, or bytes were written to that slot. Unsubmitted outputs,
+outputs from an unaccepted completion, and outputs whose managed publication
+failed MUST NOT become Run Artifacts.
+
+Publication eligibility and atomic publication behavior are defined by
+[PR-REQ-0281](../product-behavior/actions-plans-and-runs.md#pr-req-0281---atomic-managed-output-publication-and-late-completion).
+The initial product scope MUST NOT expose Artifact as a global top-level
+resource taxonomy.
+
+**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0109.**
 
 ### PR-REQ-0145 - SnapshotCandidate
 

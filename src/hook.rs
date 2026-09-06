@@ -28,11 +28,12 @@ use std::sync::atomic::AtomicUsize;
 use crate::{
     domain::{
         ActionPlanStep, HookCompletionRecord, ManagedOutputIdentity, PactrunErrorRefV1,
-        RecoveryRiskState, RunFailedStep, RunFailureRecord, RunId, RunOutcome, RunPrimaryFailure,
+        RecoveryRiskState, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunOutcome,
+        RunPrimaryFailure,
     },
     executor::AdmittedExecution,
-    managed_data::StagingSession,
-    persistence::PactrunPersistence,
+    managed_data::{ExecutionDirectory, StagedFile, StagingSession},
+    persistence::{PactrunPersistence, PersistenceError, RunArtifactWrite},
 };
 
 use self::runtime::LiveExecution;
@@ -61,6 +62,7 @@ impl ActionCancellation {
 
 pub(crate) struct LiveOutputSlot {
     pub(crate) output: ManagedOutputIdentity,
+    pub(crate) handle: String,
     pub(crate) path: PathBuf,
 }
 
@@ -71,7 +73,9 @@ pub(crate) struct RuntimeTerminalFacts {
     pub(crate) hook_completion: Option<HookCompletionRecord>,
     pub(crate) completion_accepted: bool,
     pub(crate) process_terminated: bool,
+    pub(crate) submitted_outputs: Vec<ManagedOutputIdentity>,
     pub(crate) outputs: Vec<LiveOutputSlot>,
+    pub(crate) execution: Option<ExecutionDirectory>,
 }
 
 impl fmt::Debug for LiveOutputSlot {
@@ -94,16 +98,59 @@ impl fmt::Debug for RuntimeTerminalFacts {
             .field("hook_completion", &self.hook_completion.is_some())
             .field("completion_accepted", &self.completion_accepted)
             .field("process_terminated", &self.process_terminated)
+            .field("submitted_outputs", &self.submitted_outputs)
             .field("outputs", &self.outputs)
+            .field(
+                "execution",
+                &self.execution.as_ref().map(|_| "<owner-ephemeral>"),
+            )
+            .finish()
+    }
+}
+
+/// Owner-held terminal facts and independently staged output bytes. This state
+/// remains in the continuation registry until a durable terminal transaction
+/// is confirmed.
+pub(crate) struct FinalizationState {
+    pub(super) facts: RuntimeTerminalFacts,
+    pub(super) prepared: Option<Vec<PreparedOutput>>,
+    pub(super) cleanup_attempted: bool,
+    pub(super) publication_failed: bool,
+    pub(super) cleanup_failed: bool,
+}
+
+pub(super) struct PreparedOutput {
+    output: ManagedOutputIdentity,
+    bytes: StagedFile,
+}
+
+impl fmt::Debug for PreparedOutput {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PreparedOutput")
+            .field("output", &self.output)
+            .field("bytes", &"<owner-private-staging>")
+            .finish()
+    }
+}
+
+impl fmt::Debug for FinalizationState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("FinalizationState")
+            .field("facts", &self.facts)
+            .field("prepared", &self.prepared.as_ref().map(Vec::len))
+            .field("cleanup_attempted", &self.cleanup_attempted)
             .finish()
     }
 }
 
 #[derive(Debug)]
 pub(crate) enum OwnerContinuation {
-    ReadyForSlice5(RuntimeTerminalFacts),
+    ReadyToFinalize(FinalizationState),
     RetryProcessControl(ProcessControlRetry),
     RetryDurableOperation(DurableOperationRetry),
+    RetryFinalization(FinalizationState),
 }
 
 #[derive(Debug)]
@@ -186,9 +233,10 @@ impl OwnerContinuationRegistry {
             .get(&run)
         {
             Some(RegistryEntry::Stable(continuation)) => Some(match **continuation {
-                OwnerContinuation::ReadyForSlice5(_) => "ready",
+                OwnerContinuation::ReadyToFinalize(_) => "ready",
                 OwnerContinuation::RetryProcessControl(_) => "process",
                 OwnerContinuation::RetryDurableOperation(_) => "durable",
+                OwnerContinuation::RetryFinalization(_) => "finalization",
             }),
             _ => None,
         }
@@ -360,6 +408,7 @@ pub(crate) fn execute_admitted_action_with_risk_failures(
 
 pub(crate) fn resume_owner_continuation(
     persistence: &PactrunPersistence,
+    _staging: &StagingSession,
     mut guard: ContinuationGuard<'_>,
 ) {
     let continuation = guard
@@ -375,20 +424,247 @@ pub(crate) fn resume_owner_continuation(
         .insert(guard.run, RegistryEntry::Stable(Box::new(next)));
 }
 
+/// Advances an owner-held continuation through finalization. A successful
+/// return means the durable Finished record is committed and the continuation
+/// has been consumed. On persistence failure the continuation is put back
+/// before the error is returned.
+pub(crate) fn advance_owner_continuation(
+    persistence: &PactrunPersistence,
+    staging: &StagingSession,
+    mut guard: ContinuationGuard<'_>,
+) -> Result<bool, PersistenceError> {
+    let continuation = guard
+        .continuation
+        .take()
+        .expect("continuation guard has not completed");
+    let continuation = match continuation {
+        OwnerContinuation::ReadyToFinalize(state) => OwnerContinuation::ReadyToFinalize(state),
+        OwnerContinuation::RetryFinalization(state) => OwnerContinuation::RetryFinalization(state),
+        other => runtime::resume_registered(persistence, other),
+    };
+    let (published, next) = match continuation {
+        OwnerContinuation::ReadyToFinalize(state) | OwnerContinuation::RetryFinalization(state) => {
+            match finalize_owner_state(persistence, staging, state) {
+                Ok(FinalizationAdvance::Published) => (true, None),
+                Ok(FinalizationAdvance::Retained(state)) => {
+                    (false, Some(OwnerContinuation::RetryFinalization(*state)))
+                }
+                Err(error) => {
+                    let (state, error) = *error;
+                    guard
+                        .registry
+                        .entries
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner())
+                        .insert(
+                            guard.run,
+                            RegistryEntry::Stable(Box::new(OwnerContinuation::RetryFinalization(
+                                state,
+                            ))),
+                        );
+                    return Err(error);
+                }
+            }
+        }
+        other => (false, Some(other)),
+    };
+    if let Some(next) = next {
+        guard
+            .registry
+            .entries
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .insert(guard.run, RegistryEntry::Stable(Box::new(next)));
+    } else {
+        guard
+            .registry
+            .entries
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .remove(&guard.run);
+    }
+    guard.continuation = None;
+    Ok(published)
+}
+
+enum FinalizationAdvance {
+    Published,
+    Retained(Box<FinalizationState>),
+}
+
+fn finalize_owner_state(
+    persistence: &PactrunPersistence,
+    staging: &StagingSession,
+    mut state: FinalizationState,
+) -> Result<FinalizationAdvance, Box<(FinalizationState, PersistenceError)>> {
+    if !state.facts.process_terminated {
+        return Err(Box::new((
+            state,
+            PersistenceError::InvalidRunTransition(
+                "terminal facts require observed process termination".to_owned(),
+            ),
+        )));
+    }
+    if state.prepared.is_none() {
+        state.prepared = Some(Vec::new());
+        if state.facts.completion_accepted && !state.facts.submitted_outputs.is_empty() {
+            let mut slots = state
+                .facts
+                .outputs
+                .iter()
+                .map(|slot| (slot.output.clone(), slot.path.clone()))
+                .collect::<BTreeMap<_, _>>();
+            let mut prepared = Vec::new();
+            for output in &state.facts.submitted_outputs {
+                let Some(path) = slots.remove(output) else {
+                    state.publication_failed = true;
+                    prepared.clear();
+                    break;
+                };
+                match staging.stage_action_output(&path) {
+                    Ok(bytes) => prepared.push(PreparedOutput {
+                        output: output.clone(),
+                        bytes,
+                    }),
+                    Err(_) => {
+                        state.publication_failed = true;
+                        prepared.clear();
+                        break;
+                    }
+                }
+            }
+            if !state.publication_failed {
+                prepared.sort_by(|left, right| left.output.cmp(&right.output));
+                state.prepared = Some(prepared);
+            }
+        }
+    }
+
+    if !state.cleanup_attempted {
+        state.cleanup_attempted = true;
+        if let Some(execution) = state.facts.execution.as_ref()
+            && execution.cleanup().is_err()
+        {
+            state.cleanup_failed = true;
+        }
+    }
+
+    let prepared = state
+        .prepared
+        .as_ref()
+        .expect("preparation state initialized");
+    let mut readers = Vec::new();
+    for artifact in prepared.iter() {
+        match artifact.bytes.try_clone_reader() {
+            Ok(reader) => readers.push(reader),
+            Err(_) => {
+                state.publication_failed = true;
+                state.prepared = Some(Vec::new());
+                break;
+            }
+        }
+    }
+    let finish = finish_for_state(&state);
+    let prepared = state
+        .prepared
+        .as_ref()
+        .expect("preparation state initialized");
+    let mut artifacts = prepared
+        .iter()
+        .zip(readers.iter_mut())
+        .map(|(artifact, reader)| RunArtifactWrite {
+            output: artifact.output.clone(),
+            byte_len: artifact.bytes.byte_len(),
+            reader,
+        })
+        .collect::<Vec<_>>();
+    let owner = staging.owner();
+    match persistence.finish_run_owned(
+        &owner,
+        state.facts.run,
+        &finish,
+        &state.facts.submitted_outputs,
+        &mut artifacts,
+    ) {
+        Ok(_) => Ok(FinalizationAdvance::Published),
+        Err(error) => Err(Box::new((state, error))),
+    }
+}
+
+fn finish_for_state(state: &FinalizationState) -> RunFinish {
+    let mut finish = RunFinish {
+        outcome: state.facts.outcome,
+        primary_failure: state.facts.primary_failure.clone(),
+        secondary_failures: Vec::new(),
+        hook_completion: state
+            .facts
+            .hook_completion
+            .as_ref()
+            .map(structural_hook_completion),
+    };
+    if state.publication_failed {
+        let failure = safe_execution_failure(
+            "managed_output_publication_failed",
+            "Managed Action output publication failed",
+        );
+        if finish.primary_failure.is_none() && finish.outcome == RunOutcome::Succeeded {
+            finish.outcome = RunOutcome::Failed;
+            finish.primary_failure = Some(RunPrimaryFailure {
+                failure,
+                step: RunFailedStep::Plan(ActionPlanStep::PublishDeclaredOutputs),
+            });
+        } else {
+            finish.secondary_failures.push(failure);
+        }
+    }
+    if state.cleanup_failed {
+        finish.secondary_failures.push(safe_execution_failure(
+            "workspace_cleanup_failed",
+            "Action execution workspace cleanup failed",
+        ));
+    }
+    finish
+}
+
+fn structural_hook_completion(completion: &HookCompletionRecord) -> HookCompletionRecord {
+    HookCompletionRecord {
+        status: completion.status,
+        code: None,
+        message: None,
+    }
+}
+
+fn safe_execution_failure(code: &'static str, message: &'static str) -> RunFailureRecord {
+    RunFailureRecord {
+        error: PactrunErrorRefV1::new("execution", code)
+            .expect("Slice 5 execution error identities are valid"),
+        message: message.to_owned(),
+    }
+}
+
 pub(super) fn ready_failure(
     run: RunId,
     failure: FailureKind,
     outputs: Vec<LiveOutputSlot>,
+    execution: Option<ExecutionDirectory>,
 ) -> OwnerContinuation {
     let (_, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
-    OwnerContinuation::ReadyForSlice5(RuntimeTerminalFacts {
-        run,
-        outcome: RunOutcome::Failed,
-        primary_failure,
-        hook_completion: None,
-        completion_accepted: false,
-        process_terminated: true,
-        outputs,
+    OwnerContinuation::ReadyToFinalize(FinalizationState {
+        facts: RuntimeTerminalFacts {
+            run,
+            outcome: RunOutcome::Failed,
+            primary_failure,
+            hook_completion: None,
+            completion_accepted: false,
+            process_terminated: true,
+            submitted_outputs: Vec::new(),
+            outputs,
+            execution,
+        },
+        prepared: None,
+        cleanup_attempted: false,
+        publication_failed: false,
+        cleanup_failed: false,
     })
 }
 

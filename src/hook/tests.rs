@@ -28,12 +28,12 @@ use crate::{
     application::{InputAcquisition, PactrunApplication},
     domain::{
         ActionIdentity, ActionPlanStep, ActionRunBoundary, HookCompletionStatus, InputIdentity,
-        InstanceName, InstanceView, ParameterIdentity, ParameterTextSource, RawParameterInput,
-        RecoveryRiskState, RevisionMetadataMutationBatch, RunFailedStep, RunId, RunOutcome,
-        RunState,
+        InstanceName, InstanceView, ManagedOutputIdentity, ParameterIdentity, ParameterTextSource,
+        RawParameterInput, RecoveryRiskState, RevisionMetadataMutationBatch, RunFailedStep, RunId,
+        RunOutcome, RunState,
     },
     executor::{AdmissionOptions, AdmittedExecution},
-    managed_data::session_is_live,
+    managed_data::{fail_next_execution_cleanup, session_is_live},
     persistence::PactrunPersistence,
 };
 
@@ -202,9 +202,23 @@ fn launcher_command() -> &'static str {
 }
 
 fn direct_action(id: &str, terminal: &str, extra_arg: Option<&str>) -> String {
+    direct_action_with_outputs(id, terminal, extra_arg, &["report"])
+}
+
+fn direct_action_with_outputs(
+    id: &str,
+    terminal: &str,
+    extra_arg: Option<&str>,
+    output_ids: &[&str],
+) -> String {
     let extra = extra_arg
         .map(|arg| format!(", \"{arg}\""))
         .unwrap_or_default();
+    let outputs = output_ids
+        .iter()
+        .map(|id| format!("{{ id: {id} }}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     format!(
         r#"    - id: {id}
       access: observe
@@ -218,7 +232,7 @@ fn direct_action(id: &str, terminal: &str, extra_arg: Option<&str>) -> String {
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "{WORKER_TEST}", "--nocapture", "--test-threads=1", "{ARGUMENT_TAIL}"{extra}]
         io: {{ terminal: {terminal} }}
-      outputs: [{{ id: report }}]
+      outputs: [{outputs}]
 "#
     )
 }
@@ -226,6 +240,12 @@ fn direct_action(id: &str, terminal: &str, extra_arg: Option<&str>) -> String {
 fn manifest() -> String {
     let mut actions = String::new();
     actions.push_str(&direct_action("direct", "none", None));
+    actions.push_str(&direct_action_with_outputs(
+        "output_subset",
+        "none",
+        None,
+        &["report", "secondary"],
+    ));
     actions.push_str(&direct_action("output_terminal", "output", None));
     actions.push_str(&direct_action("interactive_terminal", "interactive", None));
     actions.push_str(&direct_action(
@@ -319,7 +339,7 @@ fn take_facts(application: &PactrunApplication, run: RunId) -> RuntimeTerminalFa
         .take_owner_continuation(run)
         .expect("Run has an owner continuation");
     match guard.complete() {
-        OwnerContinuation::ReadyForSlice5(facts) => facts,
+        OwnerContinuation::ReadyToFinalize(state) => state.facts,
         other => panic!("expected terminal facts, found {other:?}"),
     }
 }
@@ -563,7 +583,7 @@ impl HookWorker {
                 self.complete(json!({"status": "success", "produced_outputs": []}));
                 self.expect_accepted();
             }
-            "output" => {
+            "output" | "output_subset" => {
                 fs::write(
                     report["staged_path"].as_str().unwrap(),
                     b"unpublished-output",
@@ -577,6 +597,24 @@ impl HookWorker {
                     "status": "failure",
                     "code": "service_failed",
                     "message": "diagnostic artifact retained",
+                    "produced_outputs": [],
+                }));
+                self.expect_accepted();
+            }
+            "finalization_text_marker" => {
+                write_frame(
+                    &mut self.stream,
+                    &json!({
+                        "type": "diagnostic",
+                        "severity": "warning",
+                        "code": "hook_diagnostic_marker",
+                        "message": "slice5_hook_diagnostic_marker",
+                    }),
+                );
+                self.complete(json!({
+                    "status": "failure",
+                    "code": "hook_completion_marker",
+                    "message": "slice5_hook_completion_marker",
                     "produced_outputs": [],
                 }));
                 self.expect_accepted();
@@ -647,6 +685,24 @@ impl HookWorker {
                     "status": "failure",
                     "code": "cancelled",
                     "produced_outputs": [],
+                }));
+                self.expect_accepted();
+                fs::write(marker_variant(&marker, "accepted"), b"").unwrap();
+            }
+            "cancel_then_output" => {
+                fs::write(marker_variant(&marker, "ready"), b"").unwrap();
+                let cancel = self.expect_cancel();
+                fs::write(
+                    marker_variant(&marker, "cancel"),
+                    cancel["reason"].as_str().unwrap(),
+                )
+                .unwrap();
+                self.cancel_ack(&cancel);
+                fs::write(report["staged_path"].as_str().unwrap(), b"late-output").unwrap();
+                self.complete(json!({
+                    "status": "failure",
+                    "code": "cancelled",
+                    "produced_outputs": [report_handle],
                 }));
                 self.expect_accepted();
                 fs::write(marker_variant(&marker, "accepted"), b"").unwrap();
@@ -1715,6 +1771,8 @@ fn terminal_modes_keep_the_protocol_off_stdio() {
     }
 }
 
+// Supporting runtime non-retention coverage for the production finalization
+// boundary is provided by PR-TEST-0113 below.
 // Test-ID: PR-TEST-0099
 // Verifies: PR-REQ-0098, PR-REQ-0280
 #[test]
@@ -1798,6 +1856,85 @@ fn sensitive_values_endpoints_and_raw_frames_are_not_retained() {
             !contains(&database, needle),
             "durable storage retains {:?}",
             String::from_utf8_lossy(needle)
+        );
+    }
+}
+
+// Test-ID: PR-TEST-0113
+// Verifies: PR-REQ-0283
+#[test]
+fn production_finalization_drops_hook_text_but_keeps_structural_status() {
+    const CODE_MARKER: &str = "hook_completion_marker";
+    const COMPLETION_MESSAGE_MARKER: &str = "slice5_hook_completion_marker";
+    const DIAGNOSTIC_MARKER: &str = "slice5_hook_diagnostic_marker";
+
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("finalization-text-marker");
+    let admitted = fixture.admit("direct", "finalization_text_marker", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+
+    let storage = fixture.storage.clone();
+    drop(fixture.application);
+    let reopened = persistence(&storage);
+    let view = reopened.load_run(run).unwrap().unwrap();
+    let RunState::Finished(outcome) = &view.state else {
+        panic!("expected a Finished Run");
+    };
+    let completion = outcome
+        .hook_completion
+        .as_ref()
+        .expect("production Run retains Hook completion status");
+    assert_eq!(completion.status, HookCompletionStatus::Failure);
+    assert!(completion.code.is_none());
+    assert!(completion.message.is_none());
+
+    let debug = format!("{view:?}");
+    for marker in [CODE_MARKER, COMPLETION_MESSAGE_MARKER, DIAGNOSTIC_MARKER] {
+        assert!(!debug.contains(marker), "Run Debug output retains {marker}");
+    }
+    let outcome_debug = format!("{outcome:?}");
+    for marker in [CODE_MARKER, COMPLETION_MESSAGE_MARKER, DIAGNOSTIC_MARKER] {
+        assert!(
+            !outcome_debug.contains(marker),
+            "Run diagnostics retain {marker}"
+        );
+    }
+
+    let database = rusqlite::Connection::open(storage.join("database/pactrun.sqlite3")).unwrap();
+    let (status, code_present, code, message_present, message): (i64, i64, Vec<u8>, i64, Vec<u8>) =
+        database
+            .query_row(
+                "SELECT status_rank, code_present, code_utf8, message_present, message_utf8 \
+                 FROM run_hook_completions WHERE run_id=?1",
+                [run.as_bytes().as_slice()],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+    assert_eq!(status, HookCompletionStatus::Failure.rank());
+    assert_eq!(code_present, 0);
+    assert!(code.is_empty());
+    assert_eq!(message_present, 0);
+    assert!(message.is_empty());
+
+    let durable = database_bytes(&storage);
+    for marker in [CODE_MARKER, COMPLETION_MESSAGE_MARKER, DIAGNOSTIC_MARKER] {
+        assert!(
+            !contains(&durable, marker.as_bytes()),
+            "durable Run persistence retains {marker}"
         );
     }
 }
@@ -1893,4 +2030,205 @@ fn confirmed_owner_loss_cleanup_removes_execution_bytes_but_not_durable_run_stat
         pinned, SECRET_BINDING,
         "pins outlive the owner and ignore the replaced current binding"
     );
+
+    // Once lease loss is confirmed, reconciliation is the only operation that
+    // changes the durable Running record: it records Interrupted and releases
+    // the admitted pins in the same terminal transaction.
+    let reconciled = reopened.reconcile_lost_action_owners().unwrap();
+    assert_eq!(reconciled, vec![run]);
+    match load_run(&storage, run).state {
+        RunState::Finished(outcome) => {
+            assert_eq!(outcome.outcome, RunOutcome::Interrupted);
+            assert_eq!(outcome.boundary, ActionRunBoundary::Admitted);
+            assert_eq!(outcome.terminal_risk, RecoveryRiskState::Open);
+            assert!(outcome.primary_failure.is_none());
+            assert!(outcome.hook_completion.is_none());
+        }
+        other => panic!("expected reconciled Finished Run, found {other:?}"),
+    }
+    assert_eq!(
+        count("SELECT COUNT(*) FROM run_revision_pins WHERE run_id=?1"),
+        0
+    );
+    assert_eq!(
+        count("SELECT COUNT(*) FROM run_payload_pins WHERE run_id=?1"),
+        0
+    );
+    let instance = load_run(&storage, run).instance;
+    let guard = persistence(&storage)
+        .load_instance_recovery_guard(instance)
+        .unwrap()
+        .unwrap();
+    assert_eq!(guard.run, run);
+}
+
+// Test-ID: PR-TEST-0106
+// Verifies: PR-REQ-0073, PR-REQ-0144, PR-REQ-0281
+#[test]
+fn accepted_output_subset_is_published_only_after_cleanup() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("output-subset");
+    let admitted = fixture.admit("output_subset", "output_subset", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    let session: Value =
+        serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
+            .unwrap();
+    let workspace = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+    let execution_root = workspace.parent().unwrap().to_path_buf();
+    assert!(execution_root.is_dir());
+
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let view = load_run(&fixture.storage, run);
+    let RunState::Finished(outcome) = view.state else {
+        panic!("expected a Finished Run");
+    };
+    assert_eq!(outcome.outcome, RunOutcome::Succeeded);
+    assert_eq!(outcome.artifacts.len(), 1);
+    assert_eq!(outcome.artifacts[0].output.as_str(), "report");
+    assert!(
+        !execution_root.exists(),
+        "cleanup precedes terminal publication"
+    );
+
+    let mut bytes = Vec::new();
+    persistence(&fixture.storage)
+        .open_run_artifact(
+            run,
+            &ManagedOutputIdentity::parse("report").unwrap(),
+            &mut bytes,
+        )
+        .unwrap();
+    assert_eq!(bytes, b"unpublished-output");
+    assert!(
+        outcome
+            .artifacts
+            .iter()
+            .all(|artifact| artifact.output.as_str() != "secondary")
+    );
+}
+
+// Test-ID: PR-TEST-0109
+// Verifies: PR-REQ-0144, PR-REQ-0281
+#[test]
+fn late_completion_keeps_timeout_outcome_but_publishes_eligible_output() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("late-output");
+    let admitted = fixture.admit("direct", "cancel_then_output", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, Some(300), Some(20_000)),
+        ActionCancellation::default(),
+    );
+    let session: Value =
+        serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
+            .unwrap();
+    let workspace = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let RunState::Finished(outcome) = load_run(&fixture.storage, run).state else {
+        panic!("expected a Finished Run");
+    };
+    assert_eq!(outcome.outcome, RunOutcome::TimedOut);
+    assert_eq!(outcome.artifacts.len(), 1);
+    assert_eq!(outcome.artifacts[0].output.as_str(), "report");
+    let mut bytes = Vec::new();
+    persistence(&fixture.storage)
+        .open_run_artifact(
+            run,
+            &ManagedOutputIdentity::parse("report").unwrap(),
+            &mut bytes,
+        )
+        .unwrap();
+    assert_eq!(bytes, b"late-output");
+    assert!(!workspace.parent().unwrap().exists());
+}
+
+// Test-ID: PR-TEST-0107
+// Verifies: PR-REQ-0051, PR-REQ-0144, PR-REQ-0281
+#[test]
+fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("output-publication-failure");
+    let admitted = fixture.admit("direct", "output", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    let session: Value =
+        serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
+            .unwrap();
+    let workspace = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+    fs::remove_file(workspace.parent().unwrap().join("outputs").join("report")).unwrap();
+
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let RunState::Finished(outcome) = load_run(&fixture.storage, run).state else {
+        panic!("expected a Finished Run");
+    };
+    assert_eq!(outcome.outcome, RunOutcome::Failed);
+    let primary = outcome.primary_failure.unwrap();
+    assert_eq!(primary.failure.error.owner(), "execution");
+    assert_eq!(
+        primary.failure.error.code(),
+        "managed_output_publication_failed"
+    );
+    assert_eq!(
+        primary.step,
+        RunFailedStep::Plan(ActionPlanStep::PublishDeclaredOutputs),
+        "publication is the primary causal failure"
+    );
+    assert!(outcome.secondary_failures.is_empty());
+    assert!(outcome.artifacts.is_empty());
+}
+
+// Test-ID: PR-TEST-0110
+// Verifies: PR-REQ-0051, PR-REQ-0073, PR-REQ-0282
+#[test]
+fn cleanup_failure_leaves_residue_but_does_not_block_terminal_publication() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("cleanup-failure");
+    let admitted = fixture.admit("direct", "hook_failure", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    let session: Value =
+        serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
+            .unwrap();
+    let workspace = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+    let execution_root = workspace.parent().unwrap().to_path_buf();
+    fail_next_execution_cleanup();
+
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let RunState::Finished(outcome) = load_run(&fixture.storage, run).state else {
+        panic!("expected a Finished Run");
+    };
+    assert_eq!(outcome.outcome, RunOutcome::Failed);
+    assert!(outcome.primary_failure.is_none());
+    assert_eq!(
+        outcome.hook_completion.as_ref().unwrap().status,
+        HookCompletionStatus::Failure
+    );
+    assert_eq!(outcome.secondary_failures.len(), 1);
+    assert_eq!(
+        outcome.secondary_failures[0].error.code(),
+        "workspace_cleanup_failed"
+    );
+    assert!(
+        execution_root.is_dir(),
+        "cleanup failure leaves non-authoritative residue"
+    );
+    assert!(
+        execution_root.join("outputs/report").is_file(),
+        "cleanup residue remains non-authoritative"
+    );
+    assert!(outcome.artifacts.is_empty());
 }
