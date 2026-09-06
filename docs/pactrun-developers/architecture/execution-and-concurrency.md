@@ -270,4 +270,4 @@ request cancellation, propagate it, observe Hook termination, perform required
 finalization, and only then publish a terminal outcome. `TimedOut` MUST identify
 termination caused by Pactrun policy.
 
-**Verification: PR-TEST-0097.**
+**Verification: PR-TEST-0097, PR-TEST-0103.**

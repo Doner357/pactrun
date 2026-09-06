@@ -331,7 +331,8 @@ This requirement defines runtime behavior but is intentionally not claimed by
 Revision Core golden vectors. It requires future Compiler, Admission, and
 Executor integration tests.
 
-**Verification: PR-TEST-0081, PR-TEST-0090, PR-TEST-0095.**
+**Verification: PR-TEST-0081, PR-TEST-0090, PR-TEST-0095, PR-TEST-0101,
+PR-TEST-0102.**
 
 ### PR-REQ-0274 - Host launcher candidate eligibility
 

@@ -3,6 +3,11 @@
 //! This crate is an internal implementation boundary. It is not a Pactrun API.
 
 #[cfg(windows)]
+mod process;
+#[cfg(windows)]
+pub use process::{HookProcess, HookTerminal};
+
+#[cfg(windows)]
 mod implementation {
 
     use std::{
@@ -18,7 +23,7 @@ mod implementation {
             process::ExitStatusExt,
         },
         path::Path,
-        process::{Child, ExitStatus},
+        process::ExitStatus,
         ptr,
     };
 
@@ -32,15 +37,17 @@ mod implementation {
         },
         Win32::{
             Foundation::{
-                CloseHandle, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED,
-                GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
-                RtlNtStatusToDosError, UNICODE_STRING,
+                ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GENERIC_READ,
+                GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree, RtlNtStatusToDosError,
+                UNICODE_STRING,
             },
             Security::{
                 Authorization::{
-                    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+                    ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+                    SDDL_REVISION_1,
                 },
-                PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
+                GetTokenInformation, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_GROUPS,
+                TOKEN_INFORMATION_CLASS, TOKEN_QUERY, TOKEN_USER, TokenRestrictedSids, TokenUser,
             },
             Storage::FileSystem::{
                 DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
@@ -55,16 +62,11 @@ mod implementation {
             System::WindowsProgramming::DRIVE_FIXED,
             System::{
                 IO::{CancelIoEx, GetOverlappedResult, IO_STATUS_BLOCK, OVERLAPPED},
-                JobObjects::{
-                    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-                    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-                    SetInformationJobObject, TerminateJobObject,
-                },
                 Pipes::{
                     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE,
                     PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
                 },
-                Threading::CreateEventW,
+                Threading::{CreateEventW, GetCurrentProcess, OpenProcessToken},
             },
         },
     };
@@ -104,7 +106,7 @@ mod implementation {
     impl NamedPipeListener {
         pub fn bind(endpoint: &str) -> io::Result<Self> {
             let wide_endpoint = wide_nul(OsStr::new(endpoint));
-            let descriptor_text = wide_nul(OsStr::new("D:P(A;;GA;;;SY)(A;;GA;;;OW)"));
+            let descriptor_text = owner_pipe_descriptor()?;
             let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
             if unsafe {
                 ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -211,6 +213,81 @@ mod implementation {
         }
     }
 
+    fn owner_pipe_descriptor() -> io::Result<Vec<u16>> {
+        let mut token = ptr::null_mut();
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let token = unsafe { OwnedHandle::from_raw_handle(token.cast()) };
+        let user_storage = token_information(&token, TokenUser)?;
+        let user = unsafe { &*user_storage.as_ptr().cast::<TOKEN_USER>() };
+        let mut descriptor = format!("D:P(A;;GA;;;SY)(A;;GA;;;{})", sid_text(user.User.Sid)?);
+
+        // Restricted-token access checks evaluate the DACL twice: once with
+        // the ordinary token SIDs and once with the restricting SIDs. Keep the
+        // user-specific ACE for the first pass and admit the token's exact
+        // restricting SIDs for the second, rather than broadening to Everyone.
+        let restricted_storage = token_information(&token, TokenRestrictedSids)?;
+        let restricted = unsafe { &*restricted_storage.as_ptr().cast::<TOKEN_GROUPS>() };
+        for index in 0..restricted.GroupCount as usize {
+            let group = unsafe { &*restricted.Groups.as_ptr().add(index) };
+            descriptor.push_str("(A;;GA;;;");
+            descriptor.push_str(&sid_text(group.Sid)?);
+            descriptor.push(')');
+        }
+        Ok(wide_nul(OsStr::new(&descriptor)))
+    }
+
+    fn token_information(
+        token: &OwnedHandle,
+        class: TOKEN_INFORMATION_CLASS,
+    ) -> io::Result<Vec<usize>> {
+        let mut bytes = 0;
+        unsafe {
+            GetTokenInformation(
+                token.as_raw_handle().cast(),
+                class,
+                ptr::null_mut(),
+                0,
+                &mut bytes,
+            );
+        }
+        if bytes == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut storage = vec![0_usize; (bytes as usize).div_ceil(size_of::<usize>())];
+        if unsafe {
+            GetTokenInformation(
+                token.as_raw_handle().cast(),
+                class,
+                storage.as_mut_ptr().cast(),
+                bytes,
+                &mut bytes,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(storage)
+    }
+
+    fn sid_text(sid: windows_sys::Win32::Security::PSID) -> io::Result<String> {
+        let mut string_sid = ptr::null_mut();
+        if unsafe { ConvertSidToStringSidW(sid, &mut string_sid) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut length = 0;
+        while unsafe { *string_sid.add(length) } != 0 {
+            length += 1;
+        }
+        let sid =
+            String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(string_sid, length) });
+        unsafe {
+            LocalFree(string_sid.cast());
+        }
+        Ok(sid)
+    }
+
     impl Drop for NamedPipeListener {
         fn drop(&mut self) {
             // A pending connect must complete before its OVERLAPPED is freed.
@@ -306,53 +383,6 @@ mod implementation {
             return Err(io::Error::last_os_error());
         }
         Ok(unsafe { OwnedHandle::from_raw_handle(handle.cast()) })
-    }
-
-    #[derive(Debug)]
-    pub struct ProcessJob {
-        handle: OwnedHandle,
-    }
-
-    impl ProcessJob {
-        pub fn assign(child: &Child) -> io::Result<Self> {
-            let handle = unsafe { CreateJobObjectW(ptr::null(), ptr::null()) };
-            if handle.is_null() {
-                return Err(io::Error::last_os_error());
-            }
-            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            let configured = unsafe {
-                SetInformationJobObject(
-                    handle,
-                    JobObjectExtendedLimitInformation,
-                    (&raw const limits).cast(),
-                    u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
-                        .expect("job information size fits u32"),
-                )
-            };
-            if configured == 0 {
-                unsafe {
-                    CloseHandle(handle);
-                }
-                return Err(io::Error::last_os_error());
-            }
-            if unsafe { AssignProcessToJobObject(handle, child.as_raw_handle().cast()) } == 0 {
-                unsafe {
-                    CloseHandle(handle);
-                }
-                return Err(io::Error::last_os_error());
-            }
-            Ok(Self {
-                handle: unsafe { OwnedHandle::from_raw_handle(handle.cast()) },
-            })
-        }
-
-        pub fn terminate(&self) -> io::Result<()> {
-            if unsafe { TerminateJobObject(self.handle.as_raw_handle().cast(), 1) } == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(())
-        }
     }
 
     pub fn exit_status_from_code(code: u32) -> ExitStatus {
