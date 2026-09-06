@@ -30,7 +30,7 @@ use super::{
     RuntimeTerminalFacts,
     materialize::MaterializedAction,
     outcome_and_failure,
-    platform::{ProcessSupervisor, ProtocolListener, configure_terminal},
+    platform::{ProcessSupervisor, ProtocolListener},
     protocol::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
     ready_failure,
 };
@@ -142,10 +142,12 @@ pub(super) fn execute_registered(
             );
         }
     };
-    let mut command = materialized.command();
-    listener.inject_environment(&mut command);
-    configure_terminal(&mut command, admitted.plan().terminal());
-    let supervisor = match ProcessSupervisor::spawn(&mut command) {
+    let supervisor = match ProcessSupervisor::spawn(
+        materialized.program(),
+        materialized.arguments(),
+        admitted.plan().terminal(),
+        &listener,
+    ) {
         Ok(supervisor) => supervisor,
         Err(_) => {
             return ready_failure(run, FailureKind::Launch, materialized.into_output_slots());

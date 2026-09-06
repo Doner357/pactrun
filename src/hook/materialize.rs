@@ -3,7 +3,6 @@ use std::{
     fmt, fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use serde_json::{Number, Value, json};
@@ -161,10 +160,12 @@ impl MaterializedAction {
         })
     }
 
-    pub(super) fn command(&self) -> Command {
-        let mut command = Command::new(&self.program);
-        command.args(&self.arguments);
-        command
+    pub(super) fn program(&self) -> &Path {
+        &self.program
+    }
+
+    pub(super) fn arguments(&self) -> &[String] {
+        &self.arguments
     }
 
     pub(super) fn session(&self) -> &Value {

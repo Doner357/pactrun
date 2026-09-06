@@ -1,13 +1,16 @@
 //! Platform seams: the owner-private protocol listener, supervised process
 //! launch with process-tree control, and terminal stream wiring.
 
-use std::{
-    fmt, io,
-    process::{Child, Command, ExitStatus, Stdio},
-};
+use std::{fmt, io, path::Path, process::ExitStatus};
+
+#[cfg(any(unix, test))]
+use std::process::Command;
 
 #[cfg(unix)]
-use std::{fs, path::Path};
+use std::{
+    fs,
+    process::{Child, Stdio},
+};
 
 use crate::domain::TerminalContractV1;
 
@@ -42,9 +45,16 @@ impl ProtocolListener {
 
     /// PR-REQ-0280: both discovery variables are replaced in the exact child
     /// environment; ambient values are never trusted.
+    #[cfg(any(unix, test))]
     pub(super) fn inject_environment(&self, command: &mut Command) {
-        command.env(TRANSPORT_ENVIRONMENT, platform_transport_name());
-        command.env(ENDPOINT_ENVIRONMENT, &self.endpoint);
+        command.envs(self.environment());
+    }
+
+    fn environment(&self) -> [(&str, &str); 2] {
+        [
+            (TRANSPORT_ENVIRONMENT, platform_transport_name()),
+            (ENDPOINT_ENVIRONMENT, &self.endpoint),
+        ]
     }
 
     pub(super) fn try_accept(&mut self) -> io::Result<Option<ProtocolStream>> {
@@ -70,35 +80,42 @@ impl Drop for ProtocolListener {
 
 #[derive(Debug)]
 pub(super) struct ProcessSupervisor {
+    #[cfg(unix)]
     child: Child,
     #[cfg(windows)]
-    job: pactrun_windows_ntfs::ProcessJob,
+    child: pactrun_windows_ntfs::HookProcess,
 }
 
 impl ProcessSupervisor {
-    pub(super) fn spawn(command: &mut Command) -> io::Result<Self> {
+    pub(super) fn spawn(
+        program: &Path,
+        arguments: &[String],
+        terminal: TerminalContractV1,
+        listener: &ProtocolListener,
+    ) -> io::Result<Self> {
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
+            let mut command = Command::new(program);
+            command.args(arguments);
+            listener.inject_environment(&mut command);
+            configure_terminal(&mut command, terminal);
             command.process_group(0);
+            Ok(Self {
+                child: command.spawn()?,
+            })
         }
-        let child = command.spawn()?;
         #[cfg(windows)]
         {
-            let mut child = child;
-            let job = match pactrun_windows_ntfs::ProcessJob::assign(&child) {
-                Ok(job) => job,
-                Err(error) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(error);
-                }
+            use pactrun_windows_ntfs::{HookProcess, HookTerminal};
+            let terminal = match terminal {
+                TerminalContractV1::None => HookTerminal::None,
+                TerminalContractV1::Output => HookTerminal::Output,
+                TerminalContractV1::Interactive => HookTerminal::Interactive,
             };
-            Ok(Self { child, job })
-        }
-        #[cfg(unix)]
-        {
-            Ok(Self { child })
+            Ok(Self {
+                child: HookProcess::spawn(program, arguments, terminal, listener.environment())?,
+            })
         }
     }
 
@@ -113,7 +130,7 @@ impl ProcessSupervisor {
     pub(super) fn terminate_tree(&mut self) -> io::Result<()> {
         #[cfg(windows)]
         {
-            self.job.terminate()
+            self.child.terminate_tree()
         }
         #[cfg(unix)]
         {
@@ -126,7 +143,8 @@ impl ProcessSupervisor {
     }
 }
 
-pub(super) fn configure_terminal(command: &mut Command, terminal: TerminalContractV1) {
+#[cfg(unix)]
+fn configure_terminal(command: &mut Command, terminal: TerminalContractV1) {
     match terminal {
         TerminalContractV1::None => {
             command

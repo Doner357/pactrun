@@ -8,6 +8,8 @@ mod protocol;
 mod runtime;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, windows))]
+mod windows_tests;
 
 use std::{
     collections::BTreeMap,

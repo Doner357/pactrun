@@ -102,7 +102,7 @@ Protocol messages MUST NOT be mixed into standard output. `IOContract` MUST
 describe channels and transition policy without pretending to be a complete
 host-device sandbox.
 
-**Verification: PR-TEST-0098.**
+**Verification: PR-TEST-0098, PR-TEST-0102.**
 
 ### PR-REQ-0280 - Hook Protocol runtime transport discovery
 
@@ -138,7 +138,7 @@ identity and not an alternative authentication or protocol-version mechanism.
 The first bytes in each direction after connection remain the exact Frozen V1
 preamble from PR-REQ-0205.
 
-**Verification: PR-TEST-0095, PR-TEST-0098, PR-TEST-0099.**
+**Verification: PR-TEST-0095, PR-TEST-0098, PR-TEST-0099, PR-TEST-0102.**
 
 ## Recovery-risk duty
 

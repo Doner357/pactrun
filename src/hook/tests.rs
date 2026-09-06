@@ -61,6 +61,10 @@ struct RuntimeFixture {
 
 impl RuntimeFixture {
     fn new() -> Self {
+        Self::with_source(|_, _, _| {})
+    }
+
+    fn with_source(configure: impl FnOnce(&Path, &Path, &mut String)) -> Self {
         let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice4-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
@@ -85,7 +89,9 @@ impl RuntimeFixture {
         )
         .unwrap();
         fs::write(source.join("broken.bin"), b"not an executable image").unwrap();
-        fs::write(source.join("pactrun.yaml"), manifest()).unwrap();
+        let mut manifest = manifest();
+        configure(&source, &launcher, &mut manifest);
+        fs::write(source.join("pactrun.yaml"), manifest).unwrap();
 
         let application = PactrunApplication::open(&storage).unwrap();
         let metadata = RevisionMetadataMutationBatch::new(Vec::new()).unwrap();
@@ -1215,6 +1221,106 @@ fn execution_materialization_uses_pinned_copies_and_live_owner_output_slots() {
         policy(None, None, None),
     );
     assert_eq!(second.outcome, RunOutcome::Succeeded);
+}
+
+// Test-ID: PR-TEST-0101
+// Verifies: PR-REQ-0194
+#[cfg(windows)]
+#[test]
+fn windows_launches_extensionless_images_and_never_substitutes_exe_or_cmd() {
+    for shadow in [false, true] {
+        let fixture = RuntimeFixture::with_source(|source, launcher, manifest| {
+            fs::rename(source.join(worker_file_name()), source.join("worker")).unwrap();
+            fs::rename(
+                launcher.join(launcher_command()),
+                launcher.join("pactrun-hook-test"),
+            )
+            .unwrap();
+            *manifest = manifest
+                .replace(worker_file_name(), "worker")
+                .replace(launcher_command(), "pactrun-hook-test");
+            if shadow {
+                fs::write(source.join("shadow.bin"), b"unadmitted sibling").unwrap();
+                fs::write(launcher.join(launcher_command()), b"unadmitted sibling").unwrap();
+                manifest.push_str(
+                    "    - { id: shadow, source: shadow.bin, path: bin/worker.exe, executable: true }\n",
+                );
+            }
+        });
+        for action in ["direct", "interpreted"] {
+            let facts = fixture.execute(
+                action,
+                "success",
+                &fixture.marker(action),
+                policy(Some(10_000), None, None),
+            );
+            assert_eq!(
+                facts.outcome,
+                RunOutcome::Succeeded,
+                "{action}, shadow={shadow}: {:?}",
+                failure_ref(&facts)
+            );
+            assert!(facts.process_terminated && facts.completion_accepted);
+        }
+    }
+
+    // A batch suffix does not disqualify a native image. Only the Executor's
+    // no-shell guard rejects non-image batch files; Admission does not probe PE.
+    let fixture = RuntimeFixture::with_source(|source, launcher, manifest| {
+        fs::rename(source.join(worker_file_name()), source.join("worker.cmd")).unwrap();
+        fs::rename(
+            launcher.join(launcher_command()),
+            launcher.join("launcher.bat"),
+        )
+        .unwrap();
+        *manifest = manifest
+            .replace(worker_file_name(), "worker.cmd")
+            .replace(launcher_command(), "launcher.bat");
+    });
+    for action in ["direct", "interpreted"] {
+        let facts = fixture.execute(
+            action,
+            "success",
+            &fixture.marker(action),
+            policy(Some(10_000), None, None),
+        );
+        assert_eq!(facts.outcome, RunOutcome::Succeeded);
+    }
+
+    // Refuse batch script content without executing it through cmd.exe.
+    for extension in ["cmd", "bat"] {
+        let fixture = RuntimeFixture::with_source(|source, launcher, manifest| {
+            *manifest = manifest.replace("broken.bin", &format!("hook.{extension}"));
+            let script = format!(
+                "@echo off\r\necho implicit-shell>\"{}\"\r\n",
+                source.join("shell-ran").display()
+            );
+            fs::write(source.join(format!("hook.{extension}")), &script).unwrap();
+            fs::write(launcher.join(format!("launcher.{extension}")), script).unwrap();
+            *manifest = manifest.replace(launcher_command(), &format!("launcher.{extension}"));
+        });
+        for action in ["broken_launch", "interpreted"] {
+            let facts = fixture.execute(
+                action,
+                "success",
+                &fixture.marker(action),
+                policy(Some(10_000), None, None),
+            );
+            assert!(
+                !fixture.temporary.path().join("source/shell-ran").exists(),
+                "CreateProcessW executed {action} .{extension} through an implicit shell"
+            );
+            assert_eq!(
+                failure_ref(&facts),
+                Some((
+                    "execution",
+                    "launch_failed",
+                    RunFailedStep::Plan(ActionPlanStep::LaunchHook)
+                ))
+            );
+        }
+        assert!(!fixture.temporary.path().join("source/shell-ran").exists());
+    }
 }
 
 // Test-ID: PR-TEST-0095
