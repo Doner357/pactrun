@@ -4,8 +4,9 @@ title: Persistence Schema V2
 
 # Persistence Schema V2
 
-**Status: Current implemented internal persistence schema and normative internal
-contract; non-Frozen, non-public, and not a stable public support contract.**
+**Status: Implemented M1-D internal persistence schema and normative internal
+contract; superseded as the current schema by PersistenceSchemaV4; non-Frozen,
+non-public, and not a stable public support contract.**
 
 This page defines the persistence contract followed by the integrated M1-D
 implementation. It does not expose a public API, define an Export Bundle Format,

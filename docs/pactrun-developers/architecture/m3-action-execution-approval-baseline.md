@@ -4,17 +4,20 @@ title: M3 Action Execution Approval Baseline
 
 # M3 Action Execution Approval Baseline
 
-**Status: Informative approved planning baseline and navigation entry point.**
+**Status: Informative approved planning baseline and navigation entry point;
+historical approval status, not a live implementation-status report.**
 
 This page records the completed M3 scope and dependency review. It does not
 create independent product requirements. The linked requirement-bearing pages
 are the sole normative authority, and their text wins if a summary here is
 ambiguous.
 
-M3 is approved as the next implementation milestone. Approval permits bounded
-implementation of Action execution on an isolated feature branch; it is not a
-claim that Action execution exists, that M3 is complete, or that an unresolved
-human or machine interface has become stable.
+M3 was approved as the next implementation milestone. That approval permitted
+bounded implementation of Action execution on an isolated feature branch. As of
+2026-09-06, M3 implementation is in progress: Slices 1 through 4 are
+integrated, Slice 5 is the next ordered target, and the milestone is not yet
+complete. Exact human and machine interface spelling remains subject to its
+requirement-bearing specifications.
 
 ## Approved managed-execution path
 

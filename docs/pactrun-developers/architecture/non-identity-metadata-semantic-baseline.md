@@ -29,8 +29,8 @@ non-public.
 | Local metadata | A local alias binds at most one Revision. Each Revision has at most one current non-empty note and one current `Trusted` or `Distrusted` assessment; row/state absence means no value. | [PR-REQ-0253](./identity-and-state.md#pr-req-0253---local-aliases-notes-and-trust) |
 | Portability | Presentation, reference-label bindings, and the three provenance claim types are portable-capable. Alias, note, and trust are local-only. Classification does not define bundle carriage or import merge. | [PR-REQ-0021](./identity-and-state.md#pr-req-0021---portable-and-local-metadata), [PR-REQ-0254](./resources-and-versioning.md#pr-req-0254---non-identity-metadata-portability-boundary) |
 | Mutation and concurrency | One typed batch targets one existing exact Revision. Set-like updates are idempotent; current values use semantic CAS. CAS compares only current state and intentionally cannot detect ABA or mutation history. | [PR-REQ-0255](./persistence-schema-v2.md#pr-req-0255---typed-metadata-mutation-and-repository-contract) |
-| Persistence | PersistenceSchemaV2 is the current implemented internal schema and fixes canonical relational representation, exact keys and constraints, current-state absence, deletion cascades, and a crate-private typed repository contract. | [PR-REQ-0256](./persistence-schema-v2.md#pr-req-0256---exact-persistenceschemav2) |
-| Migration | Pristine databases create V2 directly. Exact V1 migrates transactionally to exact V2; foreign, partial, drifted, and newer schemas are rejected. Revision identity and canonical bytes remain unchanged. | [PR-REQ-0078](./resources-and-versioning.md#pr-req-0078---persistence-migrations), [PR-REQ-0257](./persistence-schema-v2.md#pr-req-0257---v1-to-v2-migration-and-validation) |
+| Persistence | PersistenceSchemaV2 is the internal schema version that introduced the M1-D metadata contract and fixes its canonical relational representation, exact keys and constraints, current-state absence, deletion cascades, and crate-private typed repository contract. | [PR-REQ-0256](./persistence-schema-v2.md#pr-req-0256---exact-persistenceschemav2) |
+| Migration | The M1-D V1-to-V2 migration is transactional; foreign, partial, drifted, and newer schemas are rejected at that boundary. Later schema migrations continue the database to current PersistenceSchemaV4. Revision identity and canonical bytes remain unchanged. | [PR-REQ-0078](./resources-and-versioning.md#pr-req-0078---persistence-migrations), [PR-REQ-0257](./persistence-schema-v2.md#pr-req-0257---v1-to-v2-migration-and-validation), [PR-REQ-0276](./persistence-schema-v4.md#pr-req-0276---persistence-migration-to-v4) |
 
 ## Closed presentation relation
 
@@ -64,10 +64,10 @@ remain parity-equivalent with Domain ordering. Rowid, insertion order,
 timestamps, query-plan order, SQLite NULL ordering, and locale collation are
 not semantic inputs.
 
-## Implemented internal persistence boundary
+## Implemented M1-D persistence boundary
 
-[Persistence Schema V2](./persistence-schema-v2.md) is the current implemented
-normative internal persistence contract. Its exact DDL uses
+[Persistence Schema V2](./persistence-schema-v2.md) is the implemented M1-D
+portion of the normative internal persistence contract. Its exact DDL uses
 non-null semantic key components, explicit presence ranks and canonical empty
 payload sentinels for optional tuple values, fixed integer variant ranks,
 primary keys over complete semantic tuples, and row absence for absent current
@@ -94,7 +94,7 @@ opaque serialized Domain object.
 ## M1-D implementation closure
 
 The integrated implementation follows the closed typed requirements and schema
-above. Automated coverage includes fresh V2 and V1-to-V2 behavior, crash and
+above. Automated coverage includes the M1-D fresh-V2 schema and V1-to-V2 behavior, crash and
 concurrent migration boundaries, canonical tuple and absence rejection, the
 full presentation target-by-field cross-product, deterministic SQL/Domain
 comparator parity, idempotency, semantic CAS including its intentional ABA

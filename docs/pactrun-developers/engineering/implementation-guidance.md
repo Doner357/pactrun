@@ -38,8 +38,11 @@ non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 is the next approved implementation milestone. This approval does not claim
-runtime support or choose the still-open exact human spelling.
+M3 implementation is in progress: Slices 1 through 4 are integrated, and Slice
+5 is the next ordered implementation target. The remaining managed output,
+Run finalization, recovery reconciliation, and human CLI work is not yet
+complete, and exact human spelling remains open until it is closed by a
+requirement.
 
 ## Implementation decisions
 
