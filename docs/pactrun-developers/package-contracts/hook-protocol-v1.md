@@ -393,6 +393,23 @@ sandbox.
 
 **Verification: PR-TEST-0024.**
 
+### PR-REQ-0283 - Runtime Hook text retention boundary
+
+The production runtime Run representation MUST retain necessary Hook structural
+state, including success or failure, without default persistence of arbitrary
+Hook code, message, diagnostics, or protocol-error free text. This slice MUST
+NOT add opt-in settings or CLI spelling. The existing V4 optional completion
+representation and exact historical reading of absent versus present-empty
+values remain unchanged.
+
+Pactrun-owned failures MUST use fixed safe text and a taxonomy reference and
+MUST NOT retain raw frames, Secret values, sensitive parameters, protocol
+endpoints, or execution paths. This boundary does not require scanning or
+rewriting opaque Artifact bytes and does not claim general detection of
+sensitive derived values.
+
+**Verification: PR-TEST-0084, PR-TEST-0113.**
+
 ### PR-REQ-0215 - Recovery-risk request state machine
 
 The initial risk state is `clear`. A Hook requests a transition with:

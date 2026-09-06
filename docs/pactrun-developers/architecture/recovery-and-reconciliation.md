@@ -82,7 +82,7 @@ Every Running Run MUST have exactly one execution owner. Reconciliation MUST NOT
 mark a Run interrupted until owner loss is established by the selected ownership
 mechanism.
 
-**Verification: PR-TEST-0100.**
+**Verification: PR-TEST-0100, PR-TEST-0111.**
 
 ### PR-REQ-0277 - Action execution owner mechanism
 
@@ -105,7 +105,7 @@ finishes it.
 This requirement selects the mechanism for Action Runs. M6 MAY generalize it to
 later managed-execution types without introducing a parallel ownership model.
 
-**Verification: PR-TEST-0086.**
+**Verification: PR-TEST-0086, PR-TEST-0111.**
 
 ### PR-REQ-0061 - Plan is not a replay contract
 
@@ -169,7 +169,7 @@ After confirmed owner loss, a reconciler MUST read only durable recovery state,
 perform only authorized Pactrun-owned recovery, apply the materialized Instance
 consequence, and finish the Run as `Interrupted`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0112.**
 
 ### PR-REQ-0065 - Recovery-reference lifetime
 

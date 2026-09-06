@@ -13,10 +13,10 @@ modify the V1, V2, or V3 tables or any Frozen identity, wire, or error format.
 PersistenceSchemaV4 is the current implemented internal schema after M3
 Slice 2 integration. It defines the durable representation of Action Runs,
 execution ownership, durable execution pins, Action recovery state, the
-`ManualRecoveryRequired` Instance trust guard, and Run Artifacts. It does not
-implement Admission, Hook launch, HookProtocolV1 runtime behavior,
-reconciliation, output publication flow, or human spelling; those remain owned
-by later M3 slices.
+`ManualRecoveryRequired` Instance trust guard, and Run Artifacts. Admission,
+Hook launch, HookProtocolV1 runtime behavior, owner-held finalization, output
+publication, and explicit owner-loss reconciliation compose over this schema in
+crate-private M3 runtime code; human spelling remains outside this substrate.
 
 ### PR-REQ-0275 - Exact PersistenceSchemaV4
 
@@ -267,13 +267,21 @@ terminal risk `Open`; a guard whose Run has terminal risk `Clear`; a chunk
 gap, non-final short chunk, or length mismatch; an invalid Domain string; or an
 `owner_session` that is not a valid staging session name.
 
+A Running Action Run MUST be in exactly one of these boundary/risk states:
+`Accepted + Clear`, `Admitted + Clear`, or `Admitted + Open`. Recovery risk
+MUST NOT become `Open` before Admission. A persisted `Accepted + Open` Running
+Run is impossible and corrupt. Logical loading, recovery, and terminal
+transitions MUST reject it without publishing an outcome, changing the Instance
+recovery guard or state version, releasing references, or normalizing it into a
+valid state.
+
 V4 has no dedicated sensitive-value fields: no table stores invocation
 parameter values, Secret payload bytes, or value-derived digests for a Run.
 This is a schema fact only. Runtime redaction of Hook-authored and
 Pactrun-authored diagnostic text remains the obligation of the slices that
 produce Run text.
 
-**Verification: PR-TEST-0082, PR-TEST-0084, PR-TEST-0087.**
+**Verification: PR-TEST-0082, PR-TEST-0084, PR-TEST-0087, PR-TEST-0104, PR-TEST-0105, PR-TEST-0112.**
 
 ### PR-REQ-0276 - Persistence migration to V4
 
@@ -317,10 +325,15 @@ admit_run(run, admission_facts, launcher_check, override_guard) -> admitted | re
 open_recovery_risk(run)
 clear_recovery_risk(run)
 finish_run(run, outcome, failures, hook_completion, staged_artifacts) -> published state version?
+finish_run_owned(owner, run, outcome, hook_completion, submitted_outputs, staged_artifacts)
+    -> published state version?
+advance_owner_continuation(run) -> durable terminal published | owner retry retained
 resolve_manual_recovery(instance, expected_state_version) -> InstanceStateVersion
 list_runs(instance) -> ordered RunSummary[]
 load_run(run) -> RunView
 load_instance_recovery_guard(instance) -> RecoveryGuardView?
+load_run_inspection(run) -> RunInspectionData
+reconcile_action_runs() -> reconciled RunId[]
 open_run_artifact(run, output) -> streamed bytes
 delete_run_artifact(run, output)
 stream_admitted_payload(run, input) -> streamed pinned bytes
@@ -350,11 +363,22 @@ Admitted; they add no schema. A transaction failure publishes no Run, pin,
 risk transition, outcome, Artifact, guard, or state version. The concrete Rust
 names remain crate-private and are not a stable API.
 
+M3 Slice 5 composes the crate-private owner continuation and finalization
+substrate over V4: eligible Action output bytes are independently staged,
+execution cleanup is attempted before the terminal transaction, and the
+Run outcome, failures, Hook structural result, and Artifacts are published
+atomically. The production finalizer retains Hook completion status while
+omitting Hook-authored code and message text; generic historical V4 reads keep
+their exact optional-value semantics. The explicit owner-loss reconciler reads
+the durable owner and risk state, confirms the staging lease, and finishes only
+confirmed-lost valid Running Action records. `load_run_inspection` reads a Run
+and its Instance's current recovery guard from one SQLite read snapshot. These
+additions do not alter the V4 table manifest or expose a public inspection or
+CLI surface.
+
 ## Deferred work
 
-V4 does not define Admission composition, Hook process launch, HookProtocolV1
-runtime acknowledgment ordering, owner-loss reconciliation, output publication
-flow, non-sensitive parameter recording, Run retention policy, Snapshot,
-Migration, Restore, or Cleanup execution records, Instance deletion, generic
-garbage collection, Artifact export, ServiceStorage, a stable public API, or
-human spelling.
+V4 does not define non-sensitive parameter recording, Run retention policy,
+Snapshot, Migration, Restore, or Cleanup execution records, Instance deletion,
+generic garbage collection, Artifact export, ServiceStorage, a stable public
+API, or human spelling.

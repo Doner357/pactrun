@@ -187,11 +187,37 @@ impl MaterializedAction {
             .collect()
     }
 
+    pub(super) fn submitted_outputs(&self, handles: &[String]) -> Vec<ManagedOutputIdentity> {
+        let selected = handles.iter().collect::<BTreeSet<_>>();
+        let mut outputs = self
+            .outputs
+            .iter()
+            .filter(|slot| selected.contains(&slot.handle))
+            .map(|slot| slot.output.clone())
+            .collect::<Vec<_>>();
+        outputs.sort();
+        outputs
+    }
+
+    pub(super) fn into_execution(self) -> (ExecutionDirectory, Vec<LiveOutputSlot>) {
+        let outputs = self
+            .outputs
+            .into_iter()
+            .map(|slot| LiveOutputSlot {
+                output: slot.output,
+                handle: slot.handle,
+                path: slot.path,
+            })
+            .collect();
+        (self.directory, outputs)
+    }
+
     pub(super) fn into_output_slots(self) -> Vec<LiveOutputSlot> {
         self.outputs
             .into_iter()
             .map(|slot| LiveOutputSlot {
                 output: slot.output,
+                handle: slot.handle,
                 path: slot.path,
             })
             .collect()

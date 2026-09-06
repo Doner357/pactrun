@@ -56,6 +56,46 @@ diagnostics, output references, and timing when available.
 
 **Verification: Pending automated coverage.**
 
+Slice 5 provides only the crate-private RunView, ordered Run enumeration, a
+single-snapshot Run-plus-current-recovery-guard inspection substrate, and
+independent Run Artifact streaming and expiry needed by a later inspection
+surface. Supporting coverage is provided by `PR-TEST-0105`, `PR-TEST-0106`,
+`PR-TEST-0107`, `PR-TEST-0109`, `PR-TEST-0110`, and the Slice 5 inspection
+snapshot test; these tests do not establish user-visible inspection. Human
+inspection and exact presentation remain deferred to Slice 6. This is
+supporting coverage only and is not verification of `PR-REQ-0097`.
+
+### PR-REQ-0281 - Atomic managed-output publication and late completion
+
+Action Managed Output eligibility is determined by the protocol-accepted
+completion and its valid submitted output handles, not by whether the Run
+outcome is `Succeeded`.
+
+If cancellation or timeout has already won outcome arbitration, but a valid
+Action completion is subsequently protocol-accepted before process termination,
+its valid submitted output handles MUST remain eligible for Managed Artifact
+publication. The Run outcome MUST remain `Cancelled` or `TimedOut`,
+respectively.
+
+If no completion is protocol-accepted, no Action output slot may be published.
+Preallocated slots, files written before cancellation, or an unaccepted
+completion MUST NOT be treated as submissions.
+
+Publication of the eligible submitted set is atomic at the Action-publication
+level. Pactrun MUST validate and independently stage the entire set before
+publishing it. If any required publication input cannot be validated, read, or
+staged completely, none of that set may be published. Artifacts and the Run
+terminal record MUST be published in the same V4 transaction. A publication
+failure after a Hook-owned failure or after a locked `Cancelled` or `TimedOut`
+outcome is secondary; a first publication failure on an otherwise successful
+Run makes the Run `Failed` with `PublishDeclaredOutputs` as its primary step.
+
+Database transaction failure retains owner-held retry state and MUST NOT be
+converted into a fabricated terminal outcome. Eligibility does not require
+submitting every declaration, and it does not guarantee persistence success.
+
+**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0109.**
+
 ### PR-REQ-0098 - Sensitive Run data
 
 Run records and ordinary diagnostics MUST NOT store sensitive parameter values,

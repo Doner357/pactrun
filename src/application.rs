@@ -5,7 +5,7 @@ mod installation;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
-    io::Read,
+    io::{Read, Write},
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -17,13 +17,17 @@ use crate::{
     domain::{
         ActionCompilationObservation, ActionExecutionPlan, ActionIdentity, ActionResolutionError,
         ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName, InstanceStateVersion,
-        InstanceSummary, InstanceView, InvokeAction, LocalAlias, PlanCompilationError,
-        RawParameterInput, ReferenceLabel, RevisionCoreV1Error, RevisionIdentity,
-        RevisionMetadataMutationBatch, RunId, bind_action_parameters,
+        InstanceSummary, InstanceView, InvokeAction, LocalAlias, ManagedOutputIdentity,
+        PlanCompilationError, RawParameterInput, ReferenceLabel, RevisionCoreV1Error,
+        RevisionIdentity, RevisionMetadataMutationBatch, RunId, RunInspectionData, RunSummary,
+        RunView, bind_action_parameters,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
     hook::{ActionCancellation, ContinuationGuard, HookRuntimePolicy, OwnerContinuationRegistry},
-    managed_data::{StagedFile, StagingError, StagingSession},
+    managed_data::{
+        SessionOwnerProbe, StagedFile, StagingError, StagingSession, cleanup_lost_session,
+        probe_session_owner,
+    },
     persistence::{
         ManagedInputWrite, PactrunPersistence, PersistenceError, validate_supported_storage_root,
     },
@@ -279,6 +283,48 @@ impl PactrunApplication {
     }
 
     #[allow(dead_code)]
+    pub(crate) fn list_runs(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Vec<RunSummary>, ApplicationError> {
+        Ok(self.persistence.list_runs(instance)?)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn load_run(&self, run: RunId) -> Result<Option<RunView>, ApplicationError> {
+        Ok(self.persistence.load_run(run)?)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn load_run_inspection(
+        &self,
+        run: RunId,
+    ) -> Result<Option<RunInspectionData>, ApplicationError> {
+        Ok(self.persistence.load_run_inspection(run)?)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn stream_run_artifact(
+        &self,
+        run: RunId,
+        output: &ManagedOutputIdentity,
+        destination: &mut impl Write,
+    ) -> Result<(), ApplicationError> {
+        Ok(self
+            .persistence
+            .open_run_artifact(run, output, destination)?)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn delete_run_artifact(
+        &self,
+        run: RunId,
+        output: &ManagedOutputIdentity,
+    ) -> Result<bool, ApplicationError> {
+        Ok(self.persistence.delete_run_artifact(run, output)?)
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn resolve_action(
         &self,
         instance_name: &InstanceName,
@@ -490,8 +536,50 @@ impl PactrunApplication {
         let Some(guard) = self.continuations.take(run) else {
             return false;
         };
-        crate::hook::resume_owner_continuation(&self.persistence, guard);
+        crate::hook::resume_owner_continuation(&self.persistence, &self.staging, guard);
         true
+    }
+
+    /// Advances the owner-held runtime/finalization state once. The
+    /// continuation remains registered until durable terminal publication is
+    /// confirmed.
+    #[allow(dead_code)]
+    pub(crate) fn advance_owner_continuation(&self, run: RunId) -> Result<bool, ApplicationError> {
+        let Some(guard) = self.continuations.take(run) else {
+            return Ok(false);
+        };
+        Ok(crate::hook::advance_owner_continuation(
+            &self.persistence,
+            &self.staging,
+            guard,
+        )?)
+    }
+
+    /// Reconciles only Runs whose recorded staging lease is conclusively
+    /// lost. An inconclusive probe is left untouched for a later scan.
+    #[allow(dead_code)]
+    pub(crate) fn reconcile_lost_action_owners(&self) -> Result<Vec<RunId>, ApplicationError> {
+        let candidates = self.persistence.list_running_action_runs()?;
+        let mut reconciled = Vec::new();
+        for (instance, run, owner) in candidates {
+            if probe_session_owner(self.staging.storage_root(), &owner)
+                != SessionOwnerProbe::ConfirmedLoss
+            {
+                continue;
+            }
+            let lock = self.mutation_lock(instance)?;
+            let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+            if probe_session_owner(self.staging.storage_root(), &owner)
+                != SessionOwnerProbe::ConfirmedLoss
+            {
+                continue;
+            }
+            if self.persistence.reconcile_action_run(run, &owner)? {
+                reconciled.push(run);
+                let _ = cleanup_lost_session(self.staging.storage_root(), &owner);
+            }
+        }
+        Ok(reconciled)
     }
 
     /// `ResolveManualRecovery` is a no-Hook, no-Compiler, no-Run management

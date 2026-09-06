@@ -256,12 +256,28 @@ timing. `ManualRecoveryRequired` MUST NOT be a Run outcome.
 
 ### PR-REQ-0051 - Failure detail ordering
 
-The first failure that prevents intended workflow completion MUST be the
-`PrimaryFailure`. Failures arising during cleanup, rollback, or failure handling
-MUST be secondary unless no earlier failure exists and the cleanup failure itself
-prevents completion.
+Failure ordering MUST follow workflow-causal order while preserving failure
+ownership. When the first failure that prevents intended workflow completion is
+Pactrun-owned, it MUST be recorded as the Pactrun `PrimaryFailure`.
 
-**Verification: Pending automated coverage.**
+A Hook completion with `status = failure` MAY itself be the first
+workflow-causal failure. It MUST remain represented by the Hook-owned completion
+result; a Pactrun `PrimaryFailure` is not required in that case. Pactrun MUST
+NOT synthesize a Pactrun-owned error, or translate a Hook-owned result into one,
+merely to populate `PrimaryFailure`.
+
+Pactrun-owned errors arising later during publication, cleanup, rollback, or
+other failure handling MUST remain secondary to that earlier Hook-owned or
+Pactrun-owned failure, including when the earlier Hook-owned failure leaves
+`PrimaryFailure` absent.
+
+An error arising during cleanup or failure handling may be primary only when no
+earlier workflow-causal failure exists and that error itself prevents intended
+workflow completion. This ordering is cross-referenced with the Hook completion
+representation in [PR-REQ-0223](./error-taxonomy-v1.md#pr-req-0223---error-identity-is-not-outcome-or-precedence)
+and [PR-REQ-0212](../package-contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion).
+
+**Verification: PR-TEST-0107, PR-TEST-0110.**
 
 ### PR-REQ-0052 - Cancellation and timeout finalization
 

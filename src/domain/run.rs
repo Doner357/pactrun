@@ -193,6 +193,22 @@ pub(crate) struct RunExecutionView {
     pub(crate) risk_state: RecoveryRiskState,
 }
 
+/// Valid Running Action states. Admission establishes the second boundary;
+/// recovery risk is not legal before that boundary exists.
+pub(crate) fn validate_running_action_state(
+    boundary: ActionRunBoundary,
+    risk_state: RecoveryRiskState,
+) -> Result<(), RunRecordError> {
+    match (boundary, risk_state) {
+        (ActionRunBoundary::Accepted, RecoveryRiskState::Clear)
+        | (ActionRunBoundary::Admitted, RecoveryRiskState::Clear)
+        | (ActionRunBoundary::Admitted, RecoveryRiskState::Open) => Ok(()),
+        (ActionRunBoundary::Accepted, RecoveryRiskState::Open) => Err(RunRecordError::new(
+            "a Running Action cannot have open recovery risk before Admission",
+        )),
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RunArtifactSummary {
     pub(crate) output: ManagedOutputIdentity,
@@ -234,6 +250,12 @@ pub(crate) struct RunView {
     pub(crate) accepted_at_unix_ms: u64,
     pub(crate) action: ActionRunIdentity,
     pub(crate) state: RunState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct RunInspectionData {
+    pub(crate) run: RunView,
+    pub(crate) current_recovery_guard: Option<RecoveryGuardView>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -486,6 +508,28 @@ mod tests {
         assert_eq!(
             risk_transition(RecoveryRiskState::Clear, RecoveryRiskState::Clear),
             Err(RunTransitionError::RiskAlreadyClear)
+        );
+    }
+
+    // Test-ID: PR-TEST-0104
+    // Verifies: PR-REQ-0275
+    #[test]
+    fn running_action_state_matrix_rejects_accepted_open_risk() {
+        assert!(
+            validate_running_action_state(ActionRunBoundary::Accepted, RecoveryRiskState::Clear,)
+                .is_ok()
+        );
+        assert!(
+            validate_running_action_state(ActionRunBoundary::Admitted, RecoveryRiskState::Clear,)
+                .is_ok()
+        );
+        assert!(
+            validate_running_action_state(ActionRunBoundary::Admitted, RecoveryRiskState::Open,)
+                .is_ok()
+        );
+        assert!(
+            validate_running_action_state(ActionRunBoundary::Accepted, RecoveryRiskState::Open,)
+                .is_err()
         );
     }
 }

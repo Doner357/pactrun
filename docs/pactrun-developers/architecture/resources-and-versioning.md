@@ -21,10 +21,51 @@ Run or Run Artifact remaining available.
 
 A Run Artifact MUST belong to its Run and MAY expire independently of retained
 Run metadata. A Run Record MAY have a separate retention policy. Workspaces and
-uncommitted Snapshot Candidates MUST be execution-scoped and cleaned after
-terminal execution.
+uncommitted Snapshot Candidates MUST be execution-scoped; Snapshot Candidate
+execution-scoped lifetime and post-termination cleanup remain unchanged.
 
-**Verification: Pending automated coverage.**
+Action Workspaces MUST remain execution-scoped. For an Action, execution
+termination means that the supervised Hook execution has ended and required
+process-tree termination has been observed. A path on which no Hook process was
+started does not require a Hook-termination event.
+
+Execution termination is distinct from durable Run terminal publication: the
+transaction that publishes the Finished Run outcome and its associated
+authoritative records. “After terminal execution” MUST NOT be interpreted as
+requiring Workspace cleanup to wait until that transaction has committed.
+
+Once execution has terminated and output preparation no longer needs the
+execution Workspace, Pactrun MUST attempt Workspace cleanup. The attempt MAY
+precede durable Run terminal publication. Successful cleanup MUST NOT be a
+prerequisite for terminal publication.
+
+Cleanup failure MAY leave non-authoritative residue. It MUST NOT change the Run
+outcome, create or reopen recovery risk, create a manual-recovery obligation,
+or prevent terminal publication. Residue remains eligible for subsequent
+owner-session teardown or confirmed-owner-loss housekeeping; it MUST NOT become
+managed content merely because it remains on disk.
+
+After confirmed owner loss, orphaned Action Workspace bytes are cleanup-eligible
+under the selected ownership mechanism. Their cleanup MUST NOT recover or
+publish uncommitted output slots.
+
+**Verification: PR-TEST-0106, PR-TEST-0110.**
+
+### PR-REQ-0282 - Execution-workspace housekeeping failures
+
+Cleanup is non-authoritative housekeeping and MUST NOT determine Action
+success. A cleanup failure MUST NOT change an already-selected outcome,
+replace a primary failure, open recovery risk, create a manual-recovery
+obligation, or prevent terminal publication. An error observed before
+terminalization MUST be recorded as a secondary failure under
+[PR-REQ-0051](./execution-and-concurrency.md#pr-req-0051---failure-detail-ordering).
+
+This cleanup MUST be limited to the current Run's execution tree and MUST
+protect other Runs, the owner lease, and prepared output staging. It MUST NOT
+create a durable cleanup queue or extend execution pins. Later housekeeping
+MUST NOT rewrite an existing terminal outcome.
+
+**Verification: PR-TEST-0110.**
 
 ### PR-REQ-0074 - Checkpoint and pin lifetime
 
