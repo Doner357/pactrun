@@ -28,8 +28,8 @@ is Frozen.
   integrated into `develop`. M3 Slice 3 transactional Run acceptance and
   Admission are integrated into `develop`. M3 Slice 4 Hook process launch,
   execution materialization, and the HookProtocolV1 runtime are integrated
-  into `develop`; M3 Slice 5's crate-private finalization substrate is also
-  integrated into `develop`.
+  into `develop`; M3 Slices 5 and 6's finalization substrate and human CLI are
+  also integrated into `develop`.
 - `SnapshotIntegrityFormatV1` is Frozen and merged into `develop` with Rust
   verification, an independent Node 24 oracle, golden vectors, and
   requirement/test traceability.
@@ -61,11 +61,9 @@ is Frozen.
   preserves the earlier metadata, Instance, and binding contracts and remains
   non-Frozen and non-public.
 - The M3 Action execution scope and dependency review is complete. M3 is
-  `In progress`, with Slices 1 through 5 integrated into `develop`, including
-  the Action Hook runtime and Slice 5's crate-private managed-output,
-  finalization, cleanup, owner-loss reconciliation, and inspection-data
-  substrate. Slice 6's user-visible inspection and spelling remain within the
-  approved baseline and existing Frozen contracts.
+  `Complete`, with Slices 1 through 6 integrated into `develop`, including the
+  Action Hook runtime, Slice 5's crate-private managed-output/finalization
+  substrate, and Slice 6's user-visible inspection and human CLI.
 
 ## Milestone states
 
@@ -114,7 +112,7 @@ which remains non-Frozen and non-public.
 
 The M3 review is recorded in the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 is `In progress`; implementation must remain within that baseline and its
+M3 is `Complete`; the implementation remains bounded by that baseline and its
 linked normative requirements.
 
 ## Milestones
@@ -338,8 +336,8 @@ I/O transitions, Executor behavior, and Run records.
 
 The approved scope and work ordering are synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-Exact new CLI spelling remains a required M3 closure item and is not invented by
-this informative roadmap.
+Exact new CLI spelling was a required M3 closure item and is now closed by
+`PR-REQ-0284` and its verification.
 
 The completed M3 Slice 1 implements exact Instance and Action resolution,
 `InvokeAction`, typed primitive parameter binding, side-effect-free immutable
@@ -458,9 +456,9 @@ Action orphan reconciliation, and the production Hook text finalization
 boundary. The additional inspection snapshot test is supporting coverage for
 the crate-private substrate and has no user-visible inspection verification
 edge. `PR-REQ-0097` is verified by `PR-TEST-0114`; that user-visible
-projection remains branch-local until this branch is integrated.
+projection is integrated into `develop` with Slice 6.
 
-The branch-local Slice 6 coverage currently includes `PR-TEST-0114`,
+Slice 6 coverage includes `PR-TEST-0114`,
 `PR-TEST-0115`, `PR-TEST-0116`, `PR-TEST-0117`, `PR-TEST-0118`,
 `PR-TEST-0119`, `PR-TEST-0120`, `PR-TEST-0121`, `PR-TEST-0122`,
 `PR-TEST-0123`, `PR-TEST-0124`, `PR-TEST-0125`, `PR-TEST-0126`,
@@ -476,18 +474,17 @@ launcher resolution, Admission re-selection, `ProcessSupervisor::spawn()`,
 production adapter argv/`env::args_os()`, and the exact second launch.
 `PR-TEST-0140` and `PR-TEST-0141` cover lossless Windows and Linux human Plan
 pathname projections for non-UTF-8 host-native paths, including the read-only
-no-Run/no-launch boundary. The `develop` baseline remains unchanged until this
-branch is integrated.
+no-Run/no-launch boundary. The `develop` baseline now includes this Slice 6
+implementation.
 
-M3 Slices 1 through 5 are closed and integrated into `develop`. Slice 5
+M3 Slices 1 through 6 are closed and integrated into `develop`. Slice 5
 completed Managed Action Output atomic publication, owner-held finalization and
 retry, durable Run terminalization, Action owner-loss reconciliation, and the
-crate-private Run/artifact/inspection substrate. The overall M3 milestone
-remains `In progress`; Slice 6 is implemented and verified on this branch but
-is still pending human review and integration. User-visible Run inspection and
-the `PR-REQ-0097` verification are not present in the `develop` baseline.
+crate-private Run/artifact/inspection substrate. Slice 6 completes the human
+Action/Plan/Run and recovery boundary, including the `PR-REQ-0097`
+verification. The overall M3 milestone is `Complete`.
 
-The Slice 6 implementation branch adds the bounded human surface without
+The integrated Slice 6 implementation adds the bounded human surface without
 changing the internal V4 encoding: `action list/show`, foreground `invoke`
 with exact parameter-source handling, side-effect-free `--plan`, structural
 Run inspection, explicit owner reconciliation, and guarded manual recovery.

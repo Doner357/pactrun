@@ -38,19 +38,19 @@ non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
-M3 implementation is in progress: Slices 1 through 5 are integrated into
+M3 implementation is complete: Slices 1 through 6 are integrated into
 `develop`, including the Slice 5 crate-private managed-output, Run finalization,
-cleanup, owner-loss reconciliation, and inspection-data substrate. The current
-Slice 6 branch supplies the user-visible Run inspection, exact human spelling,
-and `PR-REQ-0097` verification while remaining pending review and integration.
+cleanup, owner-loss reconciliation, and inspection-data substrate, plus the
+Slice 6 user-visible Run inspection, exact human spelling, and `PR-REQ-0097`
+verification.
 
-The current Slice 6 implementation branch closes that deferred human boundary
+The integrated Slice 6 implementation closes that deferred human boundary
 with exact Action/Plan/Run command spelling, a structural-only Run formatter,
 read-only inspection and Plan opening, protected file/stdin parameter sources,
 owner-held foreground cancellation, and explicit owner-loss/manual-recovery
 operations. These additions remain crate-private and do not add a public API,
-stable JSON envelope, V5 schema, or Frozen wire change; the branch is pending
-integration into `develop`.
+stable JSON envelope, V5 schema, or Frozen wire change; the result is integrated
+into `develop`.
 
 ## Implementation decisions
 
@@ -255,11 +255,10 @@ sensitive-data contracts are sufficient to begin bounded internal
 implementation. Slice 5 now provides owner-held finalization, atomic eligible
 Action output publication, execution-workspace cleanup, explicit confirmed
 owner-loss reconciliation, and crate-private Run inspection/data access over
-PersistenceSchemaV4. The Slice 6 branch now supplies the human projection and
-traceability for `PR-REQ-0097`; the exact persistence encoding and process
-mechanisms remain implementation choices. Exact new CLI spelling remains
-externally observable and must be closed by a requirement before M3 can be
-marked complete.
+PersistenceSchemaV4. Slice 6 supplies the human projection and traceability for
+`PR-REQ-0097`; the exact persistence encoding and process mechanisms remain
+implementation choices. Exact new CLI spelling is closed by `PR-REQ-0284` and
+its verification, satisfying the M3 human-interface completion gate.
 
 ### RevisionCoreV1 authoring spelling
 

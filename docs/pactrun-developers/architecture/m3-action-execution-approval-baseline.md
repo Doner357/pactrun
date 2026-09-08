@@ -92,16 +92,17 @@ M3 implementation is ordered as these reviewable slices:
 Slice 5 closes only the internal substrate for item 5: owner-held continuation
 advancement, atomic eligible-output publication, execution-workspace cleanup,
 and explicit confirmed-owner-loss reconciliation, together with crate-private
-Run inspection data access. It does not expose the human Run inspection surface
-or complete `PR-REQ-0097`; Slice 6 remains pending.
+Run inspection data access. It did not expose the human Run inspection surface
+or complete `PR-REQ-0097`; those deferred responsibilities are now closed by
+the integrated Slice 6 implementation.
 
-The current Slice 6 implementation branch adds the minimal human boundary over
+The integrated Slice 6 implementation adds the minimal human boundary over
 that substrate. Its inspection and `--plan` commands use an exact V4 read-only
 opening; its foreground invocation keeps one cancellation controller and owner
 through acceptance, Hook supervision, cleanup, and durable finalization; and
 its recovery commands distinguish owner-loss reconciliation from the guarded
-manual operator assertion. The branch also verifies `PR-REQ-0097` using
-`PR-TEST-0114`; its branch-local Slice 6 verification additionally includes
+manual operator assertion. The integrated implementation also verifies
+`PR-REQ-0097` using `PR-TEST-0114`; its Slice 6 verification additionally includes
 `PR-TEST-0131`, `PR-TEST-0132`, and `PR-TEST-0133` for POSIX and Windows
 lifecycle coverage, plus the Windows interactive exact-launch regressions
 `PR-TEST-0134`, `PR-TEST-0135`, `PR-TEST-0136`, `PR-TEST-0137`, and
@@ -110,13 +111,14 @@ production Action → `ProcessSupervisor` → adapter argv/`env::args_os()` →
 exact second-launch regression is `PR-TEST-0139`. `PR-TEST-0140` and
 `PR-TEST-0141` cover lossless Windows and Linux human `--plan` rendering for
 host-native launcher pathnames while preserving the read-only preview boundary.
-The branch remains pending human review and integration and does not change the Frozen
+Slice 6 is closed and integrated into `develop`; it does not change the Frozen
 protocol, V4 historical encoding, or public API scope.
 
 The internal persistence encoding and platform mechanisms remain implementation
 decisions, but they must preserve the linked durable and crash-visible meaning.
-Exact new CLI spelling is externally observable and must be closed in a
-requirement before M3 completion; this approval does not guess or freeze it.
+Exact new CLI spelling is externally observable and is closed by
+`PR-REQ-0284` and its verification; no additional Frozen or public interface is
+implied.
 
 ## Explicit exclusions
 
