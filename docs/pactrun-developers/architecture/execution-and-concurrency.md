@@ -243,7 +243,8 @@ admission checks. Admission failures, including stale
 `InstanceStateVersion`, missing exact references, and failed remaining
 preconditions, and all later execution failures MUST be recorded in that Run.
 
-**Verification: PR-TEST-0089.**
+**Verification: PR-TEST-0089, PR-TEST-0121, PR-TEST-0123, PR-TEST-0126,
+PR-TEST-0128.**
 
 ### PR-REQ-0050 - Run phase and outcome
 
@@ -286,4 +287,57 @@ request cancellation, propagate it, observe Hook termination, perform required
 finalization, and only then publish a terminal outcome. `TimedOut` MUST identify
 termination caused by Pactrun policy.
 
-**Verification: PR-TEST-0097, PR-TEST-0103.**
+**Verification: PR-TEST-0097, PR-TEST-0103, PR-TEST-0124, PR-TEST-0127,
+PR-TEST-0132.**
+
+### PR-REQ-0286 - Foreground cancellation and execution ownership
+
+The M3 human `invoke` MUST install one invocation-scoped cancellation
+controller before storage opening and source acquisition, and carry it through
+resolution, compilation, acceptance, Admission, Hook execution, and
+finalization. Cancellation before durable acceptance MUST win the explicit
+acceptance arbitration and MUST NOT create a Run. Once acceptance is durably
+committed, cancellation is an owner-held terminal request: it MUST preserve the
+candidate RunId, complete the applicable no-launch or process-termination path,
+perform cleanup and durable finalization, and MUST NOT release the owner lease,
+exit, or rewrite an already-won completion, failure, or timeout.
+
+Launch and cancellation MUST have a serialized gate. A forced Hook/process-tree
+termination, protocol EOF, crash, or child exit MUST NOT by itself establish
+Pactrun owner loss while the CLI lease remains held. The live CLI owner MUST
+continue process observation, recovery-consequence handling, cleanup, output
+publication, and terminal retry at the fixed 1000ms interval. `Ctrl+C` is
+repeatable and does not provide an owner-loss or force-exit spelling.
+
+An accepted no-launch path MUST state that no Hook process was created and MUST
+not fabricate observed termination, completion, or output. The existing
+terminal outcome arbiter and 5000ms default termination grace remain the
+authority for execution outcomes.
+
+The acceptance arbitration boundary is the final durable-commit decision. The
+arbiter is not held across Admission: a cancellation request that wins before
+that decision rolls back the prepared acceptance, while a decision that has
+committed retains its candidate RunId even when the caller cannot immediately
+observe the commit result. Recovery retries read and act on that exact
+candidate; they never allocate a replacement Run.
+
+For non-interactive POSIX Hooks, the supervised process is placed in its own
+process group and termination targets that group. Interactive POSIX Hooks use a
+private PTY adapter that creates a session and controlling terminal for the
+Hook while the Pactrun owner retains the foreground terminal; the adapter and
+all descendants remain in one killable process group. `/proc` descendant
+enumeration and root-only fallback termination are not part of this profile.
+The adapter is implemented only on the supported POSIX targets and fails
+closed on other POSIX targets. On Windows, an interactive adapter inherits the
+owner's console but installs the console-ignore disposition before starting the
+real Hook; the owner receives and arbitrates Ctrl+C while the Job Object
+contains the adapter and its descendants.
+
+Timeout values are validated before Run acceptance. Zero and finite values
+through the runtime's signed-millisecond boundary are valid; larger values,
+including `u64::MAX`, are rejected rather than becoming an immediate deadline
+or being saturated.
+
+**Verification: PR-TEST-0117, PR-TEST-0121, PR-TEST-0122, PR-TEST-0123,
+PR-TEST-0124, PR-TEST-0125, PR-TEST-0126, PR-TEST-0127, PR-TEST-0128,
+PR-TEST-0129, PR-TEST-0130, PR-TEST-0131, PR-TEST-0132, PR-TEST-0133.**

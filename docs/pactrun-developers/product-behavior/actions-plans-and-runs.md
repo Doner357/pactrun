@@ -20,16 +20,18 @@ Pactrun MUST resolve the exact Instance and Action, normalize parameters,
 validate readiness and policy, compile the workflow, and complete admission
 before launching the Hook.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0119, PR-TEST-0131, PR-TEST-0133.**
 
 ### PR-REQ-0095 - Plan preview
 
 A managed execution command SHOULD offer a side-effect-free plan view showing
 exact references, requirements, Migration paths, projected incomplete state,
-Cleanup requirements, and warnings when applicable. Producing a plan MUST NOT
-create a Run, reservation, lock, pin, or GC root.
+Cleanup requirements, and warnings when applicable. Host-native path fields in
+the human projection MUST remain lossless, using readable terminal escaping for
+valid UTF-8 and an explicit native code-unit or byte form for non-UTF-8 paths.
+Producing a plan MUST NOT create a Run, reservation, lock, pin, or GC root.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0120, PR-TEST-0140, PR-TEST-0141.**
 
 ### PR-REQ-0096 - Plan staleness
 
@@ -38,7 +40,7 @@ execution MUST revalidate the expected Instance state version, exact resources,
 policy, and environment. If they changed, execution MUST fail as invalidated
 rather than silently changing the workflow.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0115.**
 
 ## Run history
 
@@ -54,16 +56,53 @@ from the Instance trust consequence. It MUST be able to report the primary
 failure, secondary failure-handling errors, failed logical step, Hook result,
 diagnostics, output references, and timing when available.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0114.**
 
-Slice 5 provides only the crate-private RunView, ordered Run enumeration, a
-single-snapshot Run-plus-current-recovery-guard inspection substrate, and
-independent Run Artifact streaming and expiry needed by a later inspection
-surface. Supporting coverage is provided by `PR-TEST-0105`, `PR-TEST-0106`,
-`PR-TEST-0107`, `PR-TEST-0109`, `PR-TEST-0110`, and the Slice 5 inspection
-snapshot test; these tests do not establish user-visible inspection. Human
-inspection and exact presentation remain deferred to Slice 6. This is
-supporting coverage only and is not verification of `PR-REQ-0097`.
+The crate-private RunView and the Slice 5 single-snapshot inspection substrate
+remain the implementation basis for this user-visible projection.
+
+### PR-REQ-0285 - Structural-only human Run inspection
+
+The ordinary human `run show`, `run list`, and invocation summaries MUST use a
+typed structural projection rather than formatting arbitrary persisted Run
+text. They MAY show Run, Instance, Revision, and Action identities, phase,
+outcome, timing, taxonomy references, failed logical step, structural Hook
+success or failure, published output identities and byte lengths, terminal
+recovery risk, the current same-snapshot recovery guard, and fixed Pactrun
+diagnostics.
+
+They MUST NOT show Legacy or current Hook code, completion messages, diagnostic
+messages, protocol-error text, arbitrary persisted failure messages, or any
+free-text derivative such as a fragment, length, hash, or encoding. A Hook
+completion MUST be rendered as structural status with fixed text stating that
+Hook free text is not displayed. Terminal escaping for an allowed identity is
+not redaction. Historical absent, present-empty, and present-value fields MUST
+remain exact in persistence while mapping to the same restricted human view.
+
+**Verification: PR-TEST-0114.**
+
+### PR-REQ-0288 - Invocation parameter sources and policy values
+
+The M3 human invocation MUST accept repeated `--param <parameter-id>=<text>`
+sources as `Ordinary` values, repeated `--param-file
+<parameter-id>=<host-path>` sources as complete UTF-8 `Protected` values, and
+one `--param-stdin <parameter-id>` source as a complete UTF-8 `Protected`
+value. The first `=` separates identity from text or path; values are not
+trimmed, Unicode-normalized, BOM-stripped, shell-expanded, or otherwise
+rewritten. Duplicate identities, unknown parameters, and conflicting stdin
+sources MUST be rejected before source acquisition. An `interactive` Action
+MUST reject `--param-stdin` even for preview. Effective redaction MUST remain
+the declaration-or-Protected-source maximum, and parameter values MUST NOT
+appear in plans, Run history, or ordinary diagnostics.
+
+Non-negative decimal timeout values MUST be safely converted before deadline
+construction. Zero means immediate expiry or no grace; omitted startup and
+Action timeouts are unlimited and omitted termination grace is 5000ms. Values
+above the runtime's signed-millisecond boundary, including `u64::MAX`, MUST be
+rejected before Run acceptance; timeout construction MUST not fall back to the
+start instant or saturate.
+
+**Verification: PR-TEST-0116, PR-TEST-0129, PR-TEST-0130.**
 
 ### PR-REQ-0281 - Atomic managed-output publication and late completion
 

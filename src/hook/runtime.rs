@@ -32,7 +32,7 @@ use super::{
     outcome_and_failure,
     platform::{ProcessSupervisor, ProtocolListener},
     protocol::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
-    ready_failure,
+    ready_cancelled, ready_failure,
 };
 
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
@@ -129,10 +129,17 @@ pub(super) fn execute_registered(
     cancellation: ActionCancellation,
 ) -> OwnerContinuation {
     let run = admitted.run();
+    if cancellation.is_requested() {
+        return ready_cancelled(run, Vec::new(), None);
+    }
     let materialized = match MaterializedAction::create(persistence, staging, &admitted) {
         Ok(materialized) => materialized,
         Err(_) => return ready_failure(run, FailureKind::SessionMaterialization, Vec::new(), None),
     };
+    if cancellation.is_requested() {
+        let (execution, outputs) = materialized.into_execution();
+        return ready_cancelled(run, outputs, Some(execution));
+    }
     let listener = match ProtocolListener::bind() {
         Ok(listener) => listener,
         Err(_) => {
@@ -145,13 +152,19 @@ pub(super) fn execute_registered(
             );
         }
     };
-    let supervisor = match ProcessSupervisor::spawn(
-        materialized.program(),
-        materialized.arguments(),
-        admitted.plan().terminal(),
-        &listener,
-    ) {
-        Ok(supervisor) => supervisor,
+    let supervisor = match cancellation.arbitrate_launch(|| {
+        ProcessSupervisor::spawn(
+            materialized.program(),
+            materialized.arguments(),
+            admitted.plan().terminal(),
+            &listener,
+        )
+    }) {
+        Ok(Some(supervisor)) => supervisor,
+        Ok(None) => {
+            let (execution, outputs) = materialized.into_execution();
+            return ready_cancelled(run, outputs, Some(execution));
+        }
         Err(_) => {
             let (execution, outputs) = materialized.into_execution();
             return ready_failure(run, FailureKind::Launch, outputs, Some(execution));
@@ -175,8 +188,12 @@ pub(super) fn execute_registered(
             completion_accepted: false,
             submitted_handles: Vec::new(),
             exit_status: None,
-            startup_deadline: policy.startup_timeout.map(|timeout| started + timeout),
-            action_deadline: policy.action_timeout.map(|timeout| started + timeout),
+            startup_deadline: policy
+                .startup_timeout
+                .map(|timeout| checked_deadline(started, timeout)),
+            action_deadline: policy
+                .action_timeout
+                .map(|timeout| checked_deadline(started, timeout)),
             termination: None,
             policy,
             cancellation,
@@ -425,9 +442,18 @@ fn begin_termination(live: &mut LiveExecution, now: Instant, reason: CancelReaso
     }
     live.termination = Some(Termination {
         reason,
-        forced_at: live.policy.termination_grace.map(|grace| now + grace),
+        forced_at: live
+            .policy
+            .termination_grace
+            .map(|grace| checked_deadline(now, grace)),
     });
     send_cancel(live, reason);
+}
+
+fn checked_deadline(start: Instant, duration: Duration) -> Instant {
+    start
+        .checked_add(duration)
+        .expect("runtime deadline was validated before execution")
 }
 
 fn send_cancel(live: &mut LiveExecution, reason: CancelReason) {
@@ -604,6 +630,7 @@ fn finish_after_exit(
             primary_failure,
             hook_completion: live.hook_completion,
             completion_accepted: live.completion_accepted,
+            process_started: true,
             process_terminated: true,
             submitted_outputs,
             outputs,

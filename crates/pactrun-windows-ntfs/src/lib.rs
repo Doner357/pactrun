@@ -5,7 +5,10 @@
 #[cfg(windows)]
 mod process;
 #[cfg(windows)]
-pub use process::{HookProcess, HookTerminal};
+pub use process::{
+    HookProcess, HookTerminal, allocate_console, generate_console_ctrl_c, ignore_console_ctrl_c,
+    run_exact_in_current_job,
+};
 
 #[cfg(windows)]
 mod implementation {

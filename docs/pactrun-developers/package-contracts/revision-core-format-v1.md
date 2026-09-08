@@ -314,9 +314,14 @@ similar executable-image probe.
 
 Executor MUST launch the exact admitted path without searching again. On
 Windows it MUST pass that exact path as the `CreateProcessW` application path;
-actual image launchability is decided by `CreateProcessW`. If process launch
-fails, Pactrun MUST report launch or execution failure and MUST NOT fall back to
-a later launcher-search directory.
+actual image launchability is decided by `CreateProcessW`. An explicit
+`lpApplicationName` launch is not a shell-redirection request; the Executor may
+apply an explicit fail-closed image guard to a batch-suffixed candidate without
+changing the exact-path rule. If process launch fails, Pactrun MUST report
+launch or execution failure and MUST NOT fall back to a later launcher-search
+directory. Foreground interactive cancellation is covered by the platform
+process-group/console contract and remains owner-arbitrated rather than
+becoming a Hook-owned escape path.
 
 Direct launch selects the materialized owned executable. Runtime implementations
 must deliver the specified argument tail while treating `argv[0]` as
@@ -327,12 +332,15 @@ reparse retargeting, or a changed object behind the same candidate path requires
 a separate launcher object-identity and replacement-detection semantic closure.
 This requirement does not implicitly define one.
 
+**Verification: PR-TEST-0125.**
+
 This requirement defines runtime behavior but is intentionally not claimed by
 Revision Core golden vectors. It requires future Compiler, Admission, and
 Executor integration tests.
 
 **Verification: PR-TEST-0081, PR-TEST-0090, PR-TEST-0095, PR-TEST-0101,
-PR-TEST-0102.**
+PR-TEST-0102, PR-TEST-0134, PR-TEST-0135, PR-TEST-0136, PR-TEST-0137,
+PR-TEST-0138, PR-TEST-0139.**
 
 ### PR-REQ-0274 - Host launcher candidate eligibility
 
@@ -362,7 +370,8 @@ API to create an additional executable-image contract. The
 NOT append `.exe`, use `PATH` or `PATHEXT`, invoke file associations, or perform
 extension inference.
 
-**Verification: PR-TEST-0081.**
+**Verification: PR-TEST-0081, PR-TEST-0138, PR-TEST-0139, PR-TEST-0140,
+PR-TEST-0141.**
 
 ## Runtime content, canonical bytes, and digest
 

@@ -11,7 +11,11 @@ use std::{
     io::{self, Cursor, Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc, Barrier,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -21,6 +25,7 @@ use tempfile::TempDir;
 
 use super::{
     ActionCancellation, HookRuntimePolicy, OwnerContinuation, RuntimeTerminalFacts,
+    checked_deadline,
     platform::ProtocolListener,
     protocol::{self, PREAMBLE, ProtocolState, ProtocolStep, WireEvent},
 };
@@ -46,6 +51,88 @@ const ARGUMENT_TAIL: &str = "slice4-argument-tail";
 const MODE_PREFIX: &str = "pactrun-hook-mode:";
 const LINGER: Duration = Duration::from_millis(1500);
 const WAIT_LIMIT: Duration = Duration::from_secs(60);
+
+// Test-ID: PR-TEST-0122
+// Verifies: PR-REQ-0286
+#[test]
+fn launch_cancellation_gate_has_deterministic_concurrent_ordering() {
+    let spawned = Arc::new(AtomicUsize::new(0));
+    let cancellation = ActionCancellation::default();
+    let before = Arc::new(Barrier::new(2));
+    let after = Arc::new(Barrier::new(2));
+    let _gate_entered = cancellation.install_launch_test_hooks(Arc::clone(&before), after.clone());
+    let launch = {
+        let cancellation = cancellation.clone();
+        let spawned = Arc::clone(&spawned);
+        thread::spawn(move || {
+            cancellation.arbitrate_launch(|| {
+                spawned.fetch_add(1, Ordering::AcqRel);
+                Ok::<_, ()>(())
+            })
+        })
+    };
+    // The request is concurrent with the launch attempt, but the launch
+    // thread is held at its pre-gate seam, so this ordering is deterministic.
+    let request = {
+        let cancellation = cancellation.clone();
+        thread::spawn(move || cancellation.request())
+    };
+    request.join().unwrap();
+    before.wait();
+    after.wait();
+    assert_eq!(launch.join().unwrap().unwrap(), None);
+    assert_eq!(spawned.load(Ordering::Acquire), 0);
+
+    let spawned = Arc::new(AtomicUsize::new(0));
+    let cancellation = ActionCancellation::default();
+    let before = Arc::new(Barrier::new(2));
+    let after = Arc::new(Barrier::new(2));
+    let gate_entered = cancellation.install_launch_test_hooks(before.clone(), after.clone());
+    let launch = {
+        let cancellation = cancellation.clone();
+        let spawned = Arc::clone(&spawned);
+        thread::spawn(move || {
+            cancellation.arbitrate_launch(|| {
+                spawned.fetch_add(1, Ordering::AcqRel);
+                Ok::<_, ()>("supervised-process")
+            })
+        })
+    };
+    before.wait();
+    while !gate_entered.load(Ordering::Acquire) {
+        thread::yield_now();
+    }
+    let (started, ready) = mpsc::channel();
+    let request = {
+        let cancellation = cancellation.clone();
+        thread::spawn(move || {
+            started.send(()).unwrap();
+            cancellation.request();
+        })
+    };
+    ready.recv().unwrap();
+    after.wait();
+    assert_eq!(launch.join().unwrap().unwrap(), Some("supervised-process"));
+    request.join().unwrap();
+    assert_eq!(spawned.load(Ordering::Acquire), 1);
+    assert!(cancellation.is_requested());
+}
+
+// Test-ID: PR-TEST-0129
+// Verifies: PR-REQ-0286, PR-REQ-0288
+#[test]
+fn runtime_deadline_validation_accepts_zero_and_real_boundary_only() {
+    assert!(HookRuntimePolicy::from_millis(Some(0), Some(1), Some(5_000)).is_ok());
+    assert!(HookRuntimePolicy::from_millis(Some(5_000), Some(60_000), Some(5_000)).is_ok());
+    let maximum = i64::MAX as u64;
+    assert!(HookRuntimePolicy::from_millis(Some(maximum), None, None).is_ok());
+    assert!(HookRuntimePolicy::from_millis(Some(maximum + 1), None, None).is_err());
+    assert!(HookRuntimePolicy::from_millis(Some(u64::MAX), None, None).is_err());
+
+    let start = Instant::now();
+    assert!(checked_deadline(start, Duration::from_millis(maximum)).is_some());
+    assert!(checked_deadline(start, Duration::MAX).is_none());
+}
 
 // ---------------------------------------------------------------------------
 // Fixture
@@ -486,10 +573,17 @@ fn frame_bytes(value: &Value) -> Vec<u8> {
 
 #[test]
 fn m3_hook_worker() {
+    let arguments: Vec<String> = env::args().skip(1).collect();
+    // The Unix interactive test adapter is itself a libtest process. It
+    // inherits the owner's protocol environment while running the adapter
+    // test, but that process is not the Hook and must not compete for the
+    // owner's one-connection listener.
+    if env::var_os("PACTRUN_INTERNAL_INTERACTIVE_ADAPTER_READY").is_some() {
+        return;
+    }
     let Some(transport) = env::var_os(TRANSPORT_ENVIRONMENT) else {
         return;
     };
-    let arguments: Vec<String> = env::args().skip(1).collect();
     if let Some(mode) = arguments
         .iter()
         .find_map(|argument| argument.strip_prefix(MODE_PREFIX))
@@ -1343,7 +1437,7 @@ fn windows_launches_extensionless_images_and_never_substitutes_exe_or_cmd() {
         assert_eq!(facts.outcome, RunOutcome::Succeeded);
     }
 
-    // Refuse batch script content without executing it through cmd.exe.
+    // Refuse batch script content without executing the script body.
     for extension in ["cmd", "bat"] {
         let fixture = RuntimeFixture::with_source(|source, launcher, manifest| {
             *manifest = manifest.replace("broken.bin", &format!("hook.{extension}"));
@@ -1364,7 +1458,7 @@ fn windows_launches_extensionless_images_and_never_substitutes_exe_or_cmd() {
             );
             assert!(
                 !fixture.temporary.path().join("source/shell-ran").exists(),
-                "CreateProcessW executed {action} .{extension} through an implicit shell"
+                "batch candidate {action} .{extension} reached shell handling"
             );
             assert_eq!(
                 failure_ref(&facts),
@@ -2231,4 +2325,25 @@ fn cleanup_failure_leaves_residue_but_does_not_block_terminal_publication() {
         "cleanup residue remains non-authoritative"
     );
     assert!(outcome.artifacts.is_empty());
+}
+
+// Test-ID: PR-TEST-0117
+// Verifies: PR-REQ-0286
+#[test]
+fn cancellation_before_hook_launch_creates_no_child_process() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("cancel-before-launch");
+    let cancellation = ActionCancellation::default();
+    cancellation.request();
+
+    let facts = fixture.execute_with(
+        "direct",
+        "success",
+        &marker,
+        policy(None, None, None),
+        cancellation,
+    );
+    assert_eq!(facts.outcome, RunOutcome::Cancelled);
+    assert!(!facts.process_started && !facts.process_terminated);
+    assert!(!marker.exists(), "cancellation launched the Hook child");
 }

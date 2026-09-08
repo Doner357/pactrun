@@ -40,9 +40,17 @@ The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
 M3 implementation is in progress: Slices 1 through 5 are integrated into
 `develop`, including the Slice 5 crate-private managed-output, Run finalization,
-cleanup, owner-loss reconciliation, and inspection-data substrate. User-visible
-Run inspection, exact human spelling, and `PR-REQ-0097` verification remain
-deferred to Slice 6.
+cleanup, owner-loss reconciliation, and inspection-data substrate. The current
+Slice 6 branch supplies the user-visible Run inspection, exact human spelling,
+and `PR-REQ-0097` verification while remaining pending review and integration.
+
+The current Slice 6 implementation branch closes that deferred human boundary
+with exact Action/Plan/Run command spelling, a structural-only Run formatter,
+read-only inspection and Plan opening, protected file/stdin parameter sources,
+owner-held foreground cancellation, and explicit owner-loss/manual-recovery
+operations. These additions remain crate-private and do not add a public API,
+stable JSON envelope, V5 schema, or Frozen wire change; the branch is pending
+integration into `develop`.
 
 ## Implementation decisions
 
@@ -156,6 +164,16 @@ does not claim their runtime implementation.
 - requirement-backed minimal invocation, plan, Run, sensitive-parameter,
   cancellation, and manual-recovery spelling before M3 completion.
 
+On Windows, exact admitted Hook pathnames remain host-native (`Path`/`OsStr`/
+`OsString`) across the interactive adapter and reach the native launcher
+without UTF-8 conversion. An explicit `lpApplicationName` `CreateProcessW`
+launch is not shell redirection; the Executor-side `GetBinaryTypeW` guard
+rejects non-image batch-suffixed candidates while native PE names remain
+eligible. The human `--plan` projection also preserves host-native launcher
+pathnames: valid UTF-8 uses the existing readable terminal escaping, while
+non-UTF-8 Windows and POSIX paths use explicit native UTF-16 and byte forms;
+this is not a stable machine protocol.
+
 Workspace remains execution-scoped scratch. Persistent service-resource
 authority is not part of Frozen Hook Protocol V1 or this phase.
 
@@ -237,9 +255,9 @@ sensitive-data contracts are sufficient to begin bounded internal
 implementation. Slice 5 now provides owner-held finalization, atomic eligible
 Action output publication, execution-workspace cleanup, explicit confirmed
 owner-loss reconciliation, and crate-private Run inspection/data access over
-PersistenceSchemaV4. It does not expose user-visible Run inspection or close
-`PR-REQ-0097`; those remain Slice 6 work. The exact persistence encoding and
-process mechanisms are implementation choices. Exact new CLI spelling remains
+PersistenceSchemaV4. The Slice 6 branch now supplies the human projection and
+traceability for `PR-REQ-0097`; the exact persistence encoding and process
+mechanisms remain implementation choices. Exact new CLI spelling remains
 externally observable and must be closed by a requirement before M3 can be
 marked complete.
 

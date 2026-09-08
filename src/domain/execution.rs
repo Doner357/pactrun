@@ -218,6 +218,10 @@ impl ActionExecutionPlan {
         &self.active_bindings
     }
 
+    pub(crate) fn required_inputs_satisfied(&self) -> bool {
+        self.required_inputs_satisfied
+    }
+
     pub(crate) fn runtime_content(&self) -> &[RuntimeFileV1] {
         &self.runtime_content
     }

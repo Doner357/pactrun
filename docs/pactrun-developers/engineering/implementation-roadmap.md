@@ -457,14 +457,48 @@ publication failure ordering, cleanup residue, owner/session lease probing,
 Action orphan reconciliation, and the production Hook text finalization
 boundary. The additional inspection snapshot test is supporting coverage for
 the crate-private substrate and has no user-visible inspection verification
-edge. `PR-REQ-0097` remains Pending automated coverage until Slice 6.
+edge. `PR-REQ-0097` is verified by `PR-TEST-0114`; that user-visible
+projection remains branch-local until this branch is integrated.
+
+The branch-local Slice 6 coverage currently includes `PR-TEST-0114`,
+`PR-TEST-0115`, `PR-TEST-0116`, `PR-TEST-0117`, `PR-TEST-0118`,
+`PR-TEST-0119`, `PR-TEST-0120`, `PR-TEST-0121`, `PR-TEST-0122`,
+`PR-TEST-0123`, `PR-TEST-0124`, `PR-TEST-0125`, `PR-TEST-0126`,
+`PR-TEST-0127`, `PR-TEST-0128`, `PR-TEST-0129`, `PR-TEST-0130`,
+`PR-TEST-0131`, `PR-TEST-0132`, `PR-TEST-0133`, `PR-TEST-0134`,
+`PR-TEST-0135`, `PR-TEST-0136`, `PR-TEST-0137`, and `PR-TEST-0138`: structural
+human projection and command spelling, read-only Plan opening, exact
+Ordinary/Protected parameter sources, pre-launch cancellation, explicit
+recovery command boundaries, real POSIX interactive PTY behavior, real
+Windows-console cancellation, and lower-level Windows interactive exact-launch
+behavior. `PR-TEST-0139` covers the full production Action path through
+launcher resolution, Admission re-selection, `ProcessSupervisor::spawn()`,
+production adapter argv/`env::args_os()`, and the exact second launch.
+`PR-TEST-0140` and `PR-TEST-0141` cover lossless Windows and Linux human Plan
+pathname projections for non-UTF-8 host-native paths, including the read-only
+no-Run/no-launch boundary. The `develop` baseline remains unchanged until this
+branch is integrated.
 
 M3 Slices 1 through 5 are closed and integrated into `develop`. Slice 5
 completed Managed Action Output atomic publication, owner-held finalization and
 retry, durable Run terminalization, Action owner-loss reconciliation, and the
 crate-private Run/artifact/inspection substrate. The overall M3 milestone
-remains `In progress`; Slice 6 is the next and final ordered M3 slice.
-User-visible Run inspection and `PR-REQ-0097` remain deferred to Slice 6.
+remains `In progress`; Slice 6 is implemented and verified on this branch but
+is still pending human review and integration. User-visible Run inspection and
+the `PR-REQ-0097` verification are not present in the `develop` baseline.
+
+The Slice 6 implementation branch adds the bounded human surface without
+changing the internal V4 encoding: `action list/show`, foreground `invoke`
+with exact parameter-source handling, side-effect-free `--plan`, structural
+Run inspection, explicit owner reconciliation, and guarded manual recovery.
+Its read-only opening does not create a staging lease or perform migration,
+cleanup, reconciliation, or payload acquisition. Ctrl+C is latched by the
+invocation-scoped owner and is arbitrated at the final durable acceptance
+commit; the arbiter is never held across Admission. An uncertain commit keeps
+the candidate RunId for exact readback/retry, and the same live owner continues
+cancellation, process termination, cleanup, and durable finalization after
+acceptance. The CLI treats handler-install failure and every ordinary I/O or
+retry diagnostic as non-authoritative to Run ownership.
 
 The Windows launch correction uses the narrow `pactrun-windows-ntfs` adapter:
 the exact admitted path is `lpApplicationName`, the primary thread starts
@@ -472,16 +506,21 @@ suspended, the kill-on-close Job Object is assigned, and only then does the
 thread resume. Assignment or resume failure terminates and waits for the
 suspended process. The adapter uses CRT-compatible argument quoting, the parent
 environment with both protocol discovery variables replaced, and an explicit
-standard-handle inheritance list. It inherits the current working directory.
-Process waits use `WaitForSingleObject` and `GetExitCodeProcess`, including
-terminal exit code 259.
+standard-handle inheritance list. Its second launch of the real interactive
+Hook reuses the same native process-creation primitive with the adapter's
+existing Job Object, so no second containment boundary is introduced. It
+inherits the current working directory. Process waits use
+`WaitForSingleObject` and `GetExitCodeProcess`, including terminal exit code
+259.
 
-Windows `CreateProcessW` can itself redirect a batch script to `cmd.exe`.
-The Executor therefore uses `GetBinaryTypeW` only for batch-suffixed paths to
-refuse non-image batch files before that implicit shell can run. A PE named
-`.cmd` or `.bat` still reaches native launch. This implements the existing
-no-implicit-shell boundary; it does not change Compiler or Admission candidate
-eligibility, bind file identity, or detect replacement behind an admitted path.
+Windows passes the exact admitted path as `CreateProcessW`'s
+`lpApplicationName`; that explicit native launch is not shell redirection. The
+Executor uses `GetBinaryTypeW` as an explicit fail-closed guard for a
+batch-suffixed path that is not a native image. A native PE named `.cmd` or
+`.bat` still reaches exact native launch. This preserves the existing
+no-implicit-shell policy without changing Compiler or Admission candidate
+eligibility, bind file identity, or replacement detection behind an admitted
+path.
 
 `PR-TEST-0101` covers extensionless direct and interpreter images, competing
 `.exe` siblings, batch-script refusal, and native images with batch suffixes.
@@ -491,8 +530,23 @@ parent environment and working-directory inheritance, exit-code observation,
 and all three terminal mappings. `PR-TEST-0103` starts a descendant before any
 Hook handshake and proves that process-tree termination releases its live
 exclusive handle. These tests supplement `PR-TEST-0095` and `PR-TEST-0097`.
-They execute only on Windows; complete configured-remote `cargo xtask ci`
-verifies the POSIX path, traceability, Frozen conformance, and documentation.
+They execute only on Windows; `PR-TEST-0125` additionally drives a real Windows
+console event through an isolated console driver and a new Hook process group.
+`PR-TEST-0134` through `PR-TEST-0138` exercise the interactive adapter's
+lower-level second launch for a native PE, a non-image batch candidate, a
+native PE with a batch suffix, a competing sibling/fallback candidate, and a
+pathname that is not round-trippable through Rust UTF-8 `str`.
+`PR-TEST-0139` exercises that pathname through the full production Action,
+including launcher resolution, Admission re-selection, `ProcessSupervisor`,
+the production Pactrun adapter argv and `env::args_os()` boundary, and the
+exact second launch. The Linux real-PTY harness
+exercises the corresponding POSIX foreground-TTY path. `PR-TEST-0140` checks
+that Windows Plan output renders the exact UTF-16 pathname without U+FFFD, and
+`PR-TEST-0141` checks the corresponding invalid-UTF-8 POSIX byte rendering;
+both also verify that preview creates no Run, launch, or staging mutation.
+Complete configured-
+remote `cargo xtask ci` verifies the remaining POSIX path, traceability, Frozen
+conformance, and documentation.
 
 Frozen `HookProtocolV1` has no persistent service-storage authority. M3 MUST NOT
 reinterpret Workspace authority, pins, or `InstanceStateVersion` as authority

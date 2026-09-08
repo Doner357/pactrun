@@ -249,10 +249,6 @@ impl StagingSession {
         ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
     }
 
-    pub(crate) fn storage_root(&self) -> &Path {
-        self.root.parent().unwrap_or(&self.root)
-    }
-
     pub(crate) fn create_execution_directory(
         &self,
         run: RunId,

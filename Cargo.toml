@@ -24,10 +24,12 @@ serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.10"
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 lexopt = "=0.3.2"
+ctrlc = "=3.4.7"
 yaml-rust2 = { version = "=0.11.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1.4", features = ["fs", "process"] }
+rustix = { version = "1.1.4", features = ["fs", "process", "termios"] }
+rustix-openpty = "0.2.0"
 
 [target.'cfg(windows)'.dependencies]
 pactrun-windows-ntfs = { path = "crates/pactrun-windows-ntfs" }

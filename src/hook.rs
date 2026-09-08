@@ -16,14 +16,17 @@ use std::{
     fmt,
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, MutexGuard,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+#[cfg(any(unix, windows))]
+use std::ffi::OsString;
+
 #[cfg(test)]
-use std::sync::atomic::AtomicUsize;
+use std::sync::{Barrier, atomic::AtomicUsize};
 
 use crate::{
     domain::{
@@ -33,10 +36,20 @@ use crate::{
     },
     executor::AdmittedExecution,
     managed_data::{ExecutionDirectory, StagedFile, StagingSession},
-    persistence::{PactrunPersistence, PersistenceError, RunArtifactWrite},
+    persistence::{
+        AcceptanceArbiter, AcceptanceCommitResult, PactrunPersistence, PersistenceError,
+        RunArtifactWrite,
+    },
 };
 
 use self::runtime::LiveExecution;
+
+pub(crate) const INTERACTIVE_ADAPTER_ARGUMENT: &str = platform::INTERACTIVE_ADAPTER_ARGUMENT;
+
+#[cfg(any(unix, windows))]
+pub(crate) fn run_interactive_adapter(arguments: &[OsString]) -> i32 {
+    platform::run_interactive_adapter(arguments)
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct HookRuntimePolicy {
@@ -48,15 +61,174 @@ pub(crate) struct HookRuntimePolicy {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionCancellation {
     requested: Arc<AtomicBool>,
+    acceptance_gate: Arc<Mutex<()>>,
+    #[cfg(test)]
+    acceptance_test_hooks: Arc<Mutex<Option<ArbitrationTestHooks>>>,
+    #[cfg(test)]
+    launch_test_hooks: Arc<Mutex<Option<ArbitrationTestHooks>>>,
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug)]
+struct ArbitrationTestHooks {
+    before_gate: Arc<Barrier>,
+    after_gate: Arc<Barrier>,
+    gate_entered: Arc<AtomicBool>,
 }
 
 impl ActionCancellation {
     pub(crate) fn request(&self) {
+        let _gate = self
+            .acceptance_gate
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         self.requested.store(true, Ordering::Release);
     }
 
-    pub(super) fn is_requested(&self) -> bool {
+    pub(crate) fn is_requested(&self) -> bool {
         self.requested.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn lock_acceptance_gate(&self) -> MutexGuard<'_, ()> {
+        self.acceptance_gate
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    /// Serializes the cancellation decision with the launch commit. The gate
+    /// is held only until the spawn operation returns the real supervisor;
+    /// Hook execution never runs under this lock.
+    pub(crate) fn arbitrate_launch<T, E>(
+        &self,
+        launch: impl FnOnce() -> Result<T, E>,
+    ) -> Result<Option<T>, E> {
+        #[cfg(test)]
+        let test_hooks = self
+            .launch_test_hooks
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .clone();
+        #[cfg(test)]
+        if let Some(hooks) = &test_hooks {
+            hooks.before_gate.wait();
+        }
+
+        let _gate = self.lock_acceptance_gate();
+        #[cfg(test)]
+        if let Some(hooks) = &test_hooks {
+            hooks.gate_entered.store(true, Ordering::Release);
+            hooks.after_gate.wait();
+        }
+        if self.is_requested() {
+            Ok(None)
+        } else {
+            launch().map(Some)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_launch_test_hooks(
+        &self,
+        before_gate: Arc<Barrier>,
+        after_gate: Arc<Barrier>,
+    ) -> Arc<AtomicBool> {
+        let gate_entered = Arc::new(AtomicBool::new(false));
+        *self
+            .launch_test_hooks
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(ArbitrationTestHooks {
+            before_gate,
+            after_gate,
+            gate_entered: Arc::clone(&gate_entered),
+        });
+        gate_entered
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_acceptance_test_hooks(
+        &self,
+        before_gate: Arc<Barrier>,
+        after_gate: Arc<Barrier>,
+    ) -> Arc<AtomicBool> {
+        let gate_entered = Arc::new(AtomicBool::new(false));
+        *self
+            .acceptance_test_hooks
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(ArbitrationTestHooks {
+            before_gate,
+            after_gate,
+            gate_entered: Arc::clone(&gate_entered),
+        });
+        gate_entered
+    }
+}
+
+impl HookRuntimePolicy {
+    pub(crate) fn from_millis(
+        startup_timeout_ms: Option<u64>,
+        action_timeout_ms: Option<u64>,
+        termination_grace_ms: Option<u64>,
+    ) -> Result<Self, &'static str> {
+        let startup_timeout = checked_timeout(startup_timeout_ms)?;
+        let action_timeout = checked_timeout(action_timeout_ms)?;
+        let termination_grace = checked_timeout(termination_grace_ms)?;
+        Ok(Self {
+            startup_timeout,
+            action_timeout,
+            termination_grace,
+        })
+    }
+}
+
+// Keep the accepted wire value inside the signed millisecond range used by
+// the runtime deadline seam. This gives the CLI a stable, testable boundary
+// instead of relying on platform-specific `Instant` capacity for enormous
+// durations.
+const MAX_TIMEOUT_MS: u64 = i64::MAX as u64;
+
+fn checked_timeout(value: Option<u64>) -> Result<Option<Duration>, &'static str> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value > MAX_TIMEOUT_MS {
+        return Err("timeout value cannot be represented as a runtime deadline");
+    }
+    let duration = Duration::from_millis(value);
+    checked_deadline(Instant::now(), duration)
+        .map(|_| Some(duration))
+        .ok_or("timeout value cannot be represented as a runtime deadline")
+}
+
+fn checked_deadline(start: Instant, duration: Duration) -> Option<Instant> {
+    start.checked_add(duration)
+}
+
+impl AcceptanceArbiter for ActionCancellation {
+    fn before_durable_acceptance(
+        &self,
+        commit: impl FnOnce() -> Result<(), PersistenceError>,
+    ) -> AcceptanceCommitResult {
+        #[cfg(test)]
+        let test_hooks = self
+            .acceptance_test_hooks
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .clone();
+        #[cfg(test)]
+        if let Some(hooks) = &test_hooks {
+            hooks.before_gate.wait();
+        }
+        let _gate = self.lock_acceptance_gate();
+        #[cfg(test)]
+        if let Some(hooks) = &test_hooks {
+            hooks.gate_entered.store(true, Ordering::Release);
+            hooks.after_gate.wait();
+        }
+        if self.is_requested() {
+            AcceptanceCommitResult::Cancelled
+        } else {
+            AcceptanceCommitResult::Committed(commit())
+        }
     }
 }
 
@@ -72,6 +244,7 @@ pub(crate) struct RuntimeTerminalFacts {
     pub(crate) primary_failure: Option<RunPrimaryFailure>,
     pub(crate) hook_completion: Option<HookCompletionRecord>,
     pub(crate) completion_accepted: bool,
+    pub(crate) process_started: bool,
     pub(crate) process_terminated: bool,
     pub(crate) submitted_outputs: Vec<ManagedOutputIdentity>,
     pub(crate) outputs: Vec<LiveOutputSlot>,
@@ -97,6 +270,7 @@ impl fmt::Debug for RuntimeTerminalFacts {
             .field("primary_failure", &self.primary_failure)
             .field("hook_completion", &self.hook_completion.is_some())
             .field("completion_accepted", &self.completion_accepted)
+            .field("process_started", &self.process_started)
             .field("process_terminated", &self.process_terminated)
             .field("submitted_outputs", &self.submitted_outputs)
             .field("outputs", &self.outputs)
@@ -497,7 +671,7 @@ fn finalize_owner_state(
     staging: &StagingSession,
     mut state: FinalizationState,
 ) -> Result<FinalizationAdvance, Box<(FinalizationState, PersistenceError)>> {
-    if !state.facts.process_terminated {
+    if state.facts.process_started && !state.facts.process_terminated {
         return Err(Box::new((
             state,
             PersistenceError::InvalidRunTransition(
@@ -656,7 +830,33 @@ pub(super) fn ready_failure(
             primary_failure,
             hook_completion: None,
             completion_accepted: false,
+            process_started: false,
             process_terminated: true,
+            submitted_outputs: Vec::new(),
+            outputs,
+            execution,
+        },
+        prepared: None,
+        cleanup_attempted: false,
+        publication_failed: false,
+        cleanup_failed: false,
+    })
+}
+
+pub(super) fn ready_cancelled(
+    run: RunId,
+    outputs: Vec<LiveOutputSlot>,
+    execution: Option<ExecutionDirectory>,
+) -> OwnerContinuation {
+    OwnerContinuation::ReadyToFinalize(FinalizationState {
+        facts: RuntimeTerminalFacts {
+            run,
+            outcome: RunOutcome::Cancelled,
+            primary_failure: None,
+            hook_completion: None,
+            completion_accepted: false,
+            process_started: false,
+            process_terminated: false,
             submitted_outputs: Vec::new(),
             outputs,
             execution,

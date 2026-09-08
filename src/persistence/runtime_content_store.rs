@@ -35,7 +35,7 @@ const STAGING_NAME_ATTEMPTS: usize = 32;
 pub(crate) struct RuntimeContentStore {
     root: PathBuf,
     root_file: File,
-    lock_file: File,
+    lock_file: Option<File>,
     in_process_lock: Mutex<()>,
     instance: Arc<StoreInstanceMarker>,
     #[cfg(test)]
@@ -210,7 +210,20 @@ impl RuntimeContentStore {
         Ok(Self {
             root,
             root_file,
-            lock_file,
+            lock_file: Some(lock_file),
+            in_process_lock: Mutex::new(()),
+            instance: Arc::new(StoreInstanceMarker(0)),
+            #[cfg(test)]
+            observer: TestObserver::default(),
+        })
+    }
+
+    pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, RuntimeContentStoreError> {
+        let (root, root_file) = open_supported_root(root.as_ref())?;
+        Ok(Self {
+            root,
+            root_file,
+            lock_file: None,
             in_process_lock: Mutex::new(()),
             instance: Arc::new(StoreInstanceMarker(0)),
             #[cfg(test)]
@@ -456,11 +469,16 @@ impl RuntimeContentStore {
             .in_process_lock
             .lock()
             .map_err(|_| RuntimeContentStoreError::LockPoisoned)?;
-        self.lock_file
+        let lock_file = self.lock_file.as_ref().ok_or_else(|| {
+            RuntimeContentStoreError::UnsupportedStorageProfile(
+                "runtime-content store is read-only".to_owned(),
+            )
+        })?;
+        lock_file
             .lock()
             .map_err(|error| RuntimeContentStoreError::lock("acquire publication lock", error))?;
         let result = operation();
-        let unlock = File::unlock(&self.lock_file)
+        let unlock = File::unlock(lock_file)
             .map_err(|error| RuntimeContentStoreError::lock("release publication lock", error));
         match (result, unlock) {
             (Ok(value), Ok(())) => Ok(value),

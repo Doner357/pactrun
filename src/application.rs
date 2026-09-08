@@ -10,17 +10,30 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    static FAIL_FINALIZATION_ADVANCES_FOR_TEST: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_finalization_advances_for_test(count: usize) {
+    FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|remaining| remaining.set(count));
+}
+
 pub(crate) use installation::{InstallPackResult, MigrationRelationState};
 
 use crate::{
     authoring::{AuthoringError, SourceAcquisitionError},
     domain::{
         ActionCompilationObservation, ActionExecutionPlan, ActionIdentity, ActionResolutionError,
-        ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName, InstanceStateVersion,
-        InstanceSummary, InstanceView, InvokeAction, LocalAlias, ManagedOutputIdentity,
-        PlanCompilationError, RawParameterInput, ReferenceLabel, RevisionCoreV1Error,
-        RevisionIdentity, RevisionMetadataMutationBatch, RunId, RunInspectionData, RunSummary,
-        RunView, bind_action_parameters,
+        ActionV1, ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName,
+        InstanceStateVersion, InstanceSummary, InstanceView, InvokeAction, LocalAlias,
+        ManagedOutputIdentity, PlanCompilationError, RawParameterInput, ReferenceLabel,
+        RevisionCoreV1Error, RevisionIdentity, RevisionMetadataMutationBatch, RunFinish, RunId,
+        RunInspectionData, RunOutcome, RunSummary, RunView, bind_action_parameters,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
     hook::{ActionCancellation, ContinuationGuard, HookRuntimePolicy, OwnerContinuationRegistry},
@@ -153,7 +166,8 @@ impl From<ExecutorError> for ApplicationError {
 }
 pub(crate) struct PactrunApplication {
     persistence: PactrunPersistence,
-    staging: StagingSession,
+    staging: Option<StagingSession>,
+    storage_root: std::path::PathBuf,
     continuations: OwnerContinuationRegistry,
     mutation_locks: Mutex<BTreeMap<InstanceId, Arc<Mutex<()>>>>,
 }
@@ -176,9 +190,44 @@ impl PactrunApplication {
         let persistence = PactrunPersistence::open(&root)?;
         Ok(Self {
             persistence,
-            staging,
+            staging: Some(staging),
+            storage_root: root,
             continuations: OwnerContinuationRegistry::default(),
             mutation_locks: Mutex::new(BTreeMap::new()),
+        })
+    }
+
+    /// Opens only the exact current store for inspection and plan preview.
+    /// This path intentionally has no staging lease and performs no bootstrap,
+    /// migration, cleanup, reservation, pin, or reconciliation work.
+    pub(crate) fn open_read_only(storage_root: impl AsRef<Path>) -> Result<Self, ApplicationError> {
+        let requested = storage_root.as_ref();
+        if requested.as_os_str().is_empty() || !requested.is_absolute() {
+            return Err(ApplicationError::Configuration(
+                "PACTRUN_STORAGE_ROOT must be a non-empty absolute path".to_owned(),
+            ));
+        }
+        let root = validate_supported_storage_root(requested)
+            .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
+        for child in ["database", "runtime-content", "staging"] {
+            validate_supported_storage_root(&root.join(child))
+                .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
+        }
+        let persistence = PactrunPersistence::open_read_only(&root)?;
+        Ok(Self {
+            persistence,
+            staging: None,
+            storage_root: root,
+            continuations: OwnerContinuationRegistry::default(),
+            mutation_locks: Mutex::new(BTreeMap::new()),
+        })
+    }
+
+    fn staging(&self) -> Result<&StagingSession, ApplicationError> {
+        self.staging.as_ref().ok_or_else(|| {
+            ApplicationError::InvalidRequest(
+                "this operation requires a writable Pactrun opening".to_owned(),
+            )
         })
     }
 
@@ -189,7 +238,7 @@ impl PactrunApplication {
     ) -> Result<InstallPackResult, ApplicationError> {
         installation::install_pack_source(
             &self.persistence,
-            &self.staging,
+            self.staging()?,
             source_root,
             explicit_local_metadata,
         )
@@ -243,7 +292,9 @@ impl PactrunApplication {
         }
         let mut staged = Vec::with_capacity(initial.len());
         for mut acquisition in initial {
-            let bytes = self.staging.stage_managed_input(&mut acquisition.source)?;
+            let bytes = self
+                .staging()?
+                .stage_managed_input(&mut acquisition.source)?;
             staged.push((acquisition.input_id, bytes));
         }
         let mut readers = staged
@@ -280,6 +331,65 @@ impl PactrunApplication {
         instance: InstanceId,
     ) -> Result<Option<InstanceView>, ApplicationError> {
         Ok(self.persistence.load_instance_by_id(instance)?)
+    }
+
+    pub(crate) fn load_action_definition(
+        &self,
+        instance_name: &InstanceName,
+        action_id: &ActionIdentity,
+    ) -> Result<(InstanceView, ActionV1), ApplicationError> {
+        let instance_id = self
+            .persistence
+            .resolve_instance_name(instance_name)?
+            .ok_or(ActionResolutionError::InstanceNotFound)?;
+        let instance = self
+            .persistence
+            .load_instance_by_id(instance_id)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant(
+                    "resolved Instance disappeared while loading Action".to_owned(),
+                )
+            })?;
+        let revision = self
+            .persistence
+            .load_revision(&instance.active_revision)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant("active Revision is missing".to_owned())
+            })?;
+        let action = revision
+            .content
+            .core
+            .actions()
+            .iter()
+            .find(|candidate| &candidate.id == action_id)
+            .cloned()
+            .ok_or(ActionResolutionError::ActionNotFound)?;
+        Ok((instance, action))
+    }
+
+    pub(crate) fn list_action_definitions(
+        &self,
+        instance_name: &InstanceName,
+    ) -> Result<(InstanceView, Vec<ActionV1>), ApplicationError> {
+        let instance_id = self
+            .persistence
+            .resolve_instance_name(instance_name)?
+            .ok_or(ActionResolutionError::InstanceNotFound)?;
+        let instance = self
+            .persistence
+            .load_instance_by_id(instance_id)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant(
+                    "resolved Instance disappeared while listing Actions".to_owned(),
+                )
+            })?;
+        let revision = self
+            .persistence
+            .load_revision(&instance.active_revision)?
+            .ok_or_else(|| {
+                ActionResolutionError::RepositoryInvariant("active Revision is missing".to_owned())
+            })?;
+        Ok((instance, revision.content.core.actions().to_vec()))
     }
 
     #[allow(dead_code)]
@@ -418,7 +528,7 @@ impl PactrunApplication {
     ) -> Result<InstanceStateVersion, ApplicationError> {
         let lock = self.mutation_lock(instance)?;
         let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
-        let staged = self.staging.stage_managed_input(&mut source)?;
+        let staged = self.staging()?.stage_managed_input(&mut source)?;
         let mut reader = staged.try_clone_reader()?;
         let mut write = ManagedInputWrite {
             input_id,
@@ -448,7 +558,7 @@ impl PactrunApplication {
         authorize_secret: bool,
     ) -> Result<ExportObservation, ApplicationError> {
         // Observe operations deliberately do not acquire the mutation guard.
-        let mut staged = self.staging.create_managed_output_stage()?;
+        let mut staged = self.staging()?.create_managed_output_stage()?;
         let state_version =
             self.persistence
                 .export_input(instance, input_id, authorize_secret, staged.writer())?;
@@ -474,10 +584,74 @@ impl PactrunApplication {
         Ok(crate::executor::accept_and_admit(
             &self.persistence,
             &crate::workflow::PlatformHostLauncherLookup,
-            &self.staging.owner(),
+            &self.staging()?.owner(),
             plan,
             options,
         )?)
+    }
+
+    /// The foreground CLI passes the cancellation arbiter into the acceptance
+    /// transaction. The arbiter is acquired only for the final commit decision,
+    /// never across Admission; a request that wins before that boundary rolls
+    /// the prepared transaction back, while a committed Run remains owner-held.
+    pub(crate) fn accept_and_admit_action_with_cancellation(
+        &self,
+        plan: &ActionExecutionPlan,
+        options: AdmissionOptions,
+        cancellation: &ActionCancellation,
+    ) -> Result<AdmittedExecution, ApplicationError> {
+        let lock = self.mutation_lock(plan.instance())?;
+        let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+        Ok(crate::executor::accept_and_admit_with_arbiter(
+            &self.persistence,
+            &crate::workflow::PlatformHostLauncherLookup,
+            &self.staging()?.owner(),
+            plan,
+            options,
+            cancellation,
+        )?)
+    }
+
+    pub(crate) fn admit_accepted_action(
+        &self,
+        run: RunId,
+        plan: &ActionExecutionPlan,
+        options: AdmissionOptions,
+    ) -> Result<AdmittedExecution, ApplicationError> {
+        let lock = self.mutation_lock(plan.instance())?;
+        let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+        Ok(crate::executor::admit_existing(
+            &self.persistence,
+            &crate::workflow::PlatformHostLauncherLookup,
+            run,
+            plan,
+            options,
+        )?)
+    }
+
+    pub(crate) fn cancel_accepted_action(&self, run: RunId) -> Result<(), ApplicationError> {
+        let view = self
+            .persistence
+            .load_run(run)?
+            .ok_or_else(|| ApplicationError::InvalidRequest("Run is not persisted".to_owned()))?;
+        if !matches!(view.state, crate::domain::RunState::Running(ref execution)
+            if execution.boundary == crate::domain::ActionRunBoundary::Accepted)
+        {
+            return Err(ApplicationError::InvalidRequest(
+                "Run is no longer in the Accepted boundary".to_owned(),
+            ));
+        }
+        let lock = self.mutation_lock(view.instance)?;
+        let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+        let finish = RunFinish {
+            outcome: RunOutcome::Cancelled,
+            primary_failure: None,
+            secondary_failures: Vec::new(),
+            hook_completion: None,
+        };
+        self.persistence
+            .finish_run_owned(&self.staging()?.owner(), run, &finish, &[], &mut [])?;
+        Ok(())
     }
 
     /// Consumes one admitted Action and guarantees that every outward path
@@ -491,7 +665,7 @@ impl PactrunApplication {
     ) -> RunId {
         crate::hook::execute_admitted_action(
             &self.persistence,
-            &self.staging,
+            self.staging().expect("execution requires writable opening"),
             &self.continuations,
             admitted,
             policy,
@@ -509,7 +683,7 @@ impl PactrunApplication {
     ) -> RunId {
         crate::hook::execute_admitted_action_with_risk_failures(
             &self.persistence,
-            &self.staging,
+            self.staging().expect("execution requires writable opening"),
             &self.continuations,
             admitted,
             policy,
@@ -528,7 +702,9 @@ impl PactrunApplication {
     #[cfg(test)]
     pub(crate) fn abandon_execution_owner(self) {
         let Self { staging, .. } = self;
-        staging.abandon();
+        staging
+            .expect("test owner abandonment requires writable opening")
+            .abandon();
     }
 
     #[allow(dead_code)]
@@ -536,7 +712,11 @@ impl PactrunApplication {
         let Some(guard) = self.continuations.take(run) else {
             return false;
         };
-        crate::hook::resume_owner_continuation(&self.persistence, &self.staging, guard);
+        crate::hook::resume_owner_continuation(
+            &self.persistence,
+            self.staging().expect("execution requires writable opening"),
+            guard,
+        );
         true
     }
 
@@ -545,12 +725,26 @@ impl PactrunApplication {
     /// confirmed.
     #[allow(dead_code)]
     pub(crate) fn advance_owner_continuation(&self, run: RunId) -> Result<bool, ApplicationError> {
+        #[cfg(test)]
+        if FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|remaining| {
+            let current = remaining.get();
+            if current == 0 {
+                false
+            } else {
+                remaining.set(current - 1);
+                true
+            }
+        }) {
+            return Err(ApplicationError::Persistence(
+                PersistenceError::DatabaseLockPoisoned,
+            ));
+        }
         let Some(guard) = self.continuations.take(run) else {
             return Ok(false);
         };
         Ok(crate::hook::advance_owner_continuation(
             &self.persistence,
-            &self.staging,
+            self.staging().expect("execution requires writable opening"),
             guard,
         )?)
     }
@@ -562,21 +756,17 @@ impl PactrunApplication {
         let candidates = self.persistence.list_running_action_runs()?;
         let mut reconciled = Vec::new();
         for (instance, run, owner) in candidates {
-            if probe_session_owner(self.staging.storage_root(), &owner)
-                != SessionOwnerProbe::ConfirmedLoss
-            {
+            if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {
                 continue;
             }
             let lock = self.mutation_lock(instance)?;
             let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
-            if probe_session_owner(self.staging.storage_root(), &owner)
-                != SessionOwnerProbe::ConfirmedLoss
-            {
+            if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {
                 continue;
             }
             if self.persistence.reconcile_action_run(run, &owner)? {
                 reconciled.push(run);
-                let _ = cleanup_lost_session(self.staging.storage_root(), &owner);
+                let _ = cleanup_lost_session(&self.storage_root, &owner);
             }
         }
         Ok(reconciled)
@@ -601,7 +791,10 @@ impl PactrunApplication {
     /// The execution owner identity this process records on accepted Runs.
     #[allow(dead_code)]
     pub(crate) fn execution_owner(&self) -> ExecutionOwnerSession {
-        self.staging.owner()
+        self.staging
+            .as_ref()
+            .expect("execution owner requires writable opening")
+            .owner()
     }
 
     fn mutation_lock(&self, instance: InstanceId) -> Result<Arc<Mutex<()>>, ApplicationError> {
@@ -657,6 +850,8 @@ mod action_tests {
             .unwrap()
     }
 
+    // Test-ID: PR-TEST-0115
+    // Verifies: PR-REQ-0096
     #[test]
     fn application_resolves_exact_action_and_compilation_is_persistently_read_only() {
         let (_temporary, storage, source) = roots();
@@ -756,6 +951,16 @@ runtime_content:
         assert_eq!(after_runtime, before_runtime);
         assert!(!storage.join("staging/workspace").exists());
 
+        let read_only = PactrunApplication::open_read_only(&storage).unwrap();
+        let (_, actions) = read_only
+            .list_action_definitions(&name)
+            .expect("read-only action inspection succeeds");
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id.as_str(), "inspect");
+        drop(read_only);
+        assert_eq!(fs::read(&database_path).unwrap(), before_database);
+        assert!(!storage.join("staging/workspace").exists());
+
         application
             .set_input(
                 instance.id,
@@ -836,6 +1041,7 @@ runtime_content:
         let run = application
             .persistence
             .create_accepted_run(
+                RunId::generate().unwrap(),
                 instance.id,
                 instance.state_version,
                 &ActionRunIdentity {
@@ -843,6 +1049,7 @@ runtime_content:
                     action: ActionIdentity::parse("deploy").unwrap(),
                 },
                 &owner,
+                &crate::persistence::UnconditionalAcceptance,
             )
             .unwrap();
         let bindings = application

@@ -15,7 +15,8 @@ use std::{
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use super::{
-    PactrunPersistence, PersistenceError, VerifiedRuntimeBlob,
+    AcceptanceArbiter, AcceptanceCommitResult, AcceptanceError, PactrunPersistence,
+    PersistenceError, VerifiedRuntimeBlob,
     chunked_blob::{ChunkedBlobTable, insert_chunks, stream_chunks},
     runtime_content_store::{RuntimeContentStore, RuntimeContentStoreError},
     sqlite_instances::{
@@ -82,21 +83,30 @@ struct OutcomeRow {
 impl PactrunPersistence {
     pub(crate) fn create_accepted_run(
         &self,
+        run: RunId,
         instance: InstanceId,
         accepted_state_version: InstanceStateVersion,
         action: &ActionRunIdentity,
         owner: &ExecutionOwnerSession,
-    ) -> Result<RunId, PersistenceError> {
-        let run = RunId::generate()
-            .map_err(|error| PersistenceError::CorruptRun(format!("generate RunId: {error}")))?;
+        arbiter: &impl AcceptanceArbiter,
+    ) -> Result<RunId, AcceptanceError> {
         let mut database = self
             .database
             .lock()
-            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+            .map_err(|_| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::DatabaseLockPoisoned,
+            })?;
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(|error| PersistenceError::sqlite("begin Run acceptance", error))?;
-        instance_header(&transaction, instance)?;
+            .map_err(|error| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::sqlite("begin Run acceptance", error),
+            })?;
+        instance_header(&transaction, instance)
+            .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
+        let accepted_at_unix_ms =
+            unix_ms_now().map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         transaction
             .execute(
                 "INSERT INTO runs(run_id, instance_id, accepted_state_version, accepted_at_unix_ms) \
@@ -105,10 +115,13 @@ impl PactrunPersistence {
                     run.as_bytes().as_slice(),
                     instance.as_bytes().as_slice(),
                     accepted_state_version.as_bytes().as_slice(),
-                    unix_ms_now()?,
+                    accepted_at_unix_ms,
                 ],
             )
-            .map_err(|error| PersistenceError::sqlite("insert Run", error))?;
+            .map_err(|error| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::sqlite("insert Run", error),
+            })?;
         transaction
             .execute(
                 "INSERT INTO run_action_invocations(\
@@ -121,7 +134,10 @@ impl PactrunPersistence {
                     action.action.as_str().as_bytes(),
                 ],
             )
-            .map_err(|error| PersistenceError::sqlite("insert Run Action invocation", error))?;
+            .map_err(|error| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::sqlite("insert Run Action invocation", error),
+            })?;
         transaction
             .execute(
                 "INSERT INTO run_executions(run_id, owner_session, risk_state) VALUES (?1, ?2, ?3)",
@@ -131,11 +147,26 @@ impl PactrunPersistence {
                     RecoveryRiskState::Clear.rank(),
                 ],
             )
-            .map_err(|error| PersistenceError::sqlite("insert Run execution owner", error))?;
+            .map_err(|error| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::sqlite("insert Run execution owner", error),
+            })?;
         fault(FaultPoint::BeforeRunAcceptCommit);
-        transaction
-            .commit()
-            .map_err(|error| PersistenceError::sqlite("commit Run acceptance", error))?;
+        let commit = || {
+            transaction
+                .commit()
+                .map_err(|error| PersistenceError::sqlite("commit Run acceptance", error))
+        };
+        match arbiter.before_durable_acceptance(commit) {
+            AcceptanceCommitResult::Cancelled => {
+                return Err(AcceptanceError::Cancelled { run });
+            }
+            AcceptanceCommitResult::Committed(Ok(())) => {}
+            AcceptanceCommitResult::Committed(Err(source))
+            | AcceptanceCommitResult::Uncertain(source) => {
+                return Err(AcceptanceError::Uncertain { run, source });
+            }
+        }
         fault(FaultPoint::AfterRunAcceptCommit);
         Ok(run)
     }
@@ -1596,7 +1627,7 @@ mod tests {
         io::Cursor,
         path::{Path, PathBuf},
         process::{Command, Stdio},
-        sync::mpsc,
+        sync::{Arc, Barrier, atomic::Ordering, mpsc},
         thread,
         time::Duration,
     };
@@ -1615,6 +1646,7 @@ mod tests {
             Sha256Digest, TerminalContractV1, ValidatedRevisionContentV1, project_revision_core_v1,
             project_runtime_content_closure_v1, validate_revision_content_v1,
         },
+        hook::ActionCancellation,
         managed_data::{StagingSession, session_is_live},
         persistence::ManagedInputWrite,
     };
@@ -1777,6 +1809,33 @@ mod tests {
         ExecutionOwnerSession::parse(format!("session-{}", "0".repeat(32))).unwrap()
     }
 
+    struct CancelBeforeAcceptance;
+
+    impl AcceptanceArbiter for CancelBeforeAcceptance {
+        fn before_durable_acceptance(
+            &self,
+            _commit: impl FnOnce() -> Result<(), PersistenceError>,
+        ) -> AcceptanceCommitResult {
+            AcceptanceCommitResult::Cancelled
+        }
+    }
+
+    struct UncertainAfterAcceptance;
+
+    impl AcceptanceArbiter for UncertainAfterAcceptance {
+        fn before_durable_acceptance(
+            &self,
+            commit: impl FnOnce() -> Result<(), PersistenceError>,
+        ) -> AcceptanceCommitResult {
+            match commit() {
+                Ok(()) => AcceptanceCommitResult::Uncertain(PersistenceError::PublicationWitness(
+                    "injected acceptance commit uncertainty".to_owned(),
+                )),
+                Err(error) => AcceptanceCommitResult::Committed(Err(error)),
+            }
+        }
+    }
+
     fn action(revision: &RevisionIdentity) -> ActionRunIdentity {
         ActionRunIdentity {
             revision: revision.clone(),
@@ -1787,12 +1846,211 @@ mod tests {
     fn accepted(persistence: &PactrunPersistence, view: &InstanceView) -> RunId {
         persistence
             .create_accepted_run(
+                RunId::generate().unwrap(),
                 view.id,
                 view.state_version,
                 &action(&view.active_revision),
                 &owner(),
+                &crate::persistence::UnconditionalAcceptance,
             )
             .unwrap()
+    }
+
+    // Test-ID: PR-TEST-0121
+    // Verifies: PR-REQ-0049, PR-REQ-0286
+    #[test]
+    fn acceptance_boundary_orders_cancellation_and_preserves_candidate_identity() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+        let view = instance(&persistence, &revision, "acceptance-boundary");
+        let action = action(&revision);
+        let owner = owner();
+
+        let cancelled_candidate = RunId::from_bytes([0x11; 16]);
+        assert!(matches!(
+            persistence.create_accepted_run(
+                cancelled_candidate,
+                view.id,
+                view.state_version,
+                &action,
+                &owner,
+                &CancelBeforeAcceptance,
+            ),
+            Err(AcceptanceError::Cancelled { run }) if run == cancelled_candidate
+        ));
+        assert_eq!(persistence.load_run(cancelled_candidate).unwrap(), None);
+        assert_eq!(persistence.list_runs(view.id).unwrap().len(), 0);
+
+        let committed_candidate = RunId::from_bytes([0x22; 16]);
+        assert_eq!(
+            persistence
+                .create_accepted_run(
+                    committed_candidate,
+                    view.id,
+                    view.state_version,
+                    &action,
+                    &owner,
+                    &crate::persistence::UnconditionalAcceptance,
+                )
+                .unwrap(),
+            committed_candidate
+        );
+        assert_eq!(
+            persistence
+                .load_run(committed_candidate)
+                .unwrap()
+                .unwrap()
+                .id,
+            committed_candidate
+        );
+
+        let uncertain_candidate = RunId::from_bytes([0x33; 16]);
+        assert!(matches!(
+            persistence.create_accepted_run(
+                uncertain_candidate,
+                view.id,
+                view.state_version,
+                &action,
+                &owner,
+                &UncertainAfterAcceptance,
+            ),
+            Err(AcceptanceError::Uncertain { run, .. }) if run == uncertain_candidate
+        ));
+        assert_eq!(
+            persistence
+                .load_run(uncertain_candidate)
+                .unwrap()
+                .unwrap()
+                .id,
+            uncertain_candidate
+        );
+        assert_eq!(persistence.list_runs(view.id).unwrap().len(), 2);
+
+        // A retry is an exact readback/retry of the candidate and cannot
+        // create a replacement Run.
+        let duplicate = persistence.create_accepted_run(
+            uncertain_candidate,
+            view.id,
+            view.state_version,
+            &action,
+            &owner,
+            &crate::persistence::UnconditionalAcceptance,
+        );
+        assert!(
+            matches!(duplicate, Err(AcceptanceError::NotCommitted { run, .. }) if run == uncertain_candidate)
+        );
+        assert_eq!(persistence.list_runs(view.id).unwrap().len(), 2);
+    }
+
+    // Test-ID: PR-TEST-0128
+    // Verifies: PR-REQ-0049, PR-REQ-0286
+    #[test]
+    fn acceptance_cancellation_race_is_concurrent_and_deterministic() {
+        let (_temporary, root) = root();
+        let persistence = Arc::new(PactrunPersistence::open(&root).unwrap());
+        let revision = revision(&persistence);
+        let view = instance(&persistence, &revision, "acceptance-race");
+        let action = action(&revision);
+        let owner = owner();
+        let instance_id = view.id;
+        let state_version = view.state_version;
+
+        let cancelled = ActionCancellation::default();
+        let before = Arc::new(Barrier::new(2));
+        let after = Arc::new(Barrier::new(2));
+        cancelled.install_acceptance_test_hooks(before.clone(), after.clone());
+        let candidate = RunId::from_bytes([0x44; 16]);
+        let acceptance = {
+            let persistence = Arc::clone(&persistence);
+            let cancelled = cancelled.clone();
+            let action = action.clone();
+            let owner = owner.clone();
+            thread::spawn(move || {
+                persistence.create_accepted_run(
+                    candidate,
+                    instance_id,
+                    state_version,
+                    &action,
+                    &owner,
+                    &cancelled,
+                )
+            })
+        };
+        let cancellation = {
+            let cancelled = cancelled.clone();
+            thread::spawn(move || cancelled.request())
+        };
+        cancellation.join().unwrap();
+        before.wait();
+        after.wait();
+        assert!(matches!(
+            acceptance.join().unwrap(),
+            Err(AcceptanceError::Cancelled { run }) if run == candidate
+        ));
+        assert_eq!(persistence.load_run(candidate).unwrap(), None);
+
+        let committed = ActionCancellation::default();
+        let before = Arc::new(Barrier::new(2));
+        let after = Arc::new(Barrier::new(2));
+        let gate_entered = committed.install_acceptance_test_hooks(before.clone(), after.clone());
+        let candidate = RunId::from_bytes([0x55; 16]);
+        let acceptance = {
+            let persistence = Arc::clone(&persistence);
+            let committed = committed.clone();
+            let action = action.clone();
+            let owner = owner.clone();
+            thread::spawn(move || {
+                persistence.create_accepted_run(
+                    candidate,
+                    instance_id,
+                    state_version,
+                    &action,
+                    &owner,
+                    &committed,
+                )
+            })
+        };
+        before.wait();
+        while !gate_entered.load(Ordering::Acquire) {
+            thread::yield_now();
+        }
+        let (started, ready) = mpsc::channel();
+        let cancellation = {
+            let committed = committed.clone();
+            thread::spawn(move || {
+                started.send(()).unwrap();
+                committed.request();
+            })
+        };
+        ready.recv().unwrap();
+        after.wait();
+        assert_eq!(acceptance.join().unwrap().unwrap(), candidate);
+        cancellation.join().unwrap();
+        assert!(committed.is_requested());
+        assert_eq!(persistence.list_runs(view.id).unwrap().len(), 1);
+        assert_eq!(
+            persistence.load_run(candidate).unwrap().unwrap().id,
+            candidate
+        );
+        persistence
+            .finish_run_owned(
+                &owner,
+                candidate,
+                &RunFinish {
+                    outcome: RunOutcome::Cancelled,
+                    primary_failure: None,
+                    secondary_failures: Vec::new(),
+                    hook_completion: None,
+                },
+                &[],
+                &mut [],
+            )
+            .unwrap();
+        assert!(matches!(
+            persistence.load_run(candidate).unwrap().unwrap().state,
+            RunState::Finished(outcome) if outcome.outcome == RunOutcome::Cancelled
+        ));
     }
 
     fn admitted(persistence: &PactrunPersistence, view: &InstanceView) -> RunId {
@@ -1994,7 +2252,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0112
-    // Verifies: PR-REQ-0064, PR-REQ-0275
+    // Verifies: PR-REQ-0064, PR-REQ-0275, PR-REQ-0287
     #[test]
     fn owner_reconciliation_finishes_clear_risk_runs_by_boundary() {
         let (_temporary, root) = root();
@@ -2622,7 +2880,14 @@ mod tests {
         // The guard blocks ordinary admission; an override admits exactly one
         // execution, and a second open-risk finish leaves the guard unchanged.
         let blocked = reopened
-            .create_accepted_run(view.id, guarded_token, &action(&revision), &owner())
+            .create_accepted_run(
+                RunId::generate().unwrap(),
+                view.id,
+                guarded_token,
+                &action(&revision),
+                &owner(),
+                &crate::persistence::UnconditionalAcceptance,
+            )
             .unwrap();
         let active = bindings(&reopened, view.id);
         assert!(matches!(
@@ -2631,7 +2896,14 @@ mod tests {
         ));
         assert_eq!(finished(&reopened, blocked).outcome, RunOutcome::Failed);
         let overridden = reopened
-            .create_accepted_run(view.id, guarded_token, &action(&revision), &owner())
+            .create_accepted_run(
+                RunId::generate().unwrap(),
+                view.id,
+                guarded_token,
+                &action(&revision),
+                &owner(),
+                &crate::persistence::UnconditionalAcceptance,
+            )
             .unwrap();
         admit(&reopened, overridden, guarded_token, &active, true)
             .unwrap()
@@ -2726,7 +2998,14 @@ mod tests {
         assert!(session_is_live(&root, &owner).unwrap());
 
         let run = persistence
-            .create_accepted_run(view.id, view.state_version, &action(&revision), &owner)
+            .create_accepted_run(
+                RunId::generate().unwrap(),
+                view.id,
+                view.state_version,
+                &action(&revision),
+                &owner,
+                &crate::persistence::UnconditionalAcceptance,
+            )
             .unwrap();
         assert_eq!(running(&persistence, run).owner, owner);
         assert_eq!(
