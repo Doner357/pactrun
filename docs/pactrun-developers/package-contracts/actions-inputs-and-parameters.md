@@ -150,7 +150,7 @@ A sensitive parameter value MUST NOT be recorded in Run history. The CLI MUST
 offer a value path that does not expose the value directly in command-line
 arguments, such as prompt, file, or standard-input binding.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0116.**
 
 ### PR-REQ-0136 - Shared machinery is not shared identity
 

@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, ErrorCode, OpenFlags, OptionalExtension, TransactionBehavior, params};
 
 use super::runtime_content_store::{
     RuntimeContentStore, RuntimeContentStoreError, StoredRuntimeBlob,
@@ -260,6 +260,35 @@ impl PactrunPersistence {
         })
     }
 
+    /// Opens an existing V4 store without creating a staging session, changing
+    /// SQLite journal/schema state, or opening the runtime-content publication
+    /// lock. Inspection and plan preview use this narrower path.
+    pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root.as_ref())?;
+        let database_root = validate_supported_storage_root(&root.join(DATABASE_DIRECTORY))?;
+        let runtime_root = validate_supported_storage_root(&root.join(RUNTIME_CONTENT_DIRECTORY))?;
+        validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
+        let database_path = database_root.join(DATABASE_NAME);
+        let database =
+            Connection::open_with_flags(&database_path, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(
+                |error| PersistenceError::sqlite("open SQLite read-only database", error),
+            )?;
+        configure_read_connection(&database)?;
+        let state = classify_database(&database)?;
+        if state != DatabaseState::V4 {
+            return Err(PersistenceError::SchemaMismatch(
+                "read-only opening requires the exact current V4 schema".to_owned(),
+            ));
+        }
+        validate_schema(&database, SCHEMA_VERSION)?;
+        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?;
+        Ok(Self {
+            database: Mutex::new(database),
+            database_path,
+            runtime_content,
+        })
+    }
+
     pub(crate) fn put_runtime_content<R: Read>(
         &self,
         expected: &Sha256Digest,
@@ -418,9 +447,10 @@ impl PactrunPersistence {
 
 impl PactrunPersistence {
     pub(super) fn open_read_connection(&self) -> Result<Connection, PersistenceError> {
-        let database = Connection::open(&self.database_path)
-            .map_err(|error| PersistenceError::sqlite("open SQLite read connection", error))?;
-        configure_connection(&database)?;
+        let database =
+            Connection::open_with_flags(&self.database_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(|error| PersistenceError::sqlite("open SQLite read connection", error))?;
+        configure_read_connection(&database)?;
         let journal_mode: String = database
             .query_row("PRAGMA journal_mode", [], |row| row.get(0))
             .map_err(|error| PersistenceError::sqlite("verify WAL journal mode", error))?;
@@ -431,6 +461,27 @@ impl PactrunPersistence {
         }
         Ok(database)
     }
+}
+
+fn configure_read_connection(database: &Connection) -> Result<(), PersistenceError> {
+    database
+        .busy_timeout(BUSY_TIMEOUT)
+        .map_err(|error| PersistenceError::sqlite("set SQLite read busy timeout", error))?;
+    database
+        .execute_batch("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;")
+        .map_err(|error| PersistenceError::sqlite("configure SQLite read connection", error))?;
+    let foreign_keys: i64 = database
+        .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+        .map_err(|error| PersistenceError::sqlite("verify read foreign keys", error))?;
+    let synchronous: i64 = database
+        .pragma_query_value(None, "synchronous", |row| row.get(0))
+        .map_err(|error| PersistenceError::sqlite("verify read synchronous mode", error))?;
+    if foreign_keys != 1 || synchronous != 2 {
+        return Err(PersistenceError::DatabaseOwnership(format!(
+            "read connection settings are foreign_keys={foreign_keys}, synchronous={synchronous}"
+        )));
+    }
+    Ok(())
 }
 
 fn open_database(path: &Path) -> Result<Connection, PersistenceError> {

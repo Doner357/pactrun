@@ -28,7 +28,7 @@ Package-defined operations MUST use `pactrun invoke <instance> <action>`. The
 show operations. Action introspection MUST be available independently from
 invocation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0114.**
 
 ### PR-REQ-0115 - Instance operations
 
@@ -180,6 +180,70 @@ M2 defines no machine-readable envelope, stable public error catalog, or
 automation API, and it does not change Frozen Error Taxonomy V1.
 
 **Verification: PR-TEST-0078, PR-TEST-0079.**
+
+### PR-REQ-0284 - M3 human Action, Plan, Run, and recovery spelling
+
+The M3 human CLI MUST provide exactly these additional command forms:
+
+```text
+pactrun action list <instance>
+pactrun action show <instance> <action>
+pactrun invoke <instance> <action>
+    [--param <parameter-id>=<text>]...
+    [--param-file <parameter-id>=<host-path>]...
+    [--param-stdin <parameter-id>]
+    [--plan]
+    [--authorize-recovery-override]
+    [--startup-timeout-ms <milliseconds>]
+    [--action-timeout-ms <milliseconds>]
+    [--termination-grace-ms <milliseconds>]
+pactrun run list <instance>
+pactrun run show <run-id>
+pactrun run reconcile
+pactrun instance resolve-manual-recovery <instance> [--if-version <token>]
+```
+
+Every exact Instance operand and Action/Parameter identity is resolved using
+the existing identity grammar. A RunId is a complete 32-character lowercase
+hexadecimal value. `action list/show` and `run list/show` are structural-only
+inspection and MUST not reconcile, launch, compile, acquire a staging lease,
+or migrate storage. `--plan` uses the same read-only opening, displays the
+exact compiled Plan and applicable warnings, explicitly states that it is not
+Admission, and MUST not create a Run or launch a Hook. If
+`--authorize-recovery-override` is supplied to `--plan`, the output MUST show
+that the authorization is projected for this invocation only; it MUST not
+change the persisted recovery guard. A host-native `resolved_path` in the
+human Plan projection MUST be lossless: ordinary valid UTF-8 paths remain
+readable with terminal escaping, while non-UTF-8 paths use an explicit
+platform-native code-unit or byte representation. This representation is a
+human projection, not a stable machine-readable envelope. No stable JSON envelope,
+raw inspection option, Artifact export/delete command, or public Rust API is
+added by this spelling.
+
+Success is exit code 0, syntax or option error is 2, and operation failure or
+cancellation is 1. `invoke` returns 0 only after durable `Succeeded` terminal
+publication; cancellation before acceptance returns 1 and explicitly states
+that no Run was created.
+
+**Verification: PR-TEST-0114, PR-TEST-0118, PR-TEST-0119, PR-TEST-0120,
+PR-TEST-0131, PR-TEST-0133, PR-TEST-0140, PR-TEST-0141.**
+
+### PR-REQ-0287 - Explicit owner-loss reconciliation and manual recovery
+
+`run reconcile` MUST perform one explicit owner-loss reconciliation pass for
+the current storage root, print the RunIds it terminalized as `Interrupted`,
+and succeed when there is nothing to change. It MUST read durable recovery
+state only, MUST not replay Hooks or salvage output, and MUST leave Runs whose
+owner lease is held or inconclusive unchanged. `run show` MAY therefore display
+an unreconciled Running orphan.
+
+`--authorize-recovery-override` MUST bypass only the trust guard for one
+invocation. `instance resolve-manual-recovery` is the purpose-specific
+operator assertion; it MUST use the existing guarded no-Hook, no-Compiler,
+no-Run mutation and optional token-first CAS semantics. Neither command may
+claim to have verified or restored service-owned state.
+
+**Verification: PR-TEST-0112, PR-TEST-0118.**
 
 ## Remaining open spelling
 

@@ -1813,6 +1813,7 @@ pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
 
     let mut sources = Vec::new();
     collect_files(&workspace_root.join("src"), "rs", &mut sources)?;
+    collect_files(&workspace_root.join("tests"), "rs", &mut sources)?;
     collect_files(&workspace_root.join("xtask/src"), "rs", &mut sources)?;
     collect_files(&workspace_root.join("tests/oracles"), "mjs", &mut sources)?;
     let mut tests = BTreeMap::<String, BTreeSet<String>>::new();

@@ -10,12 +10,28 @@
 
 use std::fmt;
 
+#[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    static FAIL_NEXT_ADMISSION_FOR_TEST: Cell<bool> = const { Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) fn fail_next_admission_for_test() {
+    FAIL_NEXT_ADMISSION_FOR_TEST.with(|failed| failed.set(true));
+}
+
 use crate::{
     domain::{
         ActionExecutionPlan, ActionRunIdentity, AdmissionFacts, AdmissionRefusal,
         ExecutionOwnerSession, InterpreterLauncherObservation, RunId,
     },
-    persistence::{PactrunPersistence, PersistenceError},
+    persistence::{
+        AcceptanceArbiter, AcceptanceError, PactrunPersistence, PersistenceError,
+        UnconditionalAcceptance,
+    },
     workflow::HostLauncherLookup,
 };
 
@@ -35,6 +51,10 @@ pub(crate) struct AdmittedExecution {
 }
 
 impl AdmittedExecution {
+    pub(crate) fn from_durable(run: RunId, plan: ActionExecutionPlan) -> Self {
+        Self { run, plan }
+    }
+
     pub(crate) fn run(&self) -> RunId {
         self.run
     }
@@ -46,21 +66,29 @@ impl AdmittedExecution {
 
 #[derive(Debug)]
 pub(crate) enum ExecutorError {
+    /// Cancellation won before the acceptance transaction committed. The
+    /// candidate was never durable and must not be retried or replaced.
+    CancelledBeforeAcceptance,
     /// Admission refused the Plan; the refusal is already durable as the Run's
     /// terminal `Failed` outcome.
     Refused {
         run: RunId,
         refusal: AdmissionRefusal,
     },
-    /// An infrastructure failure. A Run created before the failure remains
-    /// Running and Accepted for later reconciliation; it occupies no
-    /// exclusivity.
-    Persistence(PersistenceError),
+    /// An infrastructure failure. `run` is present when acceptance committed
+    /// before the failure, so the caller can inspect or retry that exact Run.
+    Persistence {
+        run: Option<RunId>,
+        source: PersistenceError,
+    },
 }
 
 impl fmt::Display for ExecutorError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::CancelledBeforeAcceptance => {
+                formatter.write_str("invoke cancelled before Run acceptance; no Run was created")
+            }
             Self::Refused { run, refusal } => {
                 write!(
                     formatter,
@@ -68,7 +96,7 @@ impl fmt::Display for ExecutorError {
                     refusal.message()
                 )
             }
-            Self::Persistence(source) => write!(formatter, "persistence: {source}"),
+            Self::Persistence { source, .. } => write!(formatter, "persistence: {source}"),
         }
     }
 }
@@ -76,15 +104,15 @@ impl fmt::Display for ExecutorError {
 impl std::error::Error for ExecutorError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Refused { .. } => None,
-            Self::Persistence(source) => Some(source),
+            Self::CancelledBeforeAcceptance | Self::Refused { .. } => None,
+            Self::Persistence { source, .. } => Some(source),
         }
     }
 }
 
 impl From<PersistenceError> for ExecutorError {
     fn from(source: PersistenceError) -> Self {
-        Self::Persistence(source)
+        Self::Persistence { run: None, source }
     }
 }
 
@@ -101,15 +129,70 @@ pub(crate) fn accept_and_admit<L: HostLauncherLookup>(
     plan: &ActionExecutionPlan,
     options: AdmissionOptions,
 ) -> Result<AdmittedExecution, ExecutorError> {
-    let run = persistence.create_accepted_run(
-        plan.instance(),
-        plan.expected_state_version(),
-        &ActionRunIdentity {
-            revision: plan.active_revision().clone(),
-            action: plan.action().clone(),
-        },
+    accept_and_admit_with_arbiter(
+        persistence,
+        launcher,
         owner,
-    )?;
+        plan,
+        options,
+        &UnconditionalAcceptance,
+    )
+}
+
+pub(crate) fn accept_and_admit_with_arbiter<L: HostLauncherLookup, A: AcceptanceArbiter>(
+    persistence: &PactrunPersistence,
+    launcher: &L,
+    owner: &ExecutionOwnerSession,
+    plan: &ActionExecutionPlan,
+    options: AdmissionOptions,
+    arbiter: &A,
+) -> Result<AdmittedExecution, ExecutorError> {
+    let run = RunId::generate().map_err(|error| ExecutorError::Persistence {
+        run: None,
+        source: PersistenceError::CorruptRun(format!("generate RunId: {error}")),
+    })?;
+    let run = persistence
+        .create_accepted_run(
+            run,
+            plan.instance(),
+            plan.expected_state_version(),
+            &ActionRunIdentity {
+                revision: plan.active_revision().clone(),
+                action: plan.action().clone(),
+            },
+            owner,
+            arbiter,
+        )
+        .map_err(|error| match error {
+            AcceptanceError::Cancelled { .. } => ExecutorError::CancelledBeforeAcceptance,
+            AcceptanceError::NotCommitted { source, .. } => {
+                ExecutorError::Persistence { run: None, source }
+            }
+            AcceptanceError::Uncertain { run, source } => ExecutorError::Persistence {
+                run: Some(run),
+                source,
+            },
+        })?;
+    admit_existing(persistence, launcher, run, plan, options)
+}
+
+/// Retries Admission for an already durable Accepted Run. This never creates
+/// another Run and is used after an infrastructure failure at the admission
+/// boundary.
+pub(crate) fn admit_existing<L: HostLauncherLookup>(
+    persistence: &PactrunPersistence,
+    launcher: &L,
+    run: RunId,
+    plan: &ActionExecutionPlan,
+    options: AdmissionOptions,
+) -> Result<AdmittedExecution, ExecutorError> {
+    #[cfg(test)]
+    if FAIL_NEXT_ADMISSION_FOR_TEST.with(|failed| failed.replace(false)) {
+        return Err(ExecutorError::Persistence {
+            run: Some(run),
+            source: PersistenceError::DatabaseLockPoisoned,
+        });
+    }
     let facts = AdmissionFacts {
         expected_state_version: plan.expected_state_version(),
         active_bindings: plan.active_bindings(),
@@ -118,7 +201,12 @@ pub(crate) fn accept_and_admit<L: HostLauncherLookup>(
     };
     let launcher_check =
         |observation: &InterpreterLauncherObservation| reselect_launcher(launcher, observation);
-    match persistence.admit_run(run, &facts, &launcher_check, options.recovery_override)? {
+    match persistence
+        .admit_run(run, &facts, &launcher_check, options.recovery_override)
+        .map_err(|source| ExecutorError::Persistence {
+            run: Some(run),
+            source,
+        })? {
         Ok(()) => Ok(AdmittedExecution {
             run,
             plan: plan.clone(),

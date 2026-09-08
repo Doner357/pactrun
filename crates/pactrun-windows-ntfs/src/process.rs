@@ -25,13 +25,18 @@ use windows_sys::Win32::{
     Globalization::CompareStringOrdinal,
     Storage::FileSystem::GetBinaryTypeW,
     System::{
+        Console::{
+            AllocConsole, CTRL_C_EVENT, GenerateConsoleCtrlEvent, GetConsoleCP, GetConsoleMode,
+            GetConsoleWindow, GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+            SetConsoleCtrlHandler,
+        },
         JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
             SetInformationJobObject, TerminateJobObject,
         },
         Threading::{
-            CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW,
+            CREATE_NEW_PROCESS_GROUP, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW,
             DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
             GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
             LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROCESS_INFORMATION,
@@ -48,6 +53,52 @@ pub enum HookTerminal {
     Interactive,
 }
 
+/// Allocates a console for an isolated integration-test driver.
+pub fn allocate_console() -> io::Result<()> {
+    let has_console_handles = [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE]
+        .into_iter()
+        .any(|which| {
+            let handle = unsafe { GetStdHandle(which) };
+            let mut mode = 0;
+            !handle.is_null() && unsafe { GetConsoleMode(handle, &mut mode) } != 0
+        });
+    if has_console_handles
+        || unsafe { GetConsoleCP() } != 0
+        || !unsafe { GetConsoleWindow() }.is_null()
+    {
+        return Ok(());
+    }
+    if unsafe { AllocConsole() } == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// Sends the same processed CTRL+C console event used by the console input
+/// driver to the current console. The target group is zero so the parent
+/// Pactrun process receives the event; Hooks launched in a new process group
+/// keep their interactive handles without bypassing the owner handler.
+pub fn generate_console_ctrl_c() -> io::Result<()> {
+    if unsafe { GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) } == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+/// Makes the current helper and its descendants ignore CTRL+C. Pactrun keeps
+/// the authoritative handler in the owner process; the interactive adapter
+/// calls this before starting the real Hook so a console event cannot make the
+/// supervised child escape through the default console handler.
+pub fn ignore_console_ctrl_c() -> io::Result<()> {
+    if unsafe { SetConsoleCtrlHandler(None, 1) } == 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct HookProcess {
     process: OwnedHandle,
@@ -58,76 +109,45 @@ pub struct HookProcess {
 impl HookProcess {
     /// Inherits the parent environment with the two protocol discovery values
     /// replaced. The admitted pathname is passed unchanged as lpApplicationName.
-    pub fn spawn(
+    pub fn spawn<S: AsRef<OsStr>>(
         program: &Path,
-        arguments: &[String],
+        arguments: &[S],
         terminal: HookTerminal,
         discovery: [(&str, &str); 2],
     ) -> io::Result<Self> {
-        let mut application = checked_wide(program.as_os_str())?;
-        let mut command_line = command_line(&application, arguments)?;
-        application.push(0);
-        // CreateProcessW itself can redirect non-image batch files to cmd.exe.
-        // This Executor-only check enforces the existing no-implicit-shell
-        // rule; a PE named .cmd/.bat still reaches the exact native launch.
-        // It is not an Admission eligibility or replacement-detection check.
-        if batch_path(program) {
-            let mut binary_type = 0;
-            if unsafe { GetBinaryTypeW(application.as_ptr(), &mut binary_type) } == 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
-        let environment = environment_block(env::vars_os(), discovery)?;
-        let standard_handles = terminal_handles(terminal)?;
-        let inherited: Vec<HANDLE> = standard_handles
-            .iter()
-            .flatten()
-            .map(|handle| handle.as_raw_handle().cast())
-            .collect();
-        let attributes = if inherited.is_empty() {
-            None
-        } else {
-            Some(HandleList::new(&inherited)?)
-        };
-        let mut startup = STARTUPINFOEXW::default();
-        startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
-        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-        let raw = |index: usize| {
-            standard_handles[index]
-                .as_ref()
-                .map_or(ptr::null_mut(), |handle| handle.as_raw_handle().cast())
-        };
-        startup.StartupInfo.hStdInput = raw(0);
-        startup.StartupInfo.hStdOutput = raw(1);
-        startup.StartupInfo.hStdError = raw(2);
-        startup.lpAttributeList = attributes
-            .as_ref()
-            .map_or(ptr::null_mut(), HandleList::as_ptr);
+        Self::spawn_inner(program, arguments, terminal, discovery, None)
+    }
+
+    /// Test-only environment extension for host-native integration fixtures.
+    /// It uses the same process-creation and Job Object path as `spawn`.
+    #[doc(hidden)]
+    pub fn spawn_with_extra_environment<S: AsRef<OsStr>>(
+        program: &Path,
+        arguments: &[S],
+        terminal: HookTerminal,
+        discovery: [(&str, &str); 2],
+        extra: (&str, &OsStr),
+    ) -> io::Result<Self> {
+        Self::spawn_inner(program, arguments, terminal, discovery, Some(extra))
+    }
+
+    fn spawn_inner<S: AsRef<OsStr>>(
+        program: &Path,
+        arguments: &[S],
+        terminal: HookTerminal,
+        discovery: [(&str, &str); 2],
+        extra: Option<(&str, &OsStr)>,
+    ) -> io::Result<Self> {
         let job = create_job()?;
-        let mut information = PROCESS_INFORMATION::default();
-        // SAFETY: every buffer, standard handle, and attribute allocation is
-        // owned here and lives through CreateProcessW. Only the explicit list
-        // is inheritable by this child. Both output handles are adopted below.
-        if unsafe {
-            CreateProcessW(
-                application.as_ptr(),
-                command_line.as_mut_ptr(),
-                ptr::null(),
-                ptr::null(),
-                i32::from(!inherited.is_empty()),
-                CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
-                environment.as_ptr().cast(),
-                ptr::null(),
-                &startup.StartupInfo,
-                &mut information,
-            )
-        } == 0
-        {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: successful CreateProcessW returns two uniquely owned handles.
-        let process = unsafe { OwnedHandle::from_raw_handle(information.hProcess.cast()) };
-        let thread = unsafe { OwnedHandle::from_raw_handle(information.hThread.cast()) };
+        let created = create_native_process(
+            program,
+            arguments,
+            terminal,
+            &discovery,
+            program.as_os_str(),
+            extra,
+        )?;
+        let CreatedProcess { process, thread } = created;
         let child = Self { process, job };
         let process_handle = child.process.as_raw_handle().cast();
         // The primary thread is still suspended, including during assignment.
@@ -157,20 +177,7 @@ impl HookProcess {
     }
 
     fn wait_for(&self, timeout: u32) -> io::Result<Option<ExitStatus>> {
-        let process = self.process.as_raw_handle().cast();
-        // SAFETY: the owned process handle remains open throughout the wait.
-        match unsafe { WaitForSingleObject(process, timeout) } {
-            WAIT_TIMEOUT => Ok(None),
-            WAIT_OBJECT_0 => {
-                let mut code = 0;
-                if unsafe { GetExitCodeProcess(process, &mut code) } == 0 {
-                    return Err(io::Error::last_os_error());
-                }
-                // Test the wait result, not STILL_ACTIVE: 259 is a legal exit code.
-                Ok(Some(crate::exit_status_from_code(code)))
-            }
-            _ => Err(io::Error::last_os_error()),
-        }
+        wait_for_process(&self.process, timeout)
     }
 
     pub fn terminate_tree(&self) -> io::Result<()> {
@@ -179,6 +186,141 @@ impl HookProcess {
             return Err(io::Error::last_os_error());
         }
         Ok(())
+    }
+}
+
+struct CreatedProcess {
+    process: OwnedHandle,
+    thread: OwnedHandle,
+}
+
+/// Launches an exact native image from an interactive adapter without making
+/// another Job Object. The adapter is already a member of the owner's Job, so
+/// Windows places this suspended child and its descendants in that same Job
+/// before its primary thread is resumed.
+#[doc(hidden)]
+pub fn run_exact_in_current_job<S: AsRef<OsStr>>(
+    program: &Path,
+    arguments: &[S],
+    terminal: HookTerminal,
+) -> io::Result<ExitStatus> {
+    let CreatedProcess { process, thread } = create_native_process(
+        program,
+        arguments,
+        terminal,
+        &[],
+        OsStr::new("pactrun-hook"),
+        None,
+    )?;
+    let process_handle = process.as_raw_handle().cast();
+    if unsafe { ResumeThread(thread.as_raw_handle().cast()) } == u32::MAX {
+        let error = io::Error::last_os_error();
+        // The Hook never ran. Terminate and reap the suspended process even
+        // though its containment is owned by the adapter's existing Job.
+        unsafe {
+            TerminateProcess(process_handle, 1);
+            WaitForSingleObject(process_handle, INFINITE);
+        }
+        return Err(error);
+    }
+    wait_for_process(&process, INFINITE)?
+        .ok_or_else(|| io::Error::other("infinite process wait timed out"))
+}
+
+fn create_native_process<S: AsRef<OsStr>>(
+    program: &Path,
+    arguments: &[S],
+    terminal: HookTerminal,
+    discovery: &[(&str, &str)],
+    argv0: &OsStr,
+    extra: Option<(&str, &OsStr)>,
+) -> io::Result<CreatedProcess> {
+    let mut application = checked_wide(program.as_os_str())?;
+    // An exact lpApplicationName launch is not shell redirection. This
+    // Executor-side guard preserves the no-implicit-shell policy for
+    // batch-suffixed non-images; a PE named .cmd/.bat still reaches the exact
+    // native launch. It is not an Admission eligibility or replacement-
+    // detection check.
+    application.push(0);
+    if batch_path(program) {
+        let mut binary_type = 0;
+        if unsafe { GetBinaryTypeW(application.as_ptr(), &mut binary_type) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    let argv0 = checked_wide(argv0)?;
+    let mut command_line = command_line(&argv0, arguments)?;
+    let environment = environment_block(env::vars_os(), discovery, extra)?;
+    let standard_handles = terminal_handles(terminal)?;
+    let inherited: Vec<HANDLE> = standard_handles
+        .iter()
+        .flatten()
+        .map(|handle| handle.as_raw_handle().cast())
+        .collect();
+    let attributes = if inherited.is_empty() {
+        None
+    } else {
+        Some(HandleList::new(&inherited)?)
+    };
+    let mut startup = STARTUPINFOEXW::default();
+    startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    let raw = |index: usize| {
+        standard_handles[index]
+            .as_ref()
+            .map_or(ptr::null_mut(), |handle| handle.as_raw_handle().cast())
+    };
+    startup.StartupInfo.hStdInput = raw(0);
+    startup.StartupInfo.hStdOutput = raw(1);
+    startup.StartupInfo.hStdError = raw(2);
+    startup.lpAttributeList = attributes
+        .as_ref()
+        .map_or(ptr::null_mut(), HandleList::as_ptr);
+    let mut information = PROCESS_INFORMATION::default();
+    // SAFETY: every buffer, standard handle, and attribute allocation is
+    // owned here and lives through CreateProcessW. Only the explicit list
+    // is inheritable by this child. Both output handles are adopted below.
+    if unsafe {
+        CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            ptr::null(),
+            ptr::null(),
+            i32::from(!inherited.is_empty()),
+            CREATE_NEW_PROCESS_GROUP
+                | CREATE_SUSPENDED
+                | CREATE_UNICODE_ENVIRONMENT
+                | EXTENDED_STARTUPINFO_PRESENT,
+            environment.as_ptr().cast(),
+            ptr::null(),
+            &startup.StartupInfo,
+            &mut information,
+        )
+    } == 0
+    {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: successful CreateProcessW returns two uniquely owned handles.
+    Ok(CreatedProcess {
+        process: unsafe { OwnedHandle::from_raw_handle(information.hProcess.cast()) },
+        thread: unsafe { OwnedHandle::from_raw_handle(information.hThread.cast()) },
+    })
+}
+
+fn wait_for_process(process: &OwnedHandle, timeout: u32) -> io::Result<Option<ExitStatus>> {
+    let process = process.as_raw_handle().cast();
+    // SAFETY: the owned process handle remains open throughout the wait.
+    match unsafe { WaitForSingleObject(process, timeout) } {
+        WAIT_TIMEOUT => Ok(None),
+        WAIT_OBJECT_0 => {
+            let mut code = 0;
+            if unsafe { GetExitCodeProcess(process, &mut code) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // Test the wait result, not STILL_ACTIVE: 259 is a legal exit code.
+            Ok(Some(crate::exit_status_from_code(code)))
+        }
+        _ => Err(io::Error::last_os_error()),
     }
 }
 
@@ -328,21 +470,21 @@ fn batch_path(program: &Path) -> bool {
     )
 }
 
-fn command_line(program: &[u16], arguments: &[String]) -> io::Result<Vec<u16>> {
+fn command_line<S: AsRef<OsStr>>(program: &[u16], arguments: &[S]) -> io::Result<Vec<u16>> {
     let quote = u16::from(b'"');
     let slash = u16::from(b'\\');
     let mut line = vec![quote];
     line.extend_from_slice(program);
     line.push(quote);
     for argument in arguments {
-        let argument = checked_wide(OsStr::new(argument))?;
+        let argument = checked_wide(argument.as_ref())?;
         let quoted = argument.is_empty() || argument.iter().any(|c| *c == 32 || *c == 9);
         line.push(u16::from(b' '));
         if quoted {
             line.push(quote);
         }
         let mut slashes = 0;
-        for c in argument {
+        for c in argument.iter().copied() {
             if c == slash {
                 slashes += 1;
             } else {
@@ -388,7 +530,8 @@ fn compare_keys(left: &[u16], right: &[u16]) -> Ordering {
 
 fn environment_block(
     parent: impl IntoIterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
-    discovery: [(&str, &str); 2],
+    discovery: &[(&str, &str)],
+    extra: Option<(&str, &OsStr)>,
 ) -> io::Result<Vec<u16>> {
     let mut entries = parent
         .into_iter()
@@ -398,6 +541,11 @@ fn environment_block(
         let key = checked_wide(OsStr::new(key))?;
         entries.retain(|(existing, _)| compare_keys(existing, &key) != Ordering::Equal);
         entries.push((key, checked_wide(OsStr::new(value))?));
+    }
+    if let Some((key, value)) = extra {
+        let key = checked_wide(OsStr::new(key))?;
+        entries.retain(|(existing, _)| compare_keys(existing, &key) != Ordering::Equal);
+        entries.push((key, checked_wide(value)?));
     }
     entries.sort_by(|(left, _), (right, _)| compare_keys(left, right));
     let mut block = Vec::new();
