@@ -13,13 +13,12 @@ are the sole normative authority, and their text wins if a summary here is
 ambiguous.
 
 M3 was approved as the next implementation milestone. That approval permitted
-bounded implementation of Action execution on an isolated feature branch. As of
-2026-09-07, M3 implementation is in progress: Slices 1 through 5 are
-integrated into `develop`, and Slice 5's crate-private managed-output,
-finalization, cleanup, owner-loss reconciliation, and inspection-data substrate
-is complete. User-visible Run inspection, exact human and machine interface
-spelling, and `PR-REQ-0097` verification remain deferred to Slice 6; the
-milestone is not yet complete.
+bounded implementation of Action execution on an isolated feature branch. The
+2026-09-07 approval baseline recorded Slices 1 through 5 as integrated and Slice
+6 as the remaining deferred boundary. Slice 6 is now implemented, verified, and
+integrated into `develop`, including user-visible Run inspection, exact human
+interface spelling, and `PR-REQ-0097` verification; the M3 milestone is
+complete.
 
 ## Approved managed-execution path
 
