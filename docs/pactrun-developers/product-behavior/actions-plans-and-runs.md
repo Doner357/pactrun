@@ -20,7 +20,8 @@ Pactrun MUST resolve the exact Instance and Action, normalize parameters,
 validate readiness and policy, compile the workflow, and complete admission
 before launching the Hook.
 
-**Verification: PR-TEST-0119, PR-TEST-0131, PR-TEST-0133.**
+**Verification: PR-TEST-0119, PR-TEST-0131, PR-TEST-0133, PR-TEST-0143,
+PR-TEST-0146, PR-TEST-0150, PR-TEST-0152, PR-TEST-0166, PR-TEST-0167.**
 
 ### PR-REQ-0095 - Plan preview
 
@@ -31,7 +32,8 @@ the human projection MUST remain lossless, using readable terminal escaping for
 valid UTF-8 and an explicit native code-unit or byte form for non-UTF-8 paths.
 Producing a plan MUST NOT create a Run, reservation, lock, pin, or GC root.
 
-**Verification: PR-TEST-0120, PR-TEST-0140, PR-TEST-0141.**
+**Verification: PR-TEST-0120, PR-TEST-0140, PR-TEST-0141, PR-TEST-0144,
+PR-TEST-0148, PR-TEST-0165.**
 
 ### PR-REQ-0096 - Plan staleness
 
@@ -56,7 +58,9 @@ from the Instance trust consequence. It MUST be able to report the primary
 failure, secondary failure-handling errors, failed logical step, Hook result,
 diagnostics, output references, and timing when available.
 
-**Verification: PR-TEST-0114.**
+**Verification: PR-TEST-0114, PR-TEST-0143, PR-TEST-0146, PR-TEST-0151,
+PR-TEST-0152, PR-TEST-0153, PR-TEST-0156, PR-TEST-0159, PR-TEST-0168,
+PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
 
 The crate-private RunView and the Slice 5 single-snapshot inspection substrate
 remain the implementation basis for this user-visible projection.
@@ -79,7 +83,7 @@ Hook free text is not displayed. Terminal escaping for an allowed identity is
 not redaction. Historical absent, present-empty, and present-value fields MUST
 remain exact in persistence while mapping to the same restricted human view.
 
-**Verification: PR-TEST-0114.**
+**Verification: PR-TEST-0114, PR-TEST-0146, PR-TEST-0154, PR-TEST-0175.**
 
 ### PR-REQ-0288 - Invocation parameter sources and policy values
 
@@ -102,7 +106,9 @@ above the runtime's signed-millisecond boundary, including `u64::MAX`, MUST be
 rejected before Run acceptance; timeout construction MUST not fall back to the
 start instant or saturate.
 
-**Verification: PR-TEST-0116, PR-TEST-0129, PR-TEST-0130.**
+**Verification: PR-TEST-0116, PR-TEST-0129, PR-TEST-0130, PR-TEST-0145,
+PR-TEST-0149, PR-TEST-0150, PR-TEST-0160, PR-TEST-0163, PR-TEST-0166,
+PR-TEST-0167.**
 
 ### PR-REQ-0281 - Atomic managed-output publication and late completion
 
@@ -133,7 +139,8 @@ Database transaction failure retains owner-held retry state and MUST NOT be
 converted into a fabricated terminal outcome. Eligibility does not require
 submitting every declaration, and it does not guarantee persistence success.
 
-**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0109.**
+**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0109, PR-TEST-0151,
+PR-TEST-0153, PR-TEST-0169, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0098 - Sensitive Run data
 
@@ -142,7 +149,7 @@ Secret values, or value-derived digests intended to reveal them. Interactive
 terminal sessions MUST NOT be retained as complete transcripts by default;
 structured Hook diagnostics MAY be retained.
 
-**Verification: PR-TEST-0099.**
+**Verification: PR-TEST-0099, PR-TEST-0154, PR-TEST-0167, PR-TEST-0175.**
 
 ## Concurrent operations
 

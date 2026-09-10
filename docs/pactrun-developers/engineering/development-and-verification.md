@@ -145,6 +145,57 @@ A test must exercise the level at which the requirement makes its promise. A
 unit test for an internal value object is insufficient when the contract spans
 admission, persistence, a Hook, or concurrent mutation.
 
+## Executable system tests
+
+`tests/system.rs` is the executable-level CLI boundary. It uses one isolated
+storage root per scenario under `target/system-tests/`, a materialized copy of
+the integration-test executable as a real Hook, and a new `pactrun` process for
+each product operation and durable inspection. The harness does not call
+crate-private application or persistence APIs, inspect SQLite, or use
+production failpoints.
+
+Each scenario has an overall deadline and each CLI process has a shorter
+deadline. The harness drains both output streams while the child runs and owns
+cleanup of the CLI and recorded Hook process trees, so a hung CLI, Hook, or
+Hook descendant cannot strand the test runner. The Hook marker is written at
+worker process entry before transport discovery. It provides independent
+negative evidence for plan and pre-acceptance rejection scenarios; an empty
+Run list alone is not sufficient evidence.
+
+Run the focused system boundary and retained M3 real-CLI regression suite with:
+
+```text
+cargo xtask system-test
+```
+
+`cargo test --workspace --all-features` already includes both targets. System
+scenarios use semantic CLI fields rather than stdout goldens, preserve raw-byte
+assertions only where the public contract exposes bytes, and leave platform
+console, signal, containment, and native-path cases to platform-specific tests.
+
+The common system matrix currently has an explicit boundary rather than one
+monolithic end-to-end test: `PR-TEST-0142` through `PR-TEST-0147` establish the
+startup, installation, Input/Secret, read-only, acceptance, and durable Run
+foundation; `PR-TEST-0148` through `PR-TEST-0159` cover parameter acquisition,
+output publication, transport failure and timeout, late completion, redaction,
+terminal-channel separation, recovery risk, pinned binding views, Mutate
+conflict, and explicit owner-loss reconciliation. `PR-TEST-0165` through
+`PR-TEST-0175` close the remaining executable matrix evidence for read-only
+orphan inspection, pre-acceptance ordering, empty/Unicode protected parameters,
+durable success inspection, multi-output publication, malformed protocol
+terminalization, rejected late completion, exact mutation conflict, recovery
+token behavior, reconcile idempotence, and Secret/Protected-source redaction.
+Existing real-CLI platform regressions remain the containment and
+interactive-Hook evidence. The platform counterparts `PR-TEST-0160` through
+`PR-TEST-0164` add Linux parameter-stdin SIGINT, ordered interpreter
+eligibility, executable-bit, and byte-path coverage plus Windows
+isolated-console Ctrl+C and native-image/batch-suffix no-fallback coverage.
+`PR-TEST-0176` and `PR-TEST-0177` add accepted late completion after a real
+POSIX SIGINT and Windows console Ctrl+C; `PR-TEST-0163` uses a deterministic
+named-pipe consumption barrier before cancellation. Each platform still runs
+the common matrix; the native and console assertions are deliberately
+platform-specific rather than stdout goldens.
+
 Use the lowest-cost level that genuinely proves the contract:
 
 - domain unit tests for pure validation, identities, legal transitions,

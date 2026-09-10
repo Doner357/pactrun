@@ -90,9 +90,12 @@ impl fmt::Display for ExecutorError {
                 formatter.write_str("invoke cancelled before Run acceptance; no Run was created")
             }
             Self::Refused { run, refusal } => {
+                let error = refusal.error_ref();
                 write!(
                     formatter,
-                    "Run {run} was not admitted: {}",
+                    "{}.{}: Run {run} was not admitted: {}",
+                    error.owner(),
+                    error.code(),
                     refusal.message()
                 )
             }

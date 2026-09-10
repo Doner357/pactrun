@@ -340,7 +340,7 @@ Executor integration tests.
 
 **Verification: PR-TEST-0081, PR-TEST-0090, PR-TEST-0095, PR-TEST-0101,
 PR-TEST-0102, PR-TEST-0134, PR-TEST-0135, PR-TEST-0136, PR-TEST-0137,
-PR-TEST-0138, PR-TEST-0139.**
+PR-TEST-0138, PR-TEST-0139, PR-TEST-0161, PR-TEST-0164.**
 
 ### PR-REQ-0274 - Host launcher candidate eligibility
 
@@ -371,7 +371,7 @@ NOT append `.exe`, use `PATH` or `PATHEXT`, invoke file associations, or perform
 extension inference.
 
 **Verification: PR-TEST-0081, PR-TEST-0138, PR-TEST-0139, PR-TEST-0140,
-PR-TEST-0141.**
+PR-TEST-0141, PR-TEST-0161, PR-TEST-0162, PR-TEST-0164.**
 
 ## Runtime content, canonical bytes, and digest
 

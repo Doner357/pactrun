@@ -57,14 +57,14 @@ Pactrun MUST NOT claim that service-owned live state remains coherent with the
 currently committed source Revision merely because the Pactrun-owned boundary
 was recovered.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0174.**
 
 ### PR-REQ-0058 - No inferred compensation
 
 Pactrun MUST NOT automatically replay a Hook, infer a reverse operation, or
 choose Snapshot Restore as compensation after failure or restart.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0159, PR-TEST-0174.**
 
 ### PR-REQ-0059 - Trusted Hook duty
 

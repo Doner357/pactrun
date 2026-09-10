@@ -73,7 +73,10 @@ M2 source acquisition MUST bind identity to the exact staged bytes, normalized
 core, and runtime-content closure, not to a source pathname or filesystem
 object identity.
 
-**Verification: Pending automated coverage.**
+**Verification:** PR-TEST-0143 proves the external source-independence
+boundary. The exact opened/staged source objects, normalized core, and
+runtime-content-closure clauses retain their lower-layer evidence under their
+respective acquisition and installation requirements.
 
 ### PR-REQ-0005 - Installation and Instance creation
 
@@ -84,7 +87,7 @@ M2 Revision installation and Instance creation are separate typed requests and
 separate atomic database publications, as defined by PR-REQ-0261 and
 PR-REQ-0265.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0143.**
 
 ### PR-REQ-0006 - Distinct operation concepts
 

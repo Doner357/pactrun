@@ -187,7 +187,7 @@ Transient staging is not a persistent `ManagedInputPayload`, Workspace,
 ServiceStorage, Managed Service Resource, M3 durable pin, Run reference, GC
 root, M6 recovery state, or cross-crash retry log.
 
-**Verification: PR-TEST-0074, PR-TEST-0079.**
+**Verification: PR-TEST-0074, PR-TEST-0079, PR-TEST-0147.**
 
 ### PR-REQ-0266 - Managed Input mutation, export, and reclamation
 
@@ -250,7 +250,7 @@ The stream is non-rollbackable: downstream close, I/O failure, or crash MAY
 leave a prefix and MUST result in failure. Pactrun MUST NOT claim atomic stdout,
 replay, or resume.
 
-**Verification: PR-TEST-0076, PR-TEST-0077, PR-TEST-0078.**
+**Verification: PR-TEST-0076, PR-TEST-0077, PR-TEST-0078, PR-TEST-0147.**
 
 ### PR-REQ-0268 - M2 Secret storage and disclosure boundary
 
@@ -287,7 +287,7 @@ storage are host protection assumptions rather than Pactrun cryptographic
 guarantees. Removing a binding, payload row, staging file, or output temporary
 name MUST NOT be described as physical secure erasure.
 
-**Verification: PR-TEST-0074, PR-TEST-0076, PR-TEST-0078.**
+**Verification: PR-TEST-0074, PR-TEST-0076, PR-TEST-0078, PR-TEST-0147.**
 
 ### PR-REQ-0092 - Explicit Secret export
 
@@ -298,7 +298,7 @@ Secret disclosure, Snapshot Secret export, or Secret declassification.
 The fixed M2 spelling is `--authorize-secret-export`; its acquisition and
 destination boundaries are defined by PR-REQ-0266 and PR-REQ-0268.
 
-**Verification: PR-TEST-0078.**
+**Verification: PR-TEST-0078, PR-TEST-0147.**
 
 ### PR-REQ-0093 - Secret deletion disclaimer
 

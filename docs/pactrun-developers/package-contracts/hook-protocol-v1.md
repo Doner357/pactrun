@@ -302,7 +302,8 @@ target binding bytes. Successful Migration completion MUST submit every target
 output handle exactly once. Failure MUST submit none and MUST NOT publish staged
 target bindings. Restore and Cleanup publish no managed output.
 
-**Verification: PR-TEST-0027, PR-TEST-0094.**
+**Verification: PR-TEST-0027, PR-TEST-0094, PR-TEST-0151, PR-TEST-0153,
+PR-TEST-0169.**
 
 ### PR-REQ-0213 - Snapshot candidate and content authorities
 
@@ -446,7 +447,8 @@ crash boundaries for Action execution are an M3 responsibility under
 PR-REQ-0055 and PR-REQ-0056 and require M3 persistence and runtime integration
 tests; M6 generalizes them to later managed-execution types.
 
-**Verification: PR-TEST-0028, PR-TEST-0093.**
+**Verification: PR-TEST-0028, PR-TEST-0093, PR-TEST-0156, PR-TEST-0159,
+PR-TEST-0173.**
 
 ### PR-REQ-0216 - Operation completion and terminal states
 
@@ -511,7 +513,9 @@ failure before accepted completion prevents protocol success. Their Run and
 Instance consequences remain Pactrun-owned and depend on the durable risk state;
 Pactrun MUST NOT infer replay or compensation.
 
-**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093, PR-TEST-0097.**
+**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093,
+PR-TEST-0097, PR-TEST-0152, PR-TEST-0153, PR-TEST-0169, PR-TEST-0170,
+PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0217 - Local protocol errors and ownership
 
@@ -544,7 +548,8 @@ A Pactrun-originated `protocol_error` MUST use one of these codes; a
 Hook-originated `protocol_error` uses a Hook-owned code. Sender and state make
 the two closed message forms unambiguous.
 
-**Verification: PR-TEST-0021, PR-TEST-0023, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093.**
+**Verification: PR-TEST-0021, PR-TEST-0023, PR-TEST-0028, PR-TEST-0030,
+PR-TEST-0093, PR-TEST-0170.**
 
 ### PR-REQ-0218 - Authority is not isolation and verification is layered
 

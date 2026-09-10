@@ -226,7 +226,11 @@ publication; cancellation before acceptance returns 1 and explicitly states
 that no Run was created.
 
 **Verification: PR-TEST-0114, PR-TEST-0118, PR-TEST-0119, PR-TEST-0120,
-PR-TEST-0131, PR-TEST-0133, PR-TEST-0140, PR-TEST-0141.**
+PR-TEST-0131, PR-TEST-0133, PR-TEST-0140, PR-TEST-0141, PR-TEST-0142,
+PR-TEST-0144, PR-TEST-0145, PR-TEST-0148, PR-TEST-0149, PR-TEST-0150,
+PR-TEST-0156, PR-TEST-0159, PR-TEST-0165, PR-TEST-0166, PR-TEST-0167,
+PR-TEST-0168, PR-TEST-0172, PR-TEST-0173, PR-TEST-0174, PR-TEST-0175,
+PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0287 - Explicit owner-loss reconciliation and manual recovery
 
@@ -243,7 +247,8 @@ operator assertion; it MUST use the existing guarded no-Hook, no-Compiler,
 no-Run mutation and optional token-first CAS semantics. Neither command may
 claim to have verified or restored service-owned state.
 
-**Verification: PR-TEST-0112, PR-TEST-0118.**
+**Verification: PR-TEST-0112, PR-TEST-0118, PR-TEST-0156, PR-TEST-0159,
+PR-TEST-0165, PR-TEST-0173, PR-TEST-0174.**
 
 ## Remaining open spelling
 

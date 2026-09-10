@@ -14,6 +14,8 @@ fn main() -> ExitCode {
     let workspace_root = workspace_root();
     let result = match env::args().nth(1).as_deref() {
         Some("ci") => run_ci(&workspace_root),
+        Some("rust-ci") => run_rust_ci(&workspace_root),
+        Some("system-test") => run_system_tests(&workspace_root),
         Some("docs-build") => build_docs(&workspace_root),
         Some("revision-core-v1-verify") => revision_core_v1::verify(&workspace_root),
         Some("revision-core-v1-calculate") => revision_core_v1::calculate(&workspace_root),
@@ -32,7 +34,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("error: {error}");
             eprintln!(
-                "usage: cargo xtask <ci|docs-build|revision-core-v1-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
+                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-core-v1-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
             );
             ExitCode::FAILURE
         }
@@ -51,6 +53,16 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
     snapshot_integrity_v1::verify(workspace_root)?;
     hook_protocol_v1::verify(workspace_root)?;
     error_taxonomy_v1::verify(workspace_root)?;
+    run_rust_ci(workspace_root)?;
+    run(
+        workspace_root,
+        "pnpm",
+        &["--dir", "website", "run", "typecheck"],
+    )?;
+    build_docs(workspace_root)
+}
+
+fn run_rust_ci(workspace_root: &Path) -> Result<(), String> {
     run(workspace_root, "cargo", &["fmt", "--all", "--check"])?;
     run(
         workspace_root,
@@ -70,12 +82,34 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
         "cargo",
         &["test", "--workspace", "--all-features"],
     )?;
+    Ok(())
+}
+
+fn run_system_tests(workspace_root: &Path) -> Result<(), String> {
     run(
         workspace_root,
-        "pnpm",
-        &["--dir", "website", "run", "typecheck"],
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "pactrun",
+            "--test",
+            "system",
+            "--all-features",
+        ],
     )?;
-    build_docs(workspace_root)
+    run(
+        workspace_root,
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "pactrun",
+            "--test",
+            "m3_slice6_real_cli_e2e",
+            "--all-features",
+        ],
+    )
 }
 
 fn build_docs(workspace_root: &Path) -> Result<(), String> {

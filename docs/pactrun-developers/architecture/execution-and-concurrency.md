@@ -60,7 +60,7 @@ start a Hook, mutate an Instance, create a Run, or create a lease, pin, GC root,
 or reservation. It SHOULD reject every statically detectable error before the
 first workflow side effect.
 
-**Verification: PR-TEST-0089.**
+**Verification: PR-TEST-0089, PR-TEST-0144, PR-TEST-0148, PR-TEST-0165.**
 
 ### PR-REQ-0040 - Typed immutable plan
 
@@ -122,7 +122,7 @@ coexist with other Observe and Mutate operations. Mutate operations on the same
 Instance MUST serialize or conflict. The same mutation guard MUST protect both
 managed execution and management mutations.
 
-**Verification: PR-TEST-0092.**
+**Verification: PR-TEST-0092, PR-TEST-0172.**
 
 ### PR-REQ-0278 - Action admission exclusivity
 
@@ -148,7 +148,7 @@ same guard serializes them per transaction, and they cannot alter the Run's
 pinned context. The refusal is reported as `admission.mutation_conflict`, and
 the one-execution recovery override MUST NOT bypass it.
 
-**Verification: PR-TEST-0092.**
+**Verification: PR-TEST-0092, PR-TEST-0172.**
 
 ### PR-REQ-0279 - Admission refusal precedence
 
@@ -231,7 +231,7 @@ treated as a mutation guard or user-visible lease. Releasing a current binding
 MAY make it unreachable from the Instance, but physical content MUST remain
 until its last strong reference disappears.
 
-**Verification: PR-TEST-0083.**
+**Verification: PR-TEST-0083, PR-TEST-0157.**
 
 ## Run records
 
@@ -244,7 +244,8 @@ admission checks. Admission failures, including stale
 preconditions, and all later execution failures MUST be recorded in that Run.
 
 **Verification: PR-TEST-0089, PR-TEST-0121, PR-TEST-0123, PR-TEST-0126,
-PR-TEST-0128.**
+PR-TEST-0128, PR-TEST-0145, PR-TEST-0149, PR-TEST-0158, PR-TEST-0166,
+PR-TEST-0168, PR-TEST-0172.**
 
 ### PR-REQ-0050 - Run phase and outcome
 
@@ -253,7 +254,8 @@ A Run MUST distinguish `Running` from `Finished`. A finished Run MUST use one of
 failure details, failed logical step, Hook result, diagnostics, outputs, and
 timing. `ManualRecoveryRequired` MUST NOT be a Run outcome.
 
-**Verification: PR-TEST-0084.**
+**Verification: PR-TEST-0084, PR-TEST-0152, PR-TEST-0153, PR-TEST-0159,
+PR-TEST-0170, PR-TEST-0171, PR-TEST-0174, PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0051 - Failure detail ordering
 
@@ -278,7 +280,7 @@ workflow completion. This ordering is cross-referenced with the Hook completion
 representation in [PR-REQ-0223](./error-taxonomy-v1.md#pr-req-0223---error-identity-is-not-outcome-or-precedence)
 and [PR-REQ-0212](../package-contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion).
 
-**Verification: PR-TEST-0107, PR-TEST-0110.**
+**Verification: PR-TEST-0107, PR-TEST-0110, PR-TEST-0152, PR-TEST-0170.**
 
 ### PR-REQ-0052 - Cancellation and timeout finalization
 
@@ -288,7 +290,8 @@ finalization, and only then publish a terminal outcome. `TimedOut` MUST identify
 termination caused by Pactrun policy.
 
 **Verification: PR-TEST-0097, PR-TEST-0103, PR-TEST-0124, PR-TEST-0127,
-PR-TEST-0132.**
+PR-TEST-0132, PR-TEST-0152, PR-TEST-0153, PR-TEST-0170, PR-TEST-0171,
+PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0286 - Foreground cancellation and execution ownership
 
@@ -340,4 +343,5 @@ or being saturated.
 
 **Verification: PR-TEST-0117, PR-TEST-0121, PR-TEST-0122, PR-TEST-0123,
 PR-TEST-0124, PR-TEST-0125, PR-TEST-0126, PR-TEST-0127, PR-TEST-0128,
-PR-TEST-0129, PR-TEST-0130, PR-TEST-0131, PR-TEST-0132, PR-TEST-0133.**
+PR-TEST-0129, PR-TEST-0130, PR-TEST-0131, PR-TEST-0132, PR-TEST-0133,
+PR-TEST-0160, PR-TEST-0163, PR-TEST-0176, PR-TEST-0177.**
