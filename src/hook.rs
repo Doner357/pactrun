@@ -1,11 +1,17 @@
-//! Action Hook materialization, process supervision, and Frozen V1 runtime.
+//! Managed Hook materialization, process supervision, and Frozen V1 runtime.
 
 #![allow(dead_code)]
 
+mod capture;
 mod materialize;
 mod platform;
 mod protocol;
+mod restore;
 mod runtime;
+mod snapshots;
+pub(crate) use snapshots::{
+    SnapshotExecutionClaim, accept_snapshot, claim_snapshot, stop_snapshot_before_launch,
+};
 #[cfg(test)]
 mod tests;
 #[cfg(all(test, windows))]
@@ -321,6 +327,9 @@ impl fmt::Debug for FinalizationState {
 
 #[derive(Debug)]
 pub(crate) enum OwnerContinuation {
+    CaptureFinalization(Box<capture::CaptureFinalization>),
+    RestoreFinalization(Box<restore::RestoreFinalization>),
+    Snapshot(Box<snapshots::SnapshotOwnerState>),
     ReadyToFinalize(FinalizationState),
     RetryProcessControl(ProcessControlRetry),
     RetryDurableOperation(DurableOperationRetry),
@@ -411,6 +420,9 @@ impl OwnerContinuationRegistry {
                 OwnerContinuation::RetryProcessControl(_) => "process",
                 OwnerContinuation::RetryDurableOperation(_) => "durable",
                 OwnerContinuation::RetryFinalization(_) => "finalization",
+                OwnerContinuation::Snapshot(_) => "snapshot",
+                OwnerContinuation::CaptureFinalization(_) => "capture_finalization",
+                OwnerContinuation::RestoreFinalization(_) => "restore_finalization",
             }),
             _ => None,
         }
@@ -454,6 +466,9 @@ pub(crate) struct ContinuationGuard<'a> {
 }
 
 impl ContinuationGuard<'_> {
+    pub(crate) fn snapshot_instance(&self) -> Option<crate::domain::InstanceId> {
+        snapshots::instance(self.continuation())
+    }
     pub(crate) fn continuation(&self) -> &OwnerContinuation {
         self.continuation
             .as_ref()
@@ -509,6 +524,51 @@ pub(crate) fn execute_admitted_action(
         admitted,
         policy,
         cancellation,
+    )
+}
+
+pub(crate) fn execute_snapshot(
+    persistence: &PactrunPersistence,
+    staging: &StagingSession,
+    claim: SnapshotExecutionClaim<'_>,
+    policy: HookRuntimePolicy,
+) -> RunId {
+    runtime::execute_snapshot(persistence, staging, claim, policy)
+}
+
+#[cfg(test)]
+pub(crate) fn execute_capture_with_risk_failures(
+    persistence: &PactrunPersistence,
+    staging: &StagingSession,
+    claim: SnapshotExecutionClaim<'_>,
+    policy: HookRuntimePolicy,
+    failures: &AtomicUsize,
+) -> RunId {
+    struct FailingRisk<'a> {
+        p: &'a PactrunPersistence,
+        failures: &'a AtomicUsize,
+    }
+    impl runtime::RecoveryRiskPersistence for FailingRisk<'_> {
+        fn set_recovery_risk(&self, run: RunId, risk: RecoveryRiskState) -> Result<(), ()> {
+            if self
+                .failures
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                .is_ok()
+            {
+                return Err(());
+            }
+            runtime::RecoveryRiskPersistence::set_recovery_risk(self.p, run, risk)
+        }
+    }
+    runtime::execute_snapshot_with_risk(
+        persistence,
+        &FailingRisk {
+            p: persistence,
+            failures,
+        },
+        staging,
+        claim,
+        policy,
     )
 }
 
@@ -598,15 +658,30 @@ pub(crate) fn resume_owner_continuation(
         .insert(guard.run, RegistryEntry::Stable(Box::new(next)));
 }
 
-/// Advances an owner-held continuation through finalization. A successful
-/// return means the durable Finished record is committed and the continuation
-/// has been consumed. On persistence failure the continuation is put back
-/// before the error is returned.
+/// Advances an owner-held continuation. `true` means it has been consumed:
+/// an accepted Run is durably Finished, or uncertain Snapshot acceptance was
+/// proven not committed. It never means Succeeded without reading the outcome.
+/// On persistence failure the continuation is restored before returning.
 pub(crate) fn advance_owner_continuation(
     persistence: &PactrunPersistence,
     staging: &StagingSession,
     mut guard: ContinuationGuard<'_>,
 ) -> Result<bool, PersistenceError> {
+    if matches!(
+        guard.continuation(),
+        OwnerContinuation::RestoreFinalization(_)
+    ) {
+        return restore::advance(persistence, staging, guard);
+    }
+    if matches!(
+        guard.continuation(),
+        OwnerContinuation::CaptureFinalization(_)
+    ) {
+        return capture::advance(persistence, staging, guard);
+    }
+    if matches!(guard.continuation(), OwnerContinuation::Snapshot(_)) {
+        return snapshots::advance(persistence, staging, guard);
+    }
     let continuation = guard
         .continuation
         .take()
@@ -895,6 +970,7 @@ pub(super) fn outcome_and_failure(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum FailureKind {
+    CapturePublication(&'static str),
     SessionMaterialization,
     Launch,
     ProtocolTransport,
@@ -906,6 +982,12 @@ pub(super) enum FailureKind {
 impl FailureKind {
     fn record(&self) -> (&'static str, &'static str, ActionPlanStep, &'static str) {
         match self {
+            Self::CapturePublication(message) => (
+                "execution",
+                "managed_output_publication_failed",
+                ActionPlanStep::PublishDeclaredOutputs,
+                message,
+            ),
             Self::SessionMaterialization => (
                 "execution",
                 "session_materialization_failed",

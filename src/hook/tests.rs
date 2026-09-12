@@ -52,6 +52,13 @@ const MODE_PREFIX: &str = "pactrun-hook-mode:";
 const LINGER: Duration = Duration::from_millis(1500);
 const WAIT_LIMIT: Duration = Duration::from_secs(60);
 
+mod capture_runtime {
+    include!("capture_tests.rs");
+}
+mod restore_runtime {
+    include!("restore_tests.rs");
+}
+
 // Test-ID: PR-TEST-0122
 // Verifies: PR-REQ-0286
 #[test]

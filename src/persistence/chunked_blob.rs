@@ -10,10 +10,11 @@ use std::io::{Read, Write};
 use rusqlite::{Connection, Transaction, params};
 
 use super::PersistenceError;
-use crate::domain::{MANAGED_INPUT_CHUNK_BYTES_V1, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1};
+use crate::domain::MANAGED_INPUT_CHUNK_BYTES_V1;
 
 /// The SQL and error mapping of one chunk table keyed by two BLOB columns.
 pub(super) struct ChunkedBlobTable {
+    pub(super) representation_maximum: u64,
     /// `INSERT ... VALUES (?1, ?2, ?3, ?4)` binding key0, key1, chunk_index,
     /// chunk_bytes.
     pub(super) insert_chunk_sql: &'static str,
@@ -33,7 +34,7 @@ pub(super) fn insert_chunks(
     reader: &mut dyn Read,
     byte_len: u64,
 ) -> Result<(), PersistenceError> {
-    if byte_len > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
+    if byte_len > table.representation_maximum {
         return Err((table.invalid)("blob exceeds the size limit".to_owned()));
     }
     let mut total = 0_u64;
@@ -60,7 +61,7 @@ pub(super) fn insert_chunks(
         total = total
             .checked_add(u64::try_from(used).expect("chunk length fits u64"))
             .ok_or_else(|| (table.invalid)("blob length overflow".to_owned()))?;
-        if total > byte_len || total > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
+        if total > byte_len || total > table.representation_maximum {
             return Err((table.invalid)("staged blob length changed".to_owned()));
         }
         transaction
@@ -84,7 +85,7 @@ pub(super) fn stream_chunks(
     declared_length: u64,
     destination: &mut dyn Write,
 ) -> Result<(), PersistenceError> {
-    if declared_length > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
+    if declared_length > table.representation_maximum {
         return Err((table.corrupt)("oversize blob header".to_owned()));
     }
     let mut statement = database

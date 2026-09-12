@@ -233,6 +233,10 @@ impl RevisionCoreV1 {
         &self.actions
     }
 
+    pub(crate) fn snapshot(&self) -> Option<&SnapshotCapabilityV1> {
+        self.snapshot.as_ref()
+    }
+
     pub(crate) fn migrations(&self) -> &[MigrationV1] {
         &self.migrations
     }

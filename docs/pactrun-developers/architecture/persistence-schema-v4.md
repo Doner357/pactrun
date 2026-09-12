@@ -4,14 +4,17 @@ title: Persistence Schema V4
 
 # Persistence Schema V4
 
-**Status: Current implemented normative internal persistence contract;
+**Status: Historical implemented normative internal persistence contract;
 non-Frozen and non-public.**
 
 This page extends the exact implemented
 [PersistenceSchemaV3](./persistence-schema-v3.md) for M3 Slice 2. It does not
 modify the V1, V2, or V3 tables or any Frozen identity, wire, or error format.
-PersistenceSchemaV4 is the current implemented internal schema after M3
-Slice 2 integration. It defines the durable representation of Action Runs,
+PersistenceSchemaV4 is the exact M3 internal schema. M4's
+[PersistenceSchemaV5](./persistence-schema-v5.md) retains these tables and adds
+explicit writable admission and Snapshot substrate; its legacy-bootstrap
+contract supersedes ordinary opening behavior for the M4 binary. V4 defines
+the durable representation of Action Runs,
 execution ownership, durable execution pins, Action recovery state, the
 `ManualRecoveryRequired` Instance trust guard, and Run Artifacts. Admission,
 Hook launch, HookProtocolV1 runtime behavior, owner-held finalization, output

@@ -38,7 +38,8 @@ pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
 const SCHEMA_V1_VERSION: i64 = 1;
 const SCHEMA_V2_VERSION: i64 = 2;
 pub(super) const SCHEMA_V3_VERSION: i64 = 3;
-pub(super) const SCHEMA_VERSION: i64 = 4;
+pub(super) const SCHEMA_V4_VERSION: i64 = 4;
+pub(super) const SCHEMA_VERSION: i64 = 5;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -102,14 +103,17 @@ pub(super) const SCHEMA_V3_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v3_additions.sql");
 pub(super) const SCHEMA_V4_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v4_additions.sql");
+pub(super) const SCHEMA_V5_ADDITIONS_SQL: &str =
+    include_str!("persistence_schema_v5_additions.sql");
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-const SCHEMA_LADDER: [(&str, &str); 4] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 5] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
     (SCHEMA_V4_ADDITIONS_SQL, "PersistenceSchemaV4 additions"),
+    (SCHEMA_V5_ADDITIONS_SQL, "PersistenceSchemaV5 additions"),
 ];
 
 #[derive(Debug)]
@@ -117,6 +121,8 @@ pub(crate) struct PactrunPersistence {
     pub(super) database: Mutex<Connection>,
     pub(super) database_path: PathBuf,
     pub(super) runtime_content: RuntimeContentStore,
+    // Dropped after the connection: a writer cannot outlive its owner lease.
+    pub(super) session: Option<crate::managed_data::StagingSession>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -159,6 +165,16 @@ pub(crate) enum PersistenceError {
     MissingRecoveryGuard,
     InvalidRunArtifact(String),
     DatabaseLockPoisoned,
+    UpgradeRequired,
+    WriterAdmissionRequired,
+    LegacySessionUncertain,
+    ActiveWriters,
+    MissingSnapshot(crate::domain::SnapshotId),
+    SnapshotCollision(crate::domain::SnapshotId),
+    SnapshotBundle(crate::snapshot_bundle::BundleError),
+    SnapshotCodec(crate::snapshot_integrity::SnapshotCodecError),
+    CorruptSnapshot(&'static str),
+    UnauthorizedSnapshotExport,
 }
 
 impl PersistenceError {
@@ -220,6 +236,16 @@ impl fmt::Display for PersistenceError {
                 write!(formatter, "invalid Run Artifact: {message}")
             }
             Self::DatabaseLockPoisoned => formatter.write_str("database mutex poisoned"),
+            Self::MissingSnapshot(id) => write!(formatter,"Snapshot {id} is not persisted"),
+            Self::SnapshotCollision(id) => write!(formatter,"Snapshot identity collision: {id}"),
+            Self::SnapshotBundle(error) => error.fmt(formatter),
+            Self::SnapshotCodec(error) => error.fmt(formatter),
+            Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
+            Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
+            Self::UpgradeRequired => formatter.write_str("exact V4 requires explicit pactrun storage upgrade"),
+            Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
+            Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
+            Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
         }
     }
 }
@@ -244,23 +270,43 @@ impl From<RuntimeContentStoreError> for PersistenceError {
 impl PactrunPersistence {
     pub(crate) fn open(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
+        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
+            PersistenceError::DatabaseOwnership("could not prepare writer session".to_owned())
+        })?;
+        Self::open_prepared(&root, session)
+    }
+
+    pub(crate) fn open_prepared(
+        root: &Path,
+        session: crate::managed_data::StagingSession,
+    ) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
+        if !session.belongs_to_storage(&root) {
+            return Err(PersistenceError::DatabaseOwnership(
+                "writer session belongs to another storage root".to_owned(),
+            ));
+        }
         let database_root = validate_supported_storage_root(&root.join(DATABASE_DIRECTORY))?;
         let runtime_root = root.join(RUNTIME_CONTENT_DIRECTORY);
-        let runtime_content = RuntimeContentStore::open(&runtime_root)?;
 
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
         let database_path = database_root.join(DATABASE_NAME);
-        let database = open_database(&database_path)?;
+        let database = super::sqlite_v5::open_writer_database(&database_path, &session)?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
+        // Cross-session cleanup and publisher maintenance require a supported,
+        // durably admitted schema; pre-admission preparation cannot authorize them.
+        let runtime_content = RuntimeContentStore::open(&runtime_root)?;
+        let _ = session.cleanup_abandoned();
 
         Ok(Self {
             database: Mutex::new(database),
             database_path,
             runtime_content,
+            session: Some(session),
         })
     }
 
-    /// Opens an existing V4 store without creating a staging session, changing
+    /// Opens an existing V5 store without creating a staging session, changing
     /// SQLite journal/schema state, or opening the runtime-content publication
     /// lock. Inspection and plan preview use this narrower path.
     pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
@@ -275,9 +321,12 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V4 {
+        if state != DatabaseState::V5 {
+            if state == DatabaseState::V4 {
+                return Err(PersistenceError::UpgradeRequired);
+            }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires the exact current V4 schema".to_owned(),
+                "read-only opening requires the exact current V5 schema".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -286,6 +335,7 @@ impl PactrunPersistence {
             database: Mutex::new(database),
             database_path,
             runtime_content,
+            session: None,
         })
     }
 
@@ -294,6 +344,9 @@ impl PactrunPersistence {
         expected: &Sha256Digest,
         source: &mut R,
     ) -> Result<StoredRuntimeBlob, PersistenceError> {
+        if self.session.is_none() {
+            return Err(PersistenceError::WriterAdmissionRequired);
+        }
         self.runtime_content
             .put_verified(expected, source)
             .map_err(PersistenceError::from)
@@ -341,6 +394,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Revision transaction", error))?;
+        self.check_write_admission(&transaction)?;
 
         if let Some(raw) = load_raw_revision(&transaction, &identity)? {
             let actual_references = load_reference_rows(&transaction, &identity)?;
@@ -424,12 +478,7 @@ impl PactrunPersistence {
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        let Some(raw) = load_raw_revision(&database, identity)? else {
-            return Ok(None);
-        };
-        ensure_package_exists(&database, &identity.package_id)?;
-        let references = load_reference_rows(&database, identity)?;
-        validate_raw_revision(identity, raw, references).map(Some)
+        load_revision_from(&database, identity)
     }
 
     pub(crate) fn verify_revision_runtime_content(
@@ -443,6 +492,18 @@ impl PactrunPersistence {
             .verify_runtime_content_available(&stored.content.runtime_content)
             .map_err(PersistenceError::from)
     }
+}
+
+pub(super) fn load_revision_from(
+    database: &Connection,
+    identity: &RevisionIdentity,
+) -> Result<Option<StoredRevisionContentV1>, PersistenceError> {
+    let Some(raw) = load_raw_revision(database, identity)? else {
+        return Ok(None);
+    };
+    ensure_package_exists(database, &identity.package_id)?;
+    let references = load_reference_rows(database, identity)?;
+    validate_raw_revision(identity, raw, references).map(Some)
 }
 
 impl PactrunPersistence {
@@ -463,7 +524,7 @@ impl PactrunPersistence {
     }
 }
 
-fn configure_read_connection(database: &Connection) -> Result<(), PersistenceError> {
+pub(super) fn configure_read_connection(database: &Connection) -> Result<(), PersistenceError> {
     database
         .busy_timeout(BUSY_TIMEOUT)
         .map_err(|error| PersistenceError::sqlite("set SQLite read busy timeout", error))?;
@@ -484,12 +545,13 @@ fn configure_read_connection(database: &Connection) -> Result<(), PersistenceErr
     Ok(())
 }
 
-fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
+#[cfg(test)]
+pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, PersistenceError> {
     let mut database = Connection::open(path)
         .map_err(|error| PersistenceError::sqlite("open SQLite database", error))?;
     configure_connection(&database)?;
 
-    classify_database(&database)?;
+    legacy_v4_classify(&database)?;
     establish_wal_mode(&database)?;
     configure_connection(&database)?;
     fault(FaultPoint::AfterWalBeforeBootstrap);
@@ -497,32 +559,37 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
     let transaction = database
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|error| PersistenceError::sqlite("begin schema bootstrap", error))?;
-    let state = classify_database(&transaction)?;
+    let state = legacy_v4_classify(&transaction)?;
     let migrated = match state {
         DatabaseState::Pristine => {
-            apply_schema_ladder(&transaction, 0)?;
+            apply_legacy_v4_ladder(&transaction, 0)?;
             transaction
                 .pragma_update(None, "application_id", APPLICATION_ID)
                 .map_err(|error| PersistenceError::sqlite("set application_id", error))?;
             transaction
-                .pragma_update(None, "user_version", SCHEMA_VERSION)
+                .pragma_update(None, "user_version", SCHEMA_V4_VERSION)
                 .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
-            validate_schema(&transaction, SCHEMA_VERSION)?;
+            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
             fault(FaultPoint::BeforeBootstrapCommit);
             false
         }
         DatabaseState::V1 | DatabaseState::V2 | DatabaseState::V3 => {
             let current = state.version().expect("exact versions carry a version");
-            apply_schema_ladder(&transaction, current)?;
-            validate_schema(&transaction, SCHEMA_VERSION)?;
+            apply_legacy_v4_ladder(&transaction, current)?;
+            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
             transaction
-                .pragma_update(None, "user_version", SCHEMA_VERSION)
+                .pragma_update(None, "user_version", SCHEMA_V4_VERSION)
                 .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
             fault(FaultPoint::BeforeSchemaMigrationCommit);
             true
         }
+        DatabaseState::V5 => {
+            return Err(PersistenceError::DatabaseOwnership(
+                "legacy V4 binary rejects newer schema".to_owned(),
+            ));
+        }
         DatabaseState::V4 => {
-            validate_schema(&transaction, SCHEMA_VERSION)?;
+            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
             false
         }
     };
@@ -537,10 +604,11 @@ fn open_database(path: &Path) -> Result<Connection, PersistenceError> {
 }
 
 /// Executes every ladder step above `current` so the schema becomes exact
-/// `SCHEMA_VERSION`; `current = 0` builds the complete schema from nothing.
-fn apply_schema_ladder(database: &Connection, current: i64) -> Result<(), PersistenceError> {
+/// `SCHEMA_V4_VERSION`; `current = 0` builds the complete schema from nothing.
+#[cfg(test)]
+fn apply_legacy_v4_ladder(database: &Connection, current: i64) -> Result<(), PersistenceError> {
     let start = usize::try_from(current).expect("schema versions are non-negative");
-    for (sql, label) in &SCHEMA_LADDER[start..] {
+    for (sql, label) in &SCHEMA_LADDER[start..4] {
         database
             .execute_batch(sql)
             .map_err(|error| PersistenceError::Sqlite {
@@ -550,8 +618,38 @@ fn apply_schema_ladder(database: &Connection, current: i64) -> Result<(), Persis
     }
     Ok(())
 }
+#[cfg(test)]
+fn legacy_v4_classify(database: &Connection) -> Result<DatabaseState, PersistenceError> {
+    let version: i64 = database
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(|e| PersistenceError::sqlite("legacy V4 version check", e))?;
+    if version > SCHEMA_V4_VERSION {
+        return Err(PersistenceError::DatabaseOwnership(
+            "legacy V4 binary rejects newer schema".to_owned(),
+        ));
+    }
+    classify_database(database)
+}
 
-fn establish_wal_mode(database: &Connection) -> Result<(), PersistenceError> {
+/// Historical <=V4 schema fixtures only, never an M4 production open path.
+/// Reads retain the original migration assertions; V5 writes still require
+/// admission and therefore cannot be performed through this unqualified view.
+#[cfg(test)]
+pub(super) fn legacy_v4_fixture(
+    root: impl AsRef<Path>,
+) -> Result<PactrunPersistence, PersistenceError> {
+    let root = root.as_ref();
+    let path = root.join("database/pactrun.sqlite3");
+    let database = legacy_v4_open_database(&path)?;
+    Ok(PactrunPersistence {
+        database: Mutex::new(database),
+        database_path: path,
+        runtime_content: RuntimeContentStore::open(root.join("runtime-content"))?,
+        session: None,
+    })
+}
+
+pub(super) fn establish_wal_mode(database: &Connection) -> Result<(), PersistenceError> {
     let started = Instant::now();
     loop {
         match database.query_row("PRAGMA journal_mode=WAL", [], |row| row.get::<_, String>(0)) {
@@ -589,7 +687,7 @@ fn is_transient_journal_mode_race(error: &rusqlite::Error) -> bool {
     ) || sqlite.extended_code == rusqlite::ffi::SQLITE_IOERR_FSTAT
 }
 
-fn configure_connection(database: &Connection) -> Result<(), PersistenceError> {
+pub(super) fn configure_connection(database: &Connection) -> Result<(), PersistenceError> {
     database
         .busy_timeout(BUSY_TIMEOUT)
         .map_err(|error| PersistenceError::sqlite("set SQLite busy timeout", error))?;
@@ -615,12 +713,13 @@ fn configure_connection(database: &Connection) -> Result<(), PersistenceError> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum DatabaseState {
+pub(super) enum DatabaseState {
     Pristine,
     V1,
     V2,
     V3,
     V4,
+    V5,
 }
 
 impl DatabaseState {
@@ -630,12 +729,13 @@ impl DatabaseState {
             Self::V1 => Some(SCHEMA_V1_VERSION),
             Self::V2 => Some(SCHEMA_V2_VERSION),
             Self::V3 => Some(SCHEMA_V3_VERSION),
-            Self::V4 => Some(SCHEMA_VERSION),
+            Self::V4 => Some(SCHEMA_V4_VERSION),
+            Self::V5 => Some(SCHEMA_VERSION),
         }
     }
 }
 
-fn classify_database(database: &Connection) -> Result<DatabaseState, PersistenceError> {
+pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, PersistenceError> {
     let application_id: i64 = database
         .pragma_query_value(None, "application_id", |row| row.get(0))
         .map_err(|error| PersistenceError::sqlite("read application_id", error))?;
@@ -658,9 +758,13 @@ fn classify_database(database: &Connection) -> Result<DatabaseState, Persistence
             validate_schema(database, SCHEMA_V3_VERSION)?;
             Ok(DatabaseState::V3)
         }
+        (APPLICATION_ID, SCHEMA_V4_VERSION, true) => {
+            validate_schema(database, SCHEMA_V4_VERSION)?;
+            Ok(DatabaseState::V4)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V4)
+            Ok(DatabaseState::V5)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -721,7 +825,7 @@ struct ForeignKeyRow {
     match_clause: String,
 }
 
-fn validate_schema(database: &Connection, version: i64) -> Result<(), PersistenceError> {
+pub(super) fn validate_schema(database: &Connection, version: i64) -> Result<(), PersistenceError> {
     if !(SCHEMA_V1_VERSION..=SCHEMA_VERSION).contains(&version) {
         return Err(PersistenceError::SchemaMismatch(format!(
             "unsupported expected schema version {version}"
@@ -1034,6 +1138,11 @@ fn validate_publications(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FaultPoint {
+    BeforeSnapshotImportCommit,
+    AfterSnapshotImportCommit,
+    BeforeWritableAdmission,
+    AfterWritableAdmission,
+    AfterLegacySessionInspection,
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
     BeforeSchemaMigrationCommit,
@@ -1056,6 +1165,11 @@ impl FaultPoint {
     #[cfg(test)]
     pub(crate) fn name(self) -> &'static str {
         match self {
+            Self::BeforeSnapshotImportCommit => "before_snapshot_import_commit",
+            Self::AfterSnapshotImportCommit => "after_snapshot_import_commit",
+            Self::BeforeWritableAdmission => "before_writable_admission",
+            Self::AfterWritableAdmission => "after_writable_admission",
+            Self::AfterLegacySessionInspection => "after_legacy_session_inspection",
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
             Self::BeforeSchemaMigrationCommit => "before_schema_migration_commit",
@@ -1081,9 +1195,25 @@ pub(crate) fn fault(_point: FaultPoint) {}
 
 #[cfg(test)]
 pub(crate) fn fault(point: FaultPoint) {
-    if ["PACTRUN_M1C_FAULT", "PACTRUN_M1D_FAULT", "PACTRUN_M3_FAULT"]
-        .iter()
-        .any(|variable| std::env::var_os(variable).is_some_and(|value| value == point.name()))
+    if std::env::var_os("PACTRUN_M4_SYNC").is_some_and(|value| value == point.name()) {
+        let root = PathBuf::from(
+            std::env::var_os("PACTRUN_M4_SYNC_DIR").expect("test synchronization directory"),
+        );
+        std::fs::write(root.join("ready"), point.name()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !root.join("release").exists() {
+            assert!(Instant::now() < deadline, "test synchronization timed out");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    if [
+        "PACTRUN_M1C_FAULT",
+        "PACTRUN_M1D_FAULT",
+        "PACTRUN_M3_FAULT",
+        "PACTRUN_M4_FAULT",
+    ]
+    .iter()
+    .any(|variable| std::env::var_os(variable).is_some_and(|value| value == point.name()))
     {
         std::process::exit(87);
     }
@@ -1404,7 +1534,7 @@ mod tests {
     // Test-ID: PR-TEST-0073
     // Verifies: PR-REQ-0078, PR-REQ-0269, PR-REQ-0270
     #[test]
-    fn exact_v2_migrates_transactionally_to_current_and_preserves_wal() {
+    fn legacy_v2_migrates_transactionally_to_v4_and_preserves_wal() {
         let (_temporary, root) = test_root();
         initialize_direct(
             &root,
@@ -1412,13 +1542,13 @@ mod tests {
             SCHEMA_V2_VERSION,
             &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
         );
-        let persistence = PactrunPersistence::open(&root).unwrap();
+        let persistence = legacy_v4_fixture(&root).unwrap();
         let database = persistence.database.lock().unwrap();
         assert_eq!(
             database
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            SCHEMA_VERSION
+            SCHEMA_V4_VERSION
         );
         assert_eq!(
             database
@@ -1426,7 +1556,7 @@ mod tests {
                 .unwrap(),
             "wal"
         );
-        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
         drop(database);
 
         let (before_temporary, before_root) = test_root();
@@ -1439,7 +1569,7 @@ mod tests {
         let before_marker = before_temporary.path().join("migration-before.success");
         assert!(!run_worker(
             &before_root,
-            "open",
+            "legacy-open",
             Some(FaultPoint::BeforeSchemaMigrationCommit),
             &before_marker,
         ));
@@ -1461,7 +1591,7 @@ mod tests {
             0
         );
         drop(database);
-        PactrunPersistence::open(&before_root).unwrap();
+        legacy_v4_fixture(&before_root).unwrap();
 
         let (after_temporary, after_root) = test_root();
         initialize_direct(
@@ -1473,7 +1603,7 @@ mod tests {
         let after_marker = after_temporary.path().join("migration-after.success");
         assert!(!run_worker(
             &after_root,
-            "open",
+            "legacy-open",
             Some(FaultPoint::AfterSchemaMigrationCommit),
             &after_marker,
         ));
@@ -1482,11 +1612,11 @@ mod tests {
             database
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            SCHEMA_VERSION
+            SCHEMA_V4_VERSION
         );
-        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
         drop(database);
-        PactrunPersistence::open(&after_root).unwrap();
+        legacy_v4_fixture(&after_root).unwrap();
     }
 
     // Test-ID: PR-TEST-0053
@@ -1887,7 +2017,7 @@ mod tests {
     // Test-ID: PR-TEST-0082
     // Verifies: PR-REQ-0078, PR-REQ-0275, PR-REQ-0276
     #[test]
-    fn exact_v3_migrates_to_v4_preserving_instances_with_crash_and_concurrency() {
+    fn legacy_v3_migrates_to_v4_preserving_instances_with_crash_and_concurrency() {
         fn v3_sql() -> String {
             format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}\n{SCHEMA_V3_ADDITIONS_SQL}")
         }
@@ -1958,10 +2088,10 @@ mod tests {
         let (_temporary, root) = test_root();
         seed_v3(&root);
         let before = preserved_rows(&raw_database(&root));
-        let persistence = PactrunPersistence::open(&root).unwrap();
+        let persistence = legacy_v4_fixture(&root).unwrap();
         let database = persistence.database.lock().unwrap();
-        assert_eq!(user_version(&database), SCHEMA_VERSION);
-        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
+        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
         assert_eq!(preserved_rows(&database), before);
         for table in [
             "runs",
@@ -2001,7 +2131,7 @@ mod tests {
         let before_marker = before_temporary.path().join("v4-before.success");
         assert!(!run_worker(
             &before_root,
-            "open",
+            "legacy-open",
             Some(FaultPoint::BeforeSchemaMigrationCommit),
             &before_marker,
         ));
@@ -2012,30 +2142,30 @@ mod tests {
         validate_schema(&database, SCHEMA_V3_VERSION).unwrap();
         assert_eq!(preserved_rows(&database), before);
         drop(database);
-        PactrunPersistence::open(&before_root).unwrap();
+        legacy_v4_fixture(&before_root).unwrap();
 
         let (after_temporary, after_root) = test_root();
         seed_v3(&after_root);
         let after_marker = after_temporary.path().join("v4-after.success");
         assert!(!run_worker(
             &after_root,
-            "open",
+            "legacy-open",
             Some(FaultPoint::AfterSchemaMigrationCommit),
             &after_marker,
         ));
         let database = raw_database(&after_root);
-        assert_eq!(user_version(&database), SCHEMA_VERSION);
-        validate_schema(&database, SCHEMA_VERSION).unwrap();
+        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
+        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
         assert_eq!(preserved_rows(&database), before);
         drop(database);
-        PactrunPersistence::open(&after_root).unwrap();
+        legacy_v4_fixture(&after_root).unwrap();
 
         // Pristine, exact V1, and exact V2 converge on exact V4 as well.
         let (_pristine_temporary, pristine_root) = test_root();
-        let pristine = PactrunPersistence::open(&pristine_root).unwrap();
+        let pristine = legacy_v4_fixture(&pristine_root).unwrap();
         assert_eq!(
             user_version(&pristine.database.lock().unwrap()),
-            SCHEMA_VERSION
+            SCHEMA_V4_VERSION
         );
         for (version, sql) in [
             (SCHEMA_V1_VERSION, SCHEMA_V1_SQL.to_owned()),
@@ -2046,10 +2176,10 @@ mod tests {
         ] {
             let (_temporary, root) = test_root();
             initialize_direct(&root, APPLICATION_ID, version, &sql);
-            let persistence = PactrunPersistence::open(&root).unwrap();
+            let persistence = legacy_v4_fixture(&root).unwrap();
             let database = persistence.database.lock().unwrap();
-            assert_eq!(user_version(&database), SCHEMA_VERSION);
-            validate_schema(&database, SCHEMA_VERSION).unwrap();
+            assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
+            validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
         }
 
         // Concurrent migrators converge through SQLite locking alone.
@@ -2061,7 +2191,7 @@ mod tests {
                 let marker = concurrent_temporary
                     .path()
                     .join(format!("migrate-{index}.success"));
-                thread::spawn(move || (run_worker(&root, "open", None, &marker), marker))
+                thread::spawn(move || (run_worker(&root, "legacy-open", None, &marker), marker))
             })
             .collect::<Vec<_>>();
         for worker in workers {
@@ -2070,7 +2200,7 @@ mod tests {
             assert!(marker.exists());
         }
         let database = raw_database(&concurrent_root);
-        assert_eq!(user_version(&database), SCHEMA_VERSION);
+        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
         assert_eq!(preserved_rows(&database), before);
         drop(database);
 
@@ -2080,14 +2210,14 @@ mod tests {
         initialize_direct(
             &drift_root,
             APPLICATION_ID,
-            SCHEMA_VERSION,
+            SCHEMA_V4_VERSION,
             &format!(
                 "{}\n{SCHEMA_V4_ADDITIONS_SQL}\nCREATE TABLE drift(value TEXT) STRICT;",
                 v3_sql()
             ),
         );
         assert!(matches!(
-            PactrunPersistence::open(&drift_root),
+            legacy_v4_fixture(&drift_root),
             Err(PersistenceError::SchemaMismatch(_))
         ));
         let (_partial_temporary, partial_root) = test_root();
@@ -2105,7 +2235,7 @@ mod tests {
             ),
         );
         assert!(matches!(
-            PactrunPersistence::open(&partial_root),
+            legacy_v4_fixture(&partial_root),
             Err(PersistenceError::SchemaMismatch(_))
         ));
     }
@@ -2117,9 +2247,13 @@ mod tests {
         };
         let root = PathBuf::from(std::env::var_os("PACTRUN_M1C_ROOT").unwrap());
         let marker = PathBuf::from(std::env::var_os("PACTRUN_M1C_SUCCESS_MARKER").unwrap());
-        let persistence = PactrunPersistence::open(&root).unwrap();
+        let persistence = if operation == "legacy-open" {
+            legacy_v4_fixture(&root).unwrap()
+        } else {
+            PactrunPersistence::open(&root).unwrap()
+        };
         match operation.to_string_lossy().as_ref() {
-            "open" => {}
+            "open" | "legacy-open" => {}
             "persist" => {
                 let bytes = b"m1c worker content";
                 let blob_digest = digest(bytes);

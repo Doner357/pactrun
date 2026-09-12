@@ -14,6 +14,9 @@ mod managed_input;
 mod revision_core_v1;
 mod revision_metadata;
 mod run;
+mod snapshot;
+mod snapshot_capability;
+mod snapshot_execution;
 
 pub(crate) use error::PactrunErrorRefV1;
 #[allow(unused_imports)]
@@ -21,7 +24,7 @@ pub(crate) use execution::*;
 #[allow(unused_imports)]
 pub(crate) use identity::{
     InstanceId, InstanceStateVersion, ManagedInputPayloadId, PackageId, RevisionContentDigest,
-    RevisionIdentity, RunId,
+    RevisionIdentity, RunId, SnapshotId,
 };
 #[allow(unused_imports)]
 pub(crate) use managed_input::*;
@@ -30,3 +33,8 @@ pub(crate) use revision_core_v1::*;
 pub(crate) use revision_metadata::*;
 #[allow(unused_imports)]
 pub(crate) use run::*;
+#[allow(unused_imports)]
+pub(crate) use snapshot::*;
+#[allow(unused_imports)]
+pub(crate) use snapshot_capability::*;
+pub(crate) use snapshot_execution::*;

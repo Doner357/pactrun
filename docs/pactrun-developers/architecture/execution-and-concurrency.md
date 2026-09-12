@@ -122,7 +122,8 @@ coexist with other Observe and Mutate operations. Mutate operations on the same
 Instance MUST serialize or conflict. The same mutation guard MUST protect both
 managed execution and management mutations.
 
-**Verification: PR-TEST-0092, PR-TEST-0172.**
+**Verification: PR-TEST-0092, PR-TEST-0172, PR-TEST-0227, PR-TEST-0228,
+PR-TEST-0236, PR-TEST-0238.**
 
 ### PR-REQ-0278 - Action admission exclusivity
 

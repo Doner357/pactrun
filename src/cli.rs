@@ -5,7 +5,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fmt,
-    fs::{self, File},
+    fs::File,
     io::{self, Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
@@ -14,12 +14,15 @@ use std::{
     time::Duration,
 };
 
+#[cfg(test)]
+use std::fs;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
+mod snapshots;
 
 use crate::{
     application::{ApplicationError, InputAcquisition, MigrationRelationState, PactrunApplication},
@@ -55,10 +58,24 @@ Usage:\n\
   pactrun run list <instance>\n\
   pactrun run show <run-id>\n\
   pactrun run reconcile\n\
+  pactrun snapshot capture <instance> [execution-options]\n\
+  pactrun snapshot restore <instance> <snapshot-id> [execution-options]\n\
+  pactrun snapshot list [--instance <instance>]\n\
+  pactrun snapshot show <snapshot-id>\n\
+  pactrun snapshot verify <snapshot-id>\n\
+  pactrun snapshot import <bundle-path>\n\
+  pactrun snapshot export <snapshot-id> --output <bundle-path> --authorize-sensitive-export\n\
+  pactrun storage upgrade\n\
+\n\
+Snapshot execution options: --param, --param-file, --param-stdin, --plan, --authorize-recovery-override,\n\
+  --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
+Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
+Snapshot bundles use filesystem paths only, never stdin/stdout.\n\
 \n\
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    Snapshot(snapshots::SnapshotCommand),
     Help,
     Version,
     GeneratePackageId,
@@ -122,6 +139,7 @@ enum Command {
         run: RunId,
     },
     ReconcileRuns,
+    UpgradeStorage,
 }
 
 enum RevisionReference {
@@ -144,6 +162,15 @@ enum ParameterSourceSpec {
     Text(ParameterIdentity, String),
     File(ParameterIdentity, PathBuf),
     Stdin(ParameterIdentity),
+}
+
+struct ExecutionOptions {
+    parameters: Vec<ParameterSourceSpec>,
+    plan: bool,
+    recovery_override: bool,
+    startup_timeout_ms: Option<u64>,
+    action_timeout_ms: Option<u64>,
+    termination_grace_ms: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -370,7 +397,7 @@ impl Drop for CancellableStdin {
 }
 
 #[cfg(test)]
-fn run(
+pub(crate) fn run(
     args: Vec<OsString>,
     storage_root: Option<OsString>,
     stdin: &mut dyn Read,
@@ -426,7 +453,16 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         "input" => parse_input(&mut parser),
         "action" => parse_action(&mut parser),
         "invoke" => parse_invoke(&mut parser),
+        "snapshot" => snapshots::parse(&mut parser).map(Command::Snapshot),
         "run" => parse_run(&mut parser),
+        "storage" => {
+            let operation = required_value_string(&mut parser, "storage command")?;
+            if operation != "upgrade" {
+                return Err(CliError::usage("unknown storage command"));
+            }
+            require_end(&mut parser)?;
+            Ok(Command::UpgradeStorage)
+        }
         _ => Err(CliError::usage(format!("unknown command {first:?}"))),
     }
 }
@@ -634,6 +670,23 @@ fn parse_action(parser: &mut Parser) -> Result<Command, CliError> {
 fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let action = parse_action_id(&required_value_string(parser, "Action identity")?)?;
+    let options = parse_execution_options(parser, "action-timeout-ms")?;
+    Ok(Command::Invoke {
+        name,
+        action,
+        parameters: options.parameters,
+        plan: options.plan,
+        recovery_override: options.recovery_override,
+        startup_timeout_ms: options.startup_timeout_ms,
+        action_timeout_ms: options.action_timeout_ms,
+        termination_grace_ms: options.termination_grace_ms,
+    })
+}
+
+fn parse_execution_options(
+    parser: &mut Parser,
+    timeout_option: &'static str,
+) -> Result<ExecutionOptions, CliError> {
     let mut parameters = Vec::new();
     let mut plan = false;
     let mut recovery_override = false;
@@ -678,11 +731,11 @@ fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
                     "--startup-timeout-ms",
                 )?;
             }
-            Arg::Long("action-timeout-ms") => {
+            Arg::Long(option) if option == timeout_option => {
                 set_once(
                     &mut action_timeout_ms,
                     parse_timeout_ms(value_string(parser, "Action timeout")?)?,
-                    "--action-timeout-ms",
+                    timeout_option,
                 )?;
             }
             Arg::Long("termination-grace-ms") => {
@@ -696,9 +749,7 @@ fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
         }
     }
     validate_parameter_source_shape(&parameters)?;
-    Ok(Command::Invoke {
-        name,
-        action,
+    Ok(ExecutionOptions {
         parameters,
         plan,
         recovery_override,
@@ -757,6 +808,26 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
+    if let Command::Snapshot(command) = command {
+        return snapshots::execute(command, &storage_root, stdin, stdout, stderr, cancellation);
+    }
+    if matches!(command, Command::UpgradeStorage) {
+        if !storage_root.is_absolute() {
+            return Err(CliError::operation("PACTRUN_STORAGE_ROOT must be absolute"));
+        }
+        let upgraded = crate::persistence::PactrunPersistence::upgrade_storage(&storage_root)
+            .map_err(|error| CliError::operation(error.to_string()))?;
+        return writeln!(
+            stdout,
+            "storage schema: V5 ({})",
+            if upgraded {
+                "upgraded"
+            } else {
+                "already current"
+            }
+        )
+        .map_err(io_operation);
+    }
     let readonly = matches!(
         command,
         Command::ListActions { .. }
@@ -1086,16 +1157,16 @@ fn execute(
         }
         Command::ListRuns { name } => {
             let (instance, _) = resolve_instance(&application, &name)?;
-            for run in application.list_runs(instance).map_err(app_error)? {
-                write_run_summary(stdout, &run)?;
+            for run in application.list_managed_runs(instance).map_err(app_error)? {
+                snapshots::write_summary(stdout, &run)?;
             }
         }
         Command::ShowRun { run } => {
             let inspection = application
-                .load_run_inspection(run)
+                .managed_run_inspection(run)
                 .map_err(app_error)?
                 .ok_or_else(|| CliError::operation("Run is not persisted"))?;
-            write_run(stdout, &inspection)?;
+            snapshots::write_run(stdout, &inspection)?;
         }
         Command::ReconcileRuns => {
             for run in application
@@ -1105,7 +1176,13 @@ fn execute(
                 writeln!(stdout, "{run}").map_err(io_operation)?;
             }
         }
-        Command::Help | Command::Version | Command::GeneratePackageId => unreachable!(),
+        Command::Help
+        | Command::Version
+        | Command::GeneratePackageId
+        | Command::UpgradeStorage
+        | Command::Snapshot(_) => {
+            unreachable!()
+        }
     }
     Ok(())
 }
@@ -1319,6 +1396,14 @@ fn format_failed_step(step: crate::domain::RunFailedStep) -> String {
     match step {
         crate::domain::RunFailedStep::Admission => "admission".to_owned(),
         crate::domain::RunFailedStep::Plan(step) => plan_step_name(step).to_owned(),
+        crate::domain::RunFailedStep::SnapshotPlan(step) => match step {
+            crate::domain::SnapshotPlanStep::EstablishSession => "establish_session",
+            crate::domain::SnapshotPlanStep::LaunchHook => "launch_hook",
+            crate::domain::SnapshotPlanStep::AcceptCompletion => "accept_completion",
+            crate::domain::SnapshotPlanStep::PublishManagedResult => "publish_managed_result",
+            crate::domain::SnapshotPlanStep::Finalize => "finalize",
+        }
+        .to_owned(),
     }
 }
 
@@ -1548,7 +1633,19 @@ fn write_run(
     )
     .map_err(io_operation)?;
     writeln!(output, "accepted_at_unix_ms: {}", run.accepted_at_unix_ms).map_err(io_operation)?;
-    match &run.state {
+    write_run_state(
+        output,
+        &run.state,
+        inspection.current_recovery_guard.as_ref(),
+    )
+}
+
+fn write_run_state(
+    output: &mut dyn Write,
+    state: &RunState,
+    current_recovery_guard: Option<&crate::domain::RecoveryGuardView>,
+) -> Result<(), CliError> {
+    match state {
         crate::domain::RunState::Running(execution) => {
             writeln!(output, "phase: running").map_err(io_operation)?;
             writeln!(output, "boundary: {}", format_boundary(execution.boundary))
@@ -1617,7 +1714,7 @@ fn write_run(
             }
         }
     }
-    if let Some(guard) = &inspection.current_recovery_guard {
+    if let Some(guard) = current_recovery_guard {
         writeln!(
             output,
             "current_recovery_guard: {}\trun: {}\tentered_at_unix_ms: {}",
@@ -2037,112 +2134,23 @@ fn io_operation(error: io::Error) -> CliError {
     CliError::operation(error.to_string())
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OutputPublicationPoint {
-    BeforeFinalNamePublication,
-    AfterFinalNamePublication,
-}
+#[cfg(test)]
+use crate::output_publication::OutputPublicationPoint;
 
 fn publish_output_file(source: &StagedFile, destination: &Path) -> Result<(), CliError> {
-    publish_output_file_with_fault(source, destination, |_| Ok(()))
+    crate::output_publication::publish(source, destination).map_err(io_operation)
 }
 
+#[cfg(test)]
 fn publish_output_file_with_fault(
     source: &StagedFile,
     destination: &Path,
     mut fault: impl FnMut(OutputPublicationPoint) -> Result<(), CliError>,
 ) -> Result<(), CliError> {
-    if destination.file_name().is_none() {
-        return Err(CliError::operation("output path has no final file name"));
-    }
-    match fs::symlink_metadata(destination) {
-        Ok(_) => return Err(CliError::operation("output destination already exists")),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(CliError::operation(error.to_string())),
-    }
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
-    let (temporary_path, mut temporary) = create_output_temporary(parent)?;
-    let result = (|| {
-        let mut reader = source
-            .try_clone_reader()
-            .map_err(|error| CliError::operation(error.to_string()))?;
-        io::copy(&mut reader, &mut temporary).map_err(io_operation)?;
-        temporary.sync_all().map_err(io_operation)?;
-        fault(OutputPublicationPoint::BeforeFinalNamePublication)?;
-        publish_no_replace(&temporary, &temporary_path, destination)?;
-        fault(OutputPublicationPoint::AfterFinalNamePublication)?;
-        sync_output_parent(parent)?;
-        Ok(())
-    })();
-    drop(temporary);
-    if temporary_path.exists() {
-        let _ = fs::remove_file(&temporary_path);
-    }
-    result
-}
-
-fn create_output_temporary(parent: &Path) -> Result<(PathBuf, File), CliError> {
-    for _ in 0..32 {
-        let mut random = [0_u8; 16];
-        getrandom::fill(&mut random)
-            .map_err(|error| CliError::operation(format!("CSPRNG failed: {error}")))?;
-        let path = parent.join(format!(".pactrun-export-{}.tmp", hex::encode(random)));
-        #[cfg(windows)]
-        let result = pactrun_windows_ntfs::create_staging(&path);
-        #[cfg(unix)]
-        let result = {
-            use std::os::unix::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&path)
-        };
-        match result {
-            Ok(file) => return Ok((path, file)),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(CliError::operation(error.to_string())),
-        }
-    }
-    Err(CliError::operation(
-        "could not allocate output temporary file",
-    ))
-}
-
-#[cfg(windows)]
-fn publish_no_replace(
-    staging: &File,
-    _staging_path: &Path,
-    final_path: &Path,
-) -> Result<(), CliError> {
-    pactrun_windows_ntfs::rename_no_replace(staging, final_path)
-        .map_err(|error| CliError::operation(error.to_string()))
-}
-
-#[cfg(target_os = "linux")]
-fn publish_no_replace(
-    _staging: &File,
-    staging_path: &Path,
-    final_path: &Path,
-) -> Result<(), CliError> {
-    fs::hard_link(staging_path, final_path)
-        .map_err(|error| CliError::operation(error.to_string()))?;
-    fs::remove_file(staging_path).map_err(|error| CliError::operation(error.to_string()))
-}
-
-#[cfg(windows)]
-fn sync_output_parent(_parent: &Path) -> Result<(), CliError> {
-    // The write-through NTFS handle and no-replace rename provide the supported
-    // Windows publication profile used by the existing M1-B store.
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn sync_output_parent(parent: &Path) -> Result<(), CliError> {
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|error| CliError::operation(error.to_string()))
+    crate::output_publication::publish_with_fault(source, destination, |point| {
+        fault(point).map_err(|error| io::Error::other(error.message))
+    })
+    .map_err(io_operation)
 }
 
 #[cfg(test)]

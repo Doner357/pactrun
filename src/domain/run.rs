@@ -1,6 +1,6 @@
-//! Run records, execution ownership, and Action recovery state.
+//! Run records, managed execution ownership, and recovery state.
 //!
-//! These types describe the durable meaning that PersistenceSchemaV4 stores.
+//! These types preserve historical Action meanings and extend them for V5.
 //! They carry no Execution Plan and are never a replay contract.
 
 use std::fmt;
@@ -77,6 +77,12 @@ closed_rank!(ActionRunBoundary, "Run boundary", {
     Admitted = 1,
 });
 
+closed_rank!(ManagedExecutionKind, "managed execution kind", {
+    Action = 0,
+    SnapshotCapture = 1,
+    SnapshotRestore = 2,
+});
+
 closed_rank!(RecoveryRiskState, "recovery risk", {
     Clear = 0,
     Open = 1,
@@ -104,6 +110,16 @@ pub(crate) enum RunPhase {
 pub(crate) enum RunFailedStep {
     Admission,
     Plan(ActionPlanStep),
+    SnapshotPlan(SnapshotPlanStep),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SnapshotPlanStep {
+    EstablishSession,
+    LaunchHook,
+    AcceptCompletion,
+    PublishManagedResult,
+    Finalize,
 }
 
 impl RunFailedStep {
@@ -115,6 +131,11 @@ impl RunFailedStep {
             Self::Plan(ActionPlanStep::AcceptCompletion) => 3,
             Self::Plan(ActionPlanStep::PublishDeclaredOutputs) => 4,
             Self::Plan(ActionPlanStep::Finalize) => 5,
+            Self::SnapshotPlan(SnapshotPlanStep::EstablishSession) => 1,
+            Self::SnapshotPlan(SnapshotPlanStep::LaunchHook) => 2,
+            Self::SnapshotPlan(SnapshotPlanStep::AcceptCompletion) => 3,
+            Self::SnapshotPlan(SnapshotPlanStep::PublishManagedResult) => 4,
+            Self::SnapshotPlan(SnapshotPlanStep::Finalize) => 5,
         }
     }
 
@@ -130,6 +151,24 @@ impl RunFailedStep {
                 "invalid failed step rank {rank}"
             ))),
         }
+    }
+
+    pub(crate) fn for_operation(
+        rank: i64,
+        kind: ManagedExecutionKind,
+    ) -> Result<Self, RunRecordError> {
+        let action = Self::from_rank(rank)?;
+        if kind == ManagedExecutionKind::Action || rank == 0 {
+            return Ok(action);
+        }
+        Ok(Self::SnapshotPlan(match rank {
+            1 => SnapshotPlanStep::EstablishSession,
+            2 => SnapshotPlanStep::LaunchHook,
+            3 => SnapshotPlanStep::AcceptCompletion,
+            4 => SnapshotPlanStep::PublishManagedResult,
+            5 => SnapshotPlanStep::Finalize,
+            _ => unreachable!("validated historical step rank"),
+        }))
     }
 }
 
@@ -186,6 +225,58 @@ pub(crate) struct ActionRunIdentity {
     pub(crate) action: ActionIdentity,
 }
 
+/// Exact persisted operation identity. Access is deliberately not a field:
+/// it is resolved against the operation's authoritative Revision declaration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ManagedRunIdentity {
+    Action(ActionRunIdentity),
+    Capture {
+        revision: RevisionIdentity,
+    },
+    Restore {
+        revision: RevisionIdentity,
+        snapshot: super::SnapshotId,
+    },
+}
+
+impl ManagedRunIdentity {
+    pub(crate) fn kind(&self) -> ManagedExecutionKind {
+        match self {
+            Self::Action(_) => ManagedExecutionKind::Action,
+            Self::Capture { .. } => ManagedExecutionKind::SnapshotCapture,
+            Self::Restore { .. } => ManagedExecutionKind::SnapshotRestore,
+        }
+    }
+    pub(crate) fn revision(&self) -> &RevisionIdentity {
+        match self {
+            Self::Action(action) => &action.revision,
+            Self::Capture { revision } | Self::Restore { revision, .. } => revision,
+        }
+    }
+
+    pub(crate) fn authoritative_access(
+        &self,
+        core: &super::RevisionCoreV1,
+    ) -> Result<super::OperationAccessV1, RunRecordError> {
+        match self {
+            Self::Action(action) => core
+                .actions()
+                .iter()
+                .find(|declaration| declaration.id == action.action)
+                .map(|declaration| declaration.access),
+            Self::Capture { .. } => core
+                .snapshot()
+                .and_then(|snapshot| snapshot.capture.as_ref())
+                .map(|capture| capture.access),
+            Self::Restore { .. } => core
+                .snapshot()
+                .and_then(|snapshot| snapshot.restore.as_ref())
+                .map(|_| super::OperationAccessV1::Mutate),
+        }
+        .ok_or_else(|| RunRecordError::new("Run operation is not declared by its exact Revision"))
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RunExecutionView {
     pub(crate) owner: ExecutionOwnerSession,
@@ -193,8 +284,8 @@ pub(crate) struct RunExecutionView {
     pub(crate) risk_state: RecoveryRiskState,
 }
 
-/// Valid Running Action states. Admission establishes the second boundary;
-/// recovery risk is not legal before that boundary exists.
+/// Shared Running-state matrix; the historical function name is retained for
+/// Action callers. Risk is not legal before the Admission boundary exists.
 pub(crate) fn validate_running_action_state(
     boundary: ActionRunBoundary,
     risk_state: RecoveryRiskState,
@@ -204,7 +295,7 @@ pub(crate) fn validate_running_action_state(
         | (ActionRunBoundary::Admitted, RecoveryRiskState::Clear)
         | (ActionRunBoundary::Admitted, RecoveryRiskState::Open) => Ok(()),
         (ActionRunBoundary::Accepted, RecoveryRiskState::Open) => Err(RunRecordError::new(
-            "a Running Action cannot have open recovery risk before Admission",
+            "a Running managed execution cannot have open recovery risk before Admission",
         )),
     }
 }
@@ -250,6 +341,33 @@ pub(crate) struct RunView {
     pub(crate) accepted_at_unix_ms: u64,
     pub(crate) action: ActionRunIdentity,
     pub(crate) state: RunState,
+}
+
+/// Operation-neutral durable view. The Action view remains a compatibility
+/// projection for the existing M3 callers, never a Snapshot replay contract.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ManagedRunView {
+    pub(crate) id: RunId,
+    pub(crate) instance: InstanceId,
+    pub(crate) accepted_state_version: InstanceStateVersion,
+    pub(crate) accepted_at_unix_ms: u64,
+    pub(crate) operation: ManagedRunIdentity,
+    pub(crate) state: RunState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ManagedRunInspectionData {
+    pub(crate) run: ManagedRunView,
+    pub(crate) current_recovery_guard: Option<RecoveryGuardView>,
+    pub(crate) capture_result: Option<super::SnapshotId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PinnedInputBinding {
+    pub(crate) input: super::InputIdentity,
+    pub(crate) role: super::ManagedInputRole,
+    pub(crate) payload: Option<super::ManagedInputPayloadId>,
+    pub(crate) protection: super::ManagedInputProtection,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

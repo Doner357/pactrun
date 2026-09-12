@@ -26,6 +26,7 @@ rusqlite = { version = "=0.40.2", features = ["bundled"] }
 lexopt = "=0.3.2"
 ctrlc = "=3.4.7"
 yaml-rust2 = { version = "=0.11.0", default-features = false }
+zip = { version = "=8.6.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1.4", features = ["fs", "process", "termios"] }

@@ -8,6 +8,13 @@ M3 Action execution with Slices 1 through 6 integrated. The Rust application,
 domain, and repository surfaces remain internal and do not constitute a stable
 public Rust API.
 
+The `feature/m4-snapshot-lifecycle` working tree adds the complete approved M4
+Capture, Restore, Snapshot inspection/verification and bundle CLI implementation.
+See the [M4 execution and acceptance record](docs/pactrun-developers/engineering/m4-implementation-status.md)
+and [Snapshot commands](docs/pactrun-developers/product-behavior/m4-snapshot-command-reference.md).
+This does not claim that those changes have been committed or integrated into
+`develop`, or that Snapshot deletion or later lifecycle features are implemented.
+
 ## Repository layout
 
 - `src/` contains the production crate and crate-private architecture modules.

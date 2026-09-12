@@ -1,12 +1,11 @@
-//! Frozen HookProtocolV1 framing, strict Action message decoding, and the
-//! Pactrun-side Action Session state machine.
+//! Frozen HookProtocolV1 framing and operation-specific Action/Capture/Restore decoding.
 //!
 //! The state machine is pure so the Frozen Action vectors can drive it
 //! directly; the runtime applies its typed steps (durable risk writes,
 //! acknowledgments, completion acceptance) around it.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     io::{self, Read, Write},
     sync::mpsc::{self, Receiver},
@@ -16,7 +15,10 @@ use std::{
 use serde_json::Value;
 
 use crate::{
-    domain::{HookCodeV1, HookCompletionStatus, RecoveryRiskState},
+    domain::{
+        CaptureServiceContentSubmission, HookCodeV1, HookCompletionStatus, RecoveryRiskState,
+        RuntimePath, SnapshotContentPath, SnapshotServiceRole,
+    },
     strict_json::{RawJsonValue, StrictJsonErrorKind, parse_json},
 };
 
@@ -24,6 +26,23 @@ use super::platform::ProtocolStream;
 
 pub(super) const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
 pub(super) const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
+
+/// Chosen by the owner before reading the peer stream, not by a Hook field.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SessionOperation {
+    Action,
+    Capture,
+    Restore,
+}
+impl SessionOperation {
+    fn wire_name(self) -> &'static str {
+        match self {
+            Self::Action => "action",
+            Self::Capture => "snapshot_capture",
+            Self::Restore => "snapshot_restore",
+        }
+    }
+}
 
 /// A Pactrun-detected protocol failure using one closed PR-REQ-0217 code.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -51,12 +70,36 @@ impl fmt::Debug for ConnectedProtocol {
 
 impl ConnectedProtocol {
     pub(super) fn start(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
+        Self::start_for(stream, session, SessionOperation::Action)
+    }
+
+    pub(super) fn start_capture(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
+        Self::start_for(stream, session, SessionOperation::Capture)
+    }
+
+    pub(super) fn start_restore(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
+        Self::start_for(stream, session, SessionOperation::Restore)
+    }
+
+    fn start_for(
+        stream: ProtocolStream,
+        session: &Value,
+        operation: SessionOperation,
+    ) -> io::Result<Self> {
+        if session["operation"]["kind"].as_str() != Some(operation.wire_name()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Session operation does not match its owner-selected protocol",
+            ));
+        }
+        // Reject an oversized Session before emitting even its preamble.
+        let payload = encode_payload(session)?;
         let reader = stream.try_clone()?;
         let mut writer = ProtocolWriter { stream };
         writer.write_preamble()?;
-        writer.write_value(session)?;
+        writer.write_payload(&payload)?;
         let (sender, receiver) = mpsc::channel();
-        thread::spawn(move || read_hook_messages(reader, &sender));
+        thread::spawn(move || read_hook_messages(reader, &sender, operation));
         Ok(Self { writer, receiver })
     }
 }
@@ -72,14 +115,81 @@ impl ProtocolWriter {
     }
 
     pub(super) fn write_value(&mut self, value: &Value) -> io::Result<()> {
-        let payload = serde_json::to_vec(value)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let payload = encode_payload(value)?;
+        self.write_payload(&payload)
+    }
+
+    fn write_payload(&mut self, payload: &[u8]) -> io::Result<()> {
+        if payload.len() > MAX_PAYLOAD {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Hook Protocol frame exceeds 16 MiB",
+            ));
+        }
         let length = u32::try_from(payload.len())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "protocol frame too large"))?;
         self.stream.write_all(&length.to_be_bytes())?;
-        self.stream.write_all(&payload)?;
+        self.stream.write_all(payload)?;
         self.stream.flush()
     }
+}
+
+/// Bound serialization as well as the wire length; no unbounded temporary
+/// Vec is built first. A failed encode emits no partial frame.
+fn encode_payload(value: &Value) -> io::Result<Vec<u8>> {
+    if !value.is_object() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Hook Protocol payload must be an object",
+        ));
+    }
+    struct BoundedPayload(Vec<u8>);
+    impl Write for BoundedPayload {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if bytes.len() > MAX_PAYLOAD - self.0.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Hook Protocol frame exceeds 16 MiB",
+                ));
+            }
+            let required = self.0.len() + bytes.len();
+            if self.0.capacity() < required {
+                let capacity = self
+                    .0
+                    .capacity()
+                    .saturating_mul(2)
+                    .max(4096)
+                    .max(required)
+                    .min(MAX_PAYLOAD);
+                self.0
+                    .try_reserve_exact(capacity - self.0.len())
+                    .map_err(|_| {
+                        io::Error::new(
+                            io::ErrorKind::OutOfMemory,
+                            "cannot allocate bounded Hook Protocol frame",
+                        )
+                    })?;
+            }
+            self.0.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut payload = BoundedPayload(Vec::new());
+    serde_json::to_writer(&mut payload, value).map_err(|error| {
+        let kind = error.io_error_kind().unwrap_or(io::ErrorKind::InvalidData);
+        io::Error::new(
+            kind,
+            "Hook Protocol frame encoding failed within the fixed resource boundary",
+        )
+    })?;
+    Ok(payload.0)
+}
+
+pub(super) fn validate_session_frame(value: &Value) -> io::Result<()> {
+    encode_payload(value).map(|_| ())
 }
 
 /// One observation from the Hook-to-Pactrun direction of the stream.
@@ -94,14 +204,26 @@ pub(super) enum WireEvent {
     TransportFailure,
 }
 
-fn read_hook_messages(mut stream: ProtocolStream, sender: &mpsc::Sender<WireEvent>) {
-    read_wire_events(&mut stream, |event| sender.send(event).is_ok());
+fn read_hook_messages(
+    mut stream: ProtocolStream,
+    sender: &mpsc::Sender<WireEvent>,
+    operation: SessionOperation,
+) {
+    read_wire_events_for(&mut stream, operation, |event| sender.send(event).is_ok());
 }
 
 /// Decodes the Hook direction of a Frozen V1 stream until the first fault,
 /// end of stream, or a refused delivery. `deliver` returns whether reading
 /// should continue.
-pub(super) fn read_wire_events(reader: &mut impl Read, mut deliver: impl FnMut(WireEvent) -> bool) {
+pub(super) fn read_wire_events(reader: &mut impl Read, deliver: impl FnMut(WireEvent) -> bool) {
+    read_wire_events_for(reader, SessionOperation::Action, deliver)
+}
+
+pub(super) fn read_wire_events_for(
+    reader: &mut impl Read,
+    operation: SessionOperation,
+    mut deliver: impl FnMut(WireEvent) -> bool,
+) {
     let mut preamble = [0_u8; PREAMBLE.len()];
     match read_fully(reader, &mut preamble) {
         Ok(ReadOutcome::Complete) => {}
@@ -155,7 +277,7 @@ pub(super) fn read_wire_events(reader: &mut impl Read, mut deliver: impl FnMut(W
                 return;
             }
         }
-        match parse_hook_message(&payload) {
+        match parse_hook_message_for(&payload, operation) {
             Ok(message) => {
                 if !deliver(WireEvent::Message(message)) {
                     return;
@@ -238,9 +360,22 @@ pub(super) struct HookCompletion {
     pub(super) code: Option<HookCodeV1>,
     pub(super) message: Option<String>,
     pub(super) produced_outputs: Vec<String>,
+    pub(super) service_content: Vec<CaptureServiceContentSubmission>,
+    pub(super) operation: SessionOperation,
 }
 
 pub(super) fn parse_hook_message(payload: &[u8]) -> Result<HookMessage, ProtocolFailure> {
+    parse_hook_message_for(payload, SessionOperation::Action)
+}
+
+pub(super) fn parse_capture_message(payload: &[u8]) -> Result<HookMessage, ProtocolFailure> {
+    parse_hook_message_for(payload, SessionOperation::Capture)
+}
+
+fn parse_hook_message_for(
+    payload: &[u8],
+    operation: SessionOperation,
+) -> Result<HookMessage, ProtocolFailure> {
     let raw = parse_json(payload, MAX_PAYLOAD).map_err(|error| {
         let code = match error.kind() {
             StrictJsonErrorKind::InvalidUtf8 => "invalid_utf8",
@@ -257,7 +392,7 @@ pub(super) fn parse_hook_message(payload: &[u8]) -> Result<HookMessage, Protocol
         "diagnostic" => parse_diagnostic(object),
         "request" => parse_request(object),
         "cancel_ack" => parse_cancel_ack(object),
-        "complete" => parse_completion(object),
+        "complete" => parse_completion(object, operation),
         "protocol_error" => parse_hook_protocol_error(object),
         _ => Err(ProtocolFailure::new(
             "unexpected_message",
@@ -308,15 +443,26 @@ fn parse_cancel_ack(mut object: Fields) -> Result<HookMessage, ProtocolFailure> 
     })
 }
 
-fn parse_completion(mut object: Fields) -> Result<HookMessage, ProtocolFailure> {
+fn parse_completion(
+    mut object: Fields,
+    operation: SessionOperation,
+) -> Result<HookMessage, ProtocolFailure> {
     closed(
         &object,
-        &["operation", "status", "produced_outputs", "code", "message"],
+        match operation {
+            SessionOperation::Action => {
+                &["operation", "status", "produced_outputs", "code", "message"]
+            }
+            SessionOperation::Capture => {
+                &["operation", "status", "service_content", "code", "message"]
+            }
+            SessionOperation::Restore => &["operation", "status", "code", "message"],
+        },
     )?;
-    if take_string(&mut object, "operation")? != "action" {
+    if take_string(&mut object, "operation")? != operation.wire_name() {
         return Err(ProtocolFailure::new(
             "invalid_completion",
-            "completion operation differs from the Action Session",
+            "completion operation differs from the owner-selected Session",
         ));
     }
     let status = match take_string(&mut object, "status")?.as_str() {
@@ -336,22 +482,80 @@ fn parse_completion(mut object: Fields) -> Result<HookMessage, ProtocolFailure> 
         Some(RawJsonValue::String(value)) => Some(value),
         Some(_) => return Err(invalid_message()),
     };
-    let produced_outputs = take_array(&mut object, "produced_outputs")?
-        .into_iter()
-        .map(|value| match value {
-            RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
-            _ => Err(ProtocolFailure::new(
-                "invalid_authority",
-                "output authority handle is not an AuthorityHandleV1",
-            )),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let produced_outputs = if operation == SessionOperation::Action {
+        take_array(&mut object, "produced_outputs")?
+            .into_iter()
+            .map(|value| match value {
+                RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
+                _ => Err(ProtocolFailure::new(
+                    "invalid_authority",
+                    "output authority handle is not an AuthorityHandleV1",
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    let service_content = if operation == SessionOperation::Capture {
+        parse_capture_content(take_array(&mut object, "service_content")?)?
+    } else {
+        Vec::new()
+    };
+    if status == HookCompletionStatus::Failure && !service_content.is_empty() {
+        return Err(ProtocolFailure::new(
+            "invalid_completion",
+            "failed Capture cannot submit service content",
+        ));
+    }
     Ok(HookMessage::Complete(HookCompletion {
         status,
         code,
         message,
         produced_outputs,
+        service_content,
+        operation,
     }))
+}
+
+fn parse_capture_content(
+    values: Vec<RawJsonValue>,
+) -> Result<Vec<CaptureServiceContentSubmission>, ProtocolFailure> {
+    let mut content = BTreeMap::new();
+    for value in values {
+        let mut descriptor = raw_object(value)?;
+        closed(&descriptor, &["role", "path", "candidate_path"])?;
+        let role = SnapshotServiceRole::parse(take_string(&mut descriptor, "role")?)
+            .map_err(|_| invalid_message())?;
+        let path = SnapshotContentPath::parse(take_string(&mut descriptor, "path")?)
+            .map_err(|_| invalid_session_path())?;
+        let candidate_path = RuntimePath::parse(take_string(&mut descriptor, "candidate_path")?)
+            .map_err(|_| invalid_session_path())?;
+        let key = (role.clone(), path.clone());
+        if content
+            .insert(
+                key,
+                CaptureServiceContentSubmission {
+                    role,
+                    path,
+                    candidate_path,
+                },
+            )
+            .is_some()
+        {
+            return Err(ProtocolFailure::new(
+                "duplicate_semantic_key",
+                "duplicate Capture service-content role/path",
+            ));
+        }
+    }
+    Ok(content.into_values().collect())
+}
+
+const fn invalid_session_path() -> ProtocolFailure {
+    ProtocolFailure::new(
+        "invalid_session_relative_path",
+        "Capture path does not satisfy the Frozen portable path profile",
+    )
 }
 
 fn parse_hook_protocol_error(mut object: Fields) -> Result<HookMessage, ProtocolFailure> {
@@ -467,6 +671,7 @@ const fn unexpected_message() -> ProtocolFailure {
 /// `session_start` has been sent.
 #[derive(Debug)]
 pub(super) struct ProtocolState {
+    operation: SessionOperation,
     session_id: String,
     declared_outputs: BTreeSet<String>,
     phase: Phase,
@@ -502,6 +707,7 @@ impl ProtocolState {
     pub(super) fn new(session_id: String, declared_outputs: BTreeSet<String>) -> Self {
         Self {
             session_id,
+            operation: SessionOperation::Action,
             declared_outputs,
             phase: Phase::AwaitReady,
             risk: RecoveryRiskState::Clear,
@@ -510,6 +716,28 @@ impl ProtocolState {
             next_control_id: 1,
             pending_controls: BTreeSet::new(),
         }
+    }
+
+    pub(super) fn new_capture(session_id: String) -> Self {
+        Self {
+            operation: SessionOperation::Capture,
+            ..Self::new(session_id, BTreeSet::new())
+        }
+    }
+
+    pub(super) fn new_restore(session_id: String) -> Self {
+        Self {
+            operation: SessionOperation::Restore,
+            ..Self::new(session_id, BTreeSet::new())
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn accept_restore_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<ProtocolStep, ProtocolFailure> {
+        self.accept(parse_hook_message_for(bytes, SessionOperation::Restore)?)
     }
 
     pub(super) fn is_ready(&self) -> bool {
@@ -593,6 +821,12 @@ impl ProtocolState {
             }
             HookMessage::Complete(completion) => {
                 self.require_active()?;
+                if completion.operation != self.operation {
+                    return Err(ProtocolFailure::new(
+                        "invalid_completion",
+                        "completion belongs to another Session operation",
+                    ));
+                }
                 if self.pending_request.is_some() {
                     return Err(ProtocolFailure::new(
                         "request_in_flight",
@@ -738,4 +972,9 @@ mod tests {
             matches!(&events[..], [WireEvent::Failure(failure)] if failure.code == "invalid_message")
         );
     }
+}
+
+#[cfg(test)]
+mod capture_tests {
+    include!("capture_protocol_tests.rs");
 }

@@ -293,7 +293,15 @@ A future author-configurable requirement vocabulary is a Revision Core format
 evolution. This format does not define Snapshot authoritative bodies or
 `SnapshotIntegrityFormatV1`.
 
-**Verification: PR-TEST-0003.**
+**Verification: PR-TEST-0003, PR-TEST-0225, PR-TEST-0227, PR-TEST-0231, PR-TEST-0235, PR-TEST-0241, PR-TEST-0246, PR-TEST-0258, PR-TEST-0270.**
+
+Runtime coverage is partial: these M4 tests exercise authored Capture access,
+required-input admission, and exact runtime/binding-fact validation. They do not
+establish complete Snapshot Hook execution. S4 adds operation-specific typed
+parameter/default/redaction handling, supported protocol/runtime qualification,
+and staged Restore transition checks. Hook sessions and successful results
+are still tested in the later lifecycle slices.
+The Frozen projection and fixed prerequisite semantics above are unchanged.
 
 ### PR-REQ-0194 - Runtime launcher integration
 

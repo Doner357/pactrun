@@ -47,7 +47,7 @@ MUST validate it and commit a Snapshot without requiring the candidate to become
 a permanent Run Artifact. The Run needs only a reference to the committed
 Snapshot.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246.**
 
 ## Snapshot capability
 
@@ -62,7 +62,7 @@ separate. Capability-specific prerequisites remain additive to global managed
 execution invariants. See
 [Revision Core Format V1](./revision-core-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246.**
 
 ### PR-REQ-0147 - Snapshot authoritative body
 
@@ -72,7 +72,7 @@ origin Instance identity, capture time, complete active and retained managed
 binding state including absence and protection, and logical service Snapshot
 content selected and submitted through Capture.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246, PR-TEST-0247.**
 
 ### PR-REQ-0148 - Snapshot identity roles
 
@@ -80,7 +80,7 @@ content selected and submitted through Capture.
 the exact authoritative body, and producer `RevisionIdentity` MUST control
 direct Restore compatibility. The digest MUST NOT replace object identity.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0213, PR-TEST-0247.**
 
 ### PR-REQ-0149 - Snapshot integrity domain
 
@@ -94,7 +94,7 @@ The exact V1 identity spelling, semantic manifest, normalization, framing, and
 verification boundary are defined by
 [Snapshot Integrity Format V1](./snapshot-integrity-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0184, PR-TEST-0185.**
 
 ### PR-REQ-0150 - Capture view consistency
 
@@ -103,7 +103,7 @@ Snapshot. A Package MUST NOT observe one active binding version while the
 Snapshot records another. This binding-view guarantee does not freeze or
 automatically enumerate service-owned live bytes.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246, PR-TEST-0249.**
 
 ### PR-REQ-0239 - ServiceStorage-backed resource capture boundary
 
@@ -130,7 +130,7 @@ This requirement does not change `SnapshotIntegrityFormatV1` schema, canonical
 bytes, framing, digest, or vectors and does not classify non-ServiceStorage-
 backed service-owned resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246.**
 
 ### PR-REQ-0151 - Restore staged context
 
@@ -138,7 +138,7 @@ The Restore Hook MUST receive the active Input view from the staged Snapshot
 binding state that Pactrun will commit on success. It MUST NOT receive the
 target's pre-Restore active bindings as though they were the resulting state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0258, PR-TEST-0268.**
 
 ### PR-REQ-0152 - Snapshot Secret handling
 
@@ -147,4 +147,4 @@ must not require a separate author flag. Package output and diagnostics MUST
 respect Secret redaction, while portable export remains an explicit operator
 sensitive-data boundary.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246, PR-TEST-0268.**

@@ -35,6 +35,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin metadata transaction", error))?;
+        self.check_write_admission(&transaction)?;
         apply_revision_metadata_in_transaction(&transaction, revision, batch)?;
         fault(FaultPoint::BeforeMetadataCommit);
         transaction
@@ -1413,7 +1414,8 @@ mod tests {
         project_revision_core_v1, project_runtime_content_closure_v1, validate_revision_content_v1,
     };
     use crate::persistence::sqlite_revision_store::{
-        APPLICATION_ID, SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL, SCHEMA_VERSION,
+        APPLICATION_ID, SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL, SCHEMA_V4_VERSION, SCHEMA_VERSION,
+        legacy_v4_fixture,
     };
     use crate::revision_core_v1::{
         encode_canonical_revision_core_v1, encode_canonical_runtime_content_v1,
@@ -1644,7 +1646,11 @@ mod tests {
             return;
         };
         let root = PathBuf::from(std::env::var_os("PACTRUN_M1D_ROOT").unwrap());
-        let persistence = PactrunPersistence::open(root).unwrap();
+        let persistence = if operation == "legacy-open" {
+            legacy_v4_fixture(&root).unwrap()
+        } else {
+            PactrunPersistence::open(&root).unwrap()
+        };
         if operation == "metadata" {
             let package: [u8; 16] = hex::decode(std::env::var("PACTRUN_M1D_PACKAGE").unwrap())
                 .unwrap()
@@ -1694,7 +1700,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            35
+            45
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
@@ -1756,7 +1762,7 @@ mod tests {
     // Test-ID: PR-TEST-0060
     // Verifies: PR-REQ-0257
     #[test]
-    fn exact_v1_to_current_migration_preserves_content_and_has_atomic_crash_boundaries() {
+    fn legacy_v1_to_v4_preserves_content_and_has_atomic_crash_boundaries() {
         let (_temporary, root) = test_root();
         let digest = blob_digest(b"migration fixture");
         let content = full_content(&digest);
@@ -1765,7 +1771,7 @@ mod tests {
             calculate_revision_content_digest_v1(&content).unwrap(),
         );
         initialize_v1(&root, Some((&identity, &content)));
-        let persistence = PactrunPersistence::open(&root).unwrap();
+        let persistence = legacy_v4_fixture(&root).unwrap();
         assert_eq!(
             persistence
                 .load_revision(&identity)
@@ -1781,14 +1787,14 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            SCHEMA_VERSION
+            SCHEMA_V4_VERSION
         );
 
         let (_before_temporary, before_root) = test_root();
         initialize_v1(&before_root, None);
         assert!(!run_worker(
             &before_root,
-            "open",
+            "legacy-open",
             Some("before_schema_migration_commit"),
             None,
         ));
@@ -1811,13 +1817,13 @@ mod tests {
             0
         );
         drop(before_database);
-        PactrunPersistence::open(&before_root).unwrap();
+        legacy_v4_fixture(&before_root).unwrap();
 
         let (_after_temporary, after_root) = test_root();
         initialize_v1(&after_root, None);
         assert!(!run_worker(
             &after_root,
-            "open",
+            "legacy-open",
             Some("after_schema_migration_commit"),
             None,
         ));
@@ -1826,15 +1832,15 @@ mod tests {
                 .unwrap()
                 .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
                 .unwrap(),
-            SCHEMA_VERSION
+            SCHEMA_V4_VERSION
         );
-        PactrunPersistence::open(&after_root).unwrap();
+        legacy_v4_fixture(&after_root).unwrap();
     }
 
     // Test-ID: PR-TEST-0061
     // Verifies: PR-REQ-0257
     #[test]
-    fn concurrent_migrators_converge_and_inadmissible_schemas_are_rejected() {
+    fn legacy_concurrent_migrators_converge_and_inadmissible_schemas_are_rejected() {
         let (_temporary, root) = test_root();
         initialize_v1(&root, None);
         let barrier = Arc::new(Barrier::new(3));
@@ -1844,7 +1850,7 @@ mod tests {
                 let barrier = Arc::clone(&barrier);
                 thread::spawn(move || {
                     barrier.wait();
-                    PactrunPersistence::open(root).map(|_| ())
+                    legacy_v4_fixture(root).map(|_| ())
                 })
             })
             .collect::<Vec<_>>();
@@ -1852,7 +1858,7 @@ mod tests {
         for handle in handles {
             handle.join().unwrap().unwrap();
         }
-        PactrunPersistence::open(&root).unwrap();
+        legacy_v4_fixture(&root).unwrap();
 
         let (_partial_temporary, partial_root) = test_root();
         let partial = Connection::open(database_path(&partial_root)).unwrap();
@@ -1870,7 +1876,7 @@ mod tests {
             .unwrap();
         partial.pragma_update(None, "user_version", 1).unwrap();
         drop(partial);
-        assert!(PactrunPersistence::open(&partial_root).is_err());
+        assert!(legacy_v4_fixture(&partial_root).is_err());
 
         let (_newer_temporary, newer_root) = test_root();
         let newer = Connection::open(database_path(&newer_root)).unwrap();
@@ -1880,10 +1886,10 @@ mod tests {
             .pragma_update(None, "application_id", APPLICATION_ID)
             .unwrap();
         newer
-            .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+            .pragma_update(None, "user_version", SCHEMA_V4_VERSION + 1)
             .unwrap();
         drop(newer);
-        assert!(PactrunPersistence::open(&newer_root).is_err());
+        assert!(legacy_v4_fixture(&newer_root).is_err());
 
         let (_drift_temporary, drift_root) = test_root();
         let drift = Connection::open(database_path(&drift_root)).unwrap();
@@ -1897,7 +1903,7 @@ mod tests {
             .unwrap();
         drift.pragma_update(None, "user_version", 2).unwrap();
         drop(drift);
-        assert!(PactrunPersistence::open(&drift_root).is_err());
+        assert!(legacy_v4_fixture(&drift_root).is_err());
     }
 
     // Test-ID: PR-TEST-0062

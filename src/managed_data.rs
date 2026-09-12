@@ -105,6 +105,15 @@ pub(crate) fn fail_next_execution_cleanup() {
 }
 
 impl StagedFile {
+    /// Synchronize an operation file without imposing the Managed Input policy.
+    /// Snapshot callers enforce their separately named capability before writes.
+    pub(crate) fn finish_operation_file(&mut self) -> io::Result<u64> {
+        self.file.flush()?;
+        self.file.sync_all()?;
+        self.byte_len = self.file.metadata()?.len();
+        self.file.seek(SeekFrom::Start(0))?;
+        Ok(self.byte_len)
+    }
     pub(crate) fn byte_len(&self) -> u64 {
         self.byte_len
     }
@@ -196,11 +205,32 @@ impl std::error::Error for StagingError {
 }
 
 impl StagingSession {
+    #[cfg(test)]
     pub(crate) fn open(storage_root: &Path) -> Result<Self, StagingError> {
+        Self::open_inner(storage_root, true)
+    }
+
+    /// Prepare only this session; do not inspect another schema's abandoned state.
+    pub(crate) fn prepare(storage_root: &Path) -> Result<Self, StagingError> {
+        Self::open_inner(storage_root, false)
+    }
+
+    pub(crate) fn cleanup_abandoned(&self) -> Result<(), StagingError> {
+        cleanup_stale_sessions(&self.root)
+    }
+
+    fn open_inner(storage_root: &Path, cleanup: bool) -> Result<Self, StagingError> {
         let staging_root = storage_root.join(STAGING_DIRECTORY);
+        match create_private_directory(&staging_root) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(StagingError::io("prepare staging root", error)),
+        }
         let root = validate_supported_storage_root(&staging_root)
             .map_err(|error| StagingError::Unsupported(error.to_string()))?;
-        cleanup_stale_sessions(&root)?;
+        if cleanup {
+            cleanup_stale_sessions(&root)?;
+        }
         for _ in 0..32 {
             let session = root.join(format!("session-{}", random_hex()?));
             match create_private_directory(&session) {
@@ -249,6 +279,10 @@ impl StagingSession {
         ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
     }
 
+    pub(crate) fn belongs_to_storage(&self, root: &Path) -> bool {
+        self.root == root.join(STAGING_DIRECTORY)
+    }
+
     pub(crate) fn create_execution_directory(
         &self,
         run: RunId,
@@ -279,6 +313,15 @@ impl StagingSession {
     }
 
     pub(crate) fn create_managed_output_stage(&self) -> Result<StagedFile, StagingError> {
+        let (path, file) = self.create_operation_file()?;
+        Ok(StagedFile {
+            file,
+            path,
+            byte_len: 0,
+        })
+    }
+
+    pub(crate) fn create_snapshot_stage(&self) -> Result<StagedFile, StagingError> {
         let (path, file) = self.create_operation_file()?;
         Ok(StagedFile {
             file,

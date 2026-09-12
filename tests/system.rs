@@ -10,6 +10,8 @@ mod common;
 mod linux;
 #[path = "system/matrix.rs"]
 mod matrix;
+#[path = "system/snapshots.rs"]
+mod snapshots;
 #[path = "system/support/mod.rs"]
 mod support;
 #[cfg(windows)]

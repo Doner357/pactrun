@@ -6,10 +6,17 @@
 
 mod chunked_blob;
 mod runtime_content_store;
+#[cfg(test)]
+mod schema_v5_contract_tests;
 mod sqlite_instances;
 mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
+mod sqlite_snapshots;
+mod sqlite_v5;
+pub(crate) use sqlite_snapshots::{
+    SnapshotImportReceipt, SnapshotInspection, SnapshotVerification,
+};
 
 /// Orders an acceptance transaction against a foreground cancellation request.
 /// Implementations run the supplied commit while holding the acceptance
@@ -64,5 +71,7 @@ pub(crate) use sqlite_instances::ManagedInputWrite;
 pub(crate) use sqlite_revision_store::{
     FaultPoint, PactrunPersistence, PersistenceError, StoredRevisionContentV1, fault,
 };
+#[cfg(test)]
+pub(crate) use sqlite_runs::fail_next_capture_publication_for_test;
 #[allow(unused_imports)]
-pub(crate) use sqlite_runs::{RunArtifactWrite, RunFinishReceipt};
+pub(crate) use sqlite_runs::{RunArtifactWrite, RunFinishReceipt, SnapshotBlobWrite};

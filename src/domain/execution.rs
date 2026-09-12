@@ -325,13 +325,16 @@ pub(crate) fn bind_action_parameters(
     action: &ActionV1,
     inputs: Vec<RawParameterInput>,
 ) -> Result<Vec<ParameterBinding>, ActionResolutionError> {
+    bind_operation_parameters(&action.parameters, inputs)
+}
+
+pub(crate) fn bind_operation_parameters(
+    parameters: &[super::ParameterV1],
+    inputs: Vec<RawParameterInput>,
+) -> Result<Vec<ParameterBinding>, ActionResolutionError> {
     let mut supplied = std::collections::BTreeMap::new();
     for input in inputs {
-        if !action
-            .parameters
-            .iter()
-            .any(|parameter| parameter.id == input.id)
-        {
+        if !parameters.iter().any(|parameter| parameter.id == input.id) {
             return Err(ActionResolutionError::UnknownParameter(input.id));
         }
         let id = input.id.clone();
@@ -340,8 +343,7 @@ pub(crate) fn bind_action_parameters(
         }
     }
 
-    action
-        .parameters
+    parameters
         .iter()
         .map(|declaration| {
             if let Some(input) = supplied.remove(&declaration.id) {

@@ -1,5 +1,4 @@
-//! PersistenceSchemaV4 Run, execution pin, Action recovery, and Artifact
-//! repository.
+//! V5 managed Run, execution pin, recovery, and historical Action Artifact repository.
 //!
 //! Every mutation is one `BEGIN IMMEDIATE` transaction. Run creation, pin
 //! establishment, risk transitions, and a terminal publication without an
@@ -13,6 +12,15 @@ use std::{
 };
 
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+
+#[cfg(test)]
+thread_local! {static FAIL_CAPTURE_PUBLICATION:std::cell::Cell<bool>=const {std::cell::Cell::new(false)};}
+#[cfg(test)]
+thread_local! {static FAIL_RESTORE_PUBLICATION:std::cell::Cell<bool>=const {std::cell::Cell::new(false)};}
+#[cfg(test)]
+pub(crate) fn fail_next_capture_publication_for_test() {
+    FAIL_CAPTURE_PUBLICATION.with(|v| v.set(true));
+}
 
 use super::{
     AcceptanceArbiter, AcceptanceCommitResult, AcceptanceError, PactrunPersistence,
@@ -31,8 +39,8 @@ use crate::domain::{
     CompiledHookLaunch, ExecutionOwnerSession, HookCodeV1, HookCompletionRecord,
     HookCompletionStatus, InputIdentity, InstanceId, InstanceStateVersion,
     InterpreterLauncherObservation, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputPayloadId,
-    ManagedOutputIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1,
-    RecoveryGuardView, RecoveryRiskState, RevisionCoreV1, RevisionIdentity, RunArtifactSummary,
+    ManagedOutputIdentity, ManagedRunIdentity, ManualRecoveryTrigger, OperationAccessV1,
+    PactrunErrorRefV1, RecoveryGuardView, RecoveryRiskState, RevisionIdentity, RunArtifactSummary,
     RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunInspectionData,
     RunOutcome, RunOutcomeView, RunPrimaryFailure, RunState, RunSummary, RunView, RuntimeFileV1,
     Sha256Digest, risk_transition, terminal_consequence, validate_running_action_state,
@@ -50,12 +58,31 @@ pub(crate) struct RunArtifactWrite<'a> {
     pub(crate) reader: &'a mut dyn Read,
 }
 
+pub(crate) struct SnapshotBlobWrite<'a> {
+    pub(crate) digest: Sha256Digest,
+    pub(crate) byte_len: u64,
+    pub(crate) reader: &'a mut dyn Read,
+}
+
+struct CapturePublication<'a> {
+    manifest: &'a crate::snapshot_integrity::VerifiedSnapshotManifest,
+    blobs: &'a mut [SnapshotBlobWrite<'a>],
+}
+
+struct FinishAuthority<'a> {
+    owner: Option<&'a ExecutionOwnerSession>,
+    outputs: Option<&'a [ManagedOutputIdentity]>,
+    capture: Option<CapturePublication<'a>>,
+    restore: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RunFinishReceipt {
     pub(crate) published_state_version: Option<InstanceStateVersion>,
 }
 
 const ARTIFACT_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
+    representation_maximum: MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
     insert_chunk_sql: "INSERT INTO run_artifact_chunks(\
         run_id, output_identity, chunk_index, chunk_bytes\
      ) VALUES (?1, ?2, ?3, ?4)",
@@ -81,12 +108,229 @@ struct OutcomeRow {
 }
 
 impl PactrunPersistence {
+    pub(crate) fn list_managed_runs(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Vec<crate::domain::ManagedRunView>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|e| PersistenceError::sqlite("begin managed Run enumeration", e))?;
+        let mut statement = tx
+            .prepare("SELECT run_id FROM runs WHERE instance_id=?1 ORDER BY run_id")
+            .map_err(|e| PersistenceError::sqlite("enumerate managed Runs", e))?;
+        let ids = statement
+            .query_map([instance.as_bytes().as_slice()], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })
+            .map_err(|e| PersistenceError::sqlite("enumerate managed Runs", e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| PersistenceError::sqlite("read managed Run identity", e))?;
+        ids.into_iter()
+            .map(|id| load_managed_run_from(&tx, run_id(id)?))
+            .collect()
+    }
+
+    pub(crate) fn managed_run_inspection(
+        &self,
+        run: RunId,
+    ) -> Result<Option<crate::domain::ManagedRunInspectionData>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|e| PersistenceError::sqlite("begin managed Run inspection", e))?;
+        let view = match load_managed_run_from(&tx, run) {
+            Ok(view) => view,
+            Err(PersistenceError::MissingRun(_)) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        let guard = load_instance_recovery_guard_from(&tx, view.instance)?;
+        let result: Option<Vec<u8>> = tx
+            .query_row(
+                "SELECT snapshot_id FROM run_capture_results WHERE run_id=?1",
+                [run.as_bytes().as_slice()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| PersistenceError::sqlite("read Capture result reference", e))?;
+        let capture_result = result
+            .map(|id| {
+                id.try_into()
+                    .map(crate::domain::SnapshotId::from_bytes)
+                    .map_err(|_| {
+                        PersistenceError::CorruptRun("invalid Capture result identity".to_owned())
+                    })
+            })
+            .transpose()?;
+        Ok(Some(crate::domain::ManagedRunInspectionData {
+            run: view,
+            current_recovery_guard: guard,
+            capture_result,
+        }))
+    }
+    #[cfg(test)]
+    pub(crate) fn fail_next_restore_publication_for_test() {
+        FAIL_RESTORE_PUBLICATION.with(|v| v.set(true));
+    }
+    pub(crate) fn publish_restore(
+        &self,
+        owner: &ExecutionOwnerSession,
+        run: RunId,
+        finish: &RunFinish,
+    ) -> Result<RunFinishReceipt, PersistenceError> {
+        let mut db = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let tx = db
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| PersistenceError::sqlite("begin Restore publication", e))?;
+        self.check_write_admission(&tx)?;
+        let header = run_header(&tx, run)?;
+        let view = load_managed_run_from(&tx, run)?;
+        if !matches!(view.operation, ManagedRunIdentity::Restore { .. }) {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Run is not Restore".to_owned(),
+            ));
+        }
+        if matches!(view.state, RunState::Finished(_)) {
+            return Ok(RunFinishReceipt {
+                published_state_version: None,
+            });
+        }
+        let (state,consequence):(Vec<u8>,i64)=tx.query_row("SELECT admitted_state_version,admitted_consequence_version FROM run_restore_admissions WHERE run_id=?1",[run.as_bytes().as_slice()],|row|Ok((row.get(0)?,row.get(1)?))).map_err(|e|PersistenceError::sqlite("load Restore publication tokens",e))?;
+        let (_, _, current) = instance_header(&tx, header.instance)?;
+        let conflict = current != state_version(state)?
+            || consequence != super::sqlite_v5::load_consequence_version(&tx, header.instance)?;
+        let mut finish = finish.clone();
+        if conflict {
+            finish.outcome = RunOutcome::Failed;
+            finish.primary_failure=Some(RunPrimaryFailure {failure:crate::domain::RunFailureRecord {error:crate::domain::PactrunErrorRefV1::new("execution","managed_output_publication_failed").expect("registered error"),message:"Restore publication conflicted with a changed Instance or recovery consequence".to_owned()},step:RunFailedStep::SnapshotPlan(crate::domain::SnapshotPlanStep::PublishManagedResult)});
+        }
+        let next = if conflict {
+            None
+        } else {
+            Some(super::sqlite_snapshots::replace_from_restore_snapshot(
+                &tx,
+                run,
+                header.instance,
+            )?)
+        };
+        let mut receipt = finish_run_authorized(
+            &tx,
+            run,
+            &header,
+            &finish,
+            &mut [],
+            FinishAuthority {
+                owner: Some(owner),
+                outputs: Some(&[]),
+                capture: None,
+                restore: !conflict,
+            },
+        )?;
+        if next.is_some() {
+            receipt.published_state_version = next;
+        }
+        #[cfg(test)]
+        if FAIL_RESTORE_PUBLICATION.with(|v| v.replace(false)) {
+            return Err(PersistenceError::DatabaseLockPoisoned);
+        }
+        fault(FaultPoint::BeforeRunFinishCommit);
+        tx.commit()
+            .map_err(|e| PersistenceError::sqlite("commit Restore publication", e))?;
+        fault(FaultPoint::AfterRunFinishCommit);
+        Ok(receipt)
+    }
+    pub(crate) fn admitted_payload_length(
+        &self,
+        run: RunId,
+        input: &InputIdentity,
+    ) -> Result<u64, PersistenceError> {
+        let mut database = self.open_read_connection()?;
+        let tx = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|e| PersistenceError::sqlite("read admitted payload length", e))?;
+        let view = load_managed_run_from(&tx, run)?;
+        if !matches!(
+            view.state,
+            RunState::Running(RunExecutionView {
+                boundary: ActionRunBoundary::Admitted,
+                ..
+            })
+        ) {
+            return Err(PersistenceError::RunNotRunning);
+        }
+        let length:i64=tx.query_row("SELECT p.byte_length FROM run_payload_pins pins JOIN managed_input_payloads p ON p.instance_id=pins.instance_id AND p.payload_id=pins.payload_id WHERE pins.run_id=?1 AND pins.input_identity=?2",params![run.as_bytes().as_slice(),input.as_str().as_bytes()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("read pinned payload header",e))?;
+        u64::try_from(length)
+            .map_err(|_| PersistenceError::CorruptRun("negative pinned payload length".to_owned()))
+    }
+
+    pub(crate) fn publish_capture<'a>(
+        &self,
+        owner: &'a ExecutionOwnerSession,
+        run: RunId,
+        finish: &RunFinish,
+        manifest: &'a crate::snapshot_integrity::VerifiedSnapshotManifest,
+        blobs: &'a mut [SnapshotBlobWrite<'a>],
+    ) -> Result<RunFinishReceipt, PersistenceError> {
+        let mut database = self
+            .database
+            .lock()
+            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let tx = database
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| PersistenceError::sqlite("begin Capture publication", e))?;
+        self.check_write_admission(&tx)?;
+        let header = run_header(&tx, run)?;
+        let receipt = finish_run_authorized(
+            &tx,
+            run,
+            &header,
+            finish,
+            &mut [],
+            FinishAuthority {
+                owner: Some(owner),
+                outputs: Some(&[]),
+                capture: Some(CapturePublication { manifest, blobs }),
+                restore: false,
+            },
+        )?;
+        #[cfg(test)]
+        if FAIL_CAPTURE_PUBLICATION.with(|v| v.replace(false)) {
+            return Err(PersistenceError::DatabaseLockPoisoned);
+        }
+        fault(FaultPoint::BeforeRunFinishCommit);
+        tx.commit()
+            .map_err(|e| PersistenceError::sqlite("commit Capture publication", e))?;
+        fault(FaultPoint::AfterRunFinishCommit);
+        Ok(receipt)
+    }
     pub(crate) fn create_accepted_run(
         &self,
         run: RunId,
         instance: InstanceId,
         accepted_state_version: InstanceStateVersion,
         action: &ActionRunIdentity,
+        owner: &ExecutionOwnerSession,
+        arbiter: &impl AcceptanceArbiter,
+    ) -> Result<RunId, AcceptanceError> {
+        self.create_accepted_managed_run(
+            run,
+            instance,
+            accepted_state_version,
+            &ManagedRunIdentity::Action(action.clone()),
+            owner,
+            arbiter,
+        )
+    }
+
+    pub(crate) fn create_accepted_managed_run(
+        &self,
+        run: RunId,
+        instance: InstanceId,
+        accepted_state_version: InstanceStateVersion,
+        operation: &ManagedRunIdentity,
         owner: &ExecutionOwnerSession,
         arbiter: &impl AcceptanceArbiter,
     ) -> Result<RunId, AcceptanceError> {
@@ -103,6 +347,8 @@ impl PactrunPersistence {
                 run,
                 source: PersistenceError::sqlite("begin Run acceptance", error),
             })?;
+        self.check_write_admission(&transaction)
+            .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         instance_header(&transaction, instance)
             .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         let accepted_at_unix_ms =
@@ -124,20 +370,15 @@ impl PactrunPersistence {
             })?;
         transaction
             .execute(
-                "INSERT INTO run_action_invocations(\
-                    run_id, package_id, revision_content_digest, action_identity\
-                 ) VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    run.as_bytes().as_slice(),
-                    action.revision.package_id.as_bytes().as_slice(),
-                    action.revision.content_digest.as_bytes().as_slice(),
-                    action.action.as_str().as_bytes(),
-                ],
+                "INSERT INTO run_operation_kinds(run_id, operation_kind) VALUES (?1, ?2)",
+                params![run.as_bytes().as_slice(), operation.kind().rank()],
             )
             .map_err(|error| AcceptanceError::NotCommitted {
                 run,
-                source: PersistenceError::sqlite("insert Run Action invocation", error),
+                source: PersistenceError::sqlite("insert Run operation kind", error),
             })?;
+        insert_managed_invocation(&transaction, run, operation)
+            .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         transaction
             .execute(
                 "INSERT INTO run_executions(run_id, owner_session, risk_state) VALUES (?1, ?2, ?3)",
@@ -182,6 +423,60 @@ impl PactrunPersistence {
         launcher_check: &LauncherCheck<'_>,
         override_guard: bool,
     ) -> Result<Result<(), AdmissionRefusal>, PersistenceError> {
+        self.admit_run_with_owner(
+            run,
+            None,
+            AdmissionQualification { facts, plan: None },
+            launcher_check,
+            override_guard,
+        )
+    }
+
+    pub(crate) fn admit_managed_run(
+        &self,
+        run: RunId,
+        owner: &ExecutionOwnerSession,
+        facts: &AdmissionFacts<'_>,
+        launcher_check: &LauncherCheck<'_>,
+        override_guard: bool,
+    ) -> Result<Result<(), AdmissionRefusal>, PersistenceError> {
+        self.admit_run_with_owner(
+            run,
+            Some(owner),
+            AdmissionQualification { facts, plan: None },
+            launcher_check,
+            override_guard,
+        )
+    }
+
+    pub(crate) fn admit_snapshot_plan(
+        &self,
+        run: RunId,
+        owner: &ExecutionOwnerSession,
+        plan: &crate::domain::SnapshotExecutionPlan,
+        launcher_check: &LauncherCheck<'_>,
+        override_guard: bool,
+    ) -> Result<Result<(), AdmissionRefusal>, PersistenceError> {
+        self.admit_run_with_owner(
+            run,
+            Some(owner),
+            AdmissionQualification {
+                facts: &plan.admission_facts(),
+                plan: Some(plan),
+            },
+            launcher_check,
+            override_guard,
+        )
+    }
+
+    fn admit_run_with_owner(
+        &self,
+        run: RunId,
+        expected_owner: Option<&ExecutionOwnerSession>,
+        qualification: AdmissionQualification<'_>,
+        launcher_check: &LauncherCheck<'_>,
+        override_guard: bool,
+    ) -> Result<Result<(), AdmissionRefusal>, PersistenceError> {
         let mut database = self
             .database
             .lock()
@@ -189,9 +484,25 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Run admission", error))?;
+        self.check_write_admission(&transaction)?;
         let header = run_header(&transaction, run)?;
-        let (_, risk_state) =
+        let (live_owner, risk_state) =
             execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
+        let operation = managed_invocation_row(&transaction, run)?;
+        load_managed_run_from(&transaction, run)?;
+        if expected_owner.is_some_and(|owner| *owner != live_owner)
+            || (expected_owner.is_none() && !matches!(operation, ManagedRunIdentity::Action(_)))
+        {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Admission owner does not match the persisted owner".to_owned(),
+            ));
+        }
+        let facts = qualification.facts;
+        if matches!(operation, ManagedRunIdentity::Restore { .. }) && qualification.plan.is_none() {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Restore requires staged Snapshot admission; Action/Capture admission cannot qualify it".to_owned(),
+            ));
+        }
         let boundary = if has_revision_pin(&transaction, run)? {
             ActionRunBoundary::Admitted
         } else {
@@ -209,7 +520,7 @@ impl PactrunPersistence {
             &self.runtime_content,
             run,
             &header,
-            facts,
+            qualification,
             launcher_check,
             override_guard,
         )?;
@@ -226,22 +537,36 @@ impl PactrunPersistence {
                         ],
                     )
                     .map_err(|error| PersistenceError::sqlite("insert Run Revision pin", error))?;
-                for binding in facts.active_bindings {
-                    transaction
-                        .execute(
-                            "INSERT INTO run_payload_pins(\
+                if matches!(operation, ManagedRunIdentity::Capture { .. }) {
+                    transaction.execute(
+                        "INSERT INTO run_payload_pins(run_id,instance_id,input_identity,payload_id) \
+                         SELECT ?1,instance_id,input_identity,payload_id FROM managed_input_bindings WHERE instance_id=?2",
+                        params![run.as_bytes().as_slice(),header.instance.as_bytes().as_slice()],
+                    ).map_err(|error| PersistenceError::sqlite("pin complete Capture registry", error))?;
+                } else if let ManagedRunIdentity::Restore { snapshot, .. } = &operation {
+                    let consequence =
+                        super::sqlite_v5::load_consequence_version(&transaction, header.instance)?;
+                    transaction.execute("INSERT INTO run_restore_admissions(run_id,snapshot_id,admitted_state_version,admitted_consequence_version) VALUES (?1,?2,?3,?4)",
+                        params![run.as_bytes().as_slice(),snapshot.as_bytes().as_slice(),header.accepted_state_version.as_bytes().as_slice(),consequence])
+                        .map_err(|error|PersistenceError::sqlite("establish Restore Snapshot pin and tokens",error))?;
+                } else {
+                    for binding in facts.active_bindings {
+                        transaction
+                            .execute(
+                                "INSERT INTO run_payload_pins(\
                                 run_id, instance_id, input_identity, payload_id\
                              ) VALUES (?1, ?2, ?3, ?4)",
-                            params![
-                                run.as_bytes().as_slice(),
-                                header.instance.as_bytes().as_slice(),
-                                binding.input.as_str().as_bytes(),
-                                binding.payload.as_bytes().as_slice(),
-                            ],
-                        )
-                        .map_err(|error| {
-                            PersistenceError::sqlite("insert Run payload pin", error)
-                        })?;
+                                params![
+                                    run.as_bytes().as_slice(),
+                                    header.instance.as_bytes().as_slice(),
+                                    binding.input.as_str().as_bytes(),
+                                    binding.payload.as_bytes().as_slice(),
+                                ],
+                            )
+                            .map_err(|error| {
+                                PersistenceError::sqlite("insert Run payload pin", error)
+                            })?;
+                    }
                 }
             }
             Err(refusal) => {
@@ -313,6 +638,96 @@ impl PactrunPersistence {
         Ok(())
     }
 
+    /// Complete Capture view from the pinned Revision and payload registry.
+    /// No current Instance bindings participate in this read.
+    pub(crate) fn admitted_capture_registry(
+        &self,
+        run: RunId,
+    ) -> Result<Vec<crate::domain::PinnedInputBinding>, PersistenceError> {
+        use crate::domain::{
+            InputProtectionV1, ManagedInputProtection, ManagedInputRole, PinnedInputBinding,
+        };
+        let mut database = self.open_read_connection()?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|error| {
+                PersistenceError::sqlite("begin pinned Capture registry read", error)
+            })?;
+        let view = load_managed_run_from(&transaction, run)?;
+        if !matches!(view.operation, ManagedRunIdentity::Capture { .. })
+            || !matches!(
+                view.state,
+                RunState::Running(RunExecutionView {
+                    boundary: ActionRunBoundary::Admitted,
+                    ..
+                })
+            )
+        {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Run is not an admitted Capture".to_owned(),
+            ));
+        }
+        let core = load_revision_core(&transaction, view.operation.revision())?;
+        let mut statement = transaction.prepare(
+            "SELECT pins.input_identity,pins.payload_id,p.protection_rank FROM run_payload_pins pins \
+             LEFT JOIN managed_input_payloads p ON p.instance_id=pins.instance_id AND p.payload_id=pins.payload_id \
+             WHERE pins.run_id=?1 ORDER BY pins.input_identity",
+        ).map_err(|error| PersistenceError::sqlite("prepare pinned Capture registry", error))?;
+        let rows = statement
+            .query_map([run.as_bytes().as_slice()], |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|error| PersistenceError::sqlite("read pinned Capture registry", error))?;
+        let mut pinned = BTreeMap::new();
+        for row in rows {
+            let (input, payload, protection) = row
+                .map_err(|error| PersistenceError::sqlite("read pinned Capture binding", error))?;
+            let input = InputIdentity::parse(utf8_message(input)?)
+                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+            let protection = ManagedInputProtection::from_rank(protection)
+                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+            pinned.insert(input, (payload_id(payload)?, protection));
+        }
+        let mut registry = Vec::new();
+        for declaration in core.inputs() {
+            let declared = match declaration.protection {
+                InputProtectionV1::Normal => ManagedInputProtection::Normal,
+                InputProtectionV1::Secret => ManagedInputProtection::Secret,
+            };
+            let (payload, protection) = match pinned.remove(&declaration.id) {
+                Some((payload, stored)) if stored >= declared => (Some(payload), stored),
+                None if !declaration.required => (None, declared),
+                _ => {
+                    return Err(PersistenceError::CorruptRun(
+                        "Capture active pin is missing or violates declared protection".to_owned(),
+                    ));
+                }
+            };
+            registry.push(PinnedInputBinding {
+                input: declaration.id.clone(),
+                role: ManagedInputRole::Active {
+                    required: declaration.required,
+                },
+                payload,
+                protection,
+            });
+        }
+        registry.extend(pinned.into_iter().map(|(input, (payload, protection))| {
+            PinnedInputBinding {
+                input,
+                role: ManagedInputRole::Retained,
+                payload: Some(payload),
+                protection,
+            }
+        }));
+        registry.sort_by(|a, b| a.input.cmp(&b.input));
+        Ok(registry)
+    }
+
     pub(crate) fn open_admitted_runtime_blob(
         &self,
         run: RunId,
@@ -371,7 +786,9 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin recovery risk transition", error))?;
+        self.check_write_admission(&transaction)?;
         run_header(&transaction, run)?;
+        load_managed_run_from(&transaction, run)?;
         let (_, current) =
             execution_row(&transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
         let boundary = if has_revision_pin(&transaction, run)? {
@@ -415,6 +832,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Run finish", error))?;
+        self.check_write_admission(&transaction)?;
         let header = run_header(&transaction, run)?;
         let receipt = finish_run_in_transaction(&transaction, run, &header, finish, artifacts)?;
         fault(FaultPoint::BeforeRunFinishCommit);
@@ -443,6 +861,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin owned Run finish", error))?;
+        self.check_write_admission(&transaction)?;
         let header = run_header(&transaction, run)?;
         let receipt = finish_run_in_transaction_owned(
             &transaction,
@@ -473,6 +892,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin ResolveManualRecovery", error))?;
+        self.check_write_admission(&transaction)?;
         let (_, _, current) = instance_header(&transaction, instance)?;
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
@@ -541,6 +961,21 @@ impl PactrunPersistence {
         }
     }
 
+    pub(crate) fn load_managed_run(
+        &self,
+        run: RunId,
+    ) -> Result<Option<crate::domain::ManagedRunView>, PersistenceError> {
+        let mut database = self.open_read_connection()?;
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|error| PersistenceError::sqlite("begin managed Run inspection", error))?;
+        match run_header(&transaction, run) {
+            Ok(_) => load_managed_run_from(&transaction, run).map(Some),
+            Err(PersistenceError::MissingRun(_)) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     pub(crate) fn load_run_inspection(
         &self,
         run: RunId,
@@ -585,10 +1020,18 @@ impl PactrunPersistence {
     pub(crate) fn list_running_action_runs(
         &self,
     ) -> Result<Vec<(InstanceId, RunId, ExecutionOwnerSession)>, PersistenceError> {
-        let database = self
-            .database
-            .lock()
-            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        self.list_running_managed_runs()
+    }
+
+    pub(crate) fn list_running_managed_runs(
+        &self,
+    ) -> Result<Vec<(InstanceId, RunId, ExecutionOwnerSession)>, PersistenceError> {
+        let mut connection = self.open_read_connection()?;
+        let database = connection
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|error| {
+                PersistenceError::sqlite("begin managed owner enumeration snapshot", error)
+            })?;
         let mut statement = database
             .prepare(
                 "SELECT runs.instance_id, runs.run_id, run_executions.owner_session \
@@ -615,6 +1058,7 @@ impl PactrunPersistence {
                 PersistenceError::CorruptRun("owner session is not UTF-8".to_owned())
             })?;
             let run = run_id(run)?;
+            load_managed_run_from(&database, run)?;
             let admitted = has_revision_pin(&database, run)?;
             let (_, risk_state) = execution_row(&database, run)?.ok_or_else(|| {
                 PersistenceError::CorruptRun(
@@ -645,6 +1089,16 @@ impl PactrunPersistence {
         run: RunId,
         owner: &ExecutionOwnerSession,
     ) -> Result<bool, PersistenceError> {
+        self.reconcile_managed_run(run, owner)
+    }
+
+    /// The application must establish confirmed lease loss before calling.
+    /// This transaction rechecks the recorded owner and never replays a Hook.
+    pub(crate) fn reconcile_managed_run(
+        &self,
+        run: RunId,
+        owner: &ExecutionOwnerSession,
+    ) -> Result<bool, PersistenceError> {
         let mut database = self
             .database
             .lock()
@@ -654,7 +1108,15 @@ impl PactrunPersistence {
             .map_err(|error| {
                 PersistenceError::sqlite("begin Action owner reconciliation", error)
             })?;
+        self.check_write_admission(&transaction)?;
         let Some((actual_owner, _)) = execution_row(&transaction, run)? else {
+            match run_header(&transaction, run) {
+                Ok(_) => {
+                    load_managed_run_from(&transaction, run)?;
+                }
+                Err(PersistenceError::MissingRun(_)) => {}
+                Err(error) => return Err(error),
+            }
             return Ok(false);
         };
         if actual_owner != *owner {
@@ -744,6 +1206,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Run Artifact expiry", error))?;
+        self.check_write_admission(&transaction)?;
         run_header(&transaction, run)?;
         let deleted = transaction
             .execute(
@@ -760,15 +1223,22 @@ impl PactrunPersistence {
 
 /// Evaluates the PR-REQ-0279 refusal precedence against persisted state. On
 /// success returns the active Revision to pin.
+#[derive(Clone, Copy)]
+struct AdmissionQualification<'a> {
+    facts: &'a AdmissionFacts<'a>,
+    plan: Option<&'a crate::domain::SnapshotExecutionPlan>,
+}
+
 fn admission_decision(
     transaction: &Transaction<'_>,
     runtime_content: &RuntimeContentStore,
     run: RunId,
     header: &RunHeader,
-    facts: &AdmissionFacts<'_>,
+    qualification: AdmissionQualification<'_>,
     launcher_check: &LauncherCheck<'_>,
     override_guard: bool,
 ) -> Result<Result<RevisionIdentity, AdmissionRefusal>, PersistenceError> {
+    let facts = qualification.facts;
     // 1. Trust guard.
     if !override_guard && guard_row(transaction, header.instance)?.is_some() {
         return Ok(Err(AdmissionRefusal::RecoveryGuardActive));
@@ -781,13 +1251,59 @@ fn admission_decision(
             "the Instance state version changed since compilation".to_owned(),
         )));
     }
-    let invocation = invocation_row(transaction, run)?;
-    if invocation.revision != active_revision {
+    let invocation = managed_invocation_row(transaction, run)?;
+    if invocation.revision() != &active_revision {
         return Ok(Err(AdmissionRefusal::PlanInvalidated(
             "the active Revision changed since compilation".to_owned(),
         )));
     }
     let core = load_revision_core(transaction, &active_revision)?;
+    if let Some(plan) = qualification.plan {
+        if plan.operation() != &invocation || plan.instance() != header.instance {
+            return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                "Snapshot Plan does not match its accepted Run".to_owned(),
+            )));
+        }
+        if let Some(reason) = validate_snapshot_plan_declaration(transaction, &core, plan)? {
+            return Ok(Err(AdmissionRefusal::PlanInvalidated(reason)));
+        }
+    }
+    if let ManagedRunIdentity::Restore { snapshot, .. } = &invocation {
+        let target =
+            super::sqlite_instances::load_instance_view_from(transaction, header.instance)?
+                .ok_or_else(|| PersistenceError::MissingInstance(header.instance.to_string()))?;
+        match super::sqlite_snapshots::qualify_restore_snapshot(transaction, &target, *snapshot) {
+            Ok(_) => {}
+            Err(PersistenceError::MissingSnapshot(_)) => {
+                return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                    "selected Snapshot is unavailable".to_owned(),
+                )));
+            }
+            Err(PersistenceError::InvalidRunTransition(message)) => {
+                return Ok(Err(AdmissionRefusal::PlanInvalidated(message)));
+            }
+            Err(PersistenceError::SnapshotCodec(
+                crate::snapshot_integrity::SnapshotCodecError::Capability(_),
+            )) => {
+                return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                    "selected Snapshot exceeds this build's Restore capability".to_owned(),
+                )));
+            }
+            Err(PersistenceError::CorruptSnapshot(_)) => {
+                return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                    "selected Snapshot fails integrity verification".to_owned(),
+                )));
+            }
+            Err(PersistenceError::SnapshotCodec(
+                crate::snapshot_integrity::SnapshotCodecError::Validation(_),
+            )) => {
+                return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                    "selected Snapshot fails required producer checks".to_owned(),
+                )));
+            }
+            Err(error) => return Err(error),
+        }
+    }
     for binding in facts.active_bindings {
         let current_payload = binding_payload(transaction, header.instance, &binding.input)?
             .map(|(payload, _)| payload);
@@ -800,7 +1316,8 @@ fn admission_decision(
     }
     let mut unbound = Vec::new();
     for declaration in core.inputs() {
-        if declaration.required
+        if !matches!(invocation, ManagedRunIdentity::Restore { .. })
+            && declaration.required
             && binding_payload(transaction, header.instance, &declaration.id)?.is_none()
         {
             unbound.push(declaration.id.as_str().to_owned());
@@ -811,6 +1328,12 @@ fn admission_decision(
             "required Inputs are not bound: {}",
             unbound.join(", ")
         ))));
+    }
+    if matches!(invocation, ManagedRunIdentity::Capture { .. })
+        && let Some(reason) =
+            validate_capture_facts(transaction, header.instance, &active_revision, &core, facts)?
+    {
+        return Ok(Err(AdmissionRefusal::PlanInvalidated(reason)));
     }
     let digests = facts
         .runtime_content
@@ -840,46 +1363,217 @@ fn admission_decision(
 
     // 3. Mutate exclusivity, with both access modes read from persisted
     //    Revision declarations.
-    if action_access(&core, &invocation.action, "the active Revision")? == OperationAccessV1::Mutate
-    {
-        let mut cores = BTreeMap::new();
-        cores.insert(active_revision.clone(), core);
-        for competitor in admitted_competitors(transaction, header.instance, run)? {
-            if !cores.contains_key(&competitor.action.revision) {
-                let pinned = load_revision_core(transaction, &competitor.action.revision)?;
-                cores.insert(competitor.action.revision.clone(), pinned);
-            }
-            let pinned = &cores[&competitor.action.revision];
-            if action_access(pinned, &competitor.action.action, "its pinned Revision")?
-                == OperationAccessV1::Mutate
-            {
-                return Ok(Err(AdmissionRefusal::MutationConflict(competitor.run)));
-            }
-        }
+    if let Some(competitor) = managed_mutation_conflict(transaction, header.instance, run)? {
+        return Ok(Err(AdmissionRefusal::MutationConflict(competitor)));
     }
     Ok(Ok(active_revision))
 }
 
-fn action_access(
-    core: &RevisionCoreV1,
-    action: &ActionIdentity,
-    source: &str,
-) -> Result<OperationAccessV1, PersistenceError> {
-    core.actions()
-        .iter()
-        .find(|declaration| &declaration.id == action)
-        .map(|declaration| declaration.access)
+fn validate_snapshot_plan_declaration(
+    database: &Connection,
+    core: &crate::domain::RevisionCoreV1,
+    plan: &crate::domain::SnapshotExecutionPlan,
+) -> Result<Option<String>, PersistenceError> {
+    use crate::domain::{
+        HookLaunchV1, InvocationParameterValue as V, ParameterTypeV1 as T, SnapshotOperation,
+    };
+    let operation = match plan.operation() {
+        ManagedRunIdentity::Capture { .. } => SnapshotOperation::Capture,
+        ManagedRunIdentity::Restore { snapshot, .. } => SnapshotOperation::Restore(*snapshot),
+        ManagedRunIdentity::Action(_) => {
+            return Ok(Some("Snapshot Plan contains an Action".to_owned()));
+        }
+    };
+    let (parameters, hook) = crate::domain::snapshot_hook(core, operation)
+        .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+    let access = plan
+        .operation()
+        .authoritative_access(core)
+        .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+    if hook != plan.hook()
+        || hook.protocol_version.get() != 1
+        || access != plan.access()
+        || parameters.len() != plan.parameters().len()
+    {
+        return Ok(Some(
+            "Snapshot Plan declaration changed or is inconsistent".to_owned(),
+        ));
+    }
+    for (declaration, binding) in parameters.iter().zip(plan.parameters()) {
+        if declaration.id != binding.id
+            || (declaration.sensitive && !binding.effective_redaction)
+            || !matches!(
+                (declaration.parameter_type, binding.value()),
+                (T::Integer, V::Integer(_))
+                    | (T::Float, V::Float(_))
+                    | (T::Boolean, V::Boolean(_))
+                    | (T::String, V::String(_))
+            )
+        {
+            return Ok(Some(
+                "Snapshot parameters do not match the exact declaration".to_owned(),
+            ));
+        }
+    }
+    let stored =
+        super::sqlite_revision_store::load_revision_from(database, plan.operation().revision())?
+            .ok_or_else(|| {
+                PersistenceError::MissingRevision(plan.operation().revision().clone())
+            })?;
+    let files = stored.content.runtime_content.files();
+    if files != plan.runtime_content() {
+        return Ok(Some(
+            "Snapshot runtime closure changed or is incomplete".to_owned(),
+        ));
+    }
+    let matches = match (&hook.launch, plan.launch()) {
+        (HookLaunchV1::Direct { executable: id }, CompiledHookLaunch::Direct { executable }) => {
+            files
+                .iter()
+                .any(|file| &file.id == id && file == executable)
+        }
+        (
+            HookLaunchV1::Interpreter {
+                command,
+                interpreter_args,
+                script: id,
+            },
+            CompiledHookLaunch::Interpreter {
+                launcher,
+                interpreter_args: args,
+                script,
+            },
+        ) => {
+            command == &launcher.command
+                && interpreter_args == args
+                && files.iter().any(|file| &file.id == id && file == script)
+        }
+        _ => false,
+    };
+    Ok((!matches).then(|| "Snapshot launch does not match its declared runtime".to_owned()))
+}
+
+fn validate_capture_facts(
+    database: &Connection,
+    instance: InstanceId,
+    revision: &RevisionIdentity,
+    core: &crate::domain::RevisionCoreV1,
+    facts: &AdmissionFacts<'_>,
+) -> Result<Option<String>, PersistenceError> {
+    use crate::domain::{
+        ActiveInstanceBindingReference, HookLaunchV1, InputProtectionV1, ManagedInputProtection,
+    };
+    let capture = core
+        .snapshot()
+        .and_then(|snapshot| snapshot.capture.as_ref())
         .ok_or_else(|| {
-            PersistenceError::CorruptRun(format!(
-                "Run Action {} is not declared by {source}",
-                action.as_str()
-            ))
-        })
+            PersistenceError::CorruptRun(
+                "Run Capture is not declared by its exact Revision".to_owned(),
+            )
+        })?;
+    let stored =
+        super::sqlite_revision_store::load_revision_from(database, revision)?.ok_or_else(|| {
+            PersistenceError::CorruptRun("Capture Revision is unavailable".to_owned())
+        })?;
+    let files = stored.content.runtime_content.files();
+    if facts.runtime_content != files {
+        return Ok(Some(
+            "Capture runtime closure changed or is incomplete".to_owned(),
+        ));
+    }
+    let launch_matches = match (&capture.hook.launch, facts.launch) {
+        (HookLaunchV1::Direct { executable: id }, CompiledHookLaunch::Direct { executable }) => {
+            files
+                .iter()
+                .any(|file| &file.id == id && file == executable)
+        }
+        (
+            HookLaunchV1::Interpreter {
+                command,
+                interpreter_args,
+                script: id,
+            },
+            CompiledHookLaunch::Interpreter {
+                launcher,
+                interpreter_args: actual_args,
+                script,
+            },
+        ) => {
+            command == &launcher.command
+                && interpreter_args == actual_args
+                && files.iter().any(|file| &file.id == id && file == script)
+        }
+        _ => false,
+    };
+    if !launch_matches || capture.hook.protocol_version.get() != 1 {
+        return Ok(Some(
+            "Capture Hook launch or protocol is not supported by the exact compiled facts"
+                .to_owned(),
+        ));
+    }
+    let mut active = Vec::new();
+    for declaration in core.inputs() {
+        if let Some((payload, protection)) = binding_payload(database, instance, &declaration.id)? {
+            if declaration.protection == InputProtectionV1::Secret
+                && protection == ManagedInputProtection::Normal
+            {
+                return Err(PersistenceError::CorruptManagedInput(
+                    "active Secret references a Normal payload".to_owned(),
+                ));
+            }
+            active.push(ActiveInstanceBindingReference {
+                input: declaration.id.clone(),
+                payload,
+                protection,
+            });
+        }
+    }
+    if active != facts.active_bindings {
+        return Ok(Some(
+            "Capture active binding facts changed or are incomplete".to_owned(),
+        ));
+    }
+    Ok(None)
+}
+
+/// Shared predicate for all managed operation kinds. The caller has already
+/// revalidated the incoming exact Revision inside this same write transaction.
+/// Accepted-only Runs never enter the competitor set; access is never supplied
+/// by the caller or inferred from the operation discriminator alone.
+fn managed_mutation_conflict(
+    transaction: &Transaction<'_>,
+    instance: InstanceId,
+    run: RunId,
+) -> Result<Option<RunId>, PersistenceError> {
+    let invocation = managed_invocation_row(transaction, run)?;
+    let core = load_revision_core(transaction, invocation.revision())?;
+    let access = invocation
+        .authoritative_access(&core)
+        .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+    if access == OperationAccessV1::Observe {
+        return Ok(None);
+    }
+    let mut cores = BTreeMap::new();
+    for competitor in admitted_competitors(transaction, instance, run)? {
+        let revision = competitor.operation.revision();
+        if !cores.contains_key(revision) {
+            cores.insert(revision.clone(), load_revision_core(transaction, revision)?);
+        }
+        if competitor
+            .operation
+            .authoritative_access(&cores[revision])
+            .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?
+            == OperationAccessV1::Mutate
+        {
+            return Ok(Some(competitor.run));
+        }
+    }
+    Ok(None)
 }
 
 struct AdmittedCompetitor {
     run: RunId,
-    action: ActionRunIdentity,
+    operation: ManagedRunIdentity,
 }
 
 /// Every other Run on the Instance that is both Running and Admitted, in
@@ -891,11 +1585,10 @@ fn admitted_competitors(
 ) -> Result<Vec<AdmittedCompetitor>, PersistenceError> {
     let mut statement = transaction
         .prepare(
-            "SELECT r.run_id, p.package_id, p.revision_content_digest, i.action_identity \
+            "SELECT r.run_id, p.package_id, p.revision_content_digest \
              FROM runs r \
              JOIN run_executions e ON e.run_id = r.run_id \
              JOIN run_revision_pins p ON p.run_id = r.run_id \
-             JOIN run_action_invocations i ON i.run_id = r.run_id \
              WHERE r.instance_id = ?1 AND r.run_id <> ?2 \
              ORDER BY r.run_id",
         )
@@ -908,25 +1601,24 @@ fn admitted_competitors(
                     row.get::<_, Vec<u8>>(0)?,
                     row.get::<_, Vec<u8>>(1)?,
                     row.get::<_, Vec<u8>>(2)?,
-                    row.get::<_, Vec<u8>>(3)?,
                 ))
             },
         )
         .map_err(|error| PersistenceError::sqlite("enumerate admitted Runs", error))?;
     let mut competitors = Vec::new();
     for row in rows {
-        let (id, package, digest, action) =
+        let (id, package, digest) =
             row.map_err(|error| PersistenceError::sqlite("read admitted Run", error))?;
-        let action = String::from_utf8(action)
-            .map_err(|_| PersistenceError::CorruptRun("ActionIdentity is not UTF-8".to_owned()))?;
-        competitors.push(AdmittedCompetitor {
-            run: run_id(id)?,
-            action: ActionRunIdentity {
-                revision: revision_identity(package, digest)?,
-                action: ActionIdentity::parse(action)
-                    .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?,
-            },
-        });
+        let id = run_id(id)?;
+        let operation = load_managed_run_from(transaction, id)?.operation;
+        if operation.revision() != &revision_identity(package, digest)?
+            || outcome_row(transaction, id)?.is_some()
+        {
+            return Err(PersistenceError::CorruptRun(
+                "admitted competitor has inconsistent Revision pin or terminal state".to_owned(),
+            ));
+        }
+        competitors.push(AdmittedCompetitor { run: id, operation });
     }
     Ok(competitors)
 }
@@ -935,6 +1627,170 @@ fn admitted_competitors(
 /// execution owner, records the outcome and its records, releases pins,
 /// reclaims unreferenced payloads, and publishes the guard and a fresh state
 /// version only when a consequence exists.
+fn validate_capture_publication(
+    tx: &Transaction<'_>,
+    run: RunId,
+    header: &RunHeader,
+    revision: &RevisionIdentity,
+    publication: &CapturePublication<'_>,
+) -> Result<(), PersistenceError> {
+    use crate::domain::{
+        BlobAccountingProfile, InputProtectionV1, ManagedInputProtection, SnapshotBindingRole,
+        SnapshotBindingState, SnapshotBlobBudget, SnapshotIntegrityVersion,
+        SnapshotProducerContext,
+    };
+    use sha2::{Digest, Sha256};
+    let invalid = || {
+        PersistenceError::CorruptSnapshot(
+            "Capture publication does not match its authoritative pinned view",
+        )
+    };
+    let manifest = publication.manifest.manifest();
+    if manifest.version() != SnapshotIntegrityVersion::V2
+        || manifest.producer() != revision
+        || manifest.origin_instance_id() != header.instance
+    {
+        return Err(invalid());
+    }
+    let core = load_revision_core(tx, revision)?;
+    manifest
+        .validate_producer(Some(&SnapshotProducerContext {
+            revision,
+            inputs: core.inputs(),
+        }))
+        .map_err(|_| invalid())?;
+    let mut statement=tx.prepare("SELECT input_identity,payload_id FROM run_payload_pins WHERE run_id=?1 ORDER BY input_identity").map_err(|e|PersistenceError::sqlite("read Capture pins",e))?;
+    let rows = statement
+        .query_map([run.as_bytes().as_slice()], |r| {
+            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })
+        .map_err(|e| PersistenceError::sqlite("read Capture pins", e))?;
+    let mut pins = BTreeMap::new();
+    for row in rows {
+        let (input, payload) = row.map_err(|e| PersistenceError::sqlite("read Capture pin", e))?;
+        pins.insert(
+            InputIdentity::parse(utf8_message(input)?).map_err(|_| invalid())?,
+            payload_id(payload)?,
+        );
+    }
+    let declarations = core
+        .inputs()
+        .iter()
+        .map(|d| (&d.id, d))
+        .collect::<BTreeMap<_, _>>();
+    let expected_keys = core
+        .inputs()
+        .iter()
+        .map(|d| d.id.clone())
+        .chain(pins.keys().cloned())
+        .collect::<BTreeSet<_>>();
+    if expected_keys.len() != manifest.managed_bindings().len() {
+        return Err(invalid());
+    }
+    struct HashSink(Sha256);
+    impl Write for HashSink {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.update(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut digests = BTreeMap::new();
+    for binding in manifest.managed_bindings() {
+        let declaration = declarations.get(&binding.input_id);
+        if binding.role
+            != if declaration.is_some() {
+                SnapshotBindingRole::Active
+            } else {
+                SnapshotBindingRole::Retained
+            }
+        {
+            return Err(invalid());
+        }
+        match pins.get(&binding.input_id) {
+            Some(payload) => {
+                let rank:i64=tx.query_row("SELECT protection_rank FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![header.instance.as_bytes().as_slice(),payload.as_bytes().as_slice()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("read pinned protection",e))?;
+                if binding.protection
+                    != ManagedInputProtection::from_rank(rank).map_err(|_| invalid())?
+                {
+                    return Err(invalid());
+                }
+                if !digests.contains_key(payload) {
+                    let mut sink = HashSink(Sha256::new());
+                    stream_payload(tx, header.instance, *payload, &mut sink)?;
+                    digests.insert(*payload, Sha256Digest::from_bytes(sink.0.finalize().into()));
+                }
+                if binding.state != SnapshotBindingState::Bound(digests[payload].clone()) {
+                    return Err(invalid());
+                }
+            }
+            None => {
+                let declaration = declaration.ok_or_else(invalid)?;
+                let protection = if declaration.protection == InputProtectionV1::Secret {
+                    ManagedInputProtection::Secret
+                } else {
+                    ManagedInputProtection::Normal
+                };
+                if binding.state != SnapshotBindingState::Absent || binding.protection != protection
+                {
+                    return Err(invalid());
+                }
+            }
+        }
+    }
+    let mut budget = SnapshotBlobBudget::new(BlobAccountingProfile::SnapshotStorage);
+    let mut keys = BTreeSet::new();
+    let accounting = |error| match error {
+        crate::domain::AccountingError::Capability(error) => PersistenceError::from(error),
+        crate::domain::AccountingError::InconsistentSourceLength => invalid(),
+    };
+    for blob in publication.blobs.iter() {
+        if !keys.insert(blob.digest.clone()) {
+            return Err(invalid());
+        }
+        budget
+            .record(blob.digest.clone(), blob.byte_len)
+            .map_err(accounting)?;
+    }
+    let refs = manifest
+        .managed_bindings()
+        .iter()
+        .filter_map(|b| {
+            if let SnapshotBindingState::Bound(d) = &b.state {
+                Some(d.clone())
+            } else {
+                None
+            }
+        })
+        .chain(
+            manifest
+                .service_content()
+                .iter()
+                .map(|c| c.blob_digest.clone()),
+        )
+        .collect::<BTreeSet<_>>();
+    if keys != refs {
+        return Err(invalid());
+    }
+    let lengths = publication
+        .blobs
+        .iter()
+        .map(|b| (&b.digest, b.byte_len))
+        .collect::<BTreeMap<_, _>>();
+    let mut service_budget = SnapshotBlobBudget::new(BlobAccountingProfile::CapturedServiceContent);
+    for descriptor in manifest.service_content() {
+        service_budget
+            .record(
+                descriptor.blob_digest.clone(),
+                lengths[&descriptor.blob_digest],
+            )
+            .map_err(accounting)?;
+    }
+    Ok(())
+}
+
 fn finish_run_in_transaction(
     transaction: &Transaction<'_>,
     run: RunId,
@@ -954,6 +1810,31 @@ fn finish_run_in_transaction_owned(
     expected_owner: Option<&ExecutionOwnerSession>,
     submitted_outputs: Option<&[ManagedOutputIdentity]>,
 ) -> Result<RunFinishReceipt, PersistenceError> {
+    finish_run_authorized(
+        transaction,
+        run,
+        header,
+        finish,
+        artifacts,
+        FinishAuthority {
+            owner: expected_owner,
+            outputs: submitted_outputs,
+            capture: None,
+            restore: false,
+        },
+    )
+}
+
+fn finish_run_authorized(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    header: &RunHeader,
+    finish: &RunFinish,
+    artifacts: &mut [RunArtifactWrite<'_>],
+    mut authority: FinishAuthority<'_>,
+) -> Result<RunFinishReceipt, PersistenceError> {
+    let expected_owner = authority.owner;
+    let submitted_outputs = authority.outputs;
     let (live_owner, live_risk) =
         execution_row(transaction, run)?.ok_or(PersistenceError::RunNotRunning)?;
     let boundary = if has_revision_pin(transaction, run)? {
@@ -968,6 +1849,57 @@ fn finish_run_in_transaction_owned(
     {
         return Err(PersistenceError::InvalidRunTransition(
             "Run finalization owner does not match the persisted owner".to_owned(),
+        ));
+    }
+    let operation = load_managed_run_from(transaction, run)?.operation;
+    if let Some(primary) = &finish.primary_failure {
+        let expected = RunFailedStep::for_operation(primary.step.rank(), operation.kind())
+            .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+        if primary.step != expected {
+            return Err(PersistenceError::InvalidRunTransition(
+                "failed step belongs to another operation kind".to_owned(),
+            ));
+        }
+    }
+    if !matches!(operation, ManagedRunIdentity::Action(_)) {
+        // This shared finalizer can fail/interrupt Snapshot operations, but
+        // cannot stand in for S5/S6's atomic operation-specific result publisher.
+        if finish.outcome == RunOutcome::Succeeded
+            && authority.capture.is_none()
+            && !authority.restore
+        {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Snapshot success requires atomic operation-specific result publication".to_owned(),
+            ));
+        }
+        if !artifacts.is_empty() {
+            return Err(PersistenceError::InvalidRunArtifact(
+                "Snapshot operations cannot publish Action Artifacts".to_owned(),
+            ));
+        }
+    }
+    if authority.capture.is_some()
+        && (!matches!(operation, ManagedRunIdentity::Capture { .. })
+            || finish.outcome != RunOutcome::Succeeded
+            || boundary != ActionRunBoundary::Admitted
+            || expected_owner.is_none()
+            || finish.hook_completion.as_ref().map(|c| c.status)
+                != Some(HookCompletionStatus::Success))
+    {
+        return Err(PersistenceError::InvalidRunTransition(
+            "Capture publication requires an owned admitted successful completion".to_owned(),
+        ));
+    }
+    if authority.restore
+        && (!matches!(operation, ManagedRunIdentity::Restore { .. })
+            || finish.outcome != RunOutcome::Succeeded
+            || boundary != ActionRunBoundary::Admitted
+            || expected_owner.is_none()
+            || finish.hook_completion.as_ref().map(|c| c.status)
+                != Some(HookCompletionStatus::Success))
+    {
+        return Err(PersistenceError::InvalidRunTransition(
+            "Restore publication requires an owned admitted successful completion".to_owned(),
         ));
     }
     if let Some(submitted_outputs) = submitted_outputs {
@@ -1001,6 +1933,20 @@ fn finish_run_in_transaction_owned(
     }
     let now = unix_ms_now()?;
 
+    if let Some(publication) = authority.capture.as_mut() {
+        validate_capture_publication(transaction, run, header, operation.revision(), publication)?;
+        super::sqlite_snapshots::insert_snapshot_manifest(transaction, publication.manifest)?;
+        for blob in publication.blobs.iter_mut() {
+            super::sqlite_snapshots::insert_snapshot_blob(
+                transaction,
+                publication.manifest.manifest().snapshot_id(),
+                &blob.digest,
+                blob.byte_len,
+                blob.reader,
+            )?;
+        }
+    }
+
     transaction
         .execute(
             "DELETE FROM run_executions WHERE run_id=?1",
@@ -1021,6 +1967,22 @@ fn finish_run_in_transaction_owned(
             ],
         )
         .map_err(|error| PersistenceError::sqlite("insert Run outcome", error))?;
+    if let Some(publication) = authority.capture.as_ref() {
+        transaction
+            .execute(
+                "INSERT INTO run_capture_results(run_id,snapshot_id) VALUES (?1,?2)",
+                params![
+                    run.as_bytes().as_slice(),
+                    publication
+                        .manifest
+                        .manifest()
+                        .snapshot_id()
+                        .as_bytes()
+                        .as_slice()
+                ],
+            )
+            .map_err(|e| PersistenceError::sqlite("publish Capture result reference", e))?;
+    }
     if let Some(primary) = &finish.primary_failure {
         transaction
             .execute(
@@ -1098,6 +2060,9 @@ fn finish_run_in_transaction_owned(
     }
 
     let mut published_state_version = None;
+    if trigger.is_some() {
+        super::sqlite_v5::advance_consequence_version(transaction, header.instance)?;
+    }
     if let Some(trigger) = trigger
         && guard_row(transaction, header.instance)?.is_none()
     {
@@ -1203,17 +2168,91 @@ fn run_header(database: &Connection, run: RunId) -> Result<RunHeader, Persistenc
         .optional()
         .map_err(|error| PersistenceError::sqlite("load Run header", error))?
         .ok_or(PersistenceError::MissingRun(run))?;
+    super::sqlite_v5::validate_run_operation(database, run)?;
+    let instance = instance_id(row.0)?;
+    super::sqlite_v5::load_consequence_version(database, instance)?;
     Ok(RunHeader {
-        instance: instance_id(row.0)?,
+        instance,
         accepted_state_version: state_version(row.1)?,
         accepted_at_unix_ms: timestamp(row.2)?,
     })
 }
 
-fn invocation_row(
+fn insert_managed_invocation(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    operation: &ManagedRunIdentity,
+) -> Result<(), PersistenceError> {
+    let revision = operation.revision();
+    let common = (
+        run.as_bytes().as_slice(),
+        revision.package_id.as_bytes().as_slice(),
+        revision.content_digest.as_bytes().as_slice(),
+    );
+    let result = match operation {
+        ManagedRunIdentity::Action(action) => transaction.execute(
+            "INSERT INTO run_action_invocations(run_id,package_id,revision_content_digest,action_identity) VALUES (?1,?2,?3,?4)",
+            params![common.0,common.1,common.2,action.action.as_str().as_bytes()]),
+        ManagedRunIdentity::Capture { .. } => transaction.execute(
+            "INSERT INTO run_capture_invocations(run_id,package_id,revision_content_digest) VALUES (?1,?2,?3)",
+            params![common.0,common.1,common.2]),
+        ManagedRunIdentity::Restore { snapshot, .. } => transaction.execute(
+            "INSERT INTO run_restore_invocations(run_id,package_id,revision_content_digest,snapshot_id) VALUES (?1,?2,?3,?4)",
+            params![common.0,common.1,common.2,snapshot.as_bytes().as_slice()]),
+    };
+    result
+        .map(|_| ())
+        .map_err(|error| PersistenceError::sqlite("insert managed Run invocation", error))
+}
+
+fn managed_invocation_row(
     database: &Connection,
     run: RunId,
-) -> Result<ActionRunIdentity, PersistenceError> {
+) -> Result<ManagedRunIdentity, PersistenceError> {
+    use crate::domain::ManagedExecutionKind;
+    let kind = super::sqlite_v5::validate_run_operation(database, run)?;
+    if kind != ManagedExecutionKind::Action {
+        let sql = match kind {
+            ManagedExecutionKind::SnapshotCapture => {
+                "SELECT package_id, revision_content_digest, NULL FROM run_capture_invocations WHERE run_id=?1"
+            }
+            ManagedExecutionKind::SnapshotRestore => {
+                "SELECT package_id, revision_content_digest, snapshot_id FROM run_restore_invocations WHERE run_id=?1"
+            }
+            ManagedExecutionKind::Action => unreachable!(),
+        };
+        let (package, digest, snapshot) = database
+            .query_row(sql, [run.as_bytes().as_slice()], |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                ))
+            })
+            .map_err(|error| PersistenceError::sqlite("load Snapshot Run invocation", error))?;
+        let revision = revision_identity(package, digest)?;
+        return match kind {
+            ManagedExecutionKind::SnapshotCapture => Ok(ManagedRunIdentity::Capture { revision }),
+            ManagedExecutionKind::SnapshotRestore => Ok(ManagedRunIdentity::Restore {
+                revision,
+                snapshot: crate::domain::SnapshotId::from_bytes(
+                    snapshot
+                        .ok_or_else(|| {
+                            PersistenceError::CorruptRun(
+                                "Restore invocation has no SnapshotId".to_owned(),
+                            )
+                        })?
+                        .try_into()
+                        .map_err(|_| {
+                            PersistenceError::CorruptRun(
+                                "invalid Restore SnapshotId length".to_owned(),
+                            )
+                        })?,
+                ),
+            }),
+            ManagedExecutionKind::Action => unreachable!(),
+        };
+    }
     let row = database
         .query_row(
             "SELECT package_id, revision_content_digest, action_identity \
@@ -1232,11 +2271,11 @@ fn invocation_row(
         .ok_or_else(|| PersistenceError::CorruptRun("Run has no Action invocation".to_owned()))?;
     let action = String::from_utf8(row.2)
         .map_err(|_| PersistenceError::CorruptRun("ActionIdentity is not UTF-8".to_owned()))?;
-    Ok(ActionRunIdentity {
+    Ok(ManagedRunIdentity::Action(ActionRunIdentity {
         revision: revision_identity(row.0, row.1)?,
         action: ActionIdentity::parse(action)
             .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?,
-    })
+    }))
 }
 
 fn execution_row(
@@ -1393,8 +2432,28 @@ fn utf8_message(bytes: Vec<u8>) -> Result<String, PersistenceError> {
 }
 
 fn load_run_from(database: &Connection, run: RunId) -> Result<RunView, PersistenceError> {
+    let managed = load_managed_run_from(database, run)?;
+    let ManagedRunIdentity::Action(action) = managed.operation else {
+        return Err(PersistenceError::InvalidRunTransition(
+            "Action view cannot represent a Snapshot Run".to_owned(),
+        ));
+    };
+    Ok(RunView {
+        id: managed.id,
+        instance: managed.instance,
+        accepted_state_version: managed.accepted_state_version,
+        accepted_at_unix_ms: managed.accepted_at_unix_ms,
+        action,
+        state: managed.state,
+    })
+}
+
+pub(super) fn load_managed_run_from(
+    database: &Connection,
+    run: RunId,
+) -> Result<crate::domain::ManagedRunView, PersistenceError> {
     let header = run_header(database, run)?;
-    let action = invocation_row(database, run)?;
+    let operation = managed_invocation_row(database, run)?;
     let execution = execution_row(database, run)?;
     let outcome = outcome_row(database, run)?;
     let admitted = has_revision_pin(database, run)?;
@@ -1420,7 +2479,7 @@ fn load_run_from(database: &Connection, run: RunId) -> Result<RunView, Persisten
                     "finished Run still holds execution pins".to_owned(),
                 ));
             }
-            RunState::Finished(load_outcome_view(database, run, outcome)?)
+            RunState::Finished(load_outcome_view(database, run, operation.kind(), outcome)?)
         }
         (Some(_), Some(_)) => {
             return Err(PersistenceError::CorruptRun(
@@ -1433,14 +2492,138 @@ fn load_run_from(database: &Connection, run: RunId) -> Result<RunView, Persisten
             ));
         }
     };
-    Ok(RunView {
+    validate_managed_run_links(database, run, &header, &operation, &state, admitted)?;
+    Ok(crate::domain::ManagedRunView {
         id: run,
         instance: header.instance,
         accepted_state_version: header.accepted_state_version,
         accepted_at_unix_ms: header.accepted_at_unix_ms,
-        action,
+        operation,
         state,
     })
+}
+
+fn validate_managed_run_links(
+    database: &Connection,
+    run: RunId,
+    header: &RunHeader,
+    operation: &ManagedRunIdentity,
+    state: &RunState,
+    admitted: bool,
+) -> Result<(), PersistenceError> {
+    let invalid = || {
+        PersistenceError::CorruptRun(
+            "Run operation, state and execution references disagree".to_owned(),
+        )
+    };
+    let (payload_count, result_count, restore_count): (i64, i64, i64) = database
+        .query_row(
+            "SELECT (SELECT count(*) FROM run_payload_pins WHERE run_id=?1), \
+         (SELECT count(*) FROM run_capture_results WHERE run_id=?1), \
+         (SELECT count(*) FROM run_restore_admissions WHERE run_id=?1)",
+            [run.as_bytes().as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|error| PersistenceError::sqlite("validate managed Run references", error))?;
+    if admitted {
+        let (package, digest): (Vec<u8>, Vec<u8>) = database
+            .query_row(
+                "SELECT package_id,revision_content_digest FROM run_revision_pins WHERE run_id=?1",
+                [run.as_bytes().as_slice()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|error| PersistenceError::sqlite("load managed Revision pin", error))?;
+        if operation.revision() != &revision_identity(package, digest)? {
+            return Err(invalid());
+        }
+        if !matches!(operation, ManagedRunIdentity::Action(_)) {
+            let core = load_revision_core(database, operation.revision())?;
+            operation
+                .authoritative_access(&core)
+                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+            if matches!(operation, ManagedRunIdentity::Capture { .. }) {
+                for declaration in core.inputs() {
+                    let protection: Option<i64> = database.query_row(
+                    "SELECT p.protection_rank FROM run_payload_pins pins \
+                     JOIN managed_input_payloads p ON p.instance_id=pins.instance_id AND p.payload_id=pins.payload_id \
+                     WHERE pins.run_id=?1 AND pins.input_identity=?2",
+                    params![run.as_bytes().as_slice(), declaration.id.as_str().as_bytes()], |row| row.get(0),
+                ).optional().map_err(|error| PersistenceError::sqlite("validate Capture active pin", error))?;
+                    match protection {
+                        None if declaration.required => return Err(invalid()),
+                        Some(rank) => {
+                            let stored = crate::domain::ManagedInputProtection::from_rank(rank)
+                                .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
+                            if declaration.protection == crate::domain::InputProtectionV1::Secret
+                                && stored != crate::domain::ManagedInputProtection::Secret
+                            {
+                                return Err(invalid());
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+    } else if payload_count != 0 {
+        return Err(invalid());
+    }
+    let capture_success = matches!(operation, ManagedRunIdentity::Capture { .. })
+        && matches!(state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded);
+    if !matches!(operation, ManagedRunIdentity::Action(_))
+        && matches!(state, RunState::Finished(outcome)
+            if outcome.outcome == RunOutcome::Succeeded && outcome.boundary != ActionRunBoundary::Admitted)
+    {
+        return Err(invalid());
+    }
+    if result_count != i64::from(capture_success) {
+        return Err(invalid());
+    }
+    if capture_success {
+        let result: Vec<u8> = database
+            .query_row(
+                "SELECT snapshot_id FROM run_capture_results WHERE run_id=?1",
+                [run.as_bytes().as_slice()],
+                |row| row.get(0),
+            )
+            .map_err(|error| PersistenceError::sqlite("load Capture result identity", error))?;
+        let _: [u8; 16] = result.try_into().map_err(|_| invalid())?;
+    }
+    let restore_admitted = matches!(operation, ManagedRunIdentity::Restore { .. }) && admitted;
+    if restore_count != i64::from(restore_admitted) {
+        return Err(invalid());
+    }
+    if let ManagedRunIdentity::Restore { revision, snapshot } = operation {
+        if payload_count != 0 {
+            return Err(invalid());
+        }
+        if admitted {
+            let (id, token, consequence): (Vec<u8>,Vec<u8>,i64) = database.query_row(
+                "SELECT snapshot_id,admitted_state_version,admitted_consequence_version FROM run_restore_admissions WHERE run_id=?1",
+                [run.as_bytes().as_slice()], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?)),
+            ).map_err(|error| PersistenceError::sqlite("load Restore admission", error))?;
+            if id != snapshot.as_bytes()
+                || state_version(token)? != header.accepted_state_version
+                || consequence < 0
+                || consequence
+                    > super::sqlite_v5::load_consequence_version(database, header.instance)?
+                || &super::sqlite_snapshots::snapshot_producer(database, *snapshot).map_err(
+                    |error| match error {
+                        PersistenceError::MissingSnapshot(_) => invalid(),
+                        other => other,
+                    },
+                )? != revision
+            {
+                return Err(invalid());
+            }
+        }
+    }
+    if !matches!(operation, ManagedRunIdentity::Action(_))
+        && matches!(state, RunState::Finished(outcome) if !outcome.artifacts.is_empty())
+    {
+        return Err(invalid());
+    }
+    Ok(())
 }
 
 fn validate_pin_instances(
@@ -1450,14 +2633,16 @@ fn validate_pin_instances(
 ) -> Result<(), PersistenceError> {
     let foreign: bool = database
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM run_payload_pins WHERE run_id=?1 AND instance_id<>?2)",
+            "SELECT EXISTS(SELECT 1 FROM run_payload_pins pins \
+             LEFT JOIN managed_input_payloads p ON p.instance_id=pins.instance_id AND p.payload_id=pins.payload_id \
+             WHERE pins.run_id=?1 AND (pins.instance_id<>?2 OR p.payload_id IS NULL))",
             params![run.as_bytes().as_slice(), instance.as_bytes().as_slice()],
             |row| row.get(0),
         )
         .map_err(|error| PersistenceError::sqlite("validate Run payload pins", error))?;
     if foreign {
         return Err(PersistenceError::CorruptRun(
-            "payload pin references another Instance".to_owned(),
+            "payload pin references another Instance or a missing payload".to_owned(),
         ));
     }
     Ok(())
@@ -1466,6 +2651,7 @@ fn validate_pin_instances(
 fn load_outcome_view(
     database: &Connection,
     run: RunId,
+    kind: crate::domain::ManagedExecutionKind,
     outcome: OutcomeRow,
 ) -> Result<RunOutcomeView, PersistenceError> {
     let primary_failure = database
@@ -1490,7 +2676,7 @@ fn load_outcome_view(
                     error: error_ref(owner, code)?,
                     message: utf8_message(message)?,
                 },
-                step: RunFailedStep::from_rank(step)
+                step: RunFailedStep::for_operation(step, kind)
                     .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?,
             })
         })
@@ -1654,6 +2840,10 @@ mod tests {
     const TOOL_BYTES: &[u8] = b"deploy tool";
 
     const WORKER_TEST: &str = "persistence::sqlite_runs::tests::m3_subprocess_worker";
+
+    mod managed_access {
+        include!("sqlite_managed_access_tests.rs");
+    }
 
     fn root() -> (TempDir, PathBuf) {
         let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice2-tests");
@@ -2731,7 +3921,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            12
+            17 // V4's twelve plus five operation/admission/result relations.
         );
         assert!(
             columns

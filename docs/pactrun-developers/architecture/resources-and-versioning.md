@@ -139,11 +139,13 @@ Run, invocation, execution owner, pin, outcome, failure, Hook completion,
 Artifact, or recovery-guard rows. V4 is the first schema that represents Runs;
 a later migration MUST preserve or transform every `run_executions` row as a
 non-terminal Run and every `instance_recovery_guards` row as an unresolved
-recovery obligation rather than inferring their disposition. After M3 Slice 2
-integration, V4 is the current canonical implemented internal schema while
-remaining non-Frozen and non-public.
+recovery obligation rather than inferring their disposition. V4 is the
+integrated M3 baseline. M4's [V5 implementation](./persistence-schema-v5.md)
+adds explicit writable admission and only the exact V4-to-V5 bootstrap in
+PR-REQ-0300; the M4 binary MUST NOT implicitly chain older schemas through V4.
+Internal persistence remains non-Frozen and non-public.
 
-**Verification: PR-TEST-0073, PR-TEST-0082.**
+**Verification: PR-TEST-0073, PR-TEST-0082, PR-TEST-0202.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 

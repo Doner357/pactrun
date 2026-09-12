@@ -23,6 +23,7 @@ use crate::{
 };
 
 const PAYLOAD_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
+    representation_maximum: crate::domain::MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
     insert_chunk_sql: "INSERT INTO managed_input_payload_chunks(        instance_id, payload_id, chunk_index, chunk_bytes     ) VALUES (?1, ?2, ?3, ?4)",
     select_chunks_sql: "SELECT chunk_index, chunk_bytes FROM managed_input_payload_chunks          WHERE instance_id=?1 AND payload_id=?2 ORDER BY chunk_index",
     read_operation: "read Managed Input staging",
@@ -66,6 +67,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Instance creation", error))?;
+        self.check_write_admission(&transaction)?;
         let core = load_revision_core(&transaction, &active_revision)?;
         for input in initial.iter() {
             if input_declaration(&core, &input.input_id).is_none() {
@@ -90,6 +92,10 @@ impl PactrunPersistence {
                 ],
             )
             .map_err(|error| PersistenceError::sqlite("insert Instance", error))?;
+        transaction.execute(
+            "INSERT INTO instance_recovery_consequence_versions(instance_id, consequence_version) VALUES (?1, 0)",
+            [instance_id.as_bytes().as_slice()],
+        ).map_err(|error| PersistenceError::sqlite("initialize Instance consequence version", error))?;
         for input in initial.iter_mut() {
             let declaration = input_declaration(&core, &input.input_id)
                 .expect("initial declarations were validated");
@@ -168,27 +174,7 @@ impl PactrunPersistence {
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        let row = database
-            .query_row(
-                "SELECT instance_name, active_package_id, \
-                        active_revision_content_digest, instance_state_version \
-                 FROM instances WHERE instance_id=?1",
-                [id.as_bytes().as_slice()],
-                |row| {
-                    Ok((
-                        row.get::<_, Vec<u8>>(0)?,
-                        row.get::<_, Vec<u8>>(1)?,
-                        row.get::<_, Vec<u8>>(2)?,
-                        row.get::<_, Vec<u8>>(3)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(|error| PersistenceError::sqlite("load Instance", error))?;
-        row.map(|(name, package, digest, version)| {
-            load_instance_from(&database, id, name, package, digest, version)
-        })
-        .transpose()
+        load_instance_view_from(&database, id)
     }
 
     pub(crate) fn observe_instance_compilation_state(
@@ -220,6 +206,7 @@ impl PactrunPersistence {
             return Ok(None);
         };
         let active_revision = revision_identity(package, digest)?;
+        super::sqlite_v5::load_consequence_version(&database, id)?;
         let state_version = state_version(version)?;
         let core = load_revision_core(&database, &active_revision)?;
         let mut active_bindings = Vec::new();
@@ -256,6 +243,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Managed Input set", error))?;
+        self.check_write_admission(&transaction)?;
         let (_, revision, current) = instance_header(&transaction, instance)?;
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
@@ -312,6 +300,7 @@ impl PactrunPersistence {
         let transaction = database
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Managed Input delete", error))?;
+        self.check_write_admission(&transaction)?;
         let (_, revision, current) = instance_header(&transaction, instance)?;
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
@@ -489,6 +478,19 @@ pub(super) fn stream_payload(
     Ok(())
 }
 
+pub(super) fn load_instance_view_from(
+    database: &Connection,
+    id: InstanceId,
+) -> Result<Option<InstanceView>, PersistenceError> {
+    let row = database.query_row("SELECT instance_name,active_package_id,active_revision_content_digest,instance_state_version FROM instances WHERE instance_id=?1",
+        [id.as_bytes().as_slice()], |row| Ok((row.get::<_,Vec<u8>>(0)?,row.get::<_,Vec<u8>>(1)?,row.get::<_,Vec<u8>>(2)?,row.get::<_,Vec<u8>>(3)?)))
+        .optional().map_err(|error|PersistenceError::sqlite("load Instance",error))?;
+    row.map(|(name, package, digest, version)| {
+        load_instance_from(database, id, name, package, digest, version)
+    })
+    .transpose()
+}
+
 fn load_instance_from(
     database: &Connection,
     id: InstanceId,
@@ -497,6 +499,7 @@ fn load_instance_from(
     digest: Vec<u8>,
     version: Vec<u8>,
 ) -> Result<InstanceView, PersistenceError> {
+    super::sqlite_v5::load_consequence_version(database, id)?;
     let name = String::from_utf8(name).map_err(|_| {
         PersistenceError::CorruptManagedInput("InstanceName is not UTF-8".to_owned())
     })?;
@@ -602,6 +605,7 @@ pub(super) fn instance_header(
         |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Vec<u8>>(2)?, row.get::<_, Vec<u8>>(3)?)),
     ).optional().map_err(|error| PersistenceError::sqlite("load Instance header", error))?
         .ok_or_else(|| PersistenceError::MissingInstance(instance.to_string()))?;
+    super::sqlite_v5::load_consequence_version(database, instance)?;
     let name = InstanceName::parse(String::from_utf8(row.0).map_err(|_| {
         PersistenceError::CorruptManagedInput("InstanceName is not UTF-8".to_owned())
     })?)

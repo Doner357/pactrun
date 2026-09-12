@@ -67,6 +67,8 @@ pub(crate) struct LiveExecution {
     hook_completion: Option<HookCompletionRecord>,
     completion_accepted: bool,
     submitted_handles: Vec<String>,
+    captured_at: Option<crate::domain::SnapshotTimestamp>,
+    capture_submitted: Vec<crate::domain::CaptureServiceContentSubmission>,
     exit_status: Option<ExitStatus>,
     startup_deadline: Option<Instant>,
     action_deadline: Option<Instant>,
@@ -187,6 +189,8 @@ pub(super) fn execute_registered(
             hook_completion: None,
             completion_accepted: false,
             submitted_handles: Vec::new(),
+            captured_at: None,
+            capture_submitted: Vec::new(),
             exit_status: None,
             startup_deadline: policy
                 .startup_timeout
@@ -199,6 +203,168 @@ pub(super) fn execute_registered(
             cancellation,
         },
     )
+}
+
+pub(super) fn execute_snapshot(
+    persistence: &PactrunPersistence,
+    staging: &StagingSession,
+    claim: super::SnapshotExecutionClaim<'_>,
+    policy: HookRuntimePolicy,
+) -> RunId {
+    execute_snapshot_with_risk(persistence, persistence, staging, claim, policy)
+}
+
+pub(super) fn execute_snapshot_with_risk(
+    persistence: &PactrunPersistence,
+    risk: &dyn RecoveryRiskPersistence,
+    staging: &StagingSession,
+    claim: super::SnapshotExecutionClaim<'_>,
+    policy: HookRuntimePolicy,
+) -> RunId {
+    let run = claim.run();
+    let cancellation = claim.cancellation();
+    let kind = claim.plan().operation().kind();
+    if cancellation.is_requested() {
+        claim
+            .stop_before_launch(crate::domain::RunFinish {
+                outcome: crate::domain::RunOutcome::Cancelled,
+                primary_failure: None,
+                secondary_failures: Vec::new(),
+                hook_completion: None,
+            })
+            .expect("valid cancellation");
+        return run;
+    }
+    let materialized = match if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
+        MaterializedAction::create_restore(persistence, staging, run, claim.plan())
+    } else {
+        MaterializedAction::create_capture(persistence, staging, run, claim.plan())
+    } {
+        Ok(value) => value,
+        Err(error) => {
+            let (outcome, mut primary_failure) =
+                outcome_and_failure(OutcomeWinner::Failed(FailureKind::SessionMaterialization));
+            if let Some(primary) = &mut primary_failure {
+                primary.step =
+                    crate::domain::RunFailedStep::for_operation(primary.step.rank(), kind)
+                        .expect("known step");
+                primary.failure.message = match error {
+                    super::materialize::MaterializationError::Capture(error) => error.message(),
+                    _ => "Snapshot session materialization or content validation failed",
+                }
+                .to_owned();
+            }
+            let finish = crate::domain::RunFinish {
+                outcome: if cancellation.is_requested() {
+                    crate::domain::RunOutcome::Cancelled
+                } else {
+                    outcome
+                },
+                primary_failure: if cancellation.is_requested() {
+                    None
+                } else {
+                    primary_failure
+                },
+                secondary_failures: Vec::new(),
+                hook_completion: None,
+            };
+            claim
+                .stop_before_launch(finish)
+                .expect("non-success Snapshot execution");
+            return run;
+        }
+    };
+    let listener = match ProtocolListener::bind() {
+        Ok(listener) => listener,
+        Err(_) => {
+            claim.replace(snapshot_before_launch(
+                run,
+                materialized,
+                FailureKind::ProtocolTransport,
+            ));
+            return run;
+        }
+    };
+    let mut pending_materialization = Some(materialized);
+    match claim.launch_once(|_| {
+        let materialized = pending_materialization.take().expect("one launch attempt");
+        match ProcessSupervisor::spawn(
+            materialized.program(),
+            materialized.arguments(),
+            materialized.terminal(),
+            &listener,
+        ) {
+            Ok(supervisor) => {
+                let started = Instant::now();
+                let state = if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
+                    ProtocolState::new_restore(materialized.session_id().to_owned())
+                } else {
+                    ProtocolState::new_capture(materialized.session_id().to_owned())
+                };
+                Ok(LiveExecution {
+                    run,
+                    materialized,
+                    supervisor,
+                    protocol: LiveProtocol::Listening(listener),
+                    state,
+                    winner: OutcomeArbiter::default(),
+                    hook_completion: None,
+                    completion_accepted: false,
+                    submitted_handles: Vec::new(),
+                    captured_at: None,
+                    capture_submitted: Vec::new(),
+                    exit_status: None,
+                    startup_deadline: policy.startup_timeout.map(|d| checked_deadline(started, d)),
+                    action_deadline: policy.action_timeout.map(|d| checked_deadline(started, d)),
+                    termination: None,
+                    policy,
+                    cancellation,
+                })
+            }
+            Err(_) => Err(Box::new(snapshot_before_launch(
+                run,
+                materialized,
+                FailureKind::Launch,
+            ))),
+        }
+    }) {
+        Ok(Some(attempt)) => attempt.replace(|live| drive_execution(risk, live)),
+        Ok(None) => {
+            if let Some(materialized) = pending_materialization.as_ref() {
+                materialized.cleanup_unlaunched();
+            }
+        }
+        Err(attempt) => attempt.replace(|continuation| *continuation),
+    }
+    run
+}
+
+fn snapshot_before_launch(
+    run: RunId,
+    mut materialized: MaterializedAction,
+    failure: FailureKind,
+) -> OwnerContinuation {
+    let restore = materialized.operation() == super::protocol::SessionOperation::Restore;
+    let acquisition = materialized.take_capture();
+    let (execution, outputs) = materialized.into_execution();
+    let (outcome, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
+    let facts = RuntimeTerminalFacts {
+        run,
+        outcome,
+        primary_failure,
+        hook_completion: None,
+        completion_accepted: false,
+        process_started: false,
+        process_terminated: false,
+        submitted_outputs: Vec::new(),
+        outputs,
+        execution: Some(execution),
+    };
+    if restore {
+        super::restore::terminal(facts)
+    } else {
+        super::capture::terminal(facts, acquisition, None, Vec::new())
+    }
 }
 
 fn drive_execution(
@@ -245,7 +411,18 @@ fn drive_execution(
         if let LiveProtocol::Listening(listener) = &mut live.protocol {
             match listener.try_accept() {
                 Ok(Some(stream)) => {
-                    match ConnectedProtocol::start(stream, live.materialized.session()) {
+                    let connected = match live.materialized.operation() {
+                        super::protocol::SessionOperation::Action => {
+                            ConnectedProtocol::start(stream, live.materialized.session())
+                        }
+                        super::protocol::SessionOperation::Capture => {
+                            ConnectedProtocol::start_capture(stream, live.materialized.session())
+                        }
+                        super::protocol::SessionOperation::Restore => {
+                            ConnectedProtocol::start_restore(stream, live.materialized.session())
+                        }
+                    };
+                    match connected {
                         Ok(connected) => live.protocol = LiveProtocol::Connected(connected),
                         Err(_) => {
                             return terminate_for_failure(
@@ -359,6 +536,20 @@ fn apply_step(
             acknowledge_risk(live, request_id, requested)
         }
         ProtocolStep::Completed(completion) => {
+            if live.materialized.operation() == super::protocol::SessionOperation::Capture {
+                if completion.status == HookCompletionStatus::Success && live.captured_at.is_none()
+                {
+                    live.captured_at = match super::capture::completion_time() {
+                        Ok(at) => Some(at),
+                        Err(_) => {
+                            return Flow::Fail(FailureKind::CapturePublication(
+                                "Capture completion time is unavailable",
+                            ));
+                        }
+                    };
+                }
+                live.capture_submitted = completion.service_content.clone();
+            }
             let LiveProtocol::Connected(connected) = &mut live.protocol else {
                 return Flow::Fail(FailureKind::ProtocolTransport);
             };
@@ -480,6 +671,13 @@ pub(super) fn resume_registered(
     continuation: OwnerContinuation,
 ) -> OwnerContinuation {
     match continuation {
+        OwnerContinuation::RestoreFinalization(state) => {
+            OwnerContinuation::RestoreFinalization(state)
+        }
+        OwnerContinuation::CaptureFinalization(state) => {
+            OwnerContinuation::CaptureFinalization(state)
+        }
+        OwnerContinuation::Snapshot(state) => OwnerContinuation::Snapshot(state),
         OwnerContinuation::ReadyToFinalize(state) => OwnerContinuation::ReadyToFinalize(state),
         OwnerContinuation::RetryFinalization(state) => OwnerContinuation::RetryFinalization(state),
         OwnerContinuation::RetryProcessControl(retry) => {
@@ -622,20 +820,30 @@ fn finish_after_exit(
         .expect("process exit establishes an outcome winner");
     let (outcome, primary_failure) = outcome_and_failure(winner);
     let submitted_outputs = live.materialized.submitted_outputs(&live.submitted_handles);
+    let capture_mode = live.materialized.operation() == super::protocol::SessionOperation::Capture;
+    let restore_mode = live.materialized.operation() == super::protocol::SessionOperation::Restore;
+    let capture = live.materialized.take_capture();
     let (execution, outputs) = live.materialized.into_execution();
+    let facts = RuntimeTerminalFacts {
+        run: live.run,
+        outcome,
+        primary_failure,
+        hook_completion: live.hook_completion,
+        completion_accepted: live.completion_accepted,
+        process_started: true,
+        process_terminated: true,
+        submitted_outputs,
+        outputs,
+        execution: Some(execution),
+    };
+    if capture_mode {
+        return super::capture::terminal(facts, capture, live.captured_at, live.capture_submitted);
+    }
+    if restore_mode {
+        return super::restore::terminal(facts);
+    }
     OwnerContinuation::ReadyToFinalize(FinalizationState {
-        facts: RuntimeTerminalFacts {
-            run: live.run,
-            outcome,
-            primary_failure,
-            hook_completion: live.hook_completion,
-            completion_accepted: live.completion_accepted,
-            process_started: true,
-            process_terminated: true,
-            submitted_outputs,
-            outputs,
-            execution: Some(execution),
-        },
+        facts,
         prepared: None,
         cleanup_attempted: false,
         publication_failed: false,

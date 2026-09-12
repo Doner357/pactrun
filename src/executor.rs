@@ -221,7 +221,7 @@ pub(crate) fn admit_existing<L: HostLauncherLookup>(
 /// The PR-REQ-0194 Admission clause: repeat the ordered selection with the
 /// exact search configuration bound into the Plan and require the same
 /// candidate path. No object identity, digest, or canonical target is compared.
-fn reselect_launcher<L: HostLauncherLookup>(
+pub(crate) fn reselect_launcher<L: HostLauncherLookup>(
     launcher: &L,
     observation: &InterpreterLauncherObservation,
 ) -> Result<(), String> {
@@ -229,5 +229,33 @@ fn reselect_launcher<L: HostLauncherLookup>(
         Ok(path) if path == observation.resolved_absolute_path => Ok(()),
         Ok(_) => Err("a different candidate is selected".to_owned()),
         Err(error) => Err(error.to_string()),
+    }
+}
+
+pub(crate) fn admit_snapshot_existing<L: HostLauncherLookup>(
+    persistence: &PactrunPersistence,
+    launcher: &L,
+    run: RunId,
+    owner: &ExecutionOwnerSession,
+    plan: &crate::domain::SnapshotExecutionPlan,
+    options: AdmissionOptions,
+) -> Result<(), ExecutorError> {
+    #[cfg(test)]
+    if FAIL_NEXT_ADMISSION_FOR_TEST.with(|failed| failed.replace(false)) {
+        return Err(ExecutorError::Persistence {
+            run: Some(run),
+            source: PersistenceError::DatabaseLockPoisoned,
+        });
+    }
+    let launcher_check =
+        |observed: &InterpreterLauncherObservation| reselect_launcher(launcher, observed);
+    match persistence
+        .admit_snapshot_plan(run, owner, plan, &launcher_check, options.recovery_override)
+        .map_err(|source| ExecutorError::Persistence {
+            run: Some(run),
+            source,
+        })? {
+        Ok(()) => Ok(()),
+        Err(refusal) => Err(ExecutorError::Refused { run, refusal }),
     }
 }
