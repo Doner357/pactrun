@@ -217,7 +217,7 @@ service-content payload is available and hashes to its declared digest.
 Manifest-only calculation may compute the integrity digest without fetching
 payloads, but MUST NOT report full Snapshot content verification.
 
-**Verification: PR-TEST-0016.**
+**Verification: PR-TEST-0016, PR-TEST-0258.**
 
 ## Semantic normalization and input validity
 

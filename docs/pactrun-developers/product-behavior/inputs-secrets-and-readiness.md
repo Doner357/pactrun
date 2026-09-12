@@ -83,7 +83,16 @@ state rather than target pre-restore completeness.
 M2 creation MAY commit this incomplete state and inspection MUST derive missing
 requirements without persisting a readiness flag, as specified by PR-REQ-0265.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0225, PR-TEST-0231, PR-TEST-0232, PR-TEST-0234, PR-TEST-0238, PR-TEST-0249, PR-TEST-0261, PR-TEST-0270, PR-TEST-0274.**
+
+Partial M4 coverage: production Capture Admission independently refuses missing
+required bindings, accepts an empty bound payload, and records legal optional
+absence. S4 adds read-only Compiler refusal without Run/lease creation,
+adversarial-observation Admission checks, zero invocation of the authorized
+launch boundary after refusal/cancellation, and staged Restore Admission for
+required-absent to absent without target completeness. Full Snapshot Hook
+sessions and the remaining operation-specific requirements remain later-slice
+coverage, rather than being inferred from these substrate tests.
 
 ## Managing active and retained bindings
 

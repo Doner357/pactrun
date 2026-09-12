@@ -19,14 +19,19 @@ use crate::{
 
 use super::LiveOutputSlot;
 
-pub(super) struct MaterializedAction {
+pub(super) struct MaterializedExecution {
     directory: ExecutionDirectory,
     outputs: Vec<MaterializedOutputSlot>,
     program: PathBuf,
     arguments: Vec<String>,
     session_id: String,
     session: Value,
+    operation: super::protocol::SessionOperation,
+    terminal: TerminalContractV1,
+    capture: Option<super::capture::CapturePreparation>,
 }
+
+pub(super) type MaterializedAction = MaterializedExecution;
 
 impl fmt::Debug for MaterializedAction {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -47,6 +52,92 @@ struct MaterializedOutputSlot {
 }
 
 impl MaterializedAction {
+    pub(super) fn create_restore(
+        p: &PactrunPersistence,
+        staging: &StagingSession,
+        run: crate::domain::RunId,
+        plan: &crate::domain::SnapshotExecutionPlan,
+    ) -> Result<Self, MaterializationError> {
+        use crate::domain::{ManagedRunIdentity, SnapshotBindingRole, SnapshotBindingState};
+        let directory = staging.create_execution_directory(run)?;
+        let result = (|| {
+            let manifest = p.admitted_restore_manifest(run)?;
+            if !matches!(plan.operation(), ManagedRunIdentity::Restore {snapshot,revision} if *snapshot == manifest.snapshot_id() && revision == manifest.producer())
+            {
+                return Err(MaterializationError::Persistence(
+                    PersistenceError::CorruptSnapshot(
+                        "Restore Plan differs from admitted Snapshot",
+                    ),
+                ));
+            }
+            let runtime = directory.create_directory(Path::new("runtime"))?;
+            let workspace = directory.create_directory(Path::new("workspace"))?;
+            directory.create_directory(Path::new("bindings"))?;
+            let content = directory.create_directory(Path::new("snapshot-content"))?;
+            for file in plan.runtime_content() {
+                materialize_runtime_file(p, run, &directory, file)?;
+            }
+            let mut bindings = Vec::new();
+            for binding in manifest.managed_bindings() {
+                if binding.role != SnapshotBindingRole::Active {
+                    continue;
+                }
+                let SnapshotBindingState::Bound(digest) = &binding.state else {
+                    continue;
+                };
+                let path = materialize_restore_blob(
+                    p,
+                    run,
+                    &directory,
+                    &Path::new("bindings").join(binding.input_id.as_str()),
+                    digest,
+                )?;
+                bindings.push(json!({"handle":random_handle()?,"input_id":binding.input_id.as_str(),"role":"active","readonly_path":host_path(&path)?}));
+            }
+            let mut descriptors = Vec::new();
+            for (index, descriptor) in manifest.service_content().iter().enumerate() {
+                let relative = format!("objects/item-{index}");
+                materialize_restore_blob(
+                    p,
+                    run,
+                    &directory,
+                    &Path::new("snapshot-content").join(&relative),
+                    &descriptor.blob_digest,
+                )?;
+                descriptors.push(json!({"role":descriptor.role.as_str(),"path":descriptor.path.as_str(),"blob_digest":descriptor.blob_digest.as_str(),"materialized_path":relative}));
+            }
+            let (program, mut arguments) = launch_command(plan.launch(), &runtime);
+            arguments.extend(plan.hook().args.iter().cloned());
+            let session_id = random_handle()?;
+            let parameters = plan
+                .parameters()
+                .iter()
+                .map(|p| {
+                    Ok(json!({"parameter_id":p.id.as_str(),"value":parameter_value(p.value())?}))
+                })
+                .collect::<Result<Vec<_>, MaterializationError>>()?;
+            let session = json!({"type":"session_start","protocol_version":1,"session_id":session_id,"run_id":run.to_string(),"revision":{"package_id":manifest.producer().package_id.to_string(),"revision_content_digest":manifest.producer().content_digest.to_string()},"parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},"operation":{"kind":"snapshot_restore","snapshot_id":manifest.snapshot_id().to_string(),"bindings":bindings,"snapshot_content":{"handle":random_handle()?,"readonly_root_path":host_path(&content)?,"logical_descriptors":descriptors}}});
+            super::protocol::validate_session_frame(&session)?;
+            Ok((program, arguments, session_id, session))
+        })();
+        match result {
+            Ok((program, arguments, session_id, session)) => Ok(Self {
+                directory,
+                outputs: Vec::new(),
+                program,
+                arguments,
+                session_id,
+                session,
+                operation: super::protocol::SessionOperation::Restore,
+                terminal: plan.hook().io.terminal,
+                capture: None,
+            }),
+            Err(error) => {
+                let _ = directory.cleanup();
+                Err(error)
+            }
+        }
+    }
     pub(super) fn create(
         persistence: &PactrunPersistence,
         staging: &StagingSession,
@@ -157,7 +248,90 @@ impl MaterializedAction {
             arguments,
             session_id,
             session,
+            operation: super::protocol::SessionOperation::Action,
+            terminal: admitted.plan().terminal(),
+            capture: None,
         })
+    }
+
+    pub(super) fn create_capture(
+        p: &PactrunPersistence,
+        staging: &StagingSession,
+        run: crate::domain::RunId,
+        plan: &crate::domain::SnapshotExecutionPlan,
+    ) -> Result<Self, MaterializationError> {
+        let directory = staging.create_execution_directory(run)?;
+        let result = (|| {
+            let runtime = directory.create_directory(Path::new("runtime"))?;
+            let workspace = directory.create_directory(Path::new("workspace"))?;
+            directory.create_directory(Path::new("bindings"))?;
+            let candidate = directory.create_directory(Path::new("candidate"))?;
+            let preparation =
+                super::capture::CapturePreparation::new(p, staging, run, plan, &candidate)
+                    .map_err(MaterializationError::Capture)?;
+            for file in plan.runtime_content() {
+                materialize_runtime_file(p, run, &directory, file)?;
+            }
+            let mut bindings = Vec::new();
+            for binding in preparation.active() {
+                let (path, mut file) =
+                    directory.create_file(&Path::new("bindings").join(binding.input.as_str()))?;
+                preparation
+                    .copy_binding(binding, &mut file)
+                    .map_err(MaterializationError::Capture)?;
+                file.flush()?;
+                drop(file);
+                let mut permissions = fs::metadata(&path)?.permissions();
+                permissions.set_readonly(true);
+                fs::set_permissions(&path, permissions)?;
+                bindings.push(json!({"handle":random_handle()?,"input_id":binding.input.as_str(),"role":"active","readonly_path":host_path(&path)?}));
+            }
+            let (program, mut arguments) = launch_command(plan.launch(), &runtime);
+            arguments.extend(plan.hook().args.iter().cloned());
+            let session_id = random_handle()?;
+            let parameters = plan
+                .parameters()
+                .iter()
+                .map(|p| {
+                    Ok(json!({"parameter_id":p.id.as_str(),"value":parameter_value(p.value())?}))
+                })
+                .collect::<Result<Vec<_>, MaterializationError>>()?;
+            let session = json!({"type":"session_start","protocol_version":1,"session_id":session_id,"run_id":run.to_string(),
+                "revision":{"package_id":plan.operation().revision().package_id.to_string(),"revision_content_digest":plan.operation().revision().content_digest.to_string()},
+                "parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},
+                "operation":{"kind":"snapshot_capture","access":access_name(plan.access()),"bindings":bindings,"candidate":{"handle":random_handle()?,"root_path":host_path(&candidate)?}}});
+            super::protocol::validate_session_frame(&session)?;
+            Ok((preparation, program, arguments, session_id, session))
+        })();
+        match result {
+            Ok((capture, program, arguments, session_id, session)) => Ok(Self {
+                directory,
+                outputs: Vec::new(),
+                program,
+                arguments,
+                session_id,
+                session,
+                operation: super::protocol::SessionOperation::Capture,
+                terminal: plan.hook().io.terminal,
+                capture: Some(capture),
+            }),
+            Err(error) => {
+                let _ = directory.cleanup();
+                Err(error)
+            }
+        }
+    }
+    pub(super) fn operation(&self) -> super::protocol::SessionOperation {
+        self.operation
+    }
+    pub(super) fn cleanup_unlaunched(&self) {
+        let _ = self.directory.cleanup();
+    }
+    pub(super) fn terminal(&self) -> TerminalContractV1 {
+        self.terminal
+    }
+    pub(super) fn take_capture(&mut self) -> Option<super::capture::CapturePreparation> {
+        self.capture.take()
     }
 
     pub(super) fn program(&self) -> &Path {
@@ -224,8 +398,26 @@ impl MaterializedAction {
     }
 }
 
+fn materialize_restore_blob(
+    p: &PactrunPersistence,
+    run: crate::domain::RunId,
+    directory: &ExecutionDirectory,
+    relative: &Path,
+    digest: &crate::domain::Sha256Digest,
+) -> Result<PathBuf, MaterializationError> {
+    let (path, mut file) = directory.create_file(relative)?;
+    p.copy_admitted_restore_blob(run, digest, &mut file)?;
+    file.flush()?;
+    drop(file);
+    let mut permissions = fs::metadata(&path)?.permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions)?;
+    Ok(path)
+}
+
 #[derive(Debug)]
 pub(super) enum MaterializationError {
+    Capture(super::capture::CaptureError),
     Io(io::Error),
     Staging(StagingError),
     Persistence(PersistenceError),

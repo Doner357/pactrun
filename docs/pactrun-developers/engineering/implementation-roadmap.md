@@ -57,9 +57,10 @@ is Frozen.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
 - [PersistenceSchemaV4](../architecture/persistence-schema-v4.md), introduced
-  by M3 Slice 2, is the current implemented internal persistence schema. It
-  preserves the earlier metadata, Instance, and binding contracts and remains
-  non-Frozen and non-public.
+  by M3 Slice 2, is the integrated `develop` persistence baseline. The M4 feature
+  branch now implements [PersistenceSchemaV5](../architecture/persistence-schema-v5.md)
+  with explicit writable admission and exact V4 bootstrap. V5 preserves the
+  earlier contracts and is not yet integrated into `develop`.
 - The M3 Action execution scope and dependency review is complete. M3 is
   `Complete`, with Slices 1 through 6 integrated into `develop`, including the
   Action Hook runtime, Slice 5's crate-private managed-output/finalization
@@ -95,7 +96,7 @@ milestone state taxonomy above:
 | PersistenceSchemaV3 internal contract | **Closed.** |
 | M3 Action execution scope and dependency review | **Closed.** |
 | PersistenceSchemaV4 internal contract | **Closed.** |
-| M3 exact new CLI spelling | **Required before M3 completion.** |
+| M3 exact new CLI spelling | **Closed.** Defined by `PR-REQ-0284` and its verification. |
 
 The ServiceStorage architecture correction, ServiceStorage semantic closure,
 and non-identity metadata persistence closure are integrated into the canonical
@@ -588,7 +589,32 @@ Completion gate:
 
 ### M4 - Snapshot lifecycle
 
-**State: Proposed.**
+**State: Implemented on feature branch; acceptance gate reported at delivery;
+authorized integration into develop pending. Not marked Complete.**
+
+The approved [M4 baseline](../architecture/m4-snapshot-lifecycle-approval-baseline.md)
+and [slice execution record](./m4-implementation-status.md) govern work on
+`feature/m4-snapshot-lifecycle`. S0 contracts and the S1 production V1/V2 codecs
+are implemented on that feature branch; V2 has passed its independent format
+conformance/freeze gate. S2 V5 persistence, writer admission, consequence
+counters, and explicit legacy bootstrap are implemented on the same feature
+branch. S3 Snapshot storage, bounded bundle handling, and application services
+are also implemented on that branch. S4 now includes read-only Snapshot
+compilation, parameter/runtime qualification, typed acceptance, Capture/Restore
+Admission, complete registry/strong Snapshot pins and dual tokens, and the shared
+one-shot owner-continuation substrate with real-process arbitration/reconciliation
+coverage. S5 implements the shared Frozen Capture protocol and managed Capture
+execution/publication, including complete pins, bounded submitted-content
+acquisition and atomic V2 results. Final-tree verification is reported with the
+S5 delivery. S6 adds Frozen Restore content authority, staged bindings, complete
+replacement and dual-token-guarded atomic success/guard resolution, with
+final-tree verification reported at delivery. S7 wires the public Snapshot CLI
+and operation-neutral Run inspection, with fresh-process V1/V2 service-content
+journeys. S8 adds the bounded integration audit, legacy requirement traceability,
+actual ZIP64 size/offset and lifecycle checks, and final platform validation.
+This does not claim completed M4
+integration. V2 integrity, bundle V1, V5 persistence, and fixed capabilities
+retain independent versions.
 
 Implement Capture binding-view consistency, `SnapshotCandidate` validation and
 commit, complete managed binding state, canonical integrity, sensitive

@@ -10,8 +10,12 @@ mod domain;
 mod executor;
 mod hook;
 mod managed_data;
+mod opened_files;
+mod output_publication;
 mod persistence;
 mod revision_core_v1;
+mod snapshot_bundle;
+mod snapshot_integrity;
 mod strict_json;
 mod workflow;
 

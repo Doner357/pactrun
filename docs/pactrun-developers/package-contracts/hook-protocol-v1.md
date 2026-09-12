@@ -68,7 +68,7 @@ wire contract. The separate Pack-facing runtime discovery ABI is defined by
 [PR-REQ-0280](./hooks-recovery-and-cleanup.md#pr-req-0280---hook-protocol-runtime-transport-discovery);
 it selects this stream without changing Frozen V1 bytes or messages.
 
-**Verification: PR-TEST-0020, PR-TEST-0031, PR-TEST-0093.**
+**Verification: PR-TEST-0020, PR-TEST-0031, PR-TEST-0093, PR-TEST-0244.**
 
 ### PR-REQ-0206 - Strict JSON message profile
 
@@ -86,7 +86,7 @@ arrays retain order. Negative conformance fixtures SHOULD isolate one fault.
 Unless this specification explicitly says otherwise, a multi-fault message
 does not establish a stable global first-error precedence.
 
-**Verification: PR-TEST-0021, PR-TEST-0093.**
+**Verification: PR-TEST-0021, PR-TEST-0093, PR-TEST-0242, PR-TEST-0244.**
 
 ### PR-REQ-0207 - Exact version confirmation
 
@@ -267,7 +267,7 @@ ACLs. Active and retained remain roles over one `ManagedInputBindings` registry.
 
 Binding arrays are semantic sets unique and sorted by `(role, input_id)`.
 
-**Verification: PR-TEST-0026, PR-TEST-0094.**
+**Verification: PR-TEST-0026, PR-TEST-0094, PR-TEST-0257, PR-TEST-0258, PR-TEST-0261.**
 
 ### PR-REQ-0212 - Managed output authorities and completion
 
@@ -362,7 +362,12 @@ which MAY be empty because Frozen Snapshot semantics permit an empty service
 content closure. Empty service content does not remove separately managed
 Snapshot binding state.
 
-**Verification: PR-TEST-0029, PR-TEST-0031.**
+**Verification: PR-TEST-0029, PR-TEST-0031, PR-TEST-0242, PR-TEST-0243, PR-TEST-0245, PR-TEST-0250, PR-TEST-0256, PR-TEST-0257, PR-TEST-0258, PR-TEST-0261, PR-TEST-0265, PR-TEST-0266, PR-TEST-0268, PR-TEST-0269.**
+
+S5 protocol coverage exercises the runtime decoder against the unchanged Frozen
+Capture transcripts and a real private pipe/socket peer that writes explicitly
+submitted candidate bytes. This is not yet managed Capture materialization,
+safe filesystem acquisition, digest computation, or Snapshot publication.
 
 ## Diagnostics, recovery, and completion
 
@@ -447,8 +452,7 @@ crash boundaries for Action execution are an M3 responsibility under
 PR-REQ-0055 and PR-REQ-0056 and require M3 persistence and runtime integration
 tests; M6 generalizes them to later managed-execution types.
 
-**Verification: PR-TEST-0028, PR-TEST-0093, PR-TEST-0156, PR-TEST-0159,
-PR-TEST-0173.**
+**Verification: PR-TEST-0028, PR-TEST-0093, PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0243, PR-TEST-0248, PR-TEST-0253, PR-TEST-0260.**
 
 ### PR-REQ-0216 - Operation completion and terminal states
 
@@ -513,9 +517,7 @@ failure before accepted completion prevents protocol success. Their Run and
 Instance consequences remain Pactrun-owned and depend on the durable risk state;
 Pactrun MUST NOT infer replay or compensation.
 
-**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093,
-PR-TEST-0097, PR-TEST-0152, PR-TEST-0153, PR-TEST-0169, PR-TEST-0170,
-PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
+**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093, PR-TEST-0097, PR-TEST-0152, PR-TEST-0153, PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177, PR-TEST-0242, PR-TEST-0243, PR-TEST-0245, PR-TEST-0248, PR-TEST-0260.**
 
 ### PR-REQ-0217 - Local protocol errors and ownership
 

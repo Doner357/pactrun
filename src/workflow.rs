@@ -92,9 +92,35 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
         .runtime_content
         .files()
         .to_vec();
-    let launch = match &action.hook.launch {
+    let launch = compile_hook_launch(
+        launcher_lookup,
+        &action.hook,
+        &runtime_content,
+        launcher_search_directories,
+    )?;
+    let facts = CompilationFacts {
+        instance: observation.instance,
+        observed_state_version: observation.state_version,
+        active_revision: observation.active_revision,
+        active_bindings: observation.active_bindings,
+        required_inputs_satisfied: observation.required_inputs_satisfied,
+        action,
+        parameters: intent.parameters.clone(),
+        runtime_content,
+        launch,
+    };
+    Ok(build_action_plan(intent, facts)?)
+}
+
+fn compile_hook_launch<L: HostLauncherLookup>(
+    launcher_lookup: &L,
+    hook: &crate::domain::HookV1,
+    runtime_content: &[RuntimeFileV1],
+    launcher_search_directories: &[PathBuf],
+) -> Result<CompiledHookLaunch, PlanCompilationError> {
+    Ok(match &hook.launch {
         HookLaunchV1::Direct { executable } => {
-            let executable = runtime_file(&runtime_content, executable)?;
+            let executable = runtime_file(runtime_content, executable)?;
             CompiledHookLaunch::Direct { executable }
         }
         HookLaunchV1::Interpreter {
@@ -111,22 +137,45 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
                     resolved_absolute_path,
                 },
                 interpreter_args: interpreter_args.clone(),
-                script: runtime_file(&runtime_content, script)?,
+                script: runtime_file(runtime_content, script)?,
             }
         }
-    };
-    let facts = CompilationFacts {
-        instance: observation.instance,
-        observed_state_version: observation.state_version,
-        active_revision: observation.active_revision,
-        active_bindings: observation.active_bindings,
-        required_inputs_satisfied: observation.required_inputs_satisfied,
-        action,
-        parameters: intent.parameters.clone(),
-        runtime_content,
+    })
+}
+
+pub(crate) trait SnapshotCompilationRepository {
+    fn observe_snapshot_compilation(
+        &self,
+        intent: &crate::domain::SnapshotIntent,
+    ) -> Result<crate::domain::SnapshotCompilationObservation, PersistenceError>;
+}
+impl SnapshotCompilationRepository for crate::application::PactrunApplication {
+    fn observe_snapshot_compilation(
+        &self,
+        intent: &crate::domain::SnapshotIntent,
+    ) -> Result<crate::domain::SnapshotCompilationObservation, PersistenceError> {
+        crate::application::PactrunApplication::observe_snapshot_compilation(self, intent)
+    }
+}
+pub(crate) fn compile_snapshot<R: SnapshotCompilationRepository, L: HostLauncherLookup>(
+    repository: &R,
+    launcher: &L,
+    intent: &crate::domain::SnapshotIntent,
+    directories: &[PathBuf],
+) -> Result<crate::domain::SnapshotExecutionPlan, crate::application::ApplicationError> {
+    let observation = repository.observe_snapshot_compilation(intent)?;
+    let (_, hook) = crate::domain::snapshot_hook(&observation.revision.core, intent.operation)?;
+    let launch = compile_hook_launch(
+        launcher,
+        hook,
+        observation.revision.runtime_content.files(),
+        directories,
+    )?;
+    Ok(crate::domain::build_snapshot_plan(
+        intent,
+        observation,
         launch,
-    };
-    Ok(build_action_plan(intent, facts)?)
+    )?)
 }
 
 fn runtime_file(

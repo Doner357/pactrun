@@ -220,8 +220,13 @@ MUST NOT infer resolution by running an Action with a particular name.
 ### PR-REQ-0070 - Automatic recovery resolution
 
 A successful ordinary Action, Capture, or Migration performed with an override
-MUST NOT automatically clear manual recovery. A successful exact-compatible
-Snapshot Restore MAY clear it. Successful Instance deletion removes the object.
+MUST NOT automatically clear manual recovery. A successfully committed
+exact-compatible Snapshot Restore with Clear recovery risk MUST clear an
+existing manual-recovery guard in the same authoritative terminal transaction,
+subject to the publication checks in
+[PR-REQ-0291](./m4-snapshot-lifecycle-approval-baseline.md#pr-req-0291---restore-authority-and-guarded-publication).
+A failed, cancelled, timed-out, or interrupted Restore MUST NOT clear a
+pre-existing guard. Successful Instance deletion removes the object.
 
 **Verification: Pending automated coverage.**
 

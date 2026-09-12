@@ -656,19 +656,32 @@ if pid == 0:
     os.environ['PACTRUN_E2E_CANCEL_ACK'] = cancel_ack
     os.execv(cli, [cli, 'invoke', 'node', 'interactive', '--termination-grace-ms', '50'])
 
+pending = b''
 def wait_for(needle):
-    data = b''
-    deadline = time.time() + 30
-    while needle not in data:
-        if time.time() >= deadline:
-            raise RuntimeError('PTY timeout waiting for ' + repr(needle) + ': ' + repr(data))
+    global pending
+    deadline = time.monotonic() + 30
+    while needle not in pending:
+        if time.monotonic() >= deadline:
+            raise RuntimeError('PTY timeout waiting for ' + repr(needle) + ': ' + repr(pending))
         ready, _, _ = select.select([fd], [], [], 0.1)
         if ready:
             try:
-                data += os.read(fd, 4096)
-            except OSError:
-                break
-    return data
+                chunk = os.read(fd, 4096)
+            except OSError as error:
+                raise RuntimeError('PTY closed before ' + repr(needle)) from error
+            if not chunk:
+                raise RuntimeError('PTY EOF before ' + repr(needle))
+            pending += chunk
+    end = pending.index(needle) + len(needle)
+    matched, pending = pending[:end], pending[end:]
+    return matched
+
+# A read may coalesce both readiness lines. Consume only the requested prefix.
+pending = b'FIRST\nSECOND\n'
+assert wait_for(b'FIRST') == b'FIRST'
+assert wait_for(b'SECOND') == b'\nSECOND'
+assert pending == b'\n'
+pending = b''
 
 wait_for(b'E2E_HOOK_READY')
 wait_for(b'E2E_HOOK_DESCENDANT_READY')

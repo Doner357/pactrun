@@ -63,7 +63,7 @@ delete operations for Snapshots. Filtering Snapshots by Instance MUST first
 resolve the live Instance to its exact identity and then filter provenance; it
 MUST NOT imply ownership.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0268.**
 
 ### PR-REQ-0118 - Revision operations
 
@@ -252,7 +252,10 @@ PR-TEST-0165, PR-TEST-0173, PR-TEST-0174.**
 
 ## Remaining open spelling
 
-Exact subcommands and options for Migration, Snapshot, recovery, Instance
+The approved [M4 Snapshot commands](./m4-snapshot-command-reference.md) now
+specify Snapshot and explicit storage-upgrade spelling, implemented on the M4
+feature branch. Snapshot deletion remains excluded from M4. Exact subcommands
+and options for Migration, other recovery, Instance
 deletion, `AbandonManagement`, and other later milestones remain open. Their
 future security-sensitive spellings must preserve PR-REQ-0119. The fixed M2
 profile above MUST NOT be expanded implicitly to fill those later gaps.

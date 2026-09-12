@@ -1,6 +1,7 @@
 //! Application orchestration and dependency-resolution ownership.
 
 mod installation;
+mod snapshots;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -71,6 +72,7 @@ pub(crate) enum ApplicationError {
     Persistence(PersistenceError),
     ActionResolution(ActionResolutionError),
     PlanCompilation(PlanCompilationError),
+    SnapshotCompilation(crate::domain::SnapshotPlanError),
     Execution(ExecutorError),
     InvalidInstallation(String),
     InvalidRequest(String),
@@ -91,6 +93,9 @@ impl fmt::Display for ApplicationError {
             Self::Persistence(source) => write!(formatter, "persistence: {source}"),
             Self::ActionResolution(source) => write!(formatter, "resolution: {source}"),
             Self::PlanCompilation(source) => write!(formatter, "compilation: {source}"),
+            Self::SnapshotCompilation(source) => {
+                write!(formatter, "Snapshot compilation: {source}")
+            }
             Self::Execution(source) => write!(formatter, "execution: {source}"),
             Self::LockPoisoned => formatter.write_str("Instance mutation lock is poisoned"),
         }
@@ -108,6 +113,7 @@ impl std::error::Error for ApplicationError {
             Self::Persistence(source) => Some(source),
             Self::ActionResolution(source) => Some(source),
             Self::PlanCompilation(source) => Some(source),
+            Self::SnapshotCompilation(source) => Some(source),
             Self::Execution(source) => Some(source),
             Self::Configuration(_)
             | Self::InvalidInstallation(_)
@@ -159,6 +165,12 @@ impl From<PlanCompilationError> for ApplicationError {
     }
 }
 
+impl From<crate::domain::SnapshotPlanError> for ApplicationError {
+    fn from(error: crate::domain::SnapshotPlanError) -> Self {
+        Self::SnapshotCompilation(error)
+    }
+}
+
 impl From<ExecutorError> for ApplicationError {
     fn from(source: ExecutorError) -> Self {
         Self::Execution(source)
@@ -166,13 +178,154 @@ impl From<ExecutorError> for ApplicationError {
 }
 pub(crate) struct PactrunApplication {
     persistence: PactrunPersistence,
-    staging: Option<StagingSession>,
     storage_root: std::path::PathBuf,
     continuations: OwnerContinuationRegistry,
     mutation_locks: Mutex<BTreeMap<InstanceId, Arc<Mutex<()>>>>,
 }
 
 impl PactrunApplication {
+    #[cfg(test)]
+    pub(crate) fn execute_capture_with_risk_failures(
+        &self,
+        run: RunId,
+        policy: HookRuntimePolicy,
+        failures: &std::sync::atomic::AtomicUsize,
+    ) -> Result<RunId, ApplicationError> {
+        let claim = self.claim_snapshot_execution(run)?.ok_or_else(|| {
+            ApplicationError::InvalidRequest("Capture was already claimed".to_owned())
+        })?;
+        Ok(crate::hook::execute_capture_with_risk_failures(
+            &self.persistence,
+            self.staging()?,
+            claim,
+            policy,
+            failures,
+        ))
+    }
+    #[allow(dead_code)]
+    pub(crate) fn execute_admitted_capture(
+        &self,
+        run: RunId,
+        policy: HookRuntimePolicy,
+    ) -> Result<RunId, ApplicationError> {
+        self.execute_admitted_snapshot(
+            run,
+            policy,
+            crate::domain::ManagedExecutionKind::SnapshotCapture,
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn execute_admitted_restore(
+        &self,
+        run: RunId,
+        policy: HookRuntimePolicy,
+    ) -> Result<RunId, ApplicationError> {
+        self.execute_admitted_snapshot(
+            run,
+            policy,
+            crate::domain::ManagedExecutionKind::SnapshotRestore,
+        )
+    }
+
+    fn execute_admitted_snapshot(
+        &self,
+        run: RunId,
+        policy: HookRuntimePolicy,
+        kind: crate::domain::ManagedExecutionKind,
+    ) -> Result<RunId, ApplicationError> {
+        let view = self.persistence.load_managed_run(run)?.ok_or_else(|| {
+            ApplicationError::InvalidRequest("Snapshot Run is unavailable".to_owned())
+        })?;
+        if view.operation.kind() != kind {
+            return Err(ApplicationError::InvalidRequest(
+                "Run has a different Snapshot operation kind".to_owned(),
+            ));
+        }
+        if !self.execute_snapshot_if_ready(run, policy)? {
+            return Err(ApplicationError::InvalidRequest(
+                "Snapshot execution is not ready or was already claimed".to_owned(),
+            ));
+        }
+        Ok(run)
+    }
+
+    pub(crate) fn execute_snapshot_if_ready(
+        &self,
+        run: RunId,
+        policy: HookRuntimePolicy,
+    ) -> Result<bool, ApplicationError> {
+        for duration in [
+            policy.startup_timeout,
+            policy.action_timeout,
+            policy.termination_grace,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if duration.as_millis() > i64::MAX as u128
+                || std::time::Instant::now().checked_add(duration).is_none()
+            {
+                return Err(ApplicationError::InvalidRequest(
+                    "Snapshot deadline is not representable".to_owned(),
+                ));
+            }
+        }
+        let Some(claim) = self.claim_snapshot_execution(run)? else {
+            return Ok(false);
+        };
+        crate::hook::execute_snapshot(&self.persistence, self.staging()?, claim, policy);
+        Ok(true)
+    }
+    // Private S4 executor seams; human Snapshot dispatch is wired in S7.
+    #[allow(dead_code)]
+    pub(crate) fn accept_snapshot_plan(
+        &self,
+        plan: crate::domain::SnapshotExecutionPlan,
+        options: AdmissionOptions,
+        cancellation: ActionCancellation,
+    ) -> Result<RunId, ApplicationError> {
+        let lock = self.mutation_lock(plan.instance())?;
+        let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+        Ok(crate::hook::accept_snapshot(
+            &self.persistence,
+            self.staging()?,
+            &self.continuations,
+            plan,
+            options,
+            cancellation,
+        )?)
+    }
+    #[allow(dead_code)]
+    pub(crate) fn claim_snapshot_execution(
+        &self,
+        run: RunId,
+    ) -> Result<Option<crate::hook::SnapshotExecutionClaim<'_>>, ApplicationError> {
+        Ok(crate::hook::claim_snapshot(
+            &self.persistence,
+            self.staging()?,
+            &self.continuations,
+            run,
+        )?)
+    }
+    #[allow(dead_code)]
+    pub(crate) fn stop_snapshot_before_launch(
+        &self,
+        run: RunId,
+        finish: RunFinish,
+    ) -> Result<bool, ApplicationError> {
+        Ok(crate::hook::stop_snapshot_before_launch(
+            &self.continuations,
+            run,
+            finish,
+        )?)
+    }
+    pub(crate) fn observe_snapshot_compilation(
+        &self,
+        intent: &crate::domain::SnapshotIntent,
+    ) -> Result<crate::domain::SnapshotCompilationObservation, PersistenceError> {
+        self.persistence.observe_snapshot_compilation(intent)
+    }
     pub(crate) fn open(storage_root: impl AsRef<Path>) -> Result<Self, ApplicationError> {
         let requested = storage_root.as_ref();
         if requested.as_os_str().is_empty() || !requested.is_absolute() {
@@ -186,11 +339,9 @@ impl PactrunApplication {
             validate_supported_storage_root(&root.join(child))
                 .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
         }
-        let staging = StagingSession::open(&root)?;
         let persistence = PactrunPersistence::open(&root)?;
         Ok(Self {
             persistence,
-            staging: Some(staging),
             storage_root: root,
             continuations: OwnerContinuationRegistry::default(),
             mutation_locks: Mutex::new(BTreeMap::new()),
@@ -216,7 +367,6 @@ impl PactrunApplication {
         let persistence = PactrunPersistence::open_read_only(&root)?;
         Ok(Self {
             persistence,
-            staging: None,
             storage_root: root,
             continuations: OwnerContinuationRegistry::default(),
             mutation_locks: Mutex::new(BTreeMap::new()),
@@ -224,7 +374,7 @@ impl PactrunApplication {
     }
 
     fn staging(&self) -> Result<&StagingSession, ApplicationError> {
-        self.staging.as_ref().ok_or_else(|| {
+        self.persistence.staging_session().ok_or_else(|| {
             ApplicationError::InvalidRequest(
                 "this operation requires a writable Pactrun opening".to_owned(),
             )
@@ -701,10 +851,7 @@ impl PactrunApplication {
     /// disappears and the staging lease is released without cleanup.
     #[cfg(test)]
     pub(crate) fn abandon_execution_owner(self) {
-        let Self { staging, .. } = self;
-        staging
-            .expect("test owner abandonment requires writable opening")
-            .abandon();
+        self.persistence.abandon_execution_owner();
     }
 
     #[allow(dead_code)]
@@ -742,6 +889,15 @@ impl PactrunApplication {
         let Some(guard) = self.continuations.take(run) else {
             return Ok(false);
         };
+        if let Some(instance) = guard.snapshot_instance() {
+            let lock = self.mutation_lock(instance)?;
+            let _mutation = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
+            return Ok(crate::hook::advance_owner_continuation(
+                &self.persistence,
+                self.staging()?,
+                guard,
+            )?);
+        }
         Ok(crate::hook::advance_owner_continuation(
             &self.persistence,
             self.staging().expect("execution requires writable opening"),
@@ -753,7 +909,11 @@ impl PactrunApplication {
     /// lost. An inconclusive probe is left untouched for a later scan.
     #[allow(dead_code)]
     pub(crate) fn reconcile_lost_action_owners(&self) -> Result<Vec<RunId>, ApplicationError> {
-        let candidates = self.persistence.list_running_action_runs()?;
+        self.reconcile_lost_managed_owners()
+    }
+
+    pub(crate) fn reconcile_lost_managed_owners(&self) -> Result<Vec<RunId>, ApplicationError> {
+        let candidates = self.persistence.list_running_managed_runs()?;
         let mut reconciled = Vec::new();
         for (instance, run, owner) in candidates {
             if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {
@@ -764,7 +924,7 @@ impl PactrunApplication {
             if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {
                 continue;
             }
-            if self.persistence.reconcile_action_run(run, &owner)? {
+            if self.persistence.reconcile_managed_run(run, &owner)? {
                 reconciled.push(run);
                 let _ = cleanup_lost_session(&self.storage_root, &owner);
             }
@@ -791,8 +951,8 @@ impl PactrunApplication {
     /// The execution owner identity this process records on accepted Runs.
     #[allow(dead_code)]
     pub(crate) fn execution_owner(&self) -> ExecutionOwnerSession {
-        self.staging
-            .as_ref()
+        self.persistence
+            .staging_session()
             .expect("execution owner requires writable opening")
             .owner()
     }
