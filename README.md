@@ -4,16 +4,18 @@ Pactrun is a local-first package management and execution product implemented in
 Rust. The repository uses a modular-monolith architecture. Canonical `develop`
 contains the completed M1 persistence foundations, the integrated M2 Pack
 installation, Instance, and Managed Input binding implementation, and completed
-M3 Action execution with Slices 1 through 6 integrated. The Rust application,
+M3 Action execution with Slices 1 through 6 integrated, and completed M4 Snapshot
+lifecycle with Slices S0 through S8 integrated. The Rust application,
 domain, and repository surfaces remain internal and do not constitute a stable
 public Rust API.
 
-The `feature/m4-snapshot-lifecycle` working tree adds the complete approved M4
-Capture, Restore, Snapshot inspection/verification and bundle CLI implementation.
+M4 provides Capture, Restore, Snapshot inspection/verification and the bundle CLI
+on the integrated PersistenceSchemaV5 baseline. New Capture writes integrity V2;
+Import, Verify, Export and exact-compatible Restore preserve V1/V2 semantics.
 See the [M4 execution and acceptance record](docs/pactrun-developers/engineering/m4-implementation-status.md)
 and [Snapshot commands](docs/pactrun-developers/product-behavior/m4-snapshot-command-reference.md).
-This does not claim that those changes have been committed or integrated into
-`develop`, or that Snapshot deletion or later lifecycle features are implemented.
+Snapshot deletion and later lifecycle features remain outside the approved M4
+scope. Git integration is not a release or a public documentation deployment.
 
 ## Repository layout
 

@@ -4,8 +4,8 @@ title: Persistence Schema V5
 
 # Persistence Schema V5
 
-**Status: Implemented normative internal schema on the M4 feature branch;
-non-Frozen and non-public. Snapshot execution remains later-slice work.**
+**Status: Implemented normative internal schema, integrated into develop with
+M4 Snapshot execution; non-Frozen and non-public.**
 
 ### PR-REQ-0298 - Exact PersistenceSchemaV5
 

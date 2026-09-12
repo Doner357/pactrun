@@ -33,8 +33,9 @@ implemented internal
 M2 contract. M2 is integrated into `develop`. The implemented internal
 [Persistence Schema V4](../architecture/persistence-schema-v4.md) extends V3
 with M3 Slice 2 Runs, durable pins, Action recovery state, ownership, and Run
-Artifacts and is the current implemented internal schema while remaining
-non-Frozen and non-public.
+Artifacts. The integrated M4 [Persistence Schema V5](../architecture/persistence-schema-v5.md)
+preserves that contract and is now the current internal schema, still non-Frozen
+and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](../architecture/m3-action-execution-approval-baseline.md).
@@ -51,6 +52,13 @@ owner-held foreground cancellation, and explicit owner-loss/manual-recovery
 operations. These additions remain crate-private and do not add a public API,
 stable JSON envelope, V5 schema, or Frozen wire change; the result is integrated
 into `develop`.
+
+M4 is also complete and integrated: it adds the Snapshot lifecycle and human CLI,
+Frozen integrity V2 current-writer/backward-reader support, bounded bundle V1,
+exact V5 bootstrap/writable admission and the guarded Restore publication path.
+See the [M4 execution record](./m4-implementation-status.md) for integration and
+verification evidence. These additions do not implement Snapshot deletion,
+ServiceStorage runtime, a public Rust API or stable machine-output envelopes.
 
 ## Implementation decisions
 

@@ -4,8 +4,8 @@ title: M4 Snapshot Commands
 
 # M4 Snapshot Commands
 
-**Status: Approved normative CLI, implemented on the M4 feature branch.
-Final-tree verification is recorded with the slice delivery.**
+**Status: Approved normative CLI, implemented and integrated into develop.
+Verification and milestone integration are recorded in the M4 execution record.**
 
 ### PR-REQ-0301 - M4 human command spelling
 

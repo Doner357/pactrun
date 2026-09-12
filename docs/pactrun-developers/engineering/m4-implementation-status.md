@@ -4,26 +4,28 @@ title: M4 Implementation Status
 
 # M4 Implementation Status
 
-**Status: Informative execution record. Capture and Restore runtime are
-implemented with the human Snapshot CLI on the feature branch. The acceptance
-gate is reported with delivery; authorized develop integration remains pending.
-M4 is not marked Complete before that integration.**
+**Status: Complete. The approved M4 scope is implemented, verified and integrated
+into develop. This is a milestone closeout, not a release or Pages deployment.**
 
-The approved work starts from `b78c02310facd0f460f9099580051776a4ba5a77`
-on `feature/m4-snapshot-lifecycle`. No commit, push, merge, or Pages deployment
-is authorized by this record.
+The approved work started from `b78c02310facd0f460f9099580051776a4ba5a77`
+on `feature/m4-snapshot-lifecycle`. The user subsequently authorized M4 closeout
+and Git integration. Implementation commit
+`5a113b069bdce74ecb96b45b83748575891c1735` was integrated by no-fast-forward merge
+`9b1fa8fc781c1941b02ccc4786ea2085d00a004c` on September 12, 2026. The retained
+feature branch records the implementation; develop is the integrated baseline.
+No push, release tag, feature-branch deletion or Pages deployment is included.
 
 | Slice | State | Completion evidence |
 | --- | --- | --- |
-| S0 normative contracts, exact DDL, traceability | Written; no runtime completion claim | Approved contracts; PR-TEST-0182/0183 execute target DDL without enabling V5 |
-| S1 Snapshot domain and V2 conformance | Implemented on feature branch; V2 Frozen | Typed manifests, versioned codecs, streamed content checks, 15 valid/32 invalid V2 vectors, independent Node 24 oracle, and ten production conformance tests |
-| S2 V5, writable admission, legacy bootstrap | Implemented on feature branch; final-tree verification reported with delivery | PR-TEST-0195 through PR-TEST-0205 cover version gates, writer leases, multi-process TOCTOU, crash boundaries, orphan preservation, counters, operation kinds, and explicit storage upgrade |
-| S3 Snapshot storage and bundle | Implemented on feature branch; final-tree verification reported with delivery | PR-TEST-0206 through PR-TEST-0219 cover bounded ZIP/ZIP64, exact closure, original-version round trips, private authorization/publication, rollback/crash, and real large payloads |
-| S4 ManagedExecution substrate | Implemented on feature branch; final-tree verification reported with delivery | PR-TEST-0220 through PR-TEST-0241 cover read-only compilation, typed parameters/runtime qualification, real Capture/Restore Admission and pins, shared one-shot owner continuations, process races/crashes, and explicit reconciliation; Hook/result boundaries below |
-| S5 Capture runtime | Implemented on feature branch; final-tree verification reported with delivery | PR-TEST-0242 through PR-TEST-0256 cover Frozen protocol, real Observe/Mutate Capture, pinned complete registry, submitted-source acquisition, atomic V2 publication, stable timestamp/identity on retry, greater-than-512-MiB content, risk acknowledgment and owner-loss/commit crashes |
-| S6 Restore runtime | Implemented on feature branch; final-tree verification reported with delivery | PR-TEST-0257 through PR-TEST-0267 cover Frozen readonly authority, real V1/V2 Restore, complete replacement, dual-token conflicts, guard resolution, publication rollback, process loss/crashes and large service-content materialization |
-| S7 human CLI | Implemented; self-review and final-tree gate recorded with delivery | PR-TEST-0268 through PR-TEST-0273 cover public V1/V2 journeys, exact command spelling, source/target separation, read-only planning/verification, redaction, live inspection/reconciliation and owner retention with broken diagnostics |
-| S8 integration closeout | Bounded audit and corrections implemented; final-tree gate reported with delivery | PR-TEST-0274/0275/0276 strengthen public compatibility/capability/source-safety, actual captured-object lifetime and greater-than-u32 ZIP64 profile evidence; scope and platform report below |
+| S0 normative contracts, exact DDL, traceability | Complete; integrated into develop | Approved contracts; PR-TEST-0182/0183 execute target DDL without enabling V5 |
+| S1 Snapshot domain and V2 conformance | Complete; integrated into develop; V2 Frozen | Typed manifests, versioned codecs, streamed content checks, 15 valid/32 invalid V2 vectors, independent Node 24 oracle, and ten production conformance tests |
+| S2 V5, writable admission, legacy bootstrap | Complete; integrated into develop | PR-TEST-0195 through PR-TEST-0205 cover version gates, writer leases, multi-process TOCTOU, crash boundaries, orphan preservation, counters, operation kinds, and explicit storage upgrade |
+| S3 Snapshot storage and bundle | Complete; integrated into develop | PR-TEST-0206 through PR-TEST-0219 cover bounded ZIP/ZIP64, exact closure, original-version round trips, private authorization/publication, rollback/crash, and real large payloads |
+| S4 ManagedExecution substrate | Complete; integrated into develop | PR-TEST-0220 through PR-TEST-0241 cover read-only compilation, typed parameters/runtime qualification, real Capture/Restore Admission and pins, shared one-shot owner continuations, process races/crashes, and explicit reconciliation; Hook/result boundaries below |
+| S5 Capture runtime | Complete; integrated into develop | PR-TEST-0242 through PR-TEST-0256 cover Frozen protocol, real Observe/Mutate Capture, pinned complete registry, submitted-source acquisition, atomic V2 publication, stable timestamp/identity on retry, greater-than-512-MiB content, risk acknowledgment and owner-loss/commit crashes |
+| S6 Restore runtime | Complete; integrated into develop | PR-TEST-0257 through PR-TEST-0267 cover Frozen readonly authority, real V1/V2 Restore, complete replacement, dual-token conflicts, guard resolution, publication rollback, process loss/crashes and large service-content materialization |
+| S7 human CLI | Complete; integrated into develop | PR-TEST-0268 through PR-TEST-0273 cover public V1/V2 journeys, exact command spelling, source/target separation, read-only planning/verification, redaction, live inspection/reconciliation and owner retention with broken diagnostics |
+| S8 integration closeout | Complete; integrated into develop | PR-TEST-0274/0275/0276 strengthen public compatibility/capability/source-safety, actual captured-object lifetime and greater-than-u32 ZIP64 profile evidence; scope and platform report below |
 
 Validation applies only to the exact tested workspace state. Pending runtime
 coverage is not evidence of implementation. Keep requirements covering later
@@ -161,9 +163,8 @@ Snapshot. S5/S6 attach actual Frozen Snapshot sessions, materialization, candida
 handling and atomic success publication; S7 attaches human CLI commands. The
 generic finalizer still refuses Snapshot Succeeded without the dedicated result
 publisher. These are the original slice boundaries, not deferred S4 work or a
-new locking/recovery authority. With the S5 implementation below, M4 remains
-not marked Complete until final acceptance and authorized
-integration into develop are completed.
+new locking/recovery authority. Final acceptance and the subsequently authorized
+integration into develop have now completed; the milestone is Complete.
 
 1. S0: review the exact DDL and normative links; verify traceability and docs.
 2. S1: typed V1/V2 production manifests/codecs, strict parsing, independent
@@ -396,10 +397,31 @@ remain deferred. PR-REQ-0239's M4 selection/no-scan rule is covered without
 claiming a ServiceStorage resource execution implementation. Other later-stage
 requirements remain pending, not silently completed by this acceptance record.
 
-All code remains in the unstaged feature-branch working tree. No commit, push,
-merge, release or public documentation deployment is authorized. Once final
-acceptance passes, the remaining milestone step is explicit authorization and
-integration into develop; only then may M4 be marked Complete.
+The user authorized the previously pending local Git integration. M4 code,
+specifications, vectors, traceability and tests are committed and merged into
+develop. The implementation feature branch is retained. No Git remote is
+configured, and no push, release or public documentation deployment was made.
+
+### Git integration and acceptance ledger
+
+| Item | Result |
+| --- | --- |
+| Pre-M4 develop baseline | `b78c02310facd0f460f9099580051776a4ba5a77` |
+| Implementation commit | `5a113b069bdce74ecb96b45b83748575891c1735` (`feat(snapshot): implement M4 snapshot lifecycle`) |
+| Integration merge | `9b1fa8fc781c1941b02ccc4786ea2085d00a004c` (`--no-ff`, no conflicts) |
+| Integrated implementation tree | `24ed7d1c957efb914d639d5e6f509d6076e7a883`, exactly equal to the feature tree |
+| Pre-integration verified source | SHA-256 `f265a4b22b0b8ac7764cc92f93e552935ae3059b36d7a7d69cbf28250a9c4447`; all 165 source files matched before staging |
+| Reviewed implementation write set | 79 M4 files; unrelated workflow/archive and local agent/SSH state excluded |
+| Native Windows acceptance | Passed: 227 library tests and 44 system tests, suites run sequentially with four outer test threads; case-internal concurrency retained |
+| POSIX acceptance | Passed: full cargo xtask ci, including 222 library tests, 43 system tests, all workspace/Frozen/oracle/traceability checks, documentation typechecking and production build |
+| Closeout document tree | Reverified before its final documentation commit; exact source/archive and results are reported with delivery |
+| Remote push, tag, Pages deployment | Not run; not part of the authorized local integration |
+
+The integration introduced no merge-resolution code changes. This closeout
+updates milestone/current-baseline metadata, preserves the corrected S5 test
+range through PR-TEST-0256 and the closed M3 CLI-spelling gate, and aligns the M3
+heading with its already-Complete baseline. Normative requirements, Frozen
+schemas/vectors and runtime behavior are unchanged by the closeout edits.
 
 ### Final-tree verification
 
@@ -408,12 +430,13 @@ includes all Frozen verifiers, Rust format/Clippy/tests, traceability, website
 typechecking and production docs build. Add V2 conformance without weakening
 any V1 checks. Native Windows process/ACL/atomic-publication tests remain a
 separate required gate. Counter limit-1/limit/limit+1 tests are not evidence
-of streaming or large-object persistence; add real greater-than-512-MiB service
-content and required ZIP64 cases later.
+of streaming or large-object persistence; the completed real greater-than-512-MiB
+service-content and ZIP64 tests are identified in the S8 evidence table above.
 
 Stop on a Frozen conflict, oracle mismatch, inability to prove writer/migration
 TOCTOU closure, unbounded ZIP allocation, unauthorized new semantics, or missing
 mandatory platform verification. Never replace such a blocker with weaker
 tests or guessed recovery. Report the tested source, every validation status,
-remaining work, and retained remote resources. Full M4 completion requires all
-gates and later user-authorized integration into develop.
+remaining exclusions, and retained remote resources. The completion gate and
+user-authorized integration into develop are satisfied; later changes must not
+reuse this acceptance claim without the required final-tree verification.

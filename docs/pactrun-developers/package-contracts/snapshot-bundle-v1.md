@@ -4,8 +4,8 @@ title: Snapshot Bundle V1
 
 # Snapshot Bundle V1
 
-**Status: Normative transport contract. S3 adapter and application services are
-implemented on the M4 feature branch; final verification is reported with delivery.**
+**Status: Normative transport contract. Adapter, application services and human
+CLI are implemented, verified and integrated into develop with M4.**
 
 ### PR-REQ-0292 - Closed Stored-ZIP transport profile
 

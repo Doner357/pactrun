@@ -4,11 +4,12 @@ title: M4 Snapshot Lifecycle Approval Baseline
 
 # M4 Snapshot Lifecycle Approval Baseline
 
-**Status: Approved normative implementation boundary. Runtime implementation
-and verification remain pending unless explicitly linked below.**
+**Status: Approved normative implementation boundary. M4 implementation and
+verification are complete and integrated into develop.**
 
-This baseline authorizes the M4 plan approved on September 11, 2026. It does
-not claim production Snapshot support. See the [execution record](../engineering/m4-implementation-status.md).
+This baseline records the M4 plan approved on September 11, 2026. The completed
+implementation and its bounded coverage are recorded in the
+[execution record](../engineering/m4-implementation-status.md).
 M3 remains integrated; M4 extends its typed modular-monolith substrate without
 a generic workflow engine or a second execution ownership model.
 

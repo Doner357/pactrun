@@ -13,11 +13,12 @@ service-specific behavior to trusted Hooks.
 :::warning Implementation status
 
 The repository uses a Rust modular-monolith architecture. Canonical `develop`
-contains the completed M1 persistence foundations and the integrated M2 Pack
-installation, Instance, and Managed Input binding implementation. M3 Action
-execution is in progress: Slices 1 through 4 are integrated, while managed
-output publication, durable Run finalization, recovery reconciliation, and the
-human CLI remain assigned to Slices 5 and 6. The Pactrun Developer
+contains the completed M1 persistence foundations, M2 Pack installation,
+Instances and Managed Input bindings, M3 Action execution, and M4 Snapshot
+lifecycle. Capture, exact-compatible Restore, Snapshot inspection/verification,
+bundle import/export and explicit storage upgrade are integrated on the V5
+persistence baseline. Snapshot deletion, ServiceStorage runtime and later
+lifecycle operations remain outside M4. The Pactrun Developer
 documentation distinguishes current implementation from planned and deferred
 contracts. Pactrun User and Package Author documentation is reserved for
 completion after the initial release.
