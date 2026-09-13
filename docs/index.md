@@ -3,47 +3,33 @@ title: Pactrun
 slug: /
 ---
 
-# Pactrun
+# Pactrun Spec and Development
 
-Pactrun is a local-first tool for installing immutable package revisions,
-managing long-lived service instances, and running package-defined operations.
-It gives package authors a consistent runtime contract while leaving
-service-specific behavior to trusted Hooks.
+Pactrun's documentation currently focuses on defining the product and enabling
+its implementation. This is not yet a beginner usage manual.
 
-:::warning Implementation status
+## Find the right entry
 
-The repository uses a Rust modular-monolith architecture. Canonical `develop`
-contains the completed M1 persistence foundations, M2 Pack installation,
-Instances and Managed Input bindings, M3 Action execution, and M4 Snapshot
-lifecycle. Capture, exact-compatible Restore, Snapshot inspection/verification,
-bundle import/export and explicit storage upgrade are integrated on the V5
-persistence baseline. Snapshot deletion, ServiceStorage runtime and later
-lifecycle operations remain outside M4. The Pactrun Developer
-documentation distinguishes current implementation from planned and deferred
-contracts. Pactrun User and Package Author documentation is reserved for
-completion after the initial release.
+- **Understand the contracts:** [Pactrun Spec](./spec/index.md).
+- **Find a term or a contract:** [vocabulary](./spec/glossary.md) and [catalog](./spec/catalog.md).
+- **Start a development task:** [Development](./development/index.md) and [task reading paths](./development/reading-paths.md).
+- **Continue the roadmap:** [current baseline and M5 handoff](./development/next-milestone.md).
+- **Review this migration:** [scope and preservation evidence](./development/spec-migration-review.md).
 
-:::
+## One specification
 
-## Start here
+Normative text under Spec defines product behavior. Development guides explain
+how to work from those rules. The roadmap records work order, and implementation
+records describe completed work; neither independently defines behavior.
+Old document paths remain compatibility entries. Website and text publications
+are copies of the same English source, not separate specifications.
 
-- [Introduction](./introduction.md) provides a short product tour and shared
-  vocabulary.
-- [Pactrun Developers](./pactrun-developers/architecture/system-model.md) covers
-  domain invariants, product behavior, Package contracts, execution,
-  persistence, recovery, and engineering policy.
-- [Pactrun Users](./pactrun-users/concepts/packages-revisions-and-instances.md)
-  is a planned guide to managed resources and user-visible operations.
-- [Package Authors](./package-authors/fundamentals/authoring-model.md) is a
-  planned authoring and integration guide.
+## Usage guides come later
 
-## Documentation authority
+[User and Pack author guides](./guides/index.md) retain their places but do not
+provide instructions yet. We will complete them in a separate documentation
+phase rather than making beginners learn the implementation model first.
 
-The English Markdown under `docs/` is the canonical semantic source. The
-Docusaurus site is a presentation of those files, not another specification.
-Future Traditional Chinese (`zh-Hant`) documentation may translate this source,
-but a translation will not independently define Pactrun behavior.
-
-Developer pages identify their content as normative, informative, or
-implementation guidance. Public role guides will summarize observable behavior
-without exposing internal requirement or test traceability.
+The documentation migration does not announce a release, implement M5, or add
+new agent runtime APIs. Check the development handoff before assuming a specified
+capability is available.

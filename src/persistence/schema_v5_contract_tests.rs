@@ -9,8 +9,7 @@ use super::sqlite_revision_store::{
     SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL, SCHEMA_V3_ADDITIONS_SQL, SCHEMA_V4_ADDITIONS_SQL,
 };
 
-const SPECIFICATION: &str =
-    include_str!("../../docs/pactrun-developers/architecture/persistence-schema-v5.md");
+const SPECIFICATION: &str = include_str!("../../docs/spec/persistence/persistence-schema-v5.md");
 
 fn approved_additions() -> &'static str {
     let (_, code) = SPECIFICATION.split_once("```sql\n").expect("one SQL block");

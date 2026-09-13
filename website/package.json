@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "docusaurus start",
-    "build": "docusaurus build",
+    "start": "node scripts/prepare-text.mjs && docusaurus start",
+    "build": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs && node scripts/prepare-text.mjs && docusaurus build",
+    "test:docs": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit"

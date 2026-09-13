@@ -6,8 +6,8 @@ title: Snapshots, Migrations, and Recovery
 
 :::info Documentation status
 
-Planned after the initial Pactrun release. This page currently reserves the
-documentation structure only.
+Deferred to the usage-documentation phase. This page reserves the
+documentation structure only; it is not an executable guide.
 
 :::
 

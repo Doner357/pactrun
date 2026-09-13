@@ -1,0 +1,50 @@
+---
+title: Contract Catalog
+---
+
+# Contract catalog
+
+**Status: Informative index; each linked document retains its original status.**
+
+This catalog distinguishes normative contracts from implementation availability.
+Status descriptions are copied from the owning pages and checked during the
+website build. They do not constitute additional requirements.
+
+| Contract | Original status |
+| --- | --- |
+| [Actions, Plans, and Runs](behavior/actions-plans-and-runs.md) | Normative product behavior specification. |
+| [Command and Output Reference](behavior/command-and-output-reference.md) | Normative product behavior specification. Exact option spelling remains open specification work where explicitly noted. |
+| [Inputs, Secrets, and Readiness](behavior/inputs-secrets-and-readiness.md) | Normative product behavior specification except where linked to an owning requirement. |
+| [M4 Runtime Capabilities](behavior/m4-runtime-capabilities.md) | Approved normative fixed build capabilities. |
+| [M4 Snapshot Commands](behavior/m4-snapshot-command-reference.md) | Approved normative CLI, implemented and integrated into develop. Verification and milestone integration are recorded in the M4 execution record. |
+| [Packages, Revisions, and Instances](behavior/packages-revisions-and-instances.md) | Normative product behavior specification except where marked informative. |
+| [Snapshots, Migration, and Recovery](behavior/snapshots-migrations-and-recovery.md) | Normative product behavior specification. |
+| [Actions, Inputs, and Parameters](contracts/actions-inputs-and-parameters.md) | Normative Package contract specification. |
+| [Authoring Model](contracts/authoring-model.md) | Normative Package contract specification. |
+| [Error Taxonomy V1](contracts/error-taxonomy-v1.md) | Frozen normative architecture specification. |
+| [Hook Protocol V1](contracts/hook-protocol-v1.md) | Frozen normative Package contract specification. |
+| [Hooks, Recovery, and Cleanup](contracts/hooks-recovery-and-cleanup.md) | Normative Package contract specification. |
+| [Migrations](contracts/migrations.md) | Normative Package contract specification. |
+| [Pack Source YAML V1](contracts/pack-source-yaml-v1.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and not a public compatibility promise. |
+| [Recipes and Runtime Content](contracts/recipes-and-runtime-content.md) | Normative Package contract specification. |
+| [Revision Core Format V1](contracts/revision-core-format-v1.md) | Frozen normative Package contract specification. |
+| [Snapshot Bundle V1](contracts/snapshot-bundle-v1.md) | Normative transport contract. Adapter, application services and human CLI are implemented, verified and integrated into develop with M4. |
+| [Snapshot Integrity Format V1](contracts/snapshot-integrity-format-v1.md) | Frozen normative Package contract specification. |
+| [Snapshot Integrity Format V2](contracts/snapshot-integrity-format-v2.md) | Frozen normative Package contract specification. |
+| [Snapshots and Managed Data](contracts/snapshots-and-managed-data.md) | Normative Package contract specification. |
+| [Execution and Concurrency](execution/execution-and-concurrency.md) | Normative architecture. |
+| [M4 Snapshot Lifecycle Approval Baseline](execution/m4-snapshot-lifecycle-approval-baseline.md) | Approved normative implementation boundary. M4 implementation and verification are complete and integrated into develop. |
+| [Recovery and Reconciliation](execution/recovery-and-reconciliation.md) | Normative architecture. |
+| [Identity and State](foundations/identity-and-state.md) | Normative architecture. |
+| [Resources and Versioning](foundations/resources-and-versioning.md) | Normative architecture. |
+| [System Model](foundations/system-model.md) | Normative architecture. |
+| [Persistence Schema V2](persistence/persistence-schema-v2.md) | Implemented M1-D internal persistence schema and normative internal contract; superseded as the current schema by PersistenceSchemaV4; non-Frozen, non-public, and not a stable public support contract. |
+| [Persistence Schema V3](persistence/persistence-schema-v3.md) | Implemented normative internal persistence contract; non-Frozen and non-public. Superseded as the current schema by PersistenceSchemaV4. |
+| [Persistence Schema V4](persistence/persistence-schema-v4.md) | Historical implemented normative internal persistence contract; non-Frozen and non-public. |
+| [Persistence Schema V5](persistence/persistence-schema-v5.md) | Implemented normative internal schema, integrated into develop with M4 Snapshot execution; non-Frozen and non-public. |
+
+For V2 and V3 persistence, references to V4 as a successor record an intermediate
+historical baseline. [V5](./persistence/persistence-schema-v5.md) is current.
+Preserve the exact documented upgrade gates rather than inferring one from this
+index. See [remaining decisions](../development/next-milestone.md) for deferred
+runtime work, not just the historical status on a format page.

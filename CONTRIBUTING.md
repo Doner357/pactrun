@@ -21,18 +21,22 @@ on focused `feature/*` branches.
 
 Canonical Markdown is maintained in `docs/`. The `website/` project is a
 presentation layer and must not rewrite those sources. Read the relevant
-Pactrun Developer normative pages before changing behavior. English is the
+[specification authority map](./docs/spec/index.md) and normative pages before changing behavior. English is the
 canonical documentation language; a future `zh-Hant` tree may provide
 translations but will not independently define semantics.
 
-Keep documentation scoped to its audience. Requirement identifiers, test
-identifiers, verification status, test design, and implementation details belong
-only in the Pactrun Developer section. Pactrun User and Package Author pages
-must contain only audience-appropriate introductions, tutorials, operational
-guidance, and observable behavior. Before the initial release, those public
-sections remain planned placeholders. A public explanation may summarize a
-Developer specification, but it must not expose internal traceability or create
-a second normative clause.
+Keep documentation scoped to its audience. Only docs/spec defines product
+requirements; Development contains workflow, design syntheses, implementation
+records, and work-order guidance. Old paths are compatibility entries, not
+additional authority. Read the [Spec map](docs/spec/index.md) and the
+[development entry](docs/development/index.md).
+
+Usage guides for users, Pack authors, and operation-oriented agents remain
+placeholders until a later documentation phase. Development guides and
+[agent development navigation](docs/agents/develop-pactrun.md) are available now.
+Agent sources are excluded from human HTML pages and navigation. Generated text
+and HTML are publication copies, never additional authority. Personal developer
+preferences do not belong in the product specification.
 
 Documentation must be valid UTF-8. English documents may use Unicode punctuation,
 symbols, diagrams, emoji, proper names, and encoding examples, but their natural
@@ -46,7 +50,7 @@ dedicated fixture for Unicode test data. A literal non-ASCII source-code
 exception must be indispensable, narrowly scoped, and explained in ASCII.
 
 The complete contributor contract is the
-[Development and Verification Policy](docs/pactrun-developers/engineering/development-and-verification.md).
+[Development and Verification Policy](./docs/development/development-and-verification.md).
 
 ## Verification
 

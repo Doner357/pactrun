@@ -1,166 +1,46 @@
 ---
-title: Actions, Plans, and Runs
+title: Actions, Plans, and Runs (moved)
 ---
 
-# Actions, Plans, and Runs
+# Actions, Plans, and Runs has moved
 
-**Status: Normative product behavior specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Actions
+Read [the current document](../../spec/behavior/actions-plans-and-runs.md). Its original rule IDs, contract status,
+and verification evidence have been preserved. This page retains old link
+anchors only; do not use it as a second source of product behavior.
 
-An Action is a Package-defined operation such as `start`, `status`, `logs`, or
-`vacuum`. Pactrun does not infer service semantics from the name. An Action named
-`backup`, for example, does not create a Pactrun Snapshot unless the Package
-also uses the Snapshot capability.
+## Previous section links
 
-### PR-REQ-0094 - Action invocation
+<a id="actions" />
+[Actions](../../spec/behavior/actions-plans-and-runs.md#actions)
 
-Users MUST invoke a Package-defined Action through the managed execution path.
-Pactrun MUST resolve the exact Instance and Action, normalize parameters,
-validate readiness and policy, compile the workflow, and complete admission
-before launching the Hook.
+<a id="pr-req-0094---action-invocation" />
+[PR-REQ-0094 - Action invocation](../../spec/behavior/actions-plans-and-runs.md#pr-req-0094---action-invocation)
 
-**Verification: PR-TEST-0119, PR-TEST-0131, PR-TEST-0133, PR-TEST-0143,
-PR-TEST-0146, PR-TEST-0150, PR-TEST-0152, PR-TEST-0166, PR-TEST-0167.**
+<a id="pr-req-0095---plan-preview" />
+[PR-REQ-0095 - Plan preview](../../spec/behavior/actions-plans-and-runs.md#pr-req-0095---plan-preview)
 
-### PR-REQ-0095 - Plan preview
+<a id="pr-req-0096---plan-staleness" />
+[PR-REQ-0096 - Plan staleness](../../spec/behavior/actions-plans-and-runs.md#pr-req-0096---plan-staleness)
 
-A managed execution command SHOULD offer a side-effect-free plan view showing
-exact references, requirements, Migration paths, projected incomplete state,
-Cleanup requirements, and warnings when applicable. Host-native path fields in
-the human projection MUST remain lossless, using readable terminal escaping for
-valid UTF-8 and an explicit native code-unit or byte form for non-UTF-8 paths.
-Producing a plan MUST NOT create a Run, reservation, lock, pin, or GC root.
+<a id="run-history" />
+[Run history](../../spec/behavior/actions-plans-and-runs.md#run-history)
 
-**Verification: PR-TEST-0120, PR-TEST-0140, PR-TEST-0141, PR-TEST-0144,
-PR-TEST-0148, PR-TEST-0165.**
+<a id="pr-req-0097---user-visible-run-detail" />
+[PR-REQ-0097 - User-visible Run detail](../../spec/behavior/actions-plans-and-runs.md#pr-req-0097---user-visible-run-detail)
 
-### PR-REQ-0096 - Plan staleness
+<a id="pr-req-0285---structural-only-human-run-inspection" />
+[PR-REQ-0285 - Structural-only human Run inspection](../../spec/behavior/actions-plans-and-runs.md#pr-req-0285---structural-only-human-run-inspection)
 
-A displayed plan MUST be treated as a preview rather than a guarantee. Actual
-execution MUST revalidate the expected Instance state version, exact resources,
-policy, and environment. If they changed, execution MUST fail as invalidated
-rather than silently changing the workflow.
+<a id="pr-req-0288---invocation-parameter-sources-and-policy-values" />
+[PR-REQ-0288 - Invocation parameter sources and policy values](../../spec/behavior/actions-plans-and-runs.md#pr-req-0288---invocation-parameter-sources-and-policy-values)
 
-**Verification: PR-TEST-0115.**
+<a id="pr-req-0281---atomic-managed-output-publication-and-late-completion" />
+[PR-REQ-0281 - Atomic managed-output publication and late completion](../../spec/behavior/actions-plans-and-runs.md#pr-req-0281---atomic-managed-output-publication-and-late-completion)
 
-## Run history
+<a id="pr-req-0098---sensitive-run-data" />
+[PR-REQ-0098 - Sensitive Run data](../../spec/behavior/actions-plans-and-runs.md#pr-req-0098---sensitive-run-data)
 
-A Run begins when Pactrun accepts a compiled Plan as an execution attempt,
-before admission checks. Resolution and compile errors therefore do not create
-Runs. Admission invalidation and later execution failures are durable history
-in that Run.
-
-### PR-REQ-0097 - User-visible Run detail
-
-Run inspection MUST distinguish terminal outcome from detailed failures and
-from the Instance trust consequence. It MUST be able to report the primary
-failure, secondary failure-handling errors, failed logical step, Hook result,
-diagnostics, output references, and timing when available.
-
-**Verification: PR-TEST-0114, PR-TEST-0143, PR-TEST-0146, PR-TEST-0151,
-PR-TEST-0152, PR-TEST-0153, PR-TEST-0156, PR-TEST-0159, PR-TEST-0168,
-PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
-
-The crate-private RunView and the Slice 5 single-snapshot inspection substrate
-remain the implementation basis for this user-visible projection.
-
-### PR-REQ-0285 - Structural-only human Run inspection
-
-The ordinary human `run show`, `run list`, and invocation summaries MUST use a
-typed structural projection rather than formatting arbitrary persisted Run
-text. They MAY show Run, Instance, Revision, and Action identities, phase,
-outcome, timing, taxonomy references, failed logical step, structural Hook
-success or failure, published output identities and byte lengths, terminal
-recovery risk, the current same-snapshot recovery guard, and fixed Pactrun
-diagnostics.
-
-They MUST NOT show Legacy or current Hook code, completion messages, diagnostic
-messages, protocol-error text, arbitrary persisted failure messages, or any
-free-text derivative such as a fragment, length, hash, or encoding. A Hook
-completion MUST be rendered as structural status with fixed text stating that
-Hook free text is not displayed. Terminal escaping for an allowed identity is
-not redaction. Historical absent, present-empty, and present-value fields MUST
-remain exact in persistence while mapping to the same restricted human view.
-
-**Verification: PR-TEST-0114, PR-TEST-0146, PR-TEST-0154, PR-TEST-0175.**
-
-### PR-REQ-0288 - Invocation parameter sources and policy values
-
-The M3 human invocation MUST accept repeated `--param <parameter-id>=<text>`
-sources as `Ordinary` values, repeated `--param-file
-<parameter-id>=<host-path>` sources as complete UTF-8 `Protected` values, and
-one `--param-stdin <parameter-id>` source as a complete UTF-8 `Protected`
-value. The first `=` separates identity from text or path; values are not
-trimmed, Unicode-normalized, BOM-stripped, shell-expanded, or otherwise
-rewritten. Duplicate identities, unknown parameters, and conflicting stdin
-sources MUST be rejected before source acquisition. An `interactive` Action
-MUST reject `--param-stdin` even for preview. Effective redaction MUST remain
-the declaration-or-Protected-source maximum, and parameter values MUST NOT
-appear in plans, Run history, or ordinary diagnostics.
-
-Non-negative decimal timeout values MUST be safely converted before deadline
-construction. Zero means immediate expiry or no grace; omitted startup and
-Action timeouts are unlimited and omitted termination grace is 5000ms. Values
-above the runtime's signed-millisecond boundary, including `u64::MAX`, MUST be
-rejected before Run acceptance; timeout construction MUST not fall back to the
-start instant or saturate.
-
-**Verification: PR-TEST-0116, PR-TEST-0129, PR-TEST-0130, PR-TEST-0145,
-PR-TEST-0149, PR-TEST-0150, PR-TEST-0160, PR-TEST-0163, PR-TEST-0166,
-PR-TEST-0167.**
-
-### PR-REQ-0281 - Atomic managed-output publication and late completion
-
-Action Managed Output eligibility is determined by the protocol-accepted
-completion and its valid submitted output handles, not by whether the Run
-outcome is `Succeeded`.
-
-If cancellation or timeout has already won outcome arbitration, but a valid
-Action completion is subsequently protocol-accepted before process termination,
-its valid submitted output handles MUST remain eligible for Managed Artifact
-publication. The Run outcome MUST remain `Cancelled` or `TimedOut`,
-respectively.
-
-If no completion is protocol-accepted, no Action output slot may be published.
-Preallocated slots, files written before cancellation, or an unaccepted
-completion MUST NOT be treated as submissions.
-
-Publication of the eligible submitted set is atomic at the Action-publication
-level. Pactrun MUST validate and independently stage the entire set before
-publishing it. If any required publication input cannot be validated, read, or
-staged completely, none of that set may be published. Artifacts and the Run
-terminal record MUST be published in the same V4 transaction. A publication
-failure after a Hook-owned failure or after a locked `Cancelled` or `TimedOut`
-outcome is secondary; a first publication failure on an otherwise successful
-Run makes the Run `Failed` with `PublishDeclaredOutputs` as its primary step.
-
-Database transaction failure retains owner-held retry state and MUST NOT be
-converted into a fabricated terminal outcome. Eligibility does not require
-submitting every declaration, and it does not guarantee persistence success.
-
-**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0109, PR-TEST-0151,
-PR-TEST-0153, PR-TEST-0169, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
-
-### PR-REQ-0098 - Sensitive Run data
-
-Run records and ordinary diagnostics MUST NOT store sensitive parameter values,
-Secret values, or value-derived digests intended to reveal them. Interactive
-terminal sessions MUST NOT be retained as complete transcripts by default;
-structured Hook diagnostics MAY be retained.
-
-**Verification: PR-TEST-0099, PR-TEST-0154, PR-TEST-0167, PR-TEST-0175.**
-
-## Concurrent operations
-
-Long-running Observe Actions can continue with their admitted context while a
-Mutate operation updates current Instance state. The running Action keeps its
-old pinned view; subsequent operations see the newly committed state. Mutate
-operations on the same Instance serialize or conflict.
-
-This pinning model applies to the exact Revision and Pactrun-authoritative
-managed context. It does not freeze or linearize service-owned live bytes. A
-service may mutate a ServiceStorage-backed Managed Service Resource without
-Pactrun observing the change or publishing a new `InstanceStateVersion`;
-future authority and operation-prerequisite representations must account for
-that ownership boundary.
+<a id="concurrent-operations" />
+[Concurrent operations](../../spec/behavior/actions-plans-and-runs.md#concurrent-operations)

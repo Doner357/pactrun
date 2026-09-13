@@ -523,9 +523,7 @@ fn required_absence_is_format_representable_not_capture_admission_permission() {
 // Verifies: PR-REQ-0297
 #[test]
 fn v2_specification_and_corpus_lifecycle_markers_agree() {
-    let specification = include_str!(
-        "../docs/pactrun-developers/package-contracts/snapshot-integrity-format-v2.md"
-    );
+    let specification = include_str!("../docs/spec/contracts/snapshot-integrity-format-v2.md");
     let status = specification
         .lines()
         .find(|line| line.starts_with("**Status:"))
