@@ -1,132 +1,28 @@
 ---
-title: M3 Action Execution Approval Baseline
+title: M3 Action Execution Approval Baseline (moved)
 ---
 
-# M3 Action Execution Approval Baseline
+# M3 Action Execution Approval Baseline has moved
 
-**Status: Informative approved planning baseline and navigation entry point;
-historical approval status, not a live implementation-status report.**
+**Status: Informative compatibility entry; no independent specification.**
 
-This page records the completed M3 scope and dependency review. It does not
-create independent product requirements. The linked requirement-bearing pages
-are the sole normative authority, and their text wins if a summary here is
-ambiguous.
+Read [the current document](../../development/design-notes/m3-action-execution-approval-baseline.md). Its original rule IDs, contract status,
+and verification evidence have been preserved. This page retains old link
+anchors only; do not use it as a second source of product behavior.
 
-M3 was approved as the next implementation milestone. That approval permitted
-bounded implementation of Action execution on an isolated feature branch. The
-2026-09-07 approval baseline recorded Slices 1 through 5 as integrated and Slice
-6 as the remaining deferred boundary. Slice 6 is now implemented, verified, and
-integrated into `develop`, including user-visible Run inspection, exact human
-interface spelling, and `PR-REQ-0097` verification; the M3 milestone is
-complete.
+## Previous section links
 
-## Approved managed-execution path
+<a id="approved-managed-execution-path" />
+[Approved managed-execution path](../../development/design-notes/m3-action-execution-approval-baseline.md#approved-managed-execution-path)
 
-| Boundary | Approved M3 meaning | Normative authority |
-| --- | --- | --- |
-| Human intent | Resolve an exact Instance and Action and normalize typed invocation parameters before compilation. | [PR-REQ-0038](./execution-and-concurrency.md#pr-req-0038---resolver-ownership), [PR-REQ-0086](../product-behavior/packages-revisions-and-instances.md#pr-req-0086---exact-resolution-before-operation), [PR-REQ-0094](../product-behavior/actions-plans-and-runs.md#pr-req-0094---action-invocation), [PR-REQ-0133](../package-contracts/actions-inputs-and-parameters.md#pr-req-0133---invocation-parameter-lifecycle) |
-| Compiler input | Use the closed `InvokeAction` intent; do not pass CLI spelling, mutable authoring input, or raw argument syntax into Domain compilation. | [PR-REQ-0037](./execution-and-concurrency.md#pr-req-0037---closed-resolved-intent), [PR-REQ-0008](./system-model.md#pr-req-0008---compiler-and-executor-ownership) |
-| Compilation | Produce one side-effect-free, immutable, typed, sequential Plan bound to exact identities and one expected `InstanceStateVersion`. A preview creates no Run or lifetime reservation. | [PR-REQ-0039](./execution-and-concurrency.md#pr-req-0039---side-effect-free-compilation), [PR-REQ-0040](./execution-and-concurrency.md#pr-req-0040---typed-immutable-plan), [PR-REQ-0041](./execution-and-concurrency.md#pr-req-0041---plan-references-are-not-pins), [PR-REQ-0095](../product-behavior/actions-plans-and-runs.md#pr-req-0095---plan-preview) |
-| Acceptance | Create the durable Run after successful compilation and before Admission. Resolution and compilation failures create no Run. | [PR-REQ-0007](./system-model.md#pr-req-0007---managed-execution-pipeline), [PR-REQ-0049](./execution-and-concurrency.md#pr-req-0049---run-creation-boundary) |
-| Admission | Revalidate the exact state token, Revision, bindings, readiness, policy, environment, Hook runtime, and launcher; establish durable pins before the first workflow side effect. Never silently re-resolve or recompile a stale Plan. | [PR-REQ-0042](./execution-and-concurrency.md#pr-req-0042---admission-linearization), [PR-REQ-0043](./execution-and-concurrency.md#pr-req-0043---plan-invalidation), [PR-REQ-0091](../product-behavior/inputs-secrets-and-readiness.md#pr-req-0091---readiness-admission), [PR-REQ-0194](../package-contracts/revision-core-format-v1.md#pr-req-0194---runtime-launcher-integration) |
-| Concurrency | Observe Actions may coexist with Observe and Mutate. Mutate Actions use the same per-Instance mutation boundary as management mutations. Pins preserve the accepted Pactrun-owned view without becoming a guard. | [PR-REQ-0045](./execution-and-concurrency.md#pr-req-0045---observe-and-mutate-access), [PR-REQ-0046](./execution-and-concurrency.md#pr-req-0046---immutable-pactrun-owned-admitted-context), [PR-REQ-0048](./execution-and-concurrency.md#pr-req-0048---pin-and-guard-separation), [PR-REQ-0278](./execution-and-concurrency.md#pr-req-0278---action-admission-exclusivity), [PR-REQ-0279](./execution-and-concurrency.md#pr-req-0279---admission-refusal-precedence) |
-| Lifetime | The accepted Run durably pins its exact Revision, runtime content, Inputs, and Secrets until terminal execution and recovery obligations release their last strong reference. | [PR-REQ-0047](./execution-and-concurrency.md#pr-req-0047---durable-execution-pins), [PR-REQ-0074](./resources-and-versioning.md#pr-req-0074---checkpoint-and-pin-lifetime), [PR-REQ-0076](./resources-and-versioning.md#pr-req-0076---physical-content-reachability), [PR-REQ-0275](./persistence-schema-v4.md#pr-req-0275---exact-persistenceschemav4) |
+<a id="approved-hook-runtime-boundary" />
+[Approved Hook Runtime boundary](../../development/design-notes/m3-action-execution-approval-baseline.md#approved-hook-runtime-boundary)
 
-## Approved Hook Runtime boundary
+<a id="action-recovery-required-in-m3" />
+[Action recovery required in M3](../../development/design-notes/m3-action-execution-approval-baseline.md#action-recovery-required-in-m3)
 
-| Boundary | Approved M3 meaning | Normative authority |
-| --- | --- | --- |
-| Process selection | Direct launch uses the exact materialized owned executable. Interpreter lookup follows normal host pathname resolution and platform eligibility, preserves the exact selected candidate path without object identity, repeats the same ordered selection at Admission, and never searches or falls back in the Executor. | [PR-REQ-0189](../package-contracts/revision-core-format-v1.md#pr-req-0189---identity-bearing-hook-launch), [PR-REQ-0194](../package-contracts/revision-core-format-v1.md#pr-req-0194---runtime-launcher-integration), [PR-REQ-0274](../package-contracts/revision-core-format-v1.md#pr-req-0274---host-launcher-candidate-eligibility) |
-| Protocol | Production execution uses the exact Frozen HookProtocolV1 framing, strict message profile, version confirmation, ordering, completion, cancellation, and error state machine. | [PR-REQ-0204](../package-contracts/hook-protocol-v1.md#pr-req-0204---candidate-and-frozen-protocol-contract) through [PR-REQ-0218](../package-contracts/hook-protocol-v1.md#pr-req-0218---authority-is-not-isolation-and-verification-is-layered), [PR-REQ-0280](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0280---hook-protocol-runtime-transport-discovery) |
-| Session authority | Construct only the exact Action Session: typed parameters, execution Workspace, active pinned bindings, authorized Action output slots, and the declared terminal contract. Authority is Pactrun-mediated capability, not an OS sandbox claim. | [PR-REQ-0169](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0169---session-authority), [PR-REQ-0170](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0170---session-authority-is-not-host-isolation), [PR-REQ-0210](../package-contracts/hook-protocol-v1.md#pr-req-0210---workspace-and-authority-boundaries), [PR-REQ-0211](../package-contracts/hook-protocol-v1.md#pr-req-0211---operation-specific-binding-visibility) |
-| Terminal I/O | Keep terminal streams separate from the protocol stream and enforce the declared `none | output | interactive` contract. Structured output never wraps raw or interactive Hook channels. | [PR-REQ-0172](../package-contracts/hooks-recovery-and-cleanup.md#pr-req-0172---terminal-and-protocol-channels), [PR-REQ-0120](../product-behavior/command-and-output-reference.md#pr-req-0120---structured-output-boundary) |
-| Outputs | Preallocate only declared Action output slots. A completion may submit a valid subset; only successfully staged and atomically committed submissions become Run-owned Artifacts. | [PR-REQ-0212](../package-contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion), [PR-REQ-0281](../product-behavior/actions-plans-and-runs.md#pr-req-0281---atomic-managed-output-publication-and-late-completion) |
-| Sensitive values | Do not persist sensitive parameters, Secret bytes, revealing digests, or default full interactive transcripts in Runs or ordinary diagnostics. | [PR-REQ-0098](../product-behavior/actions-plans-and-runs.md#pr-req-0098---sensitive-run-data), [PR-REQ-0135](../package-contracts/actions-inputs-and-parameters.md#pr-req-0135---sensitive-parameter-channel), [PR-REQ-0214](../package-contracts/hook-protocol-v1.md#pr-req-0214---structured-hook-authored-text) |
+<a id="planned-implementation-slices" />
+[Planned implementation slices](../../development/design-notes/m3-action-execution-approval-baseline.md#planned-implementation-slices)
 
-## Action recovery required in M3
-
-HookProtocolV1 makes recovery-risk requests a mandatory facility rather than an
-optional feature. M3 therefore includes the minimum durable Action recovery
-slice needed to implement that Frozen contract correctly:
-
-- durable open-risk state and an Action-specific recovery directive must be
-  published before acknowledging `enter_recovery_risk`;
-- risk must be durably clear before acknowledging `resolve_recovery_risk`;
-- every Running Action Run must have one execution owner, and confirmed owner
-  loss must finalize the Run without Hook replay or inferred compensation;
-- clear-risk owner loss may finish `Interrupted` without creating a manual
-  recovery obligation; open-risk failure or owner loss must apply the durable
-  consequence and place the Instance in `ManualRecoveryRequired`;
-- a success report with open risk is a protocol failure and also produces the
-  required manual-recovery consequence;
-- pins and Workspace cleanup remain retained while an unresolved execution or
-  recovery reference still needs them.
-
-These are existing requirements in
-[Recovery and Reconciliation](./recovery-and-reconciliation.md) and
-[Hook Protocol V1](../package-contracts/hook-protocol-v1.md); M3 does not invent
-a second Action-only recovery model. M6 remains responsible for completing and
-generalizing recovery across later Snapshot, Migration, Restore, and Cleanup
-managed executions, their commit boundaries, richer reconciliation, and all
-remaining recovery interfaces.
-
-## Planned implementation slices
-
-M3 implementation is ordered as these reviewable slices:
-
-1. typed resolution, parameter binding, `InvokeAction`, and side-effect-free
-   Plan compilation;
-2. exact internal persistence migration for Runs, durable pins, Action recovery
-   state, ownership, output metadata, and their strong-reference lifetimes;
-3. transactional Run acceptance, Admission revalidation, guard and pin
-   coordination, and crash/failure injection;
-4. cross-platform Hook process launch, Workspace and binding materialization,
-   exact HookProtocolV1 runtime, terminal I/O, cancellation, timeout, and process
-   loss;
-5. managed Action output publication, Run finalization and inspection, Action
-   recovery reconciliation, and end-to-end positive and negative tests;
-6. the minimal human invocation, plan, Run inspection, cancellation, sensitive
-   parameter, and manual-recovery spellings required to complete M3.
-
-Slice 5 closes only the internal substrate for item 5: owner-held continuation
-advancement, atomic eligible-output publication, execution-workspace cleanup,
-and explicit confirmed-owner-loss reconciliation, together with crate-private
-Run inspection data access. It did not expose the human Run inspection surface
-or complete `PR-REQ-0097`; those deferred responsibilities are now closed by
-the integrated Slice 6 implementation.
-
-The integrated Slice 6 implementation adds the minimal human boundary over
-that substrate. Its inspection and `--plan` commands use an exact V4 read-only
-opening; its foreground invocation keeps one cancellation controller and owner
-through acceptance, Hook supervision, cleanup, and durable finalization; and
-its recovery commands distinguish owner-loss reconciliation from the guarded
-manual operator assertion. The integrated implementation also verifies
-`PR-REQ-0097` using `PR-TEST-0114`; its Slice 6 verification additionally includes
-`PR-TEST-0131`, `PR-TEST-0132`, and `PR-TEST-0133` for POSIX and Windows
-lifecycle coverage, plus the Windows interactive exact-launch regressions
-`PR-TEST-0134`, `PR-TEST-0135`, `PR-TEST-0136`, `PR-TEST-0137`, and
-`PR-TEST-0138` cover lower-level host-native exact-launch behavior; the full
-production Action → `ProcessSupervisor` → adapter argv/`env::args_os()` →
-exact second-launch regression is `PR-TEST-0139`. `PR-TEST-0140` and
-`PR-TEST-0141` cover lossless Windows and Linux human `--plan` rendering for
-host-native launcher pathnames while preserving the read-only preview boundary.
-Slice 6 is closed and integrated into `develop`; it does not change the Frozen
-protocol, V4 historical encoding, or public API scope.
-
-The internal persistence encoding and platform mechanisms remain implementation
-decisions, but they must preserve the linked durable and crash-visible meaning.
-Exact new CLI spelling is externally observable and is closed by
-`PR-REQ-0284` and its verification; no additional Frozen or public interface is
-implied.
-
-## Explicit exclusions
-
-M3 does not implement Snapshot Capture or Restore, Migration execution, Cleanup
-or Instance deletion, ServiceStorage or Managed Service Resource declaration or
-authority, a public Rust API, a stable machine-readable CLI envelope, a generic
-DAG engine, an OS sandbox, scheduler behavior, Hook replay, or compensation.
-
-Workspace remains execution-scoped scratch. Inputs and Secrets remain detached
-Pactrun-authoritative bindings. Neither one may be used to simulate persistent
-service-owned live state, and an execution pin or `InstanceStateVersion` never
-claims to freeze or linearize such state.
+<a id="explicit-exclusions" />
+[Explicit exclusions](../../development/design-notes/m3-action-execution-approval-baseline.md#explicit-exclusions)

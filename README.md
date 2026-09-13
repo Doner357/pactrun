@@ -12,8 +12,8 @@ public Rust API.
 M4 provides Capture, Restore, Snapshot inspection/verification and the bundle CLI
 on the integrated PersistenceSchemaV5 baseline. New Capture writes integrity V2;
 Import, Verify, Export and exact-compatible Restore preserve V1/V2 semantics.
-See the [M4 execution and acceptance record](docs/pactrun-developers/engineering/m4-implementation-status.md)
-and [Snapshot commands](docs/pactrun-developers/product-behavior/m4-snapshot-command-reference.md).
+See the [M4 execution and acceptance record](./docs/development/m4-implementation-status.md)
+and [Snapshot commands](./docs/spec/behavior/m4-snapshot-command-reference.md).
 Snapshot deletion and later lifecycle features remain outside the approved M4
 scope. Git integration is not a release or a public documentation deployment.
 
@@ -24,13 +24,17 @@ scope. Git integration is not a release or a public documentation deployment.
 - `docs/` contains canonical Markdown sources.
 - `website/` renders `docs/` with Docusaurus and does not own normative content.
 
-The English Markdown under `docs/` is the canonical semantic source. Start with
-the [documentation home](docs/index.md). The Pactrun Developer path contains the
-current normative product and engineering specifications. Pactrun User and
-Package Author paths reserve the public guide structure for completion after the
-initial release. Requirements, implementation tests, vectors, and traceability
-are recorded with stable IDs and report actual coverage without implying support
-for deferred milestones.
+English Markdown is canonical. The [Spec map](docs/spec/index.md) is the product
+specification entry; [Development](docs/development/index.md) provides reading
+paths, verification policy, and the [M5 handoff](docs/development/next-milestone.md).
+All existing requirement-bearing documents have moved into Spec. Usage guides
+remain planned placeholders; their completion is a later task.
+
+For coding agents, read CONTRIBUTING.md and [the agent entry](docs/agents/index.md).
+Published builds provide llms.txt and agent-docs Markdown without agent-only
+HTML pages. Repository instructions and the current task govern permissions;
+personal workspace preferences are not product rules. No agent tool is assumed
+to discover these files automatically.
 
 ## Validation
 

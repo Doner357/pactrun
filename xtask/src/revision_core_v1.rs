@@ -1772,8 +1772,7 @@ fn verify_node_oracle(workspace_root: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
-    let mut markdown = Vec::new();
-    collect_files(&workspace_root.join("docs"), "md", &mut markdown)?;
+    let markdown = normative_markdown_files(&workspace_root.join("docs"))?;
     let mut requirements = BTreeMap::<String, BTreeSet<String>>::new();
     for path in markdown {
         let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
@@ -1864,6 +1863,48 @@ pub(crate) fn verify_traceability(workspace_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+// Spec is the sole product-rule tree. Old locations are forwarding entries only.
+fn is_normative_markdown(relative: &Path) -> bool {
+    relative.extension().and_then(|value| value.to_str()) == Some("md")
+        && relative.starts_with("spec")
+}
+
+fn has_numbered_requirement_definition(text: &str) -> bool {
+    text.lines().any(|line| {
+        line.starts_with('#')
+            && line
+                .trim_start_matches('#')
+                .trim_start()
+                .strip_prefix("PR-REQ-")
+                .and_then(|suffix| suffix.as_bytes().first())
+                .is_some_and(u8::is_ascii_digit)
+    })
+}
+
+pub(crate) fn normative_markdown_files(docs_root: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+    collect_files(docs_root, "md", &mut files)?;
+    let mut normative = Vec::new();
+    for path in files {
+        let relative = path
+            .strip_prefix(docs_root)
+            .map_err(|error| error.to_string())?;
+        if is_normative_markdown(relative) {
+            normative.push(path);
+        } else {
+            let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+            if has_numbered_requirement_definition(&text) {
+                return Err(format!(
+                    "product requirement definition outside Spec: {}",
+                    relative.display()
+                ));
+            }
+        }
+    }
+    normative.sort();
+    Ok(normative)
+}
+
 fn collect_files(root: &Path, extension: &str, output: &mut Vec<PathBuf>) -> Result<(), String> {
     if !root.exists() {
         return Ok(());
@@ -1908,6 +1949,45 @@ mod tests {
             .parent()
             .expect("xtask is a direct workspace child")
             .to_path_buf()
+    }
+
+    #[test]
+    fn normative_document_scope_excludes_non_authoritative_copies() {
+        for included in [
+            "spec/behavior/resources.md",
+            "spec/foundations/system-model.md",
+            "spec/execution/recovery-and-reconciliation.md",
+            "spec/contracts/hook-protocol-v1.md",
+        ] {
+            assert!(is_normative_markdown(Path::new(included)), "{included}");
+        }
+        for excluded in [
+            "agents/spec-copy.md",
+            "archive/old.md",
+            "proposals/new.md",
+            "guides/intro.md",
+            "development/implementation-roadmap.md",
+            "pactrun-developers/architecture/system-model.md",
+            "pactrun-developers/product-behavior/actions-plans-and-runs.md",
+            "pactrun-developers/package-contracts/hook-protocol-v1.md",
+            "agent-docs/spec/copy.md",
+            "specification/copy.md",
+            "spec/data.json",
+        ] {
+            assert!(!is_normative_markdown(Path::new(excluded)), "{excluded}");
+        }
+    }
+
+    #[test]
+    fn numbered_definitions_are_not_confused_with_references_or_templates() {
+        assert!(has_numbered_requirement_definition(
+            "### PR-REQ-0001 - Rule"
+        ));
+        assert!(has_numbered_requirement_definition("## PR-REQ-0001 - Rule"));
+        assert!(!has_numbered_requirement_definition("See PR-REQ-0001."));
+        assert!(!has_numbered_requirement_definition(
+            "### PR-REQ-NNNN - Template"
+        ));
     }
 
     fn manifest() -> VectorManifest {

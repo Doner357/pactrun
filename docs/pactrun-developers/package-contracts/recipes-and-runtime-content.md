@@ -1,88 +1,40 @@
 ---
-title: Recipes and Runtime Content
+title: Recipes and Runtime Content (moved)
 ---
 
-# Recipes and Runtime Content
+# Recipes and Runtime Content has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Recipes
+Read [the current document](../../spec/contracts/recipes-and-runtime-content.md). Its original rule IDs, contract status,
+and verification evidence have been preserved. This page retains old link
+anchors only; do not use it as a second source of product behavior.
 
-### PR-REQ-0137 - Trusted install-time authoring
+## Previous section links
 
-A Recipe MUST be treated as a trusted install-time authoring program. It MAY
-inspect a provided InstallContext, vary by platform or architecture, fetch from
-the network, resolve mutable upstream references, run authoring tools, and stage
-Revision-owned content.
+<a id="recipes" />
+[Recipes](../../spec/contracts/recipes-and-runtime-content.md#recipes)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0137---trusted-install-time-authoring" />
+[PR-REQ-0137 - Trusted install-time authoring](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0137---trusted-install-time-authoring)
 
-### PR-REQ-0138 - Revision is the reproducibility boundary
+<a id="pr-req-0138---revision-is-the-reproducibility-boundary" />
+[PR-REQ-0138 - Revision is the reproducibility boundary](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0138---revision-is-the-reproducibility-boundary)
 
-Pactrun MUST NOT promise that the same Source produces the same Revision. It
-MUST guarantee that the same canonical Revision Core and the same owned runtime
-content produce the same `RevisionContentDigest`.
+<a id="pr-req-0139---recipe-output-boundary" />
+[PR-REQ-0139 - Recipe output boundary](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0139---recipe-output-boundary)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0140---language-neutral-authoring-contract" />
+[PR-REQ-0140 - Language-neutral Authoring Contract](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0140---language-neutral-authoring-contract)
 
-### PR-REQ-0139 - Recipe output boundary
+<a id="runtime-content" />
+[Runtime content](../../spec/contracts/recipes-and-runtime-content.md#runtime-content)
 
-The only formal Recipe output MUST be a `RevisionCandidate`. A Recipe SHOULD
-NOT perform service lifecycle side effects as part of the authoring transaction;
-service behavior belongs in Hooks.
+<a id="pr-req-0141---pactrun-owned-materialization" />
+[PR-REQ-0141 - Pactrun-owned materialization](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0141---pactrun-owned-materialization)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0142---logical-content-roles" />
+[PR-REQ-0142 - Logical content roles](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0142---logical-content-roles)
 
-### PR-REQ-0140 - Language-neutral Authoring Contract
-
-The Recipe Authoring Contract MUST be language-neutral at the semantic level,
-versioned independently, and isolated from Pactrun's internal domain types.
-Python, Go, Rust, or other SDKs MUST be adapters rather than separate semantic
-APIs.
-
-**Verification: Pending automated coverage.**
-
-## Runtime content
-
-### PR-REQ-0141 - Pactrun-owned materialization
-
-Pactrun MUST materialize runtime content it needs to execute an Installed
-Revision. Runtime behavior MUST NOT depend on mutable source files after
-installation. This is immutable, Revision-scoped, Pactrun-owned content. It
-MUST NOT be confused with Instance-scoped `ServiceStorage` or ServiceStorage-
-backed Managed Service Resources whose live contents are service-authoritative
-and may change across Runs.
-
-For M2, `SourceRelativePathV1` acquisition and same-object staging are defined
-by PR-REQ-0259, and durable blob publication precedes the atomic installation
-reference boundary in PR-REQ-0261.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0142 - Logical content roles
-
-Authors and frontends MUST provide enough normalized information for Pactrun to
-bind immutable content to logical runtime roles and paths. Reassigning identical
-blobs to different semantic roles MAY produce a different Revision digest.
-
-Candidate `PackSourceYamlV1` therefore keeps `source` acquisition separate from
-the identity-bearing logical `path`, `id`, and `executable` descriptor fields.
-
-This runtime-content closure does not content-address, copy, version, or
-automatically Snapshot service-owned live state. A formal identity-bearing
-ServiceStorage-backed Managed Service Resource declaration requires a future
-Revision Core format. This requirement does not classify other service-owned
-resource kinds.
-
-**Verification: Pending automated coverage.**
-
-## Presentation and provenance
-
-Presentation, reference labels, and typed provenance claims can be attached
-without changing Revision identity. Presentation is current metadata over the
-closed target and field sets in PR-REQ-0251; provenance is the value-keyed
-typed claim set in PR-REQ-0252. Authoring and persistence MUST NOT infer a
-generic target, key/value map, history, or locale layer from those contracts.
-Authors must reference stable semantic keys and must not use presentation
-overlays to create Actions, Inputs, Parameters, outputs, or operations that are
-absent from the installed `RevisionCore`.
+<a id="presentation-and-provenance" />
+[Presentation and provenance](../../spec/contracts/recipes-and-runtime-content.md#presentation-and-provenance)

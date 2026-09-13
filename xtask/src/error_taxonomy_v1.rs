@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 const CATALOG_PATH: &str = "tests/vectors/error_taxonomy_v1/catalog.json";
@@ -780,8 +780,7 @@ fn load_frozen_error_vectors(
 }
 
 fn collect_requirement_ids(root: &Path) -> Result<BTreeSet<String>, String> {
-    let mut files = Vec::new();
-    collect_markdown(root, &mut files)?;
+    let files = super::revision_core_v1::normative_markdown_files(root)?;
     let mut requirements = BTreeSet::new();
     for path in files {
         let text = fs::read_to_string(&path)
@@ -795,22 +794,6 @@ fn collect_requirement_ids(root: &Path) -> Result<BTreeSet<String>, String> {
         }
     }
     Ok(requirements)
-}
-
-fn collect_markdown(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    for entry in
-        fs::read_dir(root).map_err(|error| format!("could not read {}: {error}", root.display()))?
-    {
-        let path = entry
-            .map_err(|error| format!("could not read {} entry: {error}", root.display()))?
-            .path();
-        if path.is_dir() {
-            collect_markdown(&path, files)?;
-        } else if path.extension().and_then(|value| value.to_str()) == Some("md") {
-            files.push(path);
-        }
-    }
-    Ok(())
 }
 
 fn requirement_definition(line: &str) -> Option<String> {

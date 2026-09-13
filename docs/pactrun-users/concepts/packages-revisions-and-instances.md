@@ -1,22 +1,16 @@
 ---
-title: Packages, Revisions, and Instances
+title: Packages, Revisions, and Instances (Planned)
 ---
 
 # Packages, Revisions, and Instances
 
-:::info Documentation status
+**Status: Planned placeholder.** Usage explanations and a guided example will
+be written in a later documentation phase. This page is not a tutorial.
 
-Planned after the initial Pactrun release. This page currently reserves the
-documentation structure only.
+## Reserved coverage
 
-:::
+- Installing a Pack and choosing a Revision
+- Creating and inspecting a managed Instance
+- Understanding these concepts through an actual workflow
 
-## Planned coverage
-
-- Package installation and discovery
-- Revision selection and labels
-- Instance creation, inspection, and lifecycle
-- Incomplete Instance presentation
-- Future ServiceStorage-backed resource declaration, absence, continuity, and
-  conservative non-destruction
-- Deferred taxonomy for other service-owned resources
+For implementation contracts, see [Spec](../../spec/index.md).
