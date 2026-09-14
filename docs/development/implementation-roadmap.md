@@ -77,6 +77,10 @@ driven development.
 - M5 Managed Input Migration is implemented and integrated into `develop`,
   including operator acquisition, Hook execution, per-edge publication and
   bounded interruption/reconciliation. See the [M5 closeout](./m5-implementation-status.md).
+- Bounded M6 recovery is `Complete` and integrated into local `develop`, with
+  cross-operation crash, owner/concurrency, guard and reference-lifetime evidence
+  on unchanged V6. See the [M6 closeout](./m6-implementation-status.md). M6.5
+  ServiceStorage remains separately gated and Proposed.
 - M4 Snapshot lifecycle is `Complete`, with S0-S8 integrated into `develop`.
   Capture writes Frozen integrity V2; V1/V2 import, export, verification and
   exact-compatible Restore are available through the human CLI.
@@ -105,7 +109,7 @@ milestone state taxonomy above:
 | ServiceStorage architecture correction | **Closed.** |
 | ServiceStorage semantic closure | **Closed.** |
 | ServiceStorage staged design alignment | **Scheduling and design-stage scope approved on 2026-09-14.** No runtime approval. |
-| M6 bounded recovery baseline | **Approved, 2026-09-14.** S0 audit retains V6; S1-S4 may proceed without per-slice approval. |
+| M6 bounded recovery baseline | **Approved and implemented.** The 2026-09-14 S0 audit retains V6; S0-S4 are integrated into local develop. |
 | ServiceStorage representation and runtime | **Scheduled for M6.5, after M6 and before M7.** Representation approval still required. |
 | Cleanup completion/finalization coordination | **Assigned to M7 design.** Lifecycle persistence alignment required before M6.5 schema approval. |
 | Abandon non-destruction durable representation | **Cross-stage M6.5/M7 design gate.** M7 owns the operation; no representation selected. |
@@ -686,7 +690,7 @@ Acceptance gates, retained as regression requirements:
 
 ### M6 - Recovery
 
-**State: In progress.**
+**State: Complete.**
 
 The initial 2026-09-14 approval covered Pre-M6 planning and the order
 **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. The operator subsequently approved
@@ -695,8 +699,10 @@ the [staged ServiceStorage alignment](./design-notes/service-storage-staged-desi
 and [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
 The S0 boundary/evidence audit retains exact V6; no new persistence or recovery
 policy is needed. The [implementation record](./m6-implementation-status.md)
-records the added evidence and final verification/integration gates. Completion
-still requires the exact tested tree and authorized integration into develop.
+records the added evidence and authorized integration into local develop by
+merge `ea6e57c07dbdb8a15c98f69de162f3043a153aa8`. The delivery report includes
+full CI and exact-source verification after the final integration-document edit.
+No push or ServiceStorage implementation approval was included.
 
 Harden execution ownership, durable risk and recovery state, atomic publication,
 orphan reconciliation, manual recovery and crash evidence for existing Action,

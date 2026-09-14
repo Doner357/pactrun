@@ -66,7 +66,7 @@ test('M5 integration remains distinct from separately approved M6 work', async (
   const baseline = docs.find(([name]) => name === 'development/design-notes/m5-migration-implementation-baseline.md')[1];
   const status = docs.find(([name]) => name === 'development/m5-implementation-status.md')[1];
   assert.match(roadmap, /### M5 - Migration\s+\*\*State: Implemented and integrated into develop\.\*\*/);
-  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: In progress\.\*\*/);
+  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
   assert.match(baseline, /Approved scope and implementation decisions, 2026-09-13/);
   assert.match(status.replace(/\s+/g, ' '), /approved M5 scope is implemented, verified and integrated into local develop/);
   assert.match(status, /Current production storage is V6/);
@@ -82,12 +82,12 @@ test('roadmap distinguishes historical V4 introduction from the current schema',
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /PersistenceSchemaV4 as the current canonical implemented internal schema/);
 });
 
-test('bounded M6 approval does not approve the scheduled ServiceStorage runtime', async () => {
+test('M6 integration closes recovery without approving the scheduled ServiceStorage runtime', async () => {
   const document = name => docs.find(([file]) => file === 'development/' + name)[1];
   const roadmap = document('implementation-roadmap.md');
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
   assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
-  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: In progress\.\*\*/);
+  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Proposed\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
   assert.match(current, /PersistenceSchemaV6.*integrated `develop` persistence baseline/);
@@ -99,6 +99,11 @@ test('bounded M6 approval does not approve the scheduled ServiceStorage runtime'
   assert.match(baseline, /S0 review complete/);
   assert.match(baseline, /Decision: retain exact V6/);
   assert.match(baseline, /Do not silently alter exact V6/);
+  const closeout = document('m6-implementation-status.md').replace(/\s+/g, ' ');
+  assert.match(closeout, /Status: Complete\. Bounded M6 S0-S4 is implemented and integrated into local develop/);
+  assert.match(closeout, /explicitly without push/);
+  assert.match(document('next-milestone.md'), /M6\.5 ServiceStorage is next/);
+  assert.doesNotMatch(document('next-milestone.md'), /M6 is `In progress`/);
   const alignment = document('design-notes/service-storage-staged-design-alignment.md').replace(/\s+/g, ' ');
   assert.match(alignment, /before approving the storage schema/);
   assert.match(alignment, /broader taxonomy.*remain deferred and do not block/);

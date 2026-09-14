@@ -26,6 +26,11 @@ This checkout initializes V6 and upgrades only exact V5 through explicit
 `pactrun storage upgrade`; V4 and earlier first need a compatible M4 build.
 M6 and ServiceStorage representation/runtime remain outside the completed M5 scope.
 
+Bounded [M6 recovery](./docs/development/m6-implementation-status.md) is now
+complete and integrated into local develop. It adds cross-operation recovery
+evidence and fault-injection coverage while preserving V6 and existing runtime
+semantics. M6.5 ServiceStorage is next, with separate design approval required.
+
 ## Repository layout
 
 - `src/` contains the production crate and crate-private architecture modules.
@@ -35,7 +40,7 @@ M6 and ServiceStorage representation/runtime remain outside the completed M5 sco
 
 English Markdown is canonical. The [Spec map](docs/spec/index.md) is the product
 specification entry; [Development](docs/development/index.md) provides reading
-paths, verification policy, and the [M6 handoff](docs/development/next-milestone.md).
+paths, verification policy, and the [M6.5 handoff](docs/development/next-milestone.md).
 All existing requirement-bearing documents have moved into Spec. Usage guides
 remain planned placeholders; their completion is a later task.
 

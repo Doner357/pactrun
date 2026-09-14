@@ -5,7 +5,7 @@ commit, push, deploy, change machines, or perform service side effects.
 
 1. Read applicable repository instructions and CONTRIBUTING.md in a checkout.
 2. Read [the Spec map](../spec/index.md) and choose a [task path](../development/reading-paths.md).
-3. Check [the roadmap](../development/implementation-roadmap.md) and [M6 handoff](../development/next-milestone.md).
+3. Check [the roadmap](../development/implementation-roadmap.md) and [M6.5 handoff](../development/next-milestone.md).
 4. Read actual owning rules, including unnumbered constraints, definitions,
    exceptions, and the exact format/version scope. Use [the glossary](../spec/glossary.md)
    to find a term's owner, not as a replacement definition.

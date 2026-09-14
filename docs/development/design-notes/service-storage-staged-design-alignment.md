@@ -27,6 +27,8 @@ its design gates or promote it to `Planned`. The subsequent 2026-09-14 operator
 authorization approves bounded M6 S0-S4 implementation without per-slice stops.
 M6.5 remains `Proposed` until its own baseline and representation contracts are
 approved; the M6 authorization does not extend to ServiceStorage implementation.
+Bounded M6 is now integrated into local develop as recorded in the
+[M6 closeout](../m6-implementation-status.md); M6.5 is the next design gate.
 See the [M6 baseline](./m6-recovery-implementation-baseline.md) and
 [roadmap](../implementation-roadmap.md#m65---servicestorage).
 

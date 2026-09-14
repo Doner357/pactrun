@@ -1,5 +1,5 @@
 ---
-title: Baseline and M6 Recovery Handoff
+title: Baseline and M6.5 ServiceStorage Handoff
 ---
 
 # Current baseline and next milestone
@@ -21,6 +21,12 @@ The integrated baseline adds [M5 Managed Input Migration](./m5-implementation-st
 path IDs, operator file acquisition, Frozen Migration Hooks, per-edge atomic
 publication and bounded interruption/reconciliation. The authorized local merge
 is recorded in the closeout; remote publication is separate from integration.
+
+[M6 bounded recovery](./m6-implementation-status.md) is also implemented and
+integrated into local develop. It closes existing-operation recovery evidence
+on V6 without adding a new recovery engine, schema or service rollback. The next
+proposed milestone is M6.5 ServiceStorage, starting with its representation
+design gate rather than runtime implementation.
 
 - Current persistence: [V6](../spec/persistence/persistence-schema-v6.md), internal and non-Frozen, with explicit exact-V5 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
@@ -50,7 +56,7 @@ configured destination and a non-force branch-state check.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | M5 integrated; bounded M6 S0-S4 implementation approved on 2026-09-14; M6.5 remains separately gated |
+| Scope and work order | M5 and bounded M6 S0-S4 integrated into local develop; M6.5 is next and remains separately gated |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -60,7 +66,7 @@ The owning Spec pages define the approved new command and V6 direction. Frozen
 HookProtocolV1 remains unchanged. The handoff is not a replacement for the
 exact-source validation report.
 
-## M6 approval and delivery gate
+## M6 is complete and integrated into develop
 
 After the initial scheduling approval, the operator approved continuous bounded
 M6 S0-S4 implementation on 2026-09-14. This does not approve ServiceStorage
@@ -68,9 +74,10 @@ representation or runtime. Start with the
 [staged ServiceStorage alignment](./design-notes/service-storage-staged-design-alignment.md)
 and [approved M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
 S0's operation/boundary/evidence audit retains exact V6. The
-[M6 implementation record](./m6-implementation-status.md) identifies added
-cross-operation evidence and the exact-source final verification/integration
-gates. M6 is `In progress` until those completion gates are met.
+[M6 implementation record](./m6-implementation-status.md) identifies the added
+cross-operation evidence and authorized local integration. M6 is `Complete`;
+the delivery report records final post-closeout full CI and exact-source
+verification. No push was authorized or performed.
 
 M6 covers existing Action, Capture, Restore and Migration recovery, reusing
 M3-M5 owner leases, continuations, risk handshake, exact pins and committed
@@ -79,13 +86,14 @@ S2 durable evidence/publication, S3 guard/diagnostics and S4 crash verification.
 No replay, resumed Interrupted Run, uncommitted-output salvage, new CLI spelling
 or silent V6 change is authorized.
 
-## ServiceStorage is scheduled as M6.5 before M7
+## M6.5 ServiceStorage is next, before M7
 
 The fixed order is **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. M6.5 is the dedicated
 [ServiceStorage milestone](./implementation-roadmap.md#m65---servicestorage),
 not an indefinitely deferred runtime. Its implementation remains `Proposed`
 until the separately reviewed Core, authority where needed, persistence,
-access, compatibility and upgrade contracts are approved after M6.
+access, compatibility and upgrade contracts are approved. M6 completion removes
+the work-order prerequisite; it does not approve these representations.
 
 M6.5 must align retention, finalization and abandonment persistence ownership
 with M7 before schema approval. M7 delivers actual Cleanup coordination,

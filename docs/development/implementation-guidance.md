@@ -8,7 +8,7 @@ title: Implementation Guidance
 architecture.**
 
 The [Spec map](../spec/index.md) is the authority entry. Read
-[the current M6 handoff](./next-milestone.md) before using a historical baseline
+[the current M6.5 handoff](./next-milestone.md) before using a historical baseline
 as a work order. Linked synthesis pages are navigation only. Usage guides are
 reserved for later; this document is for implementers.
 
@@ -68,8 +68,9 @@ ServiceStorage runtime, a public Rust API or stable machine-output envelopes.
 
 M5 Managed Input Migration is integrated, including per-edge publication,
 operator/Hook execution and bounded recovery; see its
-[closeout](./m5-implementation-status.md). The next entry is the
-[M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
+[closeout](./m5-implementation-status.md). Bounded M6 is also complete and
+integrated under its [baseline](./design-notes/m6-recovery-implementation-baseline.md)
+and [closeout](./m6-implementation-status.md). The next entry is M6.5 design.
 The [staged alignment](./design-notes/service-storage-staged-design-alignment.md)
 formally orders M6 recovery, M6.5 ServiceStorage and M7 Cleanup/deletion without
 approving the still-open representation or runtime designs.

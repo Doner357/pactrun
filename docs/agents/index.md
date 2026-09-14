@@ -7,8 +7,8 @@ placeholders; do not interpret them as completed tutorials.
 ## Establish authority and state
 
 - Read the [Spec map](../spec/index.md). Only Spec defines product requirements.
-- Read [current baseline and M6 handoff](../development/next-milestone.md).
-  M5 is integrated; bounded M6 is approved and In progress; M6.5 remains Proposed.
+- Read [current baseline and M6.5 handoff](../development/next-milestone.md).
+  M5 and bounded M6 are integrated; M6.5 is next and remains Proposed.
   The approved order is M6 recovery,
   M6.5 ServiceStorage, then M7 Cleanup/deletion, with separate implementation
   design gates. Scheduling is not runtime approval or completion evidence.

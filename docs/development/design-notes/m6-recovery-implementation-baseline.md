@@ -9,9 +9,10 @@ and verification proceed through S1-S4 without per-slice approval.**
 
 The operator approved continued M6 implementation after the earlier Pre-M6
 scheduling approval. This baseline records that authorization and the S0 audit;
-it is not an independent normative source or an integration claim. See the
-[M6 implementation record](../m6-implementation-status.md) for evidence and
-remaining delivery gates. ServiceStorage representation/runtime remains a
+it is not an independent normative source. See the
+[M6 implementation record](../m6-implementation-status.md) for evidence,
+authorized local integration and exact-source verification discipline.
+ServiceStorage representation/runtime remains a
 separately approved M6.5 milestone under the
 [staged alignment](./service-storage-staged-design-alignment.md).
 
