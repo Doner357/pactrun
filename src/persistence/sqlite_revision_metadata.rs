@@ -1700,7 +1700,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            45
+            52 // V5's 45 tables plus seven V6 Migration relations.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),

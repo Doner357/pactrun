@@ -100,7 +100,7 @@ fn v5_worker() {
             wait_file(&root.join("release"));
         }
         "upgrade" => {
-            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
         }
         "legacy-held" => {
             let _session = StagingSession::open(&root).unwrap();
@@ -132,13 +132,13 @@ fn v5_worker() {
 // Test-ID: PR-TEST-0195
 // Verifies: PR-REQ-0298, PR-REQ-0299, PR-REQ-0300
 #[test]
-fn source_version_matrix_and_exact_v5_initialization_are_explicit() {
+fn source_version_matrix_preserves_historical_v5_and_current_initialization() {
     let (_tmp, root) = root();
     assert!(PactrunPersistence::upgrade_storage(&root).is_err());
     assert!(!db_path(&root).exists());
     let p = PactrunPersistence::open(&root).unwrap();
-    assert_eq!(version(&root), 5);
-    validate_schema(&p.database.lock().unwrap(), 5).unwrap();
+    assert_eq!(version(&root), SCHEMA_VERSION);
+    validate_schema(&p.database.lock().unwrap(), SCHEMA_VERSION).unwrap();
     assert!(!PactrunPersistence::upgrade_storage(&root).unwrap());
     assert_eq!(count(&root, "writable_admissions"), 1);
     drop(p);
@@ -165,7 +165,8 @@ fn source_version_matrix_and_exact_v5_initialization_are_explicit() {
         assert!(residue.join("sentinel").exists());
         assert_eq!(version(&old), v as i64);
         if v == 4 {
-            assert!(PactrunPersistence::upgrade_storage(&old).unwrap());
+            assert!(PactrunPersistence::upgrade_storage(&old).is_err());
+            assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&old).unwrap());
             assert_eq!(version(&old), 5);
         } else {
             assert!(PactrunPersistence::upgrade_storage(&old).is_err());
@@ -281,8 +282,8 @@ fn pre_admission_does_not_block_but_live_and_unknown_admitted_owners_do() {
     assert_eq!(count(&root, "writable_admissions"), 0);
     fs::create_dir(root.join("staging").join(unknown)).unwrap();
     db.execute(
-        "INSERT INTO writable_admissions VALUES (?1,5)",
-        [unknown.as_bytes()],
+        "INSERT INTO writable_admissions VALUES (?1,?2)",
+        params![unknown.as_bytes(), SCHEMA_VERSION],
     )
     .unwrap();
     let tx = db
@@ -318,7 +319,8 @@ fn prepared_writer_revalidates_after_the_serialized_boundary_in_another_process(
         .unwrap();
     require_quiescent_admissions(&tx, &root).unwrap();
     // Test-only unsupported successor marker, not a production V6 migration.
-    tx.pragma_update(None, "user_version", 6).unwrap();
+    tx.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+        .unwrap();
     tx.commit().unwrap();
     fs::write(sync.join("release"), b"continue").unwrap();
     child.wait(0);
@@ -334,7 +336,7 @@ fn exact_v4_bootstrap_excludes_itself_but_refuses_other_live_or_unknown_legacy_s
     legacy(&root);
     let child = worker(&root, "legacy-held", &[]);
     wait_file(&root.join("held"));
-    let error = PactrunPersistence::upgrade_storage(&root).unwrap_err();
+    let error = PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap_err();
     assert!(matches!(error, PersistenceError::LegacySessionUncertain));
     assert!(!error.to_string().contains("admitted"));
     assert_eq!(version(&root), 4);
@@ -342,18 +344,18 @@ fn exact_v4_bootstrap_excludes_itself_but_refuses_other_live_or_unknown_legacy_s
     child.wait(0);
     let prepared = StagingSession::open(&root).unwrap();
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_legacy_v4_to_v5(&root),
         Err(PersistenceError::LegacySessionUncertain)
     ));
     drop(prepared);
     let path = root.join("staging/session-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     fs::create_dir(&path).unwrap();
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_legacy_v4_to_v5(&root),
         Err(PersistenceError::LegacySessionUncertain)
     ));
     fs::remove_dir(path).unwrap();
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
     assert_eq!(count(&root, "writable_admissions"), 0);
 }
 
@@ -410,9 +412,9 @@ fn bootstrap_and_admission_crashes_leave_only_committed_boundaries() {
         assert_eq!(version(&root), expected);
         validate_schema(&Connection::open(db_path(&root)).unwrap(), expected).unwrap();
         if expected == 4 {
-            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
         } else {
-            assert!(!PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(!PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
         }
     }
     let (_tmp, root) = root();
@@ -422,7 +424,7 @@ fn bootstrap_and_admission_crashes_leave_only_committed_boundaries() {
         &[("PACTRUN_M4_FAULT", "after_writable_admission")],
     )
     .wait(87);
-    assert_eq!(version(&root), 5);
+    assert_eq!(version(&root), SCHEMA_VERSION);
     assert_eq!(count(&root, "writable_admissions"), 1);
     let mut db = Connection::open(db_path(&root)).unwrap();
     configure_connection(&db).unwrap();
@@ -617,8 +619,15 @@ fn migration_preserves_legacy_rows_orphan_pins_risk_and_guard_without_reconcilia
     p.abandon_execution_owner();
     let db = Connection::open(db_path(&root)).unwrap();
     configure_connection(&db).unwrap();
-    // Fixture construction only: remove V5 additions to produce exact V4 bytes.
+    // Historical fixture only: remove empty V6 and V5 additions to recreate V4.
     for table in [
+        "run_migration_checkpoint_bindings",
+        "run_migration_payload_pins",
+        "run_migration_revision_pins",
+        "run_migration_boundaries",
+        "run_migration_progress",
+        "run_migration_edges",
+        "run_migration_invocations",
         "run_restore_admissions",
         "run_capture_results",
         "snapshot_blob_chunks",
@@ -636,7 +645,7 @@ fn migration_preserves_legacy_rows_orphan_pins_risk_and_guard_without_reconcilia
     validate_schema(&db, 4).unwrap();
     let before = legacy_data(&db);
     drop(db);
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
     let db = Connection::open(db_path(&root)).unwrap();
     assert_eq!(legacy_data(&db), before);
     assert_eq!(count(&root, "run_executions"), 1);
@@ -653,6 +662,8 @@ fn migration_preserves_legacy_rows_orphan_pins_risk_and_guard_without_reconcilia
         )
         .unwrap();
     assert_eq!(counter, 0);
+    drop(db);
+    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     let app = crate::application::PactrunApplication::open(&root).unwrap();
     assert_eq!(app.reconcile_lost_action_owners().unwrap(), vec![orphan]);
     assert!(app.reconcile_lost_action_owners().unwrap().is_empty());
@@ -786,6 +797,8 @@ fn explicit_storage_upgrade_cli_does_not_reconcile_or_accept_extra_options() {
     };
     assert_eq!(invoke(&["storage", "upgrade", "--force"]).0, 2);
     assert_eq!(version(&root), 4);
+    assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
+    assert!(PactrunPersistence::upgrade_legacy_v4_to_v5(&root).unwrap());
     let first = invoke(&["storage", "upgrade"]);
     assert_eq!(first.0, 0, "{}", first.2);
     assert!(first.1.contains("upgraded"));

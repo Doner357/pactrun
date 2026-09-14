@@ -11,6 +11,8 @@ mod error;
 mod execution;
 mod identity;
 mod managed_input;
+mod migration;
+mod migration_paths;
 mod revision_core_v1;
 mod revision_metadata;
 mod run;
@@ -28,6 +30,10 @@ pub(crate) use identity::{
 };
 #[allow(unused_imports)]
 pub(crate) use managed_input::*;
+#[allow(unused_imports)]
+pub(crate) use migration::*;
+#[allow(unused_imports)]
+pub(crate) use migration_paths::*;
 pub(crate) use revision_core_v1::*;
 #[allow(unused_imports)]
 pub(crate) use revision_metadata::*;

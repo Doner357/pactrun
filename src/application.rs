@@ -1,6 +1,7 @@
 //! Application orchestration and dependency-resolution ownership.
 
 mod installation;
+mod migrations;
 mod snapshots;
 
 use std::{
@@ -73,6 +74,7 @@ pub(crate) enum ApplicationError {
     ActionResolution(ActionResolutionError),
     PlanCompilation(PlanCompilationError),
     SnapshotCompilation(crate::domain::SnapshotPlanError),
+    MigrationCompilation(crate::domain::MigrationError),
     Execution(ExecutorError),
     InvalidInstallation(String),
     InvalidRequest(String),
@@ -96,6 +98,9 @@ impl fmt::Display for ApplicationError {
             Self::SnapshotCompilation(source) => {
                 write!(formatter, "Snapshot compilation: {source}")
             }
+            Self::MigrationCompilation(source) => {
+                write!(formatter, "Migration compilation: {source}")
+            }
             Self::Execution(source) => write!(formatter, "execution: {source}"),
             Self::LockPoisoned => formatter.write_str("Instance mutation lock is poisoned"),
         }
@@ -114,6 +119,7 @@ impl std::error::Error for ApplicationError {
             Self::ActionResolution(source) => Some(source),
             Self::PlanCompilation(source) => Some(source),
             Self::SnapshotCompilation(source) => Some(source),
+            Self::MigrationCompilation(source) => Some(source),
             Self::Execution(source) => Some(source),
             Self::Configuration(_)
             | Self::InvalidInstallation(_)
@@ -168,6 +174,12 @@ impl From<PlanCompilationError> for ApplicationError {
 impl From<crate::domain::SnapshotPlanError> for ApplicationError {
     fn from(error: crate::domain::SnapshotPlanError) -> Self {
         Self::SnapshotCompilation(error)
+    }
+}
+
+impl From<crate::domain::MigrationError> for ApplicationError {
+    fn from(error: crate::domain::MigrationError) -> Self {
+        Self::MigrationCompilation(error)
     }
 }
 
@@ -889,7 +901,7 @@ impl PactrunApplication {
         let Some(guard) = self.continuations.take(run) else {
             return Ok(false);
         };
-        if let Some(instance) = guard.snapshot_instance() {
+        if let Some(instance) = guard.managed_mutation_instance() {
             let lock = self.mutation_lock(instance)?;
             let _mutation = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
             return Ok(crate::hook::advance_owner_continuation(

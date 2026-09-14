@@ -315,7 +315,7 @@ output handle exactly once. Failure MUST submit none and MUST NOT publish staged
 target bindings. Restore and Cleanup publish no managed output.
 
 **Verification: PR-TEST-0027, PR-TEST-0094, PR-TEST-0151, PR-TEST-0153,
-PR-TEST-0169.**
+PR-TEST-0169, PR-TEST-0323.**
 
 ### PR-REQ-0213 - Snapshot candidate and content authorities
 

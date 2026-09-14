@@ -292,6 +292,16 @@ impl StagingSession {
             .map_err(|error| StagingError::io("create execution directory", error))?;
         Ok(ExecutionDirectory { root })
     }
+    pub(crate) fn create_migration_execution_directory(
+        &self,
+        run: RunId,
+        edge: usize,
+    ) -> Result<ExecutionDirectory, StagingError> {
+        let root = self.session.join(format!("execution-{run}-edge-{edge}"));
+        create_private_directory(&root)
+            .map_err(|error| StagingError::io("create Migration execution directory", error))?;
+        Ok(ExecutionDirectory { root })
+    }
 
     pub(crate) fn stage_managed_input(
         &self,

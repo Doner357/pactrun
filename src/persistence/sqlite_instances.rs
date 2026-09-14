@@ -248,6 +248,7 @@ impl PactrunPersistence {
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
         }
+        super::sqlite_migration_runs::require_no_migration_mutator(&transaction, instance)?;
         let core = load_revision_core(&transaction, &revision)?;
         let declaration = input_declaration(&core, &input.input_id).ok_or_else(|| {
             PersistenceError::InvalidManagedInput(
@@ -305,6 +306,7 @@ impl PactrunPersistence {
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
         }
+        super::sqlite_migration_runs::require_no_migration_mutator(&transaction, instance)?;
         let core = load_revision_core(&transaction, &revision)?;
         let Some((payload, _)) = binding_payload(&transaction, instance, input)? else {
             if input_declaration(&core, input).is_none() {
@@ -411,7 +413,7 @@ fn resolve_instance_name_from(
     Ok(Some(instance_id(id)?))
 }
 
-fn insert_payload(
+pub(super) fn insert_payload(
     transaction: &Transaction<'_>,
     instance: InstanceId,
     protection: ManagedInputProtection,
@@ -692,7 +694,10 @@ pub(super) fn reclaim_payload_if_unreferenced(
 ) -> Result<bool, PersistenceError> {
     let referenced: bool = transaction
         .query_row(
-            "SELECT EXISTS(                SELECT 1 FROM managed_input_bindings WHERE instance_id=?1 AND payload_id=?2             ) OR EXISTS(                SELECT 1 FROM run_payload_pins WHERE instance_id=?1 AND payload_id=?2             )",
+            "SELECT EXISTS(SELECT 1 FROM managed_input_bindings WHERE instance_id=?1 AND payload_id=?2) \
+             OR EXISTS(SELECT 1 FROM run_payload_pins WHERE instance_id=?1 AND payload_id=?2) \
+             OR EXISTS(SELECT 1 FROM run_migration_payload_pins WHERE instance_id=?1 AND payload_id=?2) \
+             OR EXISTS(SELECT 1 FROM run_migration_checkpoint_bindings WHERE instance_id=?1 AND payload_id=?2)",
             params![
                 instance.as_bytes().as_slice(),
                 payload.as_bytes().as_slice()

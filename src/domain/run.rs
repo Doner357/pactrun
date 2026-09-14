@@ -81,6 +81,7 @@ closed_rank!(ManagedExecutionKind, "managed execution kind", {
     Action = 0,
     SnapshotCapture = 1,
     SnapshotRestore = 2,
+    Migration = 3,
 });
 
 closed_rank!(RecoveryRiskState, "recovery risk", {
@@ -111,6 +112,7 @@ pub(crate) enum RunFailedStep {
     Admission,
     Plan(ActionPlanStep),
     SnapshotPlan(SnapshotPlanStep),
+    MigrationPlan(super::MigrationPlanStep),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -125,6 +127,7 @@ pub(crate) enum SnapshotPlanStep {
 impl RunFailedStep {
     pub(crate) fn rank(self) -> i64 {
         match self {
+            Self::MigrationPlan(step) => step.rank() + 1,
             Self::Admission => 0,
             Self::Plan(ActionPlanStep::EstablishSession) => 1,
             Self::Plan(ActionPlanStep::LaunchHook) => 2,
@@ -160,6 +163,11 @@ impl RunFailedStep {
         let action = Self::from_rank(rank)?;
         if kind == ManagedExecutionKind::Action || rank == 0 {
             return Ok(action);
+        }
+        if kind == ManagedExecutionKind::Migration {
+            return super::MigrationPlanStep::from_rank(rank - 1)
+                .map(Self::MigrationPlan)
+                .map_err(|_| RunRecordError::new("invalid Migration step"));
         }
         Ok(Self::SnapshotPlan(match rank {
             1 => SnapshotPlanStep::EstablishSession,
@@ -229,6 +237,7 @@ pub(crate) struct ActionRunIdentity {
 /// it is resolved against the operation's authoritative Revision declaration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ManagedRunIdentity {
+    Migration(super::MigrationRunIdentity),
     Action(ActionRunIdentity),
     Capture {
         revision: RevisionIdentity,
@@ -242,6 +251,7 @@ pub(crate) enum ManagedRunIdentity {
 impl ManagedRunIdentity {
     pub(crate) fn kind(&self) -> ManagedExecutionKind {
         match self {
+            Self::Migration(_) => ManagedExecutionKind::Migration,
             Self::Action(_) => ManagedExecutionKind::Action,
             Self::Capture { .. } => ManagedExecutionKind::SnapshotCapture,
             Self::Restore { .. } => ManagedExecutionKind::SnapshotRestore,
@@ -249,6 +259,7 @@ impl ManagedRunIdentity {
     }
     pub(crate) fn revision(&self) -> &RevisionIdentity {
         match self {
+            Self::Migration(migration) => migration.source(),
             Self::Action(action) => &action.revision,
             Self::Capture { revision } | Self::Restore { revision, .. } => revision,
         }
@@ -259,6 +270,7 @@ impl ManagedRunIdentity {
         core: &super::RevisionCoreV1,
     ) -> Result<super::OperationAccessV1, RunRecordError> {
         match self {
+            Self::Migration(_) => Some(super::OperationAccessV1::Mutate),
             Self::Action(action) => core
                 .actions()
                 .iter()
@@ -360,6 +372,7 @@ pub(crate) struct ManagedRunInspectionData {
     pub(crate) run: ManagedRunView,
     pub(crate) current_recovery_guard: Option<RecoveryGuardView>,
     pub(crate) capture_result: Option<super::SnapshotId>,
+    pub(crate) migration_progress: Option<super::MigrationRunProgress>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -443,7 +456,7 @@ impl AdmissionRefusal {
             }
             Self::PlanInvalidated(reason) => format!("the Plan is invalidated: {reason}"),
             Self::MutationConflict(_) => {
-                "another Mutate Action Run is admitted on this Instance".to_owned()
+                "another Mutate execution is admitted on this Instance".to_owned()
             }
         }
     }

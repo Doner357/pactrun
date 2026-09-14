@@ -16,5 +16,7 @@ These are behavior contracts, not usage tutorials. Consult implementation status
 - [Packages, Revisions, and Instances](./packages-revisions-and-instances.md): Understand the relationship between a Package lineage, an exact Revision, and a long-lived Instance. Installation, configuration readiness, and future lifecycle support are separate questions.
 - [Snapshots, Migration, and Recovery](./snapshots-migrations-and-recovery.md): Compare observable Snapshot, Migration, and recovery behavior. Check the implementation record before treating specified future operations as available.
 
+- [M5 Migration Commands](./m5-migration-command-reference.md): Path-ID discovery/selection, read-only planning, target-qualified files, and declarative/Hook-backed execution.
+
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

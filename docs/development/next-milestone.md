@@ -1,12 +1,13 @@
 ---
-title: Baseline and M5 Handoff
+title: Baseline and M6 Handoff
 ---
 
 # Current baseline and next milestone
 
 **Status: Informative handoff derived from the roadmap and owning contracts.**
-Document migration is complete for existing normative pages. This does not
-approve the next product milestone or close its future design decisions.
+Document migration is complete for existing normative pages. M5 was separately
+approved on 2026-09-13; documentation migration itself granted no implementation
+approval. Implementation evidence is recorded separately from design approval.
 
 ## What is already recorded as implemented
 
@@ -16,18 +17,26 @@ Restore, Snapshot inspection/verification, bundle import/export, and explicit
 storage upgrade on V5. It is a historical implementation record, not a substitute
 for validating a new code change.
 
-- Current persistence: [V5](../spec/persistence/persistence-schema-v5.md), internal and non-Frozen.
+The working-tree baseline adds [M5 Managed Input Migration](./m5-implementation-status.md):
+path IDs, operator file acquisition, Frozen Migration Hooks, per-edge atomic
+publication and bounded interruption/reconciliation. M5 integration is separate;
+this implementation work does not commit, push or merge the feature branch.
+
+- Current persistence: [V6](../spec/persistence/persistence-schema-v6.md), internal and non-Frozen, with explicit exact-V5 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: [Candidate V1](../spec/contracts/pack-source-yaml-v1.md), not a public compatibility promise.
 - Frozen [Core](../spec/contracts/revision-core-format-v1.md), [Hook protocol](../spec/contracts/hook-protocol-v1.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
 
-## M5 is the next design/implementation handoff, still Proposed
+## M5 implementation is complete; integration remains separate
 
-The [M5 roadmap section](./implementation-roadmap.md#m5---migration) remains
-**Proposed**. This documentation task does not change it to Planned or grant
-runtime implementation approval. The next step is a bounded M5 scope and
-dependency review using the now-consolidated contracts.
+The [M5 roadmap section](./implementation-roadmap.md#m5---migration) is
+**Implemented; integration pending** under the
+[approved baseline](./design-notes/m5-migration-implementation-baseline.md).
+[Implementation status](./m5-implementation-status.md) records the typed compiler,
+V6 upgrade, declarative/operator/Hook execution, regression evidence and exact-tree
+verification discipline. The delivery report must include the final post-closeout
+cargo xtask ci result and source-manifest check before integration.
 
 ### Already defined: preserve these decisions
 
@@ -36,18 +45,28 @@ dependency review using the now-consolidated contracts.
 - Managed Input transitions, staged targets, incomplete intermediate state, and per-edge commit behavior as bounded in the roadmap.
 - The shared [acceptance/concurrency](../spec/execution/execution-and-concurrency.md), [risk/recovery](../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../spec/contracts/hook-protocol-v1.md) contracts.
 
-### Resolve in the M5 approval baseline
+### Handoff checks
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | Explicit bounded approval and completion gates; do not infer approval from this handoff |
-| Runtime/persistence integration | Map per-edge state and commit/recovery evidence onto the existing substrate; identify any compatibility-constraining schema change before implementing it |
-| Command and diagnostic surface | Reuse already defined behavior; decide exact new spelling or output only where the [command contract](../spec/behavior/command-and-output-reference.md) leaves it open |
-| Verification plan | Map owning rules to real tests for valid/invalid sources, writer conflicts, staging, intermediate states, and interruption/per-edge outcomes; preserve existing regression protection |
+| Scope and work order | Approved M5 S0-S5 scope implemented; branch integration requires an explicit request |
+| Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
+| Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
+| Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
 | Contract conflict, if discovered | Name the conflicting rules and obtain semantic review instead of weakening a Frozen expectation |
 
-These are review deliverables, not newly invented product requirements. This
-handoff does not claim a new schema, command, or Hook version is necessary.
+The owning Spec pages define the approved new command and V6 direction. Frozen
+HookProtocolV1 remains unchanged. The handoff is not a replacement for the
+exact-source validation report.
+
+## M6 is the next proposed milestone, not implicitly approved
+
+Start by reviewing the broader pending recovery requirements and producing the
+next bounded baseline. Reuse M5's owner continuation, risk handshake, exact pins,
+committed boundary evidence and explicit reconciliation. Do not reinterpret an
+Interrupted Run as resumable, salvage uncommitted output files, or broaden the
+Managed Input checkpoint into a service-owned resource representation. M6 design
+approval and branch integration are separate from this M5 implementation request.
 
 ## Deferred work must not leak into bounded M5
 
@@ -66,7 +85,7 @@ not introduced by this migration.
 
 ## Evidence caveat
 
-Existing pending verification declarations remain unchanged, including broader
-rules that coexist with narrower implemented requirements. Related tests do not
-automatically close a broader rule. The migration preserves the evidence graph;
-it does not retrospectively certify every promise as completely covered.
+Managed Input Migration requirements now link to their direct automated evidence.
+Broader pending requirements, especially ServiceStorage and Package/service-owned
+transformation rules, remain pending. Related Managed Input tests do not
+automatically close those rules or retrospectively certify every future promise.

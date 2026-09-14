@@ -1,4 +1,4 @@
-//! Frozen HookProtocolV1 framing and operation-specific Action/Capture/Restore decoding.
+//! Frozen HookProtocolV1 framing and Action/Capture/Restore/Migration decoding.
 //!
 //! The state machine is pure so the Frozen Action vectors can drive it
 //! directly; the runtime applies its typed steps (durable risk writes,
@@ -33,6 +33,7 @@ pub(super) enum SessionOperation {
     Action,
     Capture,
     Restore,
+    Migration,
 }
 impl SessionOperation {
     fn wire_name(self) -> &'static str {
@@ -40,6 +41,7 @@ impl SessionOperation {
             Self::Action => "action",
             Self::Capture => "snapshot_capture",
             Self::Restore => "snapshot_restore",
+            Self::Migration => "migration",
         }
     }
 }
@@ -79,6 +81,9 @@ impl ConnectedProtocol {
 
     pub(super) fn start_restore(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
         Self::start_for(stream, session, SessionOperation::Restore)
+    }
+    pub(super) fn start_migration(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
+        Self::start_for(stream, session, SessionOperation::Migration)
     }
 
     fn start_for(
@@ -457,6 +462,13 @@ fn parse_completion(
                 &["operation", "status", "service_content", "code", "message"]
             }
             SessionOperation::Restore => &["operation", "status", "code", "message"],
+            SessionOperation::Migration => &[
+                "operation",
+                "status",
+                "produced_target_outputs",
+                "code",
+                "message",
+            ],
         },
     )?;
     if take_string(&mut object, "operation")? != operation.wire_name() {
@@ -482,17 +494,27 @@ fn parse_completion(
         Some(RawJsonValue::String(value)) => Some(value),
         Some(_) => return Err(invalid_message()),
     };
-    let produced_outputs = if operation == SessionOperation::Action {
-        take_array(&mut object, "produced_outputs")?
-            .into_iter()
-            .map(|value| match value {
-                RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
-                _ => Err(ProtocolFailure::new(
-                    "invalid_authority",
-                    "output authority handle is not an AuthorityHandleV1",
-                )),
-            })
-            .collect::<Result<Vec<_>, _>>()?
+    let produced_outputs = if matches!(
+        operation,
+        SessionOperation::Action | SessionOperation::Migration
+    ) {
+        take_array(
+            &mut object,
+            if operation == SessionOperation::Migration {
+                "produced_target_outputs"
+            } else {
+                "produced_outputs"
+            },
+        )?
+        .into_iter()
+        .map(|value| match value {
+            RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
+            _ => Err(ProtocolFailure::new(
+                "invalid_authority",
+                "output authority handle is not an AuthorityHandleV1",
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?
     } else {
         Vec::new()
     };
@@ -731,6 +753,12 @@ impl ProtocolState {
             ..Self::new(session_id, BTreeSet::new())
         }
     }
+    pub(super) fn new_migration(session_id: String, outputs: BTreeSet<String>) -> Self {
+        Self {
+            operation: SessionOperation::Migration,
+            ..Self::new(session_id, outputs)
+        }
+    }
 
     #[cfg(test)]
     pub(super) fn accept_restore_bytes(
@@ -852,9 +880,20 @@ impl ProtocolState {
                     if !self.declared_outputs.contains(handle) {
                         return Err(ProtocolFailure::new(
                             "invalid_authority",
-                            "Action submitted an unallocated output handle",
+                            "Hook submitted an unallocated output handle",
                         ));
                     }
+                }
+                if self.operation == SessionOperation::Migration
+                    && ((completion.status == HookCompletionStatus::Success
+                        && submitted.len() != self.declared_outputs.len())
+                        || (completion.status == HookCompletionStatus::Failure
+                            && !submitted.is_empty()))
+                {
+                    return Err(ProtocolFailure::new(
+                        "invalid_completion",
+                        "Migration must submit all target outputs on success and none on failure",
+                    ));
                 }
                 self.phase = Phase::Terminal;
                 Ok(ProtocolStep::Completed(completion))
@@ -977,4 +1016,9 @@ mod tests {
 #[cfg(test)]
 mod capture_tests {
     include!("capture_protocol_tests.rs");
+}
+
+#[cfg(test)]
+mod migration_tests {
+    include!("migration_protocol_tests.rs");
 }

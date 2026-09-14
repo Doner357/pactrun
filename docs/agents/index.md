@@ -8,7 +8,8 @@ placeholders; do not interpret them as completed tutorials.
 
 - Read the [Spec map](../spec/index.md). Only Spec defines product requirements.
 - Read [current baseline and M5 handoff](../development/next-milestone.md). M5
-  remains Proposed; a document move is not implementation approval.
+  is Planned and in progress under a separately approved baseline; a document
+  move is not implementation approval or completion evidence.
 - In a checkout, read applicable repository instructions and CONTRIBUTING.md.
   Use the checkout revision and working-tree state to identify the source.
 - In the published text edition, [publication metadata](../publication.json)

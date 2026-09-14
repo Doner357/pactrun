@@ -10,7 +10,7 @@ non-public. Superseded as the current schema by PersistenceSchemaV4.**
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-This earlier internal schema remains a normative compatibility and historical contract. Read V5 for the current layout; an intermediate successor mentioned below is not the current schema or permission for an implicit upgrade.
+This earlier internal schema remains a normative compatibility and historical contract. Read V6 for the current layout; an intermediate successor mentioned below is not the current schema or permission for an implicit upgrade.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.

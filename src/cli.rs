@@ -22,6 +22,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
+mod migrations;
 mod snapshots;
 
 use crate::{
@@ -47,6 +48,8 @@ Usage:\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
   pactrun instance list\n\
   pactrun instance show <instance>\n\
+  pactrun instance migration-paths <instance> --to <reference> [--limit <1..100>] [--after <path-id>]\n\
+  pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]\n\
   pactrun instance resolve-manual-recovery <instance> [--if-version <token>]\n\
   pactrun input list <instance>\n\
   pactrun input set <instance> <input-id> (--file <path> | --stdin) [--if-version <token>]\n\
@@ -71,10 +74,12 @@ Snapshot execution options: --param, --param-file, --param-stdin, --plan, --auth
   --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
 Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
 Snapshot bundles use filesystem paths only, never stdin/stdout.\n\
+Migration supports declared no-Hook edges; Hook execution and operator file inputs are not yet available.\n\
 \n\
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    Migration(migrations::MigrationCommand),
     Snapshot(snapshots::SnapshotCommand),
     Help,
     Version,
@@ -142,6 +147,7 @@ enum Command {
     UpgradeStorage,
 }
 
+#[derive(Clone)]
 enum RevisionReference {
     Label(ReferenceLabel),
     Alias(LocalAlias),
@@ -484,6 +490,8 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
 
 fn parse_instance(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "instance command")?.as_str() {
+        "migration-paths" => migrations::parse(parser, true).map(Command::Migration),
+        "migrate" => migrations::parse(parser, false).map(Command::Migration),
         "create" => {
             let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
             let mut revision = None;
@@ -808,6 +816,9 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
+    if let Command::Migration(command) = command {
+        return migrations::execute(command, &storage_root, stdout, cancellation);
+    }
     if let Command::Snapshot(command) = command {
         return snapshots::execute(command, &storage_root, stdin, stdout, stderr, cancellation);
     }
@@ -819,7 +830,8 @@ fn execute(
             .map_err(|error| CliError::operation(error.to_string()))?;
         return writeln!(
             stdout,
-            "storage schema: V5 ({})",
+            "storage schema: V{} ({})",
+            crate::persistence::SCHEMA_VERSION,
             if upgraded {
                 "upgraded"
             } else {
@@ -1180,6 +1192,7 @@ fn execute(
         | Command::Version
         | Command::GeneratePackageId
         | Command::UpgradeStorage
+        | Command::Migration(_)
         | Command::Snapshot(_) => {
             unreachable!()
         }
@@ -1394,6 +1407,14 @@ fn format_native_path(path: &Path) -> String {
 
 fn format_failed_step(step: crate::domain::RunFailedStep) -> String {
     match step {
+        crate::domain::RunFailedStep::MigrationPlan(step) => match step {
+            crate::domain::MigrationPlanStep::EstablishSession => "establish_session",
+            crate::domain::MigrationPlanStep::LaunchHook => "launch_hook",
+            crate::domain::MigrationPlanStep::AcceptCompletion => "accept_completion",
+            crate::domain::MigrationPlanStep::PublishManagedResult => "publish_managed_result",
+            crate::domain::MigrationPlanStep::Finalize => "finalize",
+        }
+        .to_owned(),
         crate::domain::RunFailedStep::Admission => "admission".to_owned(),
         crate::domain::RunFailedStep::Plan(step) => plan_step_name(step).to_owned(),
         crate::domain::RunFailedStep::SnapshotPlan(step) => match step {
@@ -2029,8 +2050,13 @@ fn parse_input_id(value: &str) -> Result<InputIdentity, CliError> {
     InputIdentity::parse(value.to_owned()).map_err(|error| CliError::usage(error.to_string()))
 }
 
-#[cfg(windows)]
 fn split_initial_input_file(value: OsString) -> Result<(InputIdentity, PathBuf), CliError> {
+    let (input, path) = split_input_file(value)?;
+    Ok((parse_input_id(&input)?, path))
+}
+
+#[cfg(windows)]
+fn split_input_file(value: OsString) -> Result<(String, PathBuf), CliError> {
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
 
     let units = value.encode_wide().collect::<Vec<_>>();
@@ -2046,11 +2072,11 @@ fn split_initial_input_file(value: OsString) -> Result<(InputIdentity, PathBuf),
     let input = String::from_utf16(&units[..separator])
         .map_err(|_| CliError::usage("Input identity must be valid Unicode"))?;
     let path = OsString::from_wide(&units[separator + 1..]);
-    Ok((parse_input_id(&input)?, PathBuf::from(path)))
+    Ok((input, PathBuf::from(path)))
 }
 
 #[cfg(unix)]
-fn split_initial_input_file(value: OsString) -> Result<(InputIdentity, PathBuf), CliError> {
+fn split_input_file(value: OsString) -> Result<(String, PathBuf), CliError> {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
     let bytes = value.as_bytes();
@@ -2066,7 +2092,7 @@ fn split_initial_input_file(value: OsString) -> Result<(InputIdentity, PathBuf),
     let input = std::str::from_utf8(&bytes[..separator])
         .map_err(|_| CliError::usage("Input identity must be valid UTF-8"))?;
     let path = OsString::from_vec(bytes[separator + 1..].to_vec());
-    Ok((parse_input_id(input)?, PathBuf::from(path)))
+    Ok((input.to_owned(), PathBuf::from(path)))
 }
 
 fn parse_state_version(value: String) -> Result<InstanceStateVersion, CliError> {

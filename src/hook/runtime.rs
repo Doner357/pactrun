@@ -1,4 +1,4 @@
-//! Synchronous one-shot Action Hook supervision.
+//! Shared synchronous one-shot Hook supervision.
 //!
 //! One outcome arbiter locks the first winning event (accepted completion,
 //! cancellation, startup or action deadline, or premature Hook loss). Every
@@ -138,6 +138,16 @@ pub(super) fn execute_registered(
         Ok(materialized) => materialized,
         Err(_) => return ready_failure(run, FailureKind::SessionMaterialization, Vec::new(), None),
     };
+    execute_materialized(risk_persistence, run, materialized, policy, cancellation)
+}
+
+pub(super) fn execute_materialized(
+    risk_persistence: &dyn RecoveryRiskPersistence,
+    run: RunId,
+    materialized: MaterializedAction,
+    policy: HookRuntimePolicy,
+    cancellation: ActionCancellation,
+) -> OwnerContinuation {
     if cancellation.is_requested() {
         let (execution, outputs) = materialized.into_execution();
         return ready_cancelled(run, outputs, Some(execution));
@@ -158,7 +168,7 @@ pub(super) fn execute_registered(
         ProcessSupervisor::spawn(
             materialized.program(),
             materialized.arguments(),
-            admitted.plan().terminal(),
+            materialized.terminal(),
             &listener,
         )
     }) {
@@ -173,10 +183,17 @@ pub(super) fn execute_registered(
         }
     };
     let started = Instant::now();
-    let state = ProtocolState::new(
-        materialized.session_id().to_owned(),
-        materialized.output_handle_set(),
-    );
+    let state = if materialized.operation() == super::protocol::SessionOperation::Migration {
+        ProtocolState::new_migration(
+            materialized.session_id().to_owned(),
+            materialized.output_handle_set(),
+        )
+    } else {
+        ProtocolState::new(
+            materialized.session_id().to_owned(),
+            materialized.output_handle_set(),
+        )
+    };
     drive_execution(
         risk_persistence,
         LiveExecution {
@@ -358,6 +375,7 @@ fn snapshot_before_launch(
         process_terminated: false,
         submitted_outputs: Vec::new(),
         outputs,
+        migration_outputs: Vec::new(),
         execution: Some(execution),
     };
     if restore {
@@ -420,6 +438,9 @@ fn drive_execution(
                         }
                         super::protocol::SessionOperation::Restore => {
                             ConnectedProtocol::start_restore(stream, live.materialized.session())
+                        }
+                        super::protocol::SessionOperation::Migration => {
+                            ConnectedProtocol::start_migration(stream, live.materialized.session())
                         }
                     };
                     match connected {
@@ -671,6 +692,7 @@ pub(super) fn resume_registered(
     continuation: OwnerContinuation,
 ) -> OwnerContinuation {
     match continuation {
+        OwnerContinuation::Migration(state) => OwnerContinuation::Migration(state),
         OwnerContinuation::RestoreFinalization(state) => {
             OwnerContinuation::RestoreFinalization(state)
         }
@@ -823,6 +845,7 @@ fn finish_after_exit(
     let capture_mode = live.materialized.operation() == super::protocol::SessionOperation::Capture;
     let restore_mode = live.materialized.operation() == super::protocol::SessionOperation::Restore;
     let capture = live.materialized.take_capture();
+    let migration_outputs = live.materialized.take_migration_outputs();
     let (execution, outputs) = live.materialized.into_execution();
     let facts = RuntimeTerminalFacts {
         run: live.run,
@@ -834,6 +857,7 @@ fn finish_after_exit(
         process_terminated: true,
         submitted_outputs,
         outputs,
+        migration_outputs,
         execution: Some(execution),
     };
     if capture_mode {

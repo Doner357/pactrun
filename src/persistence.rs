@@ -9,11 +9,15 @@ mod runtime_content_store;
 #[cfg(test)]
 mod schema_v5_contract_tests;
 mod sqlite_instances;
+mod sqlite_migration_runs;
+mod sqlite_migrations;
 mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
 mod sqlite_snapshots;
 mod sqlite_v5;
+mod sqlite_v6;
+pub(crate) use sqlite_revision_store::SCHEMA_VERSION;
 pub(crate) use sqlite_snapshots::{
     SnapshotImportReceipt, SnapshotInspection, SnapshotVerification,
 };
@@ -67,6 +71,9 @@ pub(crate) use runtime_content_store::{
 };
 #[allow(unused_imports)]
 pub(crate) use sqlite_instances::ManagedInputWrite;
+pub(crate) use sqlite_migration_runs::MigrationEdgePublication;
+#[cfg(test)]
+pub(crate) use sqlite_migration_runs::fail_next_edge_ack_for_test as fail_next_migration_edge_ack_for_test;
 #[allow(unused_imports)]
 pub(crate) use sqlite_revision_store::{
     FaultPoint, PactrunPersistence, PersistenceError, StoredRevisionContentV1, fault,
