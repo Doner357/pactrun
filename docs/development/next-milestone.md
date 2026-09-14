@@ -17,10 +17,10 @@ Restore, Snapshot inspection/verification, bundle import/export, and explicit
 storage upgrade on V5. It is a historical implementation record, not a substitute
 for validating a new code change.
 
-The working-tree baseline adds [M5 Managed Input Migration](./m5-implementation-status.md):
+The integrated baseline adds [M5 Managed Input Migration](./m5-implementation-status.md):
 path IDs, operator file acquisition, Frozen Migration Hooks, per-edge atomic
-publication and bounded interruption/reconciliation. M5 integration is separate;
-this implementation work does not commit, push or merge the feature branch.
+publication and bounded interruption/reconciliation. The authorized local merge
+is recorded in the closeout; remote publication is separate from integration.
 
 - Current persistence: [V6](../spec/persistence/persistence-schema-v6.md), internal and non-Frozen, with explicit exact-V5 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
@@ -28,15 +28,16 @@ this implementation work does not commit, push or merge the feature branch.
 - Pack source spelling: [Candidate V1](../spec/contracts/pack-source-yaml-v1.md), not a public compatibility promise.
 - Frozen [Core](../spec/contracts/revision-core-format-v1.md), [Hook protocol](../spec/contracts/hook-protocol-v1.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
 
-## M5 implementation is complete; integration remains separate
+## M5 is implemented and integrated into develop
 
 The [M5 roadmap section](./implementation-roadmap.md#m5---migration) is
-**Implemented; integration pending** under the
+**Implemented and integrated into develop** under the
 [approved baseline](./design-notes/m5-migration-implementation-baseline.md).
 [Implementation status](./m5-implementation-status.md) records the typed compiler,
 V6 upgrade, declarative/operator/Hook execution, regression evidence and exact-tree
-verification discipline. The delivery report must include the final post-closeout
-cargo xtask ci result and source-manifest check before integration.
+verification discipline. The delivery report must include the final post-integration
+cargo xtask ci result and source-manifest check. A remote push still needs its
+configured destination and a non-force branch-state check.
 
 ### Already defined: preserve these decisions
 
@@ -49,7 +50,7 @@ cargo xtask ci result and source-manifest check before integration.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | Approved M5 S0-S5 scope implemented; branch integration requires an explicit request |
+| Scope and work order | Approved M5 S0-S5 scope implemented and locally integrated after operator authorization; M6 remains Proposed |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -66,7 +67,7 @@ next bounded baseline. Reuse M5's owner continuation, risk handshake, exact pins
 committed boundary evidence and explicit reconciliation. Do not reinterpret an
 Interrupted Run as resumable, salvage uncommitted output files, or broaden the
 Managed Input checkpoint into a service-owned resource representation. M6 design
-approval and branch integration are separate from this M5 implementation request.
+approval remains separate from the completed M5 implementation and integration.
 
 ## Deferred work must not leak into bounded M5
 

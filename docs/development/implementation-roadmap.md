@@ -653,12 +653,12 @@ Completion gate:
 
 ### M5 - Migration
 
-**State: Implemented; integration pending.**
+**State: Implemented and integrated into develop.**
 
 The [approved M5 baseline](./design-notes/m5-migration-implementation-baseline.md)
 records the 2026-09-13 decisions. The [M5 closeout](./m5-implementation-status.md)
-records the implementation scope and final-tree verification gates. The feature
-branch has not been committed, merged or integrated by this work.
+records the implementation scope, authorized local Git integration and final-tree
+verification gates. Integration does not imply a remote push, release or deployment.
 
 Implemented target-owned Migration graphs, chaining, normalized transitions,
 typed active/retained source references, target requirements and outputs,

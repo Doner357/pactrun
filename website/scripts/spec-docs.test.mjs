@@ -61,17 +61,20 @@ test('main sidebar uses Spec and Development instead of compatibility locations'
   assert.match(sidebar, /development\/index/);
 });
 
-test('M5 closeout keeps integration separate and does not advance proposed M6', () => {
+test('M5 integration closes README and handoff without advancing proposed M6', async () => {
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
   const baseline = docs.find(([name]) => name === 'development/design-notes/m5-migration-implementation-baseline.md')[1];
   const status = docs.find(([name]) => name === 'development/m5-implementation-status.md')[1];
-  assert.match(roadmap, /### M5 - Migration\s+\*\*State: Implemented; integration pending\.\*\*/);
+  assert.match(roadmap, /### M5 - Migration\s+\*\*State: Implemented and integrated into develop\.\*\*/);
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Proposed\.\*\*/);
   assert.match(baseline, /Approved scope and implementation decisions, 2026-09-13/);
-  assert.match(status, /Implemented; not committed, merged, or integrated/);
+  assert.match(status.replace(/\s+/g, ' '), /approved M5 scope is implemented, verified and integrated into local develop/);
   assert.match(status, /Current production storage is V6/);
   assert.match(status.replace(/\s+/g, ' '), /Hook-backed chains and operator file inputs are integrated into the existing Migration Run path/);
   assert.match(status.replace(/\s+/g, ' '), /No ServiceStorage representation\/runtime, generalized M6 recovery/);
+  const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+  assert.match(readme.replace(/\s+/g, ' '), /target-qualified operator file inputs, declarative and Hook-backed chains/);
+  assert.doesNotMatch(readme, /in-progress M5|not full M5 completion|remain pending; this is/);
 });
 
 test('roadmap distinguishes historical V4 introduction from the current schema', () => {

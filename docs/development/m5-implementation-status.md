@@ -4,13 +4,25 @@ title: M5 Implementation Status
 
 # M5 implementation status
 
-**Status: Implemented; not committed, merged, or integrated.**
+**Status: Complete. The approved M5 scope is implemented, verified and integrated
+into local develop. This is not a release or Pages deployment.**
 
 The [approved baseline](./design-notes/m5-migration-implementation-baseline.md)
-fixes M5 scope. The working-tree implementation closes that Managed Input scope;
-integration and publication require separate operator authorization. Completion
-evidence must include full CI after the final closeout edit, not only the earlier
-runtime-integration pass. The delivery report records the tested source manifest.
+fixes M5 scope. The operator subsequently authorized commit, merge and push.
+Implementation commit `e40f4569111b8b0e2ae70d4b3663d0733cef2f82` was integrated
+on September 14, 2026 by no-fast-forward merge
+`3d01aedd193e8d38fb0ce99da66e8be2ecb63840`. The merge tree is identical to the
+verified feature tree. The retained feature branch records implementation;
+develop is the integrated baseline. This follow-up updates integration records
+and corrects the obsolete README capability description.
+
+At this local integration step no Git remote was configured, so no push was
+performed. The SSH CI workspace is not a Git publication destination. Publication
+requires the operator's destination URL and non-force reconciliation with its
+actual branch state. No release tag, branch deletion or Pages deployment is added.
+
+Completion evidence must include full CI after the final integration-document
+edit. The delivery report records that exact source manifest and CI result.
 
 ## Implemented foundation
 
@@ -81,8 +93,8 @@ ServiceStorage/Package-transformation requirements remain pending, including the
 future-facing scope of PR-REQ-0159, PR-REQ-0166, PR-REQ-0237, PR-REQ-0238 and
 PR-REQ-0245. Managed Input evidence must not be used to close those future rules.
 
-The existing Pages workflow and deployment configuration are unchanged. Branch
-integration, commits and pushes are outside this implementation closeout.
+The existing Pages workflow and deployment configuration are unchanged. The
+unrelated untracked Pages workflow and pactrun.zip are excluded from all commits.
 
 ## Resolved command decision
 
