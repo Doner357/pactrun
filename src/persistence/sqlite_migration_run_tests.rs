@@ -477,7 +477,7 @@ fn owner_continuation_retries_lost_commit_ack_without_repeating_an_edge() {
 }
 
 // Test-ID: PR-TEST-0306
-// Verifies: PR-REQ-0313
+// Verifies: PR-REQ-0313, PR-REQ-0070
 #[test]
 fn open_risk_never_publishes_success_and_terminal_recovery_preserves_current_boundary() {
     let (_tmp, root) = root();
@@ -583,7 +583,7 @@ fn migration_worker() {
 }
 
 // Test-ID: PR-TEST-0304
-// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0165
+// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0165, PR-REQ-0053, PR-REQ-0061, PR-REQ-0062
 #[test]
 fn edge_crashes_reconcile_without_plan_or_replay_and_final_edge_has_no_running_window() {
     for (edge, point, committed, succeeded) in [

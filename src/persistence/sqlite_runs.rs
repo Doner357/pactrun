@@ -831,10 +831,16 @@ impl PactrunPersistence {
             )
             .map_err(|error| PersistenceError::sqlite("publish recovery risk state", error))?;
         fault(FaultPoint::BeforeRecoveryRiskCommit);
+        if next == RecoveryRiskState::Clear {
+            fault(FaultPoint::BeforeRecoveryResolutionCommit);
+        }
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("commit recovery risk transition", error))?;
         fault(FaultPoint::AfterRecoveryRiskCommit);
+        if next == RecoveryRiskState::Clear {
+            fault(FaultPoint::AfterRecoveryResolutionCommit);
+        }
         Ok(())
     }
 
@@ -943,9 +949,11 @@ impl PactrunPersistence {
             .map_err(|error| PersistenceError::sqlite("clear recovery guard", error))?;
         let next = fresh_state_version()?;
         update_state_version(&transaction, instance, next)?;
+        fault(FaultPoint::BeforeManualRecoveryCommit);
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("commit ResolveManualRecovery", error))?;
+        fault(FaultPoint::AfterManualRecoveryCommit);
         Ok(next)
     }
 

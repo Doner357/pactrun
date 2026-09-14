@@ -5,6 +5,10 @@ use crate::executor::AdmissionOptions;
 use crate::workflow::{PlatformHostLauncherLookup, compile_snapshot};
 use std::io::Write;
 
+mod recovery {
+    include!("sqlite_recovery_tests.rs");
+}
+
 fn compile(
     app: &PactrunApplication,
     view: &InstanceView,

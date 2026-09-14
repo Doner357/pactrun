@@ -431,6 +431,38 @@ fn parameters(mode: &str, marker: &Path) -> Vec<RawParameterInput> {
     .collect()
 }
 
+// Test-ID: PR-TEST-0328
+// Verifies: PR-REQ-0057, PR-REQ-0058, PR-REQ-0059
+#[test]
+fn trusted_hook_mutation_after_risk_ack_is_not_rolled_back_by_recovery() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("trusted-external");
+    let admitted = fixture.admit("direct", "trusted_external_failure", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert_eq!(running_risk(&fixture.storage, run), RecoveryRiskState::Open);
+    let service = marker_variant(&marker, "service");
+    assert_eq!(fs::read(&service).unwrap(), b"service-mutated-after-ack");
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    assert!(
+        matches!(load_run(&fixture.storage, run).state, RunState::Finished(o)
+        if o.outcome == RunOutcome::Failed && o.terminal_risk == RecoveryRiskState::Open)
+    );
+    assert!(
+        persistence(&fixture.storage)
+            .load_instance_recovery_guard(fixture.instance.id)
+            .unwrap()
+            .is_some()
+    );
+    let reopened = PactrunApplication::open(&fixture.storage).unwrap();
+    assert!(reopened.reconcile_lost_managed_owners().unwrap().is_empty());
+    assert_eq!(fs::read(&service).unwrap(), b"service-mutated-after-ack");
+}
+
 fn take_facts(application: &PactrunApplication, run: RunId) -> RuntimeTerminalFacts {
     let guard = application
         .take_owner_continuation(run)
@@ -731,8 +763,17 @@ impl HookWorker {
                 self.complete(json!({"status": "success", "produced_outputs": []}));
                 self.expect_accepted();
             }
-            "risk_open_failure" => {
+            "risk_open_failure" | "trusted_external_failure" => {
                 self.request(1, "enter_recovery_risk", "open");
+                if mode == "trusted_external_failure" {
+                    // Outside execution scratch, inside the test's isolated
+                    // directory: trusted native Hooks are not OS-sandboxed.
+                    fs::write(
+                        marker_variant(&marker, "service"),
+                        b"service-mutated-after-ack",
+                    )
+                    .unwrap();
+                }
                 self.complete(json!({
                     "status": "failure",
                     "code": "service_incoherent",

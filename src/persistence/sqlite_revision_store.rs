@@ -1172,6 +1172,11 @@ pub(crate) enum FaultPoint {
     AfterRunAdmitCommit,
     BeforeRecoveryRiskCommit,
     AfterRecoveryRiskCommit,
+    BeforeRecoveryResolutionCommit,
+    AfterRecoveryResolutionCommit,
+    BeforeManualRecoveryCommit,
+    AfterManualRecoveryCommit,
+    AfterRecoveryOwnerLossProbe,
     BeforeRunFinishCommit,
     AfterRunFinishCommit,
 }
@@ -1202,6 +1207,11 @@ impl FaultPoint {
             Self::AfterRunAdmitCommit => "after_run_admit_commit",
             Self::BeforeRecoveryRiskCommit => "before_recovery_risk_commit",
             Self::AfterRecoveryRiskCommit => "after_recovery_risk_commit",
+            Self::BeforeRecoveryResolutionCommit => "before_recovery_resolution_commit",
+            Self::AfterRecoveryResolutionCommit => "after_recovery_resolution_commit",
+            Self::BeforeManualRecoveryCommit => "before_manual_recovery_commit",
+            Self::AfterManualRecoveryCommit => "after_manual_recovery_commit",
+            Self::AfterRecoveryOwnerLossProbe => "after_recovery_owner_loss_probe",
             Self::BeforeRunFinishCommit => "before_run_finish_commit",
             Self::AfterRunFinishCommit => "after_run_finish_commit",
         }

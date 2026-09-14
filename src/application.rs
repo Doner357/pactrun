@@ -931,6 +931,7 @@ impl PactrunApplication {
             if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {
                 continue;
             }
+            crate::persistence::fault(crate::persistence::FaultPoint::AfterRecoveryOwnerLossProbe);
             let lock = self.mutation_lock(instance)?;
             let _guard = lock.lock().map_err(|_| ApplicationError::LockPoisoned)?;
             if probe_session_owner(&self.storage_root, &owner) != SessionOwnerProbe::ConfirmedLoss {

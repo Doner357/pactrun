@@ -48,8 +48,8 @@ driven development.
 - `HookProtocolV1` is Frozen and merged into `develop` with Rust validation, an
   independent Node 24 valid-fixture oracle, cross-language fixtures, and
   requirement/test traceability. The Action runtime is implemented in M3
-  Slice 4; M4 Capture and Restore now reuse it in `develop`. Migration and Cleanup
-  execution remain deferred.
+  Slice 4; M4 Capture/Restore and M5 Migration reuse it in `develop`. Cleanup
+  execution remains Proposed under M7.
 - The structured error taxonomy is Frozen and merged into `develop` with
   negative fixtures and requirement/test traceability.
 - Runtime launcher integration under `PR-REQ-0194` has Compiler, Admission,
@@ -69,10 +69,14 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV5](../spec/persistence/persistence-schema-v5.md) is the integrated
-  `develop` persistence baseline, with explicit writable admission and exact V4
-  bootstrap. It preserves [PersistenceSchemaV4](../spec/persistence/persistence-schema-v4.md),
-  introduced by M3 Slice 2, and the earlier contracts.
+- [PersistenceSchemaV6](../spec/persistence/persistence-schema-v6.md) is the integrated
+  `develop` persistence baseline, with explicit exact-V5 upgrade and writable
+  admission. It preserves the earlier contracts, including
+  [V5](../spec/persistence/persistence-schema-v5.md) from M4 and
+  [V4](../spec/persistence/persistence-schema-v4.md) from M3 Slice 2.
+- M5 Managed Input Migration is implemented and integrated into `develop`,
+  including operator acquisition, Hook execution, per-edge publication and
+  bounded interruption/reconciliation. See the [M5 closeout](./m5-implementation-status.md).
 - M4 Snapshot lifecycle is `Complete`, with S0-S8 integrated into `develop`.
   Capture writes Frozen integrity V2; V1/V2 import, export, verification and
   exact-compatible Restore are available through the human CLI.
@@ -100,9 +104,11 @@ milestone state taxonomy above:
 | --- | --- |
 | ServiceStorage architecture correction | **Closed.** |
 | ServiceStorage semantic closure | **Closed.** |
-| ServiceStorage representation and runtime | **Deferred.** |
-| Cleanup completion/finalization coordination | **Deferred.** |
-| Abandon non-destruction durable representation | **Deferred.** |
+| ServiceStorage staged design alignment | **Scheduling and design-stage scope approved on 2026-09-14.** No runtime approval. |
+| M6 bounded recovery baseline | **Approved, 2026-09-14.** S0 audit retains V6; S1-S4 may proceed without per-slice approval. |
+| ServiceStorage representation and runtime | **Scheduled for M6.5, after M6 and before M7.** Representation approval still required. |
+| Cleanup completion/finalization coordination | **Assigned to M7 design.** Lifecycle persistence alignment required before M6.5 schema approval. |
+| Abandon non-destruction durable representation | **Cross-stage M6.5/M7 design gate.** M7 owns the operation; no representation selected. |
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
 | M1-D non-identity metadata implementation | **Complete.** |
@@ -125,9 +131,9 @@ Candidate `PackSourceYamlV1` remains a non-Frozen authoring contract. M2
 introduced PersistenceSchemaV3; M3 Slice 2 subsequently integrated
 PersistenceSchemaV4 as the implemented internal schema for that M3 stage.
 PersistenceSchemaV5 was introduced by M4. M5's PersistenceSchemaV6 is now the
-current implemented internal schema, with explicit exact-V5 upgrade only;
-Declarative Migration execution is implemented; Hook and operator-input execution
-remain pending. These contracts remain non-Frozen and non-public.
+current implemented internal schema, with explicit exact-V5 upgrade only.
+Declarative, Hook and operator-input Migration execution are integrated in M5.
+These persistence contracts remain non-Frozen and non-public.
 
 The M3 review is recorded in the
 [M3 Action Execution Approval Baseline](./design-notes/m3-action-execution-approval-baseline.md).
@@ -680,27 +686,84 @@ Acceptance gates, retained as regression requirements:
 
 ### M6 - Recovery
 
-**State: Proposed.**
+**State: In progress.**
 
-Complete and generalize execution ownership, recovery-risk entry and resolution,
-durable self-sufficient recovery state, crash-boundary injection, orphan
-reconciliation, and manual recovery across Snapshot, Migration, Restore,
-Cleanup, and their commit boundaries. Reuse the Action recovery substrate that
-M3 must implement for HookProtocolV1 rather than creating a parallel model.
+The initial 2026-09-14 approval covered Pre-M6 planning and the order
+**Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. The operator subsequently approved
+continuous bounded M6 implementation through S0-S4. Read
+the [staged ServiceStorage alignment](./design-notes/service-storage-staged-design-alignment.md)
+and [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
+The S0 boundary/evidence audit retains exact V6; no new persistence or recovery
+policy is needed. The [implementation record](./m6-implementation-status.md)
+records the added evidence and final verification/integration gates. Completion
+still requires the exact tested tree and authorized integration into develop.
+
+Harden execution ownership, durable risk and recovery state, atomic publication,
+orphan reconciliation, manual recovery and crash evidence for existing Action,
+Capture, Restore and Migration execution. Reuse the integrated M3-M5 substrate,
+including owner leases, continuations and per-edge Migration boundaries. Do not
+introduce a parallel ownership/recovery model, replay Hooks, resume Interrupted
+Runs, or salvage uncommitted outputs.
+
+Delivery slices are S0 contract/evidence review; S1 owner/reconciliation;
+S2 durable evidence/publication/reference lifetime; S3 existing guard and
+diagnostic behavior; S4 crash/concurrency verification and closeout. Keep V6
+unless a demonstrated gap obtains separate persistence/upgrade design approval.
+No new CLI spelling, public Rust API, stable JSON envelope or Frozen wire change
+is included.
 
 Recovery of a Pactrun-owned boundary MUST NOT be presented as rollback or proof
-of coherence for service-owned live resources.
+of coherence for service-owned live resources. ServiceStorage target-publication
+runtime/evidence belongs to M6.5; Cleanup/finalization runtime/evidence belongs
+to M7. Neither is required to exist for bounded M6 completion.
 
 Completion gate:
 
-- crash tests cover every durable transition boundary;
-- recovery does not depend on ephemeral process state;
-- orphan ownership and reconciliation behavior are deterministic;
-- normal execution cannot bypass an open recovery risk.
+- crash tests cover every in-scope durable transition and fresh-process recovery
+  does not depend on a Plan or ephemeral state;
+- held/inconclusive owner leases never authorize interruption, and competing
+  reconcilers publish deterministic outcomes;
+- committed Migration edges, recovery references and diagnosis survive correctly;
+- guard, one-execution override and atomic successful Restore resolution obey
+  their owning contracts; ordinary execution cannot bypass open recovery risk;
+- in-scope mechanically verifiable requirements have bidirectional automated
+  evidence, with exact-source full CI after final closeout edits.
+
+### M6.5 - ServiceStorage
+
+**State: Proposed. Scheduled after M6 and before M7; implementation approval pending.**
+
+After M6 completion, close and approve the representation gates below under the
+[staged alignment](./design-notes/service-storage-staged-design-alignment.md).
+Do not renumber M7 or M8. This milestone is no longer an unassigned deferred
+runtime, but scheduling is not approval of a schema, protocol or CLI.
+
+Implement in order: format/validation; persistence and allocation/access;
+Hook and continuity/Migration integration; real-resource crash and compatibility
+verification. Independently version future Core and any required Hook authority;
+preserve Frozen V1 contracts. Agree retention, finalization and abandonment
+persistence ownership with M7 before approving the storage schema, without
+shipping M7 operations early.
+
+Completion gate:
+
+- approved declaration/identity/association/locator/mapping, authority where
+  needed, persistence, access, compatibility and explicit upgrade contracts;
+- real ServiceStorage-backed resource evidence for Instance isolation,
+  identity independent of locator and conservative source-only retention;
+- PR-REQ-0246 evidence for possible target coherence before target publication:
+  open risk and manual recovery, not false source coherence or Hook replay;
+- no Inputs/metadata/Workspace mirror and no deletion route bypassing M7;
+- exact-source integration/crash/compatibility verification and full CI.
 
 ### M7 - Cleanup and deletion
 
 **State: Proposed.**
+
+M7 follows M6.5 and owns the concrete Cleanup ambiguous-completion coordination,
+durable do-not-replay boundary, storage finalization and AbandonManagement
+operations. Its lifecycle persistence dependencies must be aligned before M6.5
+schema approval. Reuse M6 recovery and M6.5 storage, not a parallel substrate.
 
 Implement typed Cleanup requirements and context, the shared risk protocol,
 cleanup-before-delete behavior, retry semantics, and explicit
@@ -738,9 +801,10 @@ Completion gate:
 ## Deferred ServiceStorage representation and runtime gates
 
 The representation-independent semantics are closed by PR-REQ-0235 through
-PR-REQ-0248. The following work remains required before production
-`ServiceStorage` or ServiceStorage-backed Managed Service Resource support can
-be planned as an implementation milestone:
+PR-REQ-0248. This heading is retained for existing links. The runtime is now
+formally scheduled as M6.5; these are remaining design approvals, not an
+unassigned implementation backlog. The [staged alignment](./design-notes/service-storage-staged-design-alignment.md)
+assigns M6.5 representation/runtime and M7 lifecycle responsibilities:
 
 - a future Revision Core serialization for storage/resource declarations,
   identities, associations, locators, compatibility mappings, prerequisites,
@@ -755,12 +819,14 @@ be planned as an implementation milestone:
   publication;
 - storage allocation, presence observation, locking, storage-lifetime
   finalization, operator handoff, explicit discard, and the concrete runtime;
-- a broader taxonomy deciding whether Docker volumes, external databases,
-  remote objects, or other service-owned resources use related abstractions.
+
+The broader taxonomy deciding whether Docker volumes, external databases,
+remote objects, or other service-owned resources use related abstractions
+remains deferred independently and does not block bounded M6.5.
 
 This list is a design gate, not a V2 schema, persistence design, CLI spelling,
 authoring syntax, compatibility algorithm, transition union, orphan-storage
-registry, or production milestone. Implementers MUST NOT bypass it by using
+registry, or production-support claim. Implementers MUST NOT bypass it by using
 Managed Inputs or M1-D metadata as a live-file or operational-state mirror.
 Hook-produced Managed Input or explicit ownership adoption may be designed
 separately and is not expanded here.

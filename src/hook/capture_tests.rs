@@ -33,6 +33,118 @@ fn fixture(access: &str) -> RuntimeFixture {
         );
     })
 }
+
+// Test-ID: PR-TEST-0329
+// Verifies: PR-REQ-0067, PR-REQ-0068, PR-REQ-0070
+#[test]
+fn successful_action_and_capture_overrides_preserve_the_existing_trust_guard() {
+    let f = fixture("observe");
+    let first = f.admit("direct", "risk_open_failure", &f.marker("guard"));
+    let first_run = first.run();
+    f.application.execute_admitted_action(
+        first,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert!(f.application.advance_owner_continuation(first_run).unwrap());
+    let p = persistence(&f.storage);
+    let guard = p
+        .load_instance_recovery_guard(f.instance.id)
+        .unwrap()
+        .unwrap();
+    let guarded_version = f
+        .application
+        .load_instance(f.instance.id)
+        .unwrap()
+        .unwrap()
+        .state_version;
+    let intent = f
+        .application
+        .resolve_action(
+            &InstanceName::parse("slice4").unwrap(),
+            &ActionIdentity::parse("direct").unwrap(),
+            parameters("success", &f.marker("action-override")),
+        )
+        .unwrap();
+    let action_plan = f
+        .application
+        .compile_action(&intent, std::slice::from_ref(&f.launcher))
+        .unwrap();
+    let admitted = f
+        .application
+        .accept_and_admit_action(
+            &action_plan,
+            AdmissionOptions {
+                recovery_override: true,
+            },
+        )
+        .unwrap();
+    let action_run = admitted.run();
+    f.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert!(
+        f.application
+            .advance_owner_continuation(action_run)
+            .unwrap()
+    );
+    assert!(
+        matches!(load_run(&f.storage, action_run).state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+    );
+    assert_eq!(
+        p.load_instance_recovery_guard(f.instance.id).unwrap(),
+        Some(guard.clone())
+    );
+    let plan = crate::workflow::compile_snapshot(
+        &f.application,
+        &crate::workflow::PlatformHostLauncherLookup,
+        &SnapshotIntent {
+            instance: f.instance.id,
+            operation: SnapshotOperation::Capture,
+            parameters: parameters("success", &f.marker("capture-override")),
+        },
+        &[],
+    )
+    .unwrap();
+    let capture_run = f
+        .application
+        .accept_snapshot_plan(
+            plan,
+            AdmissionOptions {
+                recovery_override: true,
+            },
+            ActionCancellation::default(),
+        )
+        .unwrap();
+    assert!(
+        !f.application
+            .advance_owner_continuation(capture_run)
+            .unwrap()
+    );
+    f.application
+        .execute_admitted_capture(capture_run, policy(None, None, None))
+        .unwrap();
+    assert_eq!(finish(&f, capture_run).outcome, RunOutcome::Succeeded);
+    assert_eq!(
+        p.load_instance_recovery_guard(f.instance.id).unwrap(),
+        Some(guard)
+    );
+    assert_eq!(
+        f.application
+            .load_instance(f.instance.id)
+            .unwrap()
+            .unwrap()
+            .state_version,
+        guarded_version
+    );
+    // The bypass is invocation-local; a later ordinary admission is blocked.
+    let ordinary = f
+        .application
+        .accept_and_admit_action(&action_plan, AdmissionOptions::default());
+    assert!(ordinary.is_err());
+}
 fn accept_capture(
     f: &RuntimeFixture,
     mode: &str,

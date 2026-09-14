@@ -8,7 +8,7 @@ title: Implementation Guidance
 architecture.**
 
 The [Spec map](../spec/index.md) is the authority entry. Read
-[the current M5 handoff](./next-milestone.md) before using a historical baseline
+[the current M6 handoff](./next-milestone.md) before using a historical baseline
 as a work order. Linked synthesis pages are navigation only. Usage guides are
 reserved for later; this document is for implementers.
 
@@ -38,9 +38,10 @@ implemented internal
 M2 contract. M2 is integrated into `develop`. The implemented internal
 [Persistence Schema V4](../spec/persistence/persistence-schema-v4.md) extends V3
 with M3 Slice 2 Runs, durable pins, Action recovery state, ownership, and Run
-Artifacts. The integrated M4 [Persistence Schema V5](../spec/persistence/persistence-schema-v5.md)
-preserves that contract and is now the current internal schema, still non-Frozen
-and non-public.
+Artifacts. M4 [Persistence Schema V5](../spec/persistence/persistence-schema-v5.md)
+preserves that contract. Integrated M5 adds the current internal
+[Persistence Schema V6](../spec/persistence/persistence-schema-v6.md), with exact
+V5 upgrade; it remains non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
 [M3 Action Execution Approval Baseline](./design-notes/m3-action-execution-approval-baseline.md).
@@ -65,6 +66,14 @@ See the [M4 execution record](./m4-implementation-status.md) for integration and
 verification evidence. These additions do not implement Snapshot deletion,
 ServiceStorage runtime, a public Rust API or stable machine-output envelopes.
 
+M5 Managed Input Migration is integrated, including per-edge publication,
+operator/Hook execution and bounded recovery; see its
+[closeout](./m5-implementation-status.md). The next entry is the
+[M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
+The [staged alignment](./design-notes/service-storage-staged-design-alignment.md)
+formally orders M6 recovery, M6.5 ServiceStorage and M7 Cleanup/deletion without
+approving the still-open representation or runtime designs.
+
 ## Implementation decisions
 
 Implementers may choose, without changing Pactrun semantics:
@@ -77,7 +86,7 @@ Implementers may choose, without changing Pactrun semantics:
 - Rust crate, module, type, trait, and design-pattern names;
 - PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
 - file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact implemented V2, V3, and V4 internal
+- persistence choices outside the exact implemented V2 through V6 internal
   schemas;
 - socket, named-pipe, or other side-channel transport;
 - Hook Protocol framing and encoding;
@@ -214,13 +223,26 @@ into an unapproved Service Resource transition or persistence schema.
 
 ### Phase 6 - Recovery
 
-- complete and generalize execution ownership beyond the Action substrate in
-  Phase 3;
-- complete risk-entry and risk-resolution handling for later managed-execution
-  types and their commit boundaries;
-- complete durable self-sufficient recovery state across those workflows;
+- harden existing Action, Capture, Restore and Migration ownership and recovery
+  over the integrated M3-M5 substrate;
+- complete risk handling, Plan-free durable evidence and atomic publication
+  within the bounded M6 scope once approved;
 - crash-boundary injection tests;
 - orphan reconciliation and manual recovery.
+
+The approved M6 baseline controls S0-S4 and retains exact V6 after the S0 audit.
+ServiceStorage and Cleanup runtime evidence belong to the following stages,
+not to placeholder implementations needed to close M6.
+
+### Phase 6.5 - ServiceStorage
+
+- separately approve Core representation, Hook authority where needed, and
+  persistence/access/compatibility contracts after M6;
+- align retention, finalization and abandonment persistence with M7 before
+  storage schema approval;
+- implement format/validation, storage allocation/access and continuity/Hook
+  integration, then verify real-resource isolation and target-publication crashes;
+- do not expose destructive storage paths that bypass the M7 lifecycle.
 
 ### Phase 7 - Cleanup and deletion
 
@@ -301,6 +323,11 @@ runtime. Revision Core and Hook Protocol versions remain independent. No
 authoring syntax, CLI, wire shape, storage table, retained-resource or orphan-
 storage registry, compatibility algorithm, or broader resource taxonomy is
 chosen here.
+
+These remaining gates are formally assigned by the staged alignment: M6.5 owns
+ServiceStorage representation/runtime and target publication; M7 owns Cleanup,
+finalization and AbandonManagement operations. Broader non-ServiceStorage
+resource taxonomy remains deferred independently, not a blocker for M6.5.
 
 ### Persistence and concurrency encoding
 

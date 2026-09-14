@@ -12,6 +12,16 @@ contains no independent requirement. Normative authority remains with the
 linked requirement-bearing specification pages. If a summary here differs from
 a linked requirement, the linked requirement controls.
 
+## Implementation scheduling
+
+The [staged design alignment](./service-storage-staged-design-alignment.md)
+records the 2026-09-14 scheduling approval: Pre-M6 alignment, bounded M6 recovery,
+M6.5 ServiceStorage, M7 Cleanup/deletion/AbandonManagement, then M8. The
+[M6 baseline](./m6-recovery-implementation-baseline.md) and
+[M6.5 roadmap](../implementation-roadmap.md#m65---servicestorage) define the
+delivery gates. Scheduling does not close the representation choices below or
+approve runtime implementation. Closed semantics on this page are unchanged.
+
 ## Scope
 
 This closure covers Pactrun-provided `ServiceStorage` and ServiceStorage-backed
@@ -59,6 +69,9 @@ finalization may resume, as summarized from PR-REQ-0247.
 
 ### Future Revision Core
 
+Assigned to the M6.5 representation design gate, except the broader resource
+taxonomy, which remains independently deferred and non-blocking for M6.5.
+
 - storage and resource declaration serialization and canonical projection;
 - identity encoding, association, locator, compatibility, and mapping syntax;
 - exposure, prerequisite, and lifetime encoding;
@@ -66,6 +79,9 @@ finalization may resume, as summarized from PR-REQ-0247.
 - the broader taxonomy for non-ServiceStorage-backed service-owned resources.
 
 ### Future Hook Protocol and recovery
+
+M6.5 owns persistent authority and target-publication coordination. M7 owns
+Cleanup completion/do-not-replay coordination. Neither changes Frozen V1.
 
 - whole-storage and individual-resource authority wire representation;
 - handles, Session fields, visibility, and path materialization;
@@ -75,6 +91,10 @@ finalization may resume, as summarized from PR-REQ-0247.
 - protocol negotiation and conformance fixtures.
 
 ### Future persistence and runtime
+
+M6.5 owns storage runtime and must align lifecycle persistence obligations with
+M7 before schema approval. M7 owns finalization and AbandonManagement operations;
+listing these mechanisms here does not authorize their early implementation.
 
 - SQLite or other durable representation;
 - continuity, retention, discard, and non-destruction state representation;
