@@ -479,7 +479,7 @@ pub(crate) enum MigrationTransitionV1 {
 }
 
 impl MigrationTransitionV1 {
-    fn source(&self) -> &InputBindingRefV1 {
+    pub(crate) fn source(&self) -> &InputBindingRefV1 {
         match self {
             Self::Carry { source, .. }
             | Self::Declassify { source, .. }
@@ -488,7 +488,7 @@ impl MigrationTransitionV1 {
         }
     }
 
-    fn target(&self) -> Option<&InputIdentity> {
+    pub(crate) fn target(&self) -> Option<&InputIdentity> {
         match self {
             Self::Carry {
                 target_input_id, ..

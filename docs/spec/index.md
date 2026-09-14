@@ -38,7 +38,7 @@ instead of loading every specification at once.
 | Generated HTML and text copies | Publish the same source, never a second specification |
 | User and Pack author guides | Reserved for later usage documentation |
 
-All 30 existing requirement-bearing documents now live here. Non-normative
+Requirement-bearing documents live here, including new milestone contracts. Non-normative
 syntheses and planning baselines live under Development. A milestone-specific
 page that actually contains normative rules, such as the M4 execution boundary,
 remains in Spec rather than being archived because of its date.

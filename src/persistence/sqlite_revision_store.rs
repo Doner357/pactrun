@@ -39,7 +39,8 @@ const SCHEMA_V1_VERSION: i64 = 1;
 const SCHEMA_V2_VERSION: i64 = 2;
 pub(super) const SCHEMA_V3_VERSION: i64 = 3;
 pub(super) const SCHEMA_V4_VERSION: i64 = 4;
-pub(super) const SCHEMA_VERSION: i64 = 5;
+pub(super) const SCHEMA_V5_VERSION: i64 = 5;
+pub(crate) const SCHEMA_VERSION: i64 = 6;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -105,15 +106,18 @@ pub(super) const SCHEMA_V4_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v4_additions.sql");
 pub(super) const SCHEMA_V5_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v5_additions.sql");
+pub(super) const SCHEMA_V6_ADDITIONS_SQL: &str =
+    include_str!("persistence_schema_v6_additions.sql");
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 5] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 6] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
     (SCHEMA_V4_ADDITIONS_SQL, "PersistenceSchemaV4 additions"),
     (SCHEMA_V5_ADDITIONS_SQL, "PersistenceSchemaV5 additions"),
+    (SCHEMA_V6_ADDITIONS_SQL, "PersistenceSchemaV6 changes"),
 ];
 
 #[derive(Debug)]
@@ -169,6 +173,7 @@ pub(crate) enum PersistenceError {
     WriterAdmissionRequired,
     LegacySessionUncertain,
     ActiveWriters,
+    MigrationMutationConflict(RunId),
     MissingSnapshot(crate::domain::SnapshotId),
     SnapshotCollision(crate::domain::SnapshotId),
     SnapshotBundle(crate::snapshot_bundle::BundleError),
@@ -242,10 +247,11 @@ impl fmt::Display for PersistenceError {
             Self::SnapshotCodec(error) => error.fmt(formatter),
             Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
             Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V4 requires explicit pactrun storage upgrade"),
+            Self::UpgradeRequired => formatter.write_str("exact V5 requires explicit pactrun storage upgrade to V6"),
             Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
             Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
             Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
+            Self::MigrationMutationConflict(run) => write!(formatter,"mutation_conflict: admitted Migration Run {run} holds this Instance"),
         }
     }
 }
@@ -306,7 +312,7 @@ impl PactrunPersistence {
         })
     }
 
-    /// Opens an existing V5 store without creating a staging session, changing
+    /// Opens an existing current store without creating a staging session, changing
     /// SQLite journal/schema state, or opening the runtime-content publication
     /// lock. Inspection and plan preview use this narrower path.
     pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
@@ -321,12 +327,12 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V5 {
-            if state == DatabaseState::V4 {
+        if state != DatabaseState::V6 {
+            if state == DatabaseState::V5 {
                 return Err(PersistenceError::UpgradeRequired);
             }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires the exact current V5 schema".to_owned(),
+                "read-only opening requires exact V6; use a compatible build to reach V5 before explicit upgrade".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -583,7 +589,7 @@ pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, Persist
             fault(FaultPoint::BeforeSchemaMigrationCommit);
             true
         }
-        DatabaseState::V5 => {
+        DatabaseState::V5 | DatabaseState::V6 => {
             return Err(PersistenceError::DatabaseOwnership(
                 "legacy V4 binary rejects newer schema".to_owned(),
             ));
@@ -632,7 +638,7 @@ fn legacy_v4_classify(database: &Connection) -> Result<DatabaseState, Persistenc
 }
 
 /// Historical <=V4 schema fixtures only, never an M4 production open path.
-/// Reads retain the original migration assertions; V5 writes still require
+/// Reads retain the original migration assertions; current writes still require
 /// admission and therefore cannot be performed through this unqualified view.
 #[cfg(test)]
 pub(super) fn legacy_v4_fixture(
@@ -720,6 +726,7 @@ pub(super) enum DatabaseState {
     V3,
     V4,
     V5,
+    V6,
 }
 
 impl DatabaseState {
@@ -730,7 +737,8 @@ impl DatabaseState {
             Self::V2 => Some(SCHEMA_V2_VERSION),
             Self::V3 => Some(SCHEMA_V3_VERSION),
             Self::V4 => Some(SCHEMA_V4_VERSION),
-            Self::V5 => Some(SCHEMA_VERSION),
+            Self::V5 => Some(SCHEMA_V5_VERSION),
+            Self::V6 => Some(SCHEMA_VERSION),
         }
     }
 }
@@ -762,9 +770,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
             validate_schema(database, SCHEMA_V4_VERSION)?;
             Ok(DatabaseState::V4)
         }
+        (APPLICATION_ID, SCHEMA_V5_VERSION, true) => {
+            validate_schema(database, SCHEMA_V5_VERSION)?;
+            Ok(DatabaseState::V5)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V5)
+            Ok(DatabaseState::V6)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -1143,6 +1155,9 @@ pub(crate) enum FaultPoint {
     BeforeWritableAdmission,
     AfterWritableAdmission,
     AfterLegacySessionInspection,
+    AfterV5AdmissionInspection,
+    BeforeMigrationEdgeCommit,
+    AfterMigrationEdgeCommit,
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
     BeforeSchemaMigrationCommit,
@@ -1170,6 +1185,9 @@ impl FaultPoint {
             Self::BeforeWritableAdmission => "before_writable_admission",
             Self::AfterWritableAdmission => "after_writable_admission",
             Self::AfterLegacySessionInspection => "after_legacy_session_inspection",
+            Self::AfterV5AdmissionInspection => "after_v5_admission_inspection",
+            Self::BeforeMigrationEdgeCommit => "before_migration_edge_commit",
+            Self::AfterMigrationEdgeCommit => "after_migration_edge_commit",
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
             Self::BeforeSchemaMigrationCommit => "before_schema_migration_commit",

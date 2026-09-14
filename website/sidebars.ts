@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
           'spec/behavior/inputs-secrets-and-readiness',
           'spec/behavior/m4-runtime-capabilities',
           'spec/behavior/m4-snapshot-command-reference',
+          'spec/behavior/m5-migration-command-reference',
           'spec/behavior/packages-revisions-and-instances',
           'spec/behavior/snapshots-migrations-and-recovery',
         ]},
@@ -45,6 +46,7 @@ const sidebars: SidebarsConfig = {
           'spec/execution/index',
           'spec/execution/execution-and-concurrency',
           'spec/execution/m4-snapshot-lifecycle-approval-baseline',
+          'spec/execution/m5-migration-execution',
           'spec/execution/recovery-and-reconciliation',
         ]},
         {type: 'category', label: 'Internal persistence', items: [
@@ -53,6 +55,7 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v3',
           'spec/persistence/persistence-schema-v4',
           'spec/persistence/persistence-schema-v5',
+          'spec/persistence/persistence-schema-v6',
         ]},
       ],
     },

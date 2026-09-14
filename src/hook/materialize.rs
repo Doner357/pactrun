@@ -19,6 +19,9 @@ use crate::{
 
 use super::LiveOutputSlot;
 
+#[path = "migration_materialize.rs"]
+mod migration;
+
 pub(super) struct MaterializedExecution {
     directory: ExecutionDirectory,
     outputs: Vec<MaterializedOutputSlot>,
@@ -29,6 +32,7 @@ pub(super) struct MaterializedExecution {
     operation: super::protocol::SessionOperation,
     terminal: TerminalContractV1,
     capture: Option<super::capture::CapturePreparation>,
+    migration_outputs: Vec<super::MigrationOutputSlot>,
 }
 
 pub(super) type MaterializedAction = MaterializedExecution;
@@ -131,6 +135,7 @@ impl MaterializedAction {
                 operation: super::protocol::SessionOperation::Restore,
                 terminal: plan.hook().io.terminal,
                 capture: None,
+                migration_outputs: Vec::new(),
             }),
             Err(error) => {
                 let _ = directory.cleanup();
@@ -251,6 +256,7 @@ impl MaterializedAction {
             operation: super::protocol::SessionOperation::Action,
             terminal: admitted.plan().terminal(),
             capture: None,
+            migration_outputs: Vec::new(),
         })
     }
 
@@ -314,6 +320,7 @@ impl MaterializedAction {
                 operation: super::protocol::SessionOperation::Capture,
                 terminal: plan.hook().io.terminal,
                 capture: Some(capture),
+                migration_outputs: Vec::new(),
             }),
             Err(error) => {
                 let _ = directory.cleanup();
@@ -332,6 +339,9 @@ impl MaterializedAction {
     }
     pub(super) fn take_capture(&mut self) -> Option<super::capture::CapturePreparation> {
         self.capture.take()
+    }
+    pub(super) fn take_migration_outputs(&mut self) -> Vec<super::MigrationOutputSlot> {
+        std::mem::take(&mut self.migration_outputs)
     }
 
     pub(super) fn program(&self) -> &Path {
@@ -358,6 +368,11 @@ impl MaterializedAction {
         self.outputs
             .iter()
             .map(|slot| slot.handle.clone())
+            .chain(
+                self.migration_outputs
+                    .iter()
+                    .map(|slot| slot.handle.clone()),
+            )
             .collect()
     }
 

@@ -367,6 +367,7 @@ fn retry_or_fail(
 }
 fn operation_name(operation: &ManagedRunIdentity) -> &'static str {
     match operation {
+        ManagedRunIdentity::Migration(_) => "migration",
         ManagedRunIdentity::Action(_) => "action",
         ManagedRunIdentity::Capture { .. } => "snapshot_capture",
         ManagedRunIdentity::Restore { .. } => "snapshot_restore",
@@ -466,6 +467,20 @@ pub(super) fn write_run(
     }
     if let Some(snapshot) = inspection.capture_result {
         writeln!(out, "snapshot: {snapshot}").map_err(io_operation)?;
+    }
+    if let ManagedRunIdentity::Migration(invocation) = &run.operation {
+        writeln!(
+            out,
+            "target_revision: {}\nedge_count: {}",
+            format_revision(invocation.target()),
+            invocation.edge_count()
+        )
+        .map_err(io_operation)?;
+        if let Some(progress) = &inspection.migration_progress {
+            writeln!(out,"committed_edges: {}\nlast_committed_revision: {}\nlast_committed_state_version: {}", progress.committed_edges,format_revision(&progress.boundary_revision),progress.boundary_state_version).map_err(io_operation)?;
+        } else {
+            writeln!(out, "committed_edges: 0\nadmission: not completed").map_err(io_operation)?;
+        }
     }
     super::write_run_state(out, &run.state, inspection.current_recovery_guard.as_ref())
 }

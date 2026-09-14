@@ -4,6 +4,10 @@
 // and Executor become production callers in later M3 slices.
 #![allow(dead_code)]
 
+#[cfg(test)]
+#[path = "workflow_migration_tests.rs"]
+mod migration_tests;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -187,6 +191,71 @@ fn runtime_file(
         .find(|file| file.id == *content)
         .cloned()
         .ok_or_else(|| PlanCompilationError::MissingRuntimeContent(content.clone()))
+}
+
+pub(crate) trait MigrationCompilationRepository {
+    fn verify_migration_runtime(
+        &self,
+        revision: &crate::domain::RevisionIdentity,
+    ) -> Result<(), PersistenceError>;
+    fn observe_migration_compilation(
+        &self,
+        instance: crate::domain::InstanceId,
+    ) -> Result<crate::domain::MigrationCompilationObservation, PersistenceError>;
+}
+
+impl MigrationCompilationRepository for crate::application::PactrunApplication {
+    fn verify_migration_runtime(
+        &self,
+        revision: &crate::domain::RevisionIdentity,
+    ) -> Result<(), PersistenceError> {
+        crate::application::PactrunApplication::verify_migration_runtime(self, revision)
+    }
+    fn observe_migration_compilation(
+        &self,
+        instance: crate::domain::InstanceId,
+    ) -> Result<crate::domain::MigrationCompilationObservation, PersistenceError> {
+        crate::application::PactrunApplication::observe_migration_compilation(self, instance)
+    }
+}
+
+pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLauncherLookup>(
+    repository: &R,
+    launcher: &L,
+    intent: &crate::domain::TransitionRevision,
+    directories: &[PathBuf],
+) -> Result<crate::domain::MigrationExecutionPlan, crate::application::ApplicationError> {
+    use crate::domain::*;
+    let observed = repository.observe_migration_compilation(intent.instance)?;
+    if observed.instance != intent.instance
+        || observed.state_version != intent.expected_state_version
+        || observed.active_revision != intent.source
+    {
+        return Err(MigrationError::InvalidObservation.into());
+    }
+    let bindings = build_migration_binding_plan(intent, &observed.revisions, &observed.bindings)?;
+    let mut compiled = Vec::new();
+    for edge in bindings.edges() {
+        let revision = observed
+            .revisions
+            .iter()
+            .find(|r| &r.identity == edge.target())
+            .ok_or(MigrationError::MissingRevision)?;
+        let runtime = revision.content.runtime_content.files().to_vec();
+        repository.verify_migration_runtime(&revision.identity)?;
+        let launch = edge
+            .declaration()
+            .hook
+            .as_ref()
+            .map(|hook| compile_hook_launch(launcher, hook, &runtime, directories))
+            .transpose()?;
+        compiled.push(MigrationCompiledEdge {
+            bindings: edge.clone(),
+            runtime,
+            launch,
+        });
+    }
+    Ok(MigrationExecutionPlan::new(bindings, compiled)?)
 }
 
 #[cfg(test)]

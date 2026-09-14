@@ -19,12 +19,12 @@ is Frozen.
 ## Development entry after Spec migration
 
 Use the [Spec map](../spec/index.md), [task reading paths](./reading-paths.md),
-and [current baseline / M5 handoff](./next-milestone.md) before starting the next
+and [current baseline / M6 handoff](./next-milestone.md) before starting the next
 milestone. All numbered product rules now live under Spec. Design syntheses and
 milestone records remain development guidance, not competing specifications.
 
-This reorganization does not change any milestone state. In particular, M5 is
-still Proposed and requires its bounded approval baseline before implementation.
+The Spec reorganization did not change milestone states. The subsequent
+2026-09-13 M5 approval is recorded in its milestone section and bounded baseline.
 Usage guides remain a later documentation task and do not block specification-
 driven development.
 
@@ -118,14 +118,16 @@ and non-identity metadata persistence closure are integrated into the canonical
 `develop` baseline. A later ServiceStorage representation or runtime design
 does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D was integrated against PersistenceSchemaV2; its
-metadata contract is preserved by the current PersistenceSchemaV5.
+metadata contract is preserved by the current PersistenceSchemaV6.
 
 The Pre-M2 closure and M2 implementation are integrated. M2 is `Complete`.
 Candidate `PackSourceYamlV1` remains a non-Frozen authoring contract. M2
 introduced PersistenceSchemaV3; M3 Slice 2 subsequently integrated
 PersistenceSchemaV4 as the implemented internal schema for that M3 stage.
-PersistenceSchemaV5, introduced by M4, is the current implemented internal
-schema. These internal contracts remain non-Frozen and non-public.
+PersistenceSchemaV5 was introduced by M4. M5's PersistenceSchemaV6 is now the
+current implemented internal schema, with explicit exact-V5 upgrade only;
+Declarative Migration execution is implemented; Hook and operator-input execution
+remain pending. These contracts remain non-Frozen and non-public.
 
 The M3 review is recorded in the
 [M3 Action Execution Approval Baseline](./design-notes/m3-action-execution-approval-baseline.md).
@@ -651,9 +653,14 @@ Completion gate:
 
 ### M5 - Migration
 
-**State: Proposed.**
+**State: Implemented; integration pending.**
 
-Implement target-owned Migration graphs, chaining, normalized transitions,
+The [approved M5 baseline](./design-notes/m5-migration-implementation-baseline.md)
+records the 2026-09-13 decisions. The [M5 closeout](./m5-implementation-status.md)
+records the implementation scope and final-tree verification gates. The feature
+branch has not been committed, merged or integrated by this work.
+
+Implemented target-owned Migration graphs, chaining, normalized transitions,
 typed active/retained source references, target requirements and outputs,
 single-writer validation, staged targets, and per-edge commits.
 
@@ -662,7 +669,7 @@ M5 MUST NOT extend `Carry`, `Keep`, `Discard`, or `Declassify` into an invented
 ServiceStorage-backed resource schema or claim a service filesystem/database
 transaction is atomic with Pactrun persistence.
 
-Completion gate:
+Acceptance gates, retained as regression requirements:
 
 - intrinsic target validation and exact-source relational validation remain
   distinct;

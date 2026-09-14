@@ -1,19 +1,25 @@
-//! V5 writer qualification and explicit exact-V4 legacy bootstrap.
+//! Admission-aware writer qualification, introduced in V5 and retained in V6.
 //! Session preparation is not admission; SQLite is the shared serialized boundary.
 
-use std::{fs, path::Path};
+#[cfg(test)]
+use std::fs;
+use std::path::Path;
 
-use rusqlite::{
-    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
-};
+#[cfg(test)]
+use rusqlite::OpenFlags;
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+#[cfg(test)]
 use super::runtime_content_store::{
     validate_existing_regular_entry, validate_supported_storage_root,
 };
 use super::sqlite_revision_store::{
-    APPLICATION_ID, DatabaseState, FaultPoint, SCHEMA_LADDER, SCHEMA_V4_VERSION,
-    SCHEMA_V5_ADDITIONS_SQL, SCHEMA_VERSION, classify_database, configure_connection,
-    configure_read_connection, establish_wal_mode, fault, validate_schema,
+    APPLICATION_ID, DatabaseState, FaultPoint, SCHEMA_LADDER, SCHEMA_VERSION, classify_database,
+    configure_connection, establish_wal_mode, fault, validate_schema,
+};
+#[cfg(test)]
+use super::sqlite_revision_store::{
+    SCHEMA_V4_VERSION, SCHEMA_V5_ADDITIONS_SQL, SCHEMA_V5_VERSION, configure_read_connection,
 };
 use super::{PactrunPersistence, PersistenceError};
 use crate::{
@@ -23,8 +29,8 @@ use crate::{
 
 fn unsupported_source(state: DatabaseState) -> PersistenceError {
     match state {
-        DatabaseState::V4 => PersistenceError::UpgradeRequired,
-        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V5 storage; use a compatible release to upgrade V1/V2/V3 to exact V4 first".to_owned()),
+        DatabaseState::V5 => PersistenceError::UpgradeRequired,
+        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V6 storage; use a compatible build to reach exact V5 before explicit upgrade".to_owned()),
     }
 }
 
@@ -36,7 +42,7 @@ pub(super) fn open_writer_database(
         Connection::open(path).map_err(|e| PersistenceError::sqlite("open writer database", e))?;
     configure_connection(&database)?;
     let advisory = classify_database(&database)?;
-    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V5) {
+    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V6) {
         return Err(unsupported_source(advisory));
     }
     establish_wal_mode(&database)?;
@@ -52,7 +58,7 @@ pub(super) fn open_writer_database(
             for (sql, _) in &SCHEMA_LADDER {
                 transaction
                     .execute_batch(sql)
-                    .map_err(|e| PersistenceError::sqlite("initialize V5 schema", e))?;
+                    .map_err(|e| PersistenceError::sqlite("initialize current schema", e))?;
             }
             validate_schema(&transaction, SCHEMA_VERSION)?;
             transaction
@@ -60,15 +66,15 @@ pub(super) fn open_writer_database(
                 .map_err(|e| PersistenceError::sqlite("initialize application ID", e))?;
             transaction
                 .pragma_update(None, "user_version", SCHEMA_VERSION)
-                .map_err(|e| PersistenceError::sqlite("initialize V5 version", e))?;
+                .map_err(|e| PersistenceError::sqlite("initialize current version", e))?;
             fault(FaultPoint::BeforeBootstrapCommit);
         }
-        DatabaseState::V5 => {}
+        DatabaseState::V6 => {}
         other => return Err(unsupported_source(other)),
     }
     transaction.execute(
-        "INSERT INTO writable_admissions(owner_session, admitted_schema_version) VALUES (?1, 5)",
-        [session.owner().as_str().as_bytes()],
+        "INSERT INTO writable_admissions(owner_session, admitted_schema_version) VALUES (?1, ?2)",
+        params![session.owner().as_str().as_bytes(), SCHEMA_VERSION],
     ).map_err(|e| PersistenceError::sqlite("register writable admission", e))?;
     transaction
         .commit()
@@ -134,8 +140,9 @@ impl PactrunPersistence {
         load_consequence_version(&database, instance)
     }
 
-    /// Explicit maintenance operation. Exact V5 is read-only validation/no-op.
-    pub(crate) fn upgrade_storage(root: &Path) -> Result<bool, PersistenceError> {
+    /// Historical M4 implementation, retained only to verify V4->V5 fixtures.
+    #[cfg(test)]
+    pub(super) fn upgrade_legacy_v4_to_v5(root: &Path) -> Result<bool, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         let database_root = validate_supported_storage_root(&root.join("database"))?;
         validate_existing_regular_entry(&database_root, "pactrun.sqlite3")?;
@@ -181,9 +188,9 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("preserve legacy Action operation kinds", e))?;
         transaction.execute("INSERT INTO instance_recovery_consequence_versions(instance_id, consequence_version) SELECT instance_id, 0 FROM instances", [])
             .map_err(|e| PersistenceError::sqlite("initialize consequence baselines", e))?;
-        validate_schema(&transaction, SCHEMA_VERSION)?;
+        validate_schema(&transaction, SCHEMA_V5_VERSION)?;
         transaction
-            .pragma_update(None, "user_version", SCHEMA_VERSION)
+            .pragma_update(None, "user_version", SCHEMA_V5_VERSION)
             .map_err(|e| PersistenceError::sqlite("publish V5 version", e))?;
         fault(FaultPoint::BeforeSchemaMigrationCommit);
         transaction
@@ -224,6 +231,7 @@ impl Drop for PactrunPersistence {
 }
 
 /// Only the exact V4->V5 bootstrap may conservatively inspect all session leases.
+#[cfg(test)]
 fn inspect_legacy_sessions(
     root: &Path,
     migrator: &ExecutionOwnerSession,
@@ -260,7 +268,23 @@ pub(super) fn require_quiescent_admissions(
     transaction: &Transaction<'_>,
     root: &Path,
 ) -> Result<(), PersistenceError> {
-    require_current_version(transaction)?;
+    require_quiescent_admissions_at_version(transaction, root, SCHEMA_VERSION)
+}
+
+pub(super) fn require_quiescent_admissions_at_version(
+    transaction: &Transaction<'_>,
+    root: &Path,
+    expected: i64,
+) -> Result<(), PersistenceError> {
+    let actual = classify_database(transaction)?;
+    if !matches!(
+        (actual, expected),
+        (DatabaseState::V5, 5) | (DatabaseState::V6, 6)
+    ) {
+        return Err(PersistenceError::SchemaMismatch(
+            "unexpected writer-admission source version".to_owned(),
+        ));
+    }
     let mut query = transaction.prepare("SELECT owner_session, admitted_schema_version FROM writable_admissions ORDER BY owner_session")
         .map_err(|e| PersistenceError::sqlite("inspect admitted writers", e))?;
     let rows = query
@@ -277,7 +301,7 @@ pub(super) fn require_quiescent_admissions(
             .ok_or_else(|| {
                 PersistenceError::SchemaMismatch("invalid durable writer identity".to_owned())
             })?;
-        if version != SCHEMA_VERSION {
+        if version != expected {
             return Err(PersistenceError::SchemaMismatch(
                 "invalid admitted schema version".to_owned(),
             ));
@@ -325,14 +349,15 @@ pub(super) fn validate_run_operation(
     database: &Connection,
     run: crate::domain::RunId,
 ) -> Result<ManagedExecutionKind, PersistenceError> {
-    let row: Option<(i64, i64, i64, i64)> = database.query_row(
-        "SELECT operation_kind, (SELECT count(*) FROM run_action_invocations WHERE run_id=?1), (SELECT count(*) FROM run_capture_invocations WHERE run_id=?1), (SELECT count(*) FROM run_restore_invocations WHERE run_id=?1) FROM run_operation_kinds WHERE run_id=?1",
-        [run.as_bytes().as_slice()], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
+    let row: Option<(i64, i64, i64, i64, i64)> = database.query_row(
+        "SELECT operation_kind, (SELECT count(*) FROM run_action_invocations WHERE run_id=?1), (SELECT count(*) FROM run_capture_invocations WHERE run_id=?1), (SELECT count(*) FROM run_restore_invocations WHERE run_id=?1), (SELECT count(*) FROM run_migration_invocations WHERE run_id=?1) FROM run_operation_kinds WHERE run_id=?1",
+        [run.as_bytes().as_slice()], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?)),
     ).optional().map_err(|e| PersistenceError::sqlite("validate Run operation kind", e))?;
     match row {
-        Some((0, 1, 0, 0)) => Ok(ManagedExecutionKind::Action),
-        Some((1, 0, 1, 0)) => Ok(ManagedExecutionKind::SnapshotCapture),
-        Some((2, 0, 0, 1)) => Ok(ManagedExecutionKind::SnapshotRestore),
+        Some((0, 1, 0, 0, 0)) => Ok(ManagedExecutionKind::Action),
+        Some((1, 0, 1, 0, 0)) => Ok(ManagedExecutionKind::SnapshotCapture),
+        Some((2, 0, 0, 1, 0)) => Ok(ManagedExecutionKind::SnapshotRestore),
+        Some((3, 0, 0, 0, 1)) => Ok(ManagedExecutionKind::Migration),
         _ => Err(PersistenceError::CorruptRun(
             "Run must have exactly one matching operation and invocation".to_owned(),
         )),

@@ -7,6 +7,11 @@ title: Persistence Schema V5
 **Status: Implemented normative internal schema, integrated into develop with
 M4 Snapshot execution; non-Frozen and non-public.**
 
+This is the historical M4 version contract. [V6](./persistence-schema-v6.md)
+is current; its binary accepts only exact V5 for explicit upgrade, not the
+historical V4-to-V5 entry point described below. The V5 SQL and original
+version-scoped requirements retain their meaning.
+
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 

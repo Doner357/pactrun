@@ -61,9 +61,17 @@ test('main sidebar uses Spec and Development instead of compatibility locations'
   assert.match(sidebar, /development\/index/);
 });
 
-test('roadmap approval is not advanced by the documentation migration', () => {
+test('M5 closeout keeps integration separate and does not advance proposed M6', () => {
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
-  assert.match(roadmap, /### M5 - Migration\s+\*\*State: Proposed\.\*\*/);
+  const baseline = docs.find(([name]) => name === 'development/design-notes/m5-migration-implementation-baseline.md')[1];
+  const status = docs.find(([name]) => name === 'development/m5-implementation-status.md')[1];
+  assert.match(roadmap, /### M5 - Migration\s+\*\*State: Implemented; integration pending\.\*\*/);
+  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Proposed\.\*\*/);
+  assert.match(baseline, /Approved scope and implementation decisions, 2026-09-13/);
+  assert.match(status, /Implemented; not committed, merged, or integrated/);
+  assert.match(status, /Current production storage is V6/);
+  assert.match(status.replace(/\s+/g, ' '), /Hook-backed chains and operator file inputs are integrated into the existing Migration Run path/);
+  assert.match(status.replace(/\s+/g, ' '), /No ServiceStorage representation\/runtime, generalized M6 recovery/);
 });
 
 test('roadmap distinguishes historical V4 introduction from the current schema', () => {

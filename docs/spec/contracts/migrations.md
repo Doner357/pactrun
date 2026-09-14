@@ -35,7 +35,7 @@ PR-REQ-0262. A missing source is `NotEvaluated`, not an intrinsic target error;
 an installed incompatible source is `Invalid`, and only `Valid` is eligible for
 later execution.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0072, PR-TEST-0277, PR-TEST-0278.**
 
 ### PR-REQ-0154 - Separate predicates
 
@@ -43,7 +43,7 @@ later execution.
 `RequiredInputsSatisfied` MUST remain distinct. Edge success MUST require the
 first two and MAY still leave the target ordinarily incomplete.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0279, PR-TEST-0282, PR-TEST-0312, PR-TEST-0313, PR-TEST-0321.**
 
 ### PR-REQ-0155 - Per-edge commit
 
@@ -56,7 +56,7 @@ database, Docker volume, or external-resource bytes, and it does not define a
 future persisted representation for ServiceStorage-backed Managed Service
 Resource association, continuity, retention, or discard.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0301, PR-TEST-0304, PR-TEST-0317, PR-TEST-0321.**
 
 ### PR-REQ-0156 - Whole-path preflight
 
@@ -64,7 +64,7 @@ Before the first side effect, the Compiler SHOULD symbolically preflight the
 complete selected path for statically detectable missing requirements, illegal
 Secret transitions, target-writer conflicts, and unavailable resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0281, PR-TEST-0283, PR-TEST-0284, PR-TEST-0310.**
 
 ## Input transitions
 
@@ -77,7 +77,7 @@ rename or change requires an explicit mapping. These transitions MUST NOT be
 silently generalized into a ServiceStorage-backed Managed Service Resource
 transition schema.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0280, PR-TEST-0281.**
 
 ### PR-REQ-0158 - Conservative shorthand
 
@@ -88,7 +88,7 @@ declarations unless explicitly consumed, reactivated, or discarded. No
 corresponding default or persisted retained-resource registry is defined here
 for ServiceStorage-backed Managed Service Resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0280, PR-TEST-0301.**
 
 ### PR-REQ-0159 - Declarative transition scope
 
@@ -106,7 +106,7 @@ A Secret-to-Normal target MUST use explicit `Declassify` and require operator
 authorization at execution. `Keep` MUST preserve protection, and a Hook MUST
 NOT downgrade protection through its output.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0281, PR-TEST-0311, PR-TEST-0313.**
 
 ## Requirements and outputs
 
@@ -124,7 +124,7 @@ not made an installation prerequisite by that format specification.
 PR-REQ-0262 fixes the M2 inspection and installation-order behavior without
 changing the Frozen format.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0280, PR-TEST-0312, PR-TEST-0322.**
 
 ### PR-REQ-0162 - Single target writer
 
@@ -133,7 +133,7 @@ writer: Carry, Declassify, operator-provided target binding, Hook-produced targe
 binding, or absence. Multiple writers MUST fail validation or admission; hidden
 overwrite precedence is prohibited.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0279, PR-TEST-0283, PR-TEST-0318.**
 
 ### PR-REQ-0163 - Mandatory output completion
 
@@ -142,7 +142,7 @@ must be declared. Every `produces.target` binding MUST exist before a successful
 edge commit. Success with a missing mandatory output MUST fail completion
 validation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0282, PR-TEST-0313.**
 
 ### PR-REQ-0164 - No requires-produces overlap
 
@@ -150,7 +150,7 @@ Without an explicit overwrite semantic, a target binding MUST NOT appear in
 both `requires.target` and `produces.target`. Such a normalized contract MUST be
 rejected.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0282.**
 
 ## Ownership
 
@@ -161,7 +161,7 @@ pins, staged target state, continuity and protection policy, checkpoints,
 recovery directives, final atomic commits, active Revision switching, and Run
 and Instance consequences.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0277, PR-TEST-0301, PR-TEST-0302, PR-TEST-0304, PR-TEST-0309, PR-TEST-0317.**
 
 ### PR-REQ-0166 - Package Migration responsibilities
 

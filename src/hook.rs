@@ -4,11 +4,17 @@
 
 mod capture;
 mod materialize;
+mod migrations;
 mod platform;
 mod protocol;
 mod restore;
 mod runtime;
 mod snapshots;
+#[cfg(test)]
+pub(crate) use migrations::accept_declarative_migration;
+#[cfg(test)]
+pub(crate) use migrations::uncertain_next_migration_acceptance_for_test;
+pub(crate) use migrations::{MigrationExecutionSettings, accept_migration_inputs};
 pub(crate) use snapshots::{
     SnapshotExecutionClaim, accept_snapshot, claim_snapshot, stop_snapshot_before_launch,
 };
@@ -244,6 +250,12 @@ pub(crate) struct LiveOutputSlot {
     pub(crate) path: PathBuf,
 }
 
+pub(crate) struct MigrationOutputSlot {
+    input: crate::domain::InputIdentity,
+    handle: String,
+    path: PathBuf,
+}
+
 pub(crate) struct RuntimeTerminalFacts {
     pub(crate) run: RunId,
     pub(crate) outcome: RunOutcome,
@@ -254,6 +266,7 @@ pub(crate) struct RuntimeTerminalFacts {
     pub(crate) process_terminated: bool,
     pub(crate) submitted_outputs: Vec<ManagedOutputIdentity>,
     pub(crate) outputs: Vec<LiveOutputSlot>,
+    pub(crate) migration_outputs: Vec<MigrationOutputSlot>,
     pub(crate) execution: Option<ExecutionDirectory>,
 }
 
@@ -327,6 +340,7 @@ impl fmt::Debug for FinalizationState {
 
 #[derive(Debug)]
 pub(crate) enum OwnerContinuation {
+    Migration(Box<migrations::MigrationOwnerState>),
     CaptureFinalization(Box<capture::CaptureFinalization>),
     RestoreFinalization(Box<restore::RestoreFinalization>),
     Snapshot(Box<snapshots::SnapshotOwnerState>),
@@ -421,6 +435,7 @@ impl OwnerContinuationRegistry {
                 OwnerContinuation::RetryDurableOperation(_) => "durable",
                 OwnerContinuation::RetryFinalization(_) => "finalization",
                 OwnerContinuation::Snapshot(_) => "snapshot",
+                OwnerContinuation::Migration(_) => "migration",
                 OwnerContinuation::CaptureFinalization(_) => "capture_finalization",
                 OwnerContinuation::RestoreFinalization(_) => "restore_finalization",
             }),
@@ -466,8 +481,11 @@ pub(crate) struct ContinuationGuard<'a> {
 }
 
 impl ContinuationGuard<'_> {
-    pub(crate) fn snapshot_instance(&self) -> Option<crate::domain::InstanceId> {
-        snapshots::instance(self.continuation())
+    pub(crate) fn managed_mutation_instance(&self) -> Option<crate::domain::InstanceId> {
+        match self.continuation() {
+            OwnerContinuation::Migration(state) => Some(state.instance()),
+            other => snapshots::instance(other),
+        }
     }
     pub(crate) fn continuation(&self) -> &OwnerContinuation {
         self.continuation
@@ -667,6 +685,9 @@ pub(crate) fn advance_owner_continuation(
     staging: &StagingSession,
     mut guard: ContinuationGuard<'_>,
 ) -> Result<bool, PersistenceError> {
+    if matches!(guard.continuation(), OwnerContinuation::Migration(_)) {
+        return migrations::advance(persistence, staging, guard);
+    }
     if matches!(
         guard.continuation(),
         OwnerContinuation::RestoreFinalization(_)
@@ -909,6 +930,7 @@ pub(super) fn ready_failure(
             process_terminated: true,
             submitted_outputs: Vec::new(),
             outputs,
+            migration_outputs: Vec::new(),
             execution,
         },
         prepared: None,
@@ -934,6 +956,7 @@ pub(super) fn ready_cancelled(
             process_terminated: false,
             submitted_outputs: Vec::new(),
             outputs,
+            migration_outputs: Vec::new(),
             execution,
         },
         prepared: None,

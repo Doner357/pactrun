@@ -17,6 +17,14 @@ and [Snapshot commands](./docs/spec/behavior/m4-snapshot-command-reference.md).
 Snapshot deletion and later lifecycle features remain outside the approved M4
 scope. Git integration is not a release or a public documentation deployment.
 
+The in-progress M5 branch adds Migration path selection, planning, declarative execution and
+[PersistenceSchemaV6](./docs/spec/persistence/persistence-schema-v6.md). This
+checkout initializes V6 and upgrades only exact V5 through explicit
+`pactrun storage upgrade`; V4 and earlier first need a compatible M4 build.
+Migration Run inspection, per-edge commits, and no-replay owner-loss reconciliation
+are available for no-Hook chains. Operator file inputs and Migration Hook runtime
+remain pending; this is not full M5 completion.
+
 ## Repository layout
 
 - `src/` contains the production crate and crate-private architecture modules.

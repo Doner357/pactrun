@@ -266,8 +266,10 @@ PR-TEST-0165, PR-TEST-0173, PR-TEST-0174.**
 
 The approved [M4 Snapshot commands](./m4-snapshot-command-reference.md) now
 specify Snapshot and explicit storage-upgrade spelling, implemented and integrated
-into develop with M4. Snapshot deletion remains excluded from M4. Exact subcommands
-and options for Migration, other recovery, Instance
+into develop with M4. Snapshot deletion remains excluded from M4. The separately
+approved [M5 Migration commands](./m5-migration-command-reference.md) provide
+read-only path discovery and planning; execution remains pending. Exact
+subcommands and options for other recovery, Instance
 deletion, `AbandonManagement`, and other later milestones remain open. Their
 future security-sensitive spellings must preserve PR-REQ-0119. The fixed M2
 profile above MUST NOT be expanded implicitly to fill those later gaps.

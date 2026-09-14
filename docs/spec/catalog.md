@@ -43,8 +43,16 @@ website build. They do not constitute additional requirements.
 | [Persistence Schema V4](persistence/persistence-schema-v4.md) | Historical implemented normative internal persistence contract; non-Frozen and non-public. |
 | [Persistence Schema V5](persistence/persistence-schema-v5.md) | Implemented normative internal schema, integrated into develop with M4 Snapshot execution; non-Frozen and non-public. |
 
+## M5 Managed Input Migration
+
+| Contract | Status |
+| --- | --- |
+| [M5 Migration Execution](execution/m5-migration-execution.md) | Implemented normative M5 Managed Input execution contract. |
+| [M5 Migration Commands](behavior/m5-migration-command-reference.md) | Implemented normative Migration CLI. |
+| [Persistence Schema V6](persistence/persistence-schema-v6.md) | Implemented normative internal schema and explicit V5-to-V6 upgrade. Non-Frozen and non-public. |
+
 For V2 and V3 persistence, references to V4 as a successor record an intermediate
-historical baseline. [V5](./persistence/persistence-schema-v5.md) is current.
+historical baseline. [V6](./persistence/persistence-schema-v6.md) is current.
 Preserve the exact documented upgrade gates rather than inferring one from this
 index. See [remaining decisions](../development/next-milestone.md) for deferred
 runtime work, not just the historical status on a format page.

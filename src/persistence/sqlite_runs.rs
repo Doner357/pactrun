@@ -74,6 +74,7 @@ struct FinishAuthority<'a> {
     outputs: Option<&'a [ManagedOutputIdentity]>,
     capture: Option<CapturePublication<'a>>,
     restore: bool,
+    migration: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -163,6 +164,7 @@ impl PactrunPersistence {
             })
             .transpose()?;
         Ok(Some(crate::domain::ManagedRunInspectionData {
+            migration_progress: super::sqlite_migration_runs::progress_view(&tx, run)?,
             run: view,
             current_recovery_guard: guard,
             capture_result,
@@ -227,6 +229,7 @@ impl PactrunPersistence {
                 outputs: Some(&[]),
                 capture: None,
                 restore: !conflict,
+                migration: false,
             },
         )?;
         if next.is_some() {
@@ -294,6 +297,7 @@ impl PactrunPersistence {
                 outputs: Some(&[]),
                 capture: Some(CapturePublication { manifest, blobs }),
                 restore: false,
+                migration: false,
             },
         )?;
         #[cfg(test)]
@@ -334,6 +338,16 @@ impl PactrunPersistence {
         owner: &ExecutionOwnerSession,
         arbiter: &impl AcceptanceArbiter,
     ) -> Result<RunId, AcceptanceError> {
+        if matches!(operation, ManagedRunIdentity::Migration(_))
+            && self.staging_session().is_none_or(|s| s.owner() != *owner)
+        {
+            return Err(AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::InvalidRunTransition(
+                    "Migration acceptance requires its own live session".to_owned(),
+                ),
+            });
+        }
         let mut database = self
             .database
             .lock()
@@ -501,6 +515,11 @@ impl PactrunPersistence {
         if matches!(operation, ManagedRunIdentity::Restore { .. }) && qualification.plan.is_none() {
             return Err(PersistenceError::InvalidRunTransition(
                 "Restore requires staged Snapshot admission; Action/Capture admission cannot qualify it".to_owned(),
+            ));
+        }
+        if matches!(operation, ManagedRunIdentity::Migration(_)) {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Migration requires its own whole-path admission".to_owned(),
             ));
         }
         let boundary = if has_revision_pin(&transaction, run)? {
@@ -834,6 +853,14 @@ impl PactrunPersistence {
             .map_err(|error| PersistenceError::sqlite("begin Run finish", error))?;
         self.check_write_admission(&transaction)?;
         let header = run_header(&transaction, run)?;
+        if matches!(
+            managed_invocation_row(&transaction, run)?,
+            ManagedRunIdentity::Migration(_)
+        ) {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Migration finish requires its owner or confirmed-loss reconciliation".to_owned(),
+            ));
+        }
         let receipt = finish_run_in_transaction(&transaction, run, &header, finish, artifacts)?;
         fault(FaultPoint::BeforeRunFinishCommit);
         transaction
@@ -863,6 +890,15 @@ impl PactrunPersistence {
             .map_err(|error| PersistenceError::sqlite("begin owned Run finish", error))?;
         self.check_write_admission(&transaction)?;
         let header = run_header(&transaction, run)?;
+        if matches!(
+            managed_invocation_row(&transaction, run)?,
+            ManagedRunIdentity::Migration(_)
+        ) && self.staging_session().is_none_or(|s| s.owner() != *owner)
+        {
+            return Err(PersistenceError::InvalidRunTransition(
+                "Migration finish belongs to another owner".to_owned(),
+            ));
+        }
         let receipt = finish_run_in_transaction_owned(
             &transaction,
             run,
@@ -897,6 +933,7 @@ impl PactrunPersistence {
         if current != expected {
             return Err(PersistenceError::StaleInstanceState);
         }
+        super::sqlite_migration_runs::require_no_migration_mutator(&transaction, instance)?;
         guard_row(&transaction, instance)?.ok_or(PersistenceError::MissingRecoveryGuard)?;
         transaction
             .execute(
@@ -1380,8 +1417,8 @@ fn validate_snapshot_plan_declaration(
     let operation = match plan.operation() {
         ManagedRunIdentity::Capture { .. } => SnapshotOperation::Capture,
         ManagedRunIdentity::Restore { snapshot, .. } => SnapshotOperation::Restore(*snapshot),
-        ManagedRunIdentity::Action(_) => {
-            return Ok(Some("Snapshot Plan contains an Action".to_owned()));
+        ManagedRunIdentity::Action(_) | ManagedRunIdentity::Migration(_) => {
+            return Ok(Some("Snapshot Plan contains another operation".to_owned()));
         }
     };
     let (parameters, hook) = crate::domain::snapshot_hook(core, operation)
@@ -1540,7 +1577,7 @@ fn validate_capture_facts(
 /// revalidated the incoming exact Revision inside this same write transaction.
 /// Accepted-only Runs never enter the competitor set; access is never supplied
 /// by the caller or inferred from the operation discriminator alone.
-fn managed_mutation_conflict(
+pub(super) fn managed_mutation_conflict(
     transaction: &Transaction<'_>,
     instance: InstanceId,
     run: RunId,
@@ -1821,6 +1858,7 @@ fn finish_run_in_transaction_owned(
             outputs: submitted_outputs,
             capture: None,
             restore: false,
+            migration: false,
         },
     )
 }
@@ -1867,9 +1905,10 @@ fn finish_run_authorized(
         if finish.outcome == RunOutcome::Succeeded
             && authority.capture.is_none()
             && !authority.restore
+            && !authority.migration
         {
             return Err(PersistenceError::InvalidRunTransition(
-                "Snapshot success requires atomic operation-specific result publication".to_owned(),
+                "managed success requires atomic operation-specific result publication".to_owned(),
             ));
         }
         if !artifacts.is_empty() {
@@ -1900,6 +1939,17 @@ fn finish_run_authorized(
     {
         return Err(PersistenceError::InvalidRunTransition(
             "Restore publication requires an owned admitted successful completion".to_owned(),
+        ));
+    }
+    if authority.migration
+        && (!matches!(operation, ManagedRunIdentity::Migration(_))
+            || finish.outcome != RunOutcome::Succeeded
+            || boundary != ActionRunBoundary::Admitted
+            || expected_owner.is_none()
+            || live_risk != RecoveryRiskState::Clear)
+    {
+        return Err(PersistenceError::InvalidRunTransition(
+            "Migration success requires owned admitted atomic publication".to_owned(),
         ));
     }
     if let Some(submitted_outputs) = submitted_outputs {
@@ -2059,6 +2109,9 @@ fn finish_run_authorized(
         reclaim_payload_if_unreferenced(transaction, header.instance, payload)?;
     }
 
+    if matches!(operation, ManagedRunIdentity::Migration(_)) {
+        super::sqlite_migration_runs::release_references(transaction, run, header.instance)?;
+    }
     let mut published_state_version = None;
     if trigger.is_some() {
         super::sqlite_v5::advance_consequence_version(transaction, header.instance)?;
@@ -2086,6 +2139,38 @@ fn finish_run_authorized(
     Ok(RunFinishReceipt {
         published_state_version,
     })
+}
+
+pub(super) fn finish_migration_in_transaction(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    owner: &ExecutionOwnerSession,
+    finish: &RunFinish,
+    publishing_success: bool,
+) -> Result<RunFinishReceipt, PersistenceError> {
+    let header = run_header(transaction, run)?;
+    if !matches!(
+        managed_invocation_row(transaction, run)?,
+        ManagedRunIdentity::Migration(_)
+    ) {
+        return Err(PersistenceError::InvalidRunTransition(
+            "not a Migration Run".to_owned(),
+        ));
+    }
+    finish_run_authorized(
+        transaction,
+        run,
+        &header,
+        finish,
+        &mut [],
+        FinishAuthority {
+            owner: Some(owner),
+            outputs: Some(&[]),
+            capture: None,
+            restore: false,
+            migration: publishing_success,
+        },
+    )
 }
 
 fn insert_artifact(
@@ -2183,6 +2268,9 @@ fn insert_managed_invocation(
     run: RunId,
     operation: &ManagedRunIdentity,
 ) -> Result<(), PersistenceError> {
+    if let ManagedRunIdentity::Migration(invocation) = operation {
+        return super::sqlite_migration_runs::insert_invocation(transaction, run, invocation);
+    }
     let revision = operation.revision();
     let common = (
         run.as_bytes().as_slice(),
@@ -2190,6 +2278,7 @@ fn insert_managed_invocation(
         revision.content_digest.as_bytes().as_slice(),
     );
     let result = match operation {
+        ManagedRunIdentity::Migration(_) => unreachable!("handled exact Migration invocation"),
         ManagedRunIdentity::Action(action) => transaction.execute(
             "INSERT INTO run_action_invocations(run_id,package_id,revision_content_digest,action_identity) VALUES (?1,?2,?3,?4)",
             params![common.0,common.1,common.2,action.action.as_str().as_bytes()]),
@@ -2211,6 +2300,10 @@ fn managed_invocation_row(
 ) -> Result<ManagedRunIdentity, PersistenceError> {
     use crate::domain::ManagedExecutionKind;
     let kind = super::sqlite_v5::validate_run_operation(database, run)?;
+    if kind == ManagedExecutionKind::Migration {
+        return super::sqlite_migration_runs::load_invocation(database, run)
+            .map(ManagedRunIdentity::Migration);
+    }
     if kind != ManagedExecutionKind::Action {
         let sql = match kind {
             ManagedExecutionKind::SnapshotCapture => {
@@ -2219,7 +2312,7 @@ fn managed_invocation_row(
             ManagedExecutionKind::SnapshotRestore => {
                 "SELECT package_id, revision_content_digest, snapshot_id FROM run_restore_invocations WHERE run_id=?1"
             }
-            ManagedExecutionKind::Action => unreachable!(),
+            ManagedExecutionKind::Action | ManagedExecutionKind::Migration => unreachable!(),
         };
         let (package, digest, snapshot) = database
             .query_row(sql, [run.as_bytes().as_slice()], |row| {
@@ -2250,7 +2343,7 @@ fn managed_invocation_row(
                         })?,
                 ),
             }),
-            ManagedExecutionKind::Action => unreachable!(),
+            ManagedExecutionKind::Action | ManagedExecutionKind::Migration => unreachable!(),
         };
     }
     let row = database
@@ -2493,6 +2586,14 @@ pub(super) fn load_managed_run_from(
         }
     };
     validate_managed_run_links(database, run, &header, &operation, &state, admitted)?;
+    super::sqlite_migration_runs::validate_links(
+        database,
+        run,
+        header.instance,
+        header.accepted_state_version,
+        &operation,
+        &state,
+    )?;
     Ok(crate::domain::ManagedRunView {
         id: run,
         instance: header.instance,
@@ -3898,7 +3999,7 @@ mod tests {
                 .all(|summary| summary.action.action.as_str() == "deploy")
         );
 
-        // The V4 Run tables have no dedicated sensitive-value fields.
+        // Current Run metadata tables have no dedicated sensitive-value fields.
         let database = persistence.database.lock().unwrap();
         let mut statement = database
             .prepare(
@@ -3921,7 +4022,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            17 // V4's twelve plus five operation/admission/result relations.
+            24 // V4's twelve, five V5 relations, and seven V6 Migration relations.
         );
         assert!(
             columns
