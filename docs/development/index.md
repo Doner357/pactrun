@@ -23,6 +23,13 @@ product semantics. A design summary may help locate a rule but cannot override
 it. The [M4 closeout](./m4-implementation-status.md) records integrated work, not
 a release or a fresh claim that every test has just run.
 
+The next design entry is the [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md)
+and [ServiceStorage staged alignment](./design-notes/service-storage-staged-design-alignment.md).
+The approved work order places ServiceStorage in M6.5 between M6 recovery and
+M7 Cleanup/deletion. Bounded M6 S0-S4 is approved; its
+[implementation record](./m6-implementation-status.md) tracks delivery gates.
+ServiceStorage implementation approval remains separate.
+
 ## Change discipline
 
 For behavior-preserving work, choose local implementation details without

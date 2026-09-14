@@ -35,7 +35,7 @@ M6 and ServiceStorage representation/runtime remain outside the completed M5 sco
 
 English Markdown is canonical. The [Spec map](docs/spec/index.md) is the product
 specification entry; [Development](docs/development/index.md) provides reading
-paths, verification policy, and the [M5 handoff](docs/development/next-milestone.md).
+paths, verification policy, and the [M6 handoff](docs/development/next-milestone.md).
 All existing requirement-bearing documents have moved into Spec. Usage guides
 remain planned placeholders; their completion is a later task.
 

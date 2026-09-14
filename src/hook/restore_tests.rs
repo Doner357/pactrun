@@ -378,7 +378,7 @@ fn real_capture_to_restore_exposes_selected_content_and_atomically_replaces_a_di
 }
 
 // Test-ID: PR-TEST-0259
-// Verifies: PR-REQ-0291, PR-REQ-0298
+// Verifies: PR-REQ-0291, PR-REQ-0298, PR-REQ-0070
 #[test]
 fn restore_compares_both_tokens_and_success_alone_clears_the_existing_guard() {
     for mode in ["success", "state", "aba", "consequence"] {
@@ -456,7 +456,7 @@ fn restore_compares_both_tokens_and_success_alone_clears_the_existing_guard() {
 }
 
 // Test-ID: PR-TEST-0260
-// Verifies: PR-REQ-0291, PR-REQ-0215, PR-REQ-0216, PR-REQ-0298
+// Verifies: PR-REQ-0291, PR-REQ-0215, PR-REQ-0216, PR-REQ-0298, PR-REQ-0070
 #[test]
 fn failed_cancelled_timed_out_and_protocol_invalid_restore_preserves_target_and_guard() {
     for mode in [
@@ -865,7 +865,7 @@ fn actor(
 }
 
 // Test-ID: PR-TEST-0264
-// Verifies: PR-REQ-0291, PR-REQ-0298
+// Verifies: PR-REQ-0291, PR-REQ-0298, PR-REQ-0070
 #[test]
 fn restore_owner_loss_and_commit_crashes_have_only_old_or_complete_new_state() {
     for mode in ["success", "open_failure"] {

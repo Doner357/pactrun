@@ -1,5 +1,5 @@
 ---
-title: Baseline and M6 Handoff
+title: Baseline and M6 Recovery Handoff
 ---
 
 # Current baseline and next milestone
@@ -50,7 +50,7 @@ configured destination and a non-force branch-state check.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | Approved M5 S0-S5 scope implemented and locally integrated after operator authorization; M6 remains Proposed |
+| Scope and work order | M5 integrated; bounded M6 S0-S4 implementation approved on 2026-09-14; M6.5 remains separately gated |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -60,29 +60,46 @@ The owning Spec pages define the approved new command and V6 direction. Frozen
 HookProtocolV1 remains unchanged. The handoff is not a replacement for the
 exact-source validation report.
 
-## M6 is the next proposed milestone, not implicitly approved
+## M6 approval and delivery gate
 
-Start by reviewing the broader pending recovery requirements and producing the
-next bounded baseline. Reuse M5's owner continuation, risk handshake, exact pins,
-committed boundary evidence and explicit reconciliation. Do not reinterpret an
-Interrupted Run as resumable, salvage uncommitted output files, or broaden the
-Managed Input checkpoint into a service-owned resource representation. M6 design
-approval remains separate from the completed M5 implementation and integration.
+After the initial scheduling approval, the operator approved continuous bounded
+M6 S0-S4 implementation on 2026-09-14. This does not approve ServiceStorage
+representation or runtime. Start with the
+[staged ServiceStorage alignment](./design-notes/service-storage-staged-design-alignment.md)
+and [approved M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
+S0's operation/boundary/evidence audit retains exact V6. The
+[M6 implementation record](./m6-implementation-status.md) identifies added
+cross-operation evidence and the exact-source final verification/integration
+gates. M6 is `In progress` until those completion gates are met.
 
-## Deferred work must not leak into bounded M5
+M6 covers existing Action, Capture, Restore and Migration recovery, reusing
+M3-M5 owner leases, continuations, risk handshake, exact pins and committed
+boundaries. Its slices are S0 contract/evidence review, S1 owner/reconciliation,
+S2 durable evidence/publication, S3 guard/diagnostics and S4 crash verification.
+No replay, resumed Interrupted Run, uncommitted-output salvage, new CLI spelling
+or silent V6 change is authorized.
 
-[ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
-are closed, but concrete serialization, authority where needed, durable retention
-and abandonment representation, and runtime remain deferred. The
-[roadmap's storage gates](./implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)
-remain explicit. Do not model this work as synchronized Managed Inputs or claim
-that a service database transaction is atomic with Pactrun persistence.
+## ServiceStorage is scheduled as M6.5 before M7
 
-Broader recovery generalization (M6), Cleanup/deletion (M7), and Recipes/advanced
-authoring (M8) remain Proposed. Their unresolved future design is not permission
-to expand M5; it becomes an M5 blocker only if the approved scope actually depends
-on it. Snapshot deletion and a broader non-ServiceStorage resource taxonomy are
-not introduced by this migration.
+The fixed order is **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. M6.5 is the dedicated
+[ServiceStorage milestone](./implementation-roadmap.md#m65---servicestorage),
+not an indefinitely deferred runtime. Its implementation remains `Proposed`
+until the separately reviewed Core, authority where needed, persistence,
+access, compatibility and upgrade contracts are approved after M6.
+
+M6.5 must align retention, finalization and abandonment persistence ownership
+with M7 before schema approval. M7 delivers actual Cleanup coordination,
+do-not-replay/finalization, deletion and AbandonManagement operations. M6 does
+not claim their runtime coverage or wait for Cleanup to exist; M6.5 must not
+expose deletion that bypasses M7. M7 and M8 retain their existing numbering.
+
+[Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
+remain authoritative. Inputs, metadata and Workspace are not live-service
+mirrors, and a Pactrun commit is not atomic with service bytes. The
+[remaining design gates](./implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)
+are assigned stages, not implied design approval. Snapshot deletion and the
+broader non-ServiceStorage resource taxonomy remain outside this plan; that
+taxonomy does not block bounded M6.5.
 
 ## Evidence caveat
 

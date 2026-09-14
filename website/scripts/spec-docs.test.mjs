@@ -61,12 +61,12 @@ test('main sidebar uses Spec and Development instead of compatibility locations'
   assert.match(sidebar, /development\/index/);
 });
 
-test('M5 integration closes README and handoff without advancing proposed M6', async () => {
+test('M5 integration remains distinct from separately approved M6 work', async () => {
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
   const baseline = docs.find(([name]) => name === 'development/design-notes/m5-migration-implementation-baseline.md')[1];
   const status = docs.find(([name]) => name === 'development/m5-implementation-status.md')[1];
   assert.match(roadmap, /### M5 - Migration\s+\*\*State: Implemented and integrated into develop\.\*\*/);
-  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Proposed\.\*\*/);
+  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: In progress\.\*\*/);
   assert.match(baseline, /Approved scope and implementation decisions, 2026-09-13/);
   assert.match(status.replace(/\s+/g, ' '), /approved M5 scope is implemented, verified and integrated into local develop/);
   assert.match(status, /Current production storage is V6/);
@@ -80,6 +80,37 @@ test('M5 integration closes README and handoff without advancing proposed M6', a
 test('roadmap distinguishes historical V4 introduction from the current schema', () => {
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /PersistenceSchemaV4 as the current canonical implemented internal schema/);
+});
+
+test('bounded M6 approval does not approve the scheduled ServiceStorage runtime', async () => {
+  const document = name => docs.find(([file]) => file === 'development/' + name)[1];
+  const roadmap = document('implementation-roadmap.md');
+  const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
+  assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
+  assert.match(roadmap, /### M6 - Recovery\s+\*\*State: In progress\.\*\*/);
+  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Proposed\./);
+  const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
+  assert.match(current, /PersistenceSchemaV6.*integrated `develop` persistence baseline/);
+  assert.doesNotMatch(current, /Migration and Cleanup execution remain deferred/);
+  assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /Hook and operator-input execution remain pending/);
+
+  const baseline = document('design-notes/m6-recovery-implementation-baseline.md').replace(/\s+/g, ' ');
+  assert.match(baseline, /Approved bounded M6 scope/);
+  assert.match(baseline, /S0 review complete/);
+  assert.match(baseline, /Decision: retain exact V6/);
+  assert.match(baseline, /Do not silently alter exact V6/);
+  const alignment = document('design-notes/service-storage-staged-design-alignment.md').replace(/\s+/g, ' ');
+  assert.match(alignment, /before approving the storage schema/);
+  assert.match(alignment, /broader taxonomy.*remain deferred and do not block/);
+
+  for (const entry of ['index.md', 'reading-paths.md', 'next-milestone.md', 'implementation-guidance.md', 'design-notes/service-storage-semantic-baseline.md']) {
+    assert.match(document(entry), /service-storage-staged-design-alignment\.md/, entry);
+    assert.match(document(entry), /m6-recovery-implementation-baseline\.md/, entry);
+  }
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.match(sidebar, /development\/design-notes\/service-storage-staged-design-alignment/);
+  assert.match(sidebar, /development\/design-notes\/m6-recovery-implementation-baseline/);
+  assert.match(sidebar, /development\/m6-implementation-status/);
 });
 
 async function rustFiles(directory) {

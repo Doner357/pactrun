@@ -13,7 +13,7 @@ its implementation. This is not yet a beginner usage manual.
 - **Understand the contracts:** [Pactrun Spec](./spec/index.md).
 - **Find a term or a contract:** [vocabulary](./spec/glossary.md) and [catalog](./spec/catalog.md).
 - **Start a development task:** [Development](./development/index.md) and [task reading paths](./development/reading-paths.md).
-- **Continue the roadmap:** [current baseline and M5 handoff](./development/next-milestone.md).
+- **Continue the roadmap:** [current baseline and M6 handoff](./development/next-milestone.md).
 - **Review this migration:** [scope and preservation evidence](./development/spec-migration-review.md).
 
 ## One specification

@@ -285,7 +285,7 @@ fn migration_owner_worker() {
 }
 
 // Test-ID: PR-TEST-0317
-// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0313, PR-REQ-0155, PR-REQ-0165
+// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0313, PR-REQ-0155, PR-REQ-0165, PR-REQ-0053, PR-REQ-0061, PR-REQ-0062
 #[test]
 fn mixed_chain_crashes_reconcile_in_a_new_process_without_files_or_hook_replay() {
     for (edge, fault, committed, open_risk) in [

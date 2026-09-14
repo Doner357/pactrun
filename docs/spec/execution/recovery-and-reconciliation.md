@@ -28,7 +28,10 @@ presented as a service Snapshot or as proof that external service state can be
 rolled back. It does not capture or restore authoritative ServiceStorage-backed
 Managed Service Resource bytes.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0304, PR-TEST-0317, PR-TEST-0327.**
+
+Evidence covers existing Managed Input checkpoints and conservative recovery.
+It does not claim ServiceStorage capture, rollback, or runtime support.
 
 ### PR-REQ-0054 - Runtime risk state
 
@@ -47,7 +50,7 @@ that acknowledgment. A crash around acknowledgment MAY conservatively produce
 a false-positive manual-recovery obligation, but MUST NOT create a false claim
 that an unrecorded risky boundary is safe.
 
-**Verification: PR-TEST-0096.**
+**Verification: PR-TEST-0096, PR-TEST-0326.**
 
 ### PR-REQ-0056 - Risk resolution
 
@@ -56,7 +59,7 @@ coherent enough for ordinary Pactrun management. It MUST NOT imply rollback to
 the original value or require the Run itself to succeed. Pactrun MUST durably
 clear risk before acknowledging resolution.
 
-**Verification: PR-TEST-0096.**
+**Verification: PR-TEST-0096, PR-TEST-0326.**
 
 ### PR-REQ-0057 - Terminal recovery consequence
 
@@ -69,14 +72,14 @@ Pactrun MUST NOT claim that service-owned live state remains coherent with the
 currently committed source Revision merely because the Pactrun-owned boundary
 was recovered.
 
-**Verification: PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0174.**
+**Verification: PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0174, PR-TEST-0326, PR-TEST-0328.**
 
 ### PR-REQ-0058 - No inferred compensation
 
 Pactrun MUST NOT automatically replay a Hook, infer a reverse operation, or
 choose Snapshot Restore as compensation after failure or restart.
 
-**Verification: PR-TEST-0159, PR-TEST-0174.**
+**Verification: PR-TEST-0159, PR-TEST-0174, PR-TEST-0327, PR-TEST-0328.**
 
 ### PR-REQ-0059 - Trusted Hook duty
 
@@ -84,7 +87,11 @@ A trusted Hook is responsible for entering recovery risk before a relevant
 external mutation. Pactrun MUST NOT claim that native host-process behavior is
 contained by an operating-system sandbox in the initial product scope.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0328.**
+
+The real native Hook fixture waits for risk acknowledgment before its external
+write and that write survives Pactrun recovery. This verifies the supported
+trust boundary, not confinement or enforcement against an arbitrary bad Hook.
 
 ## Durable recovery state
 
@@ -94,7 +101,7 @@ Every Running Run MUST have exactly one execution owner. Reconciliation MUST NOT
 mark a Run interrupted until owner loss is established by the selected ownership
 mechanism.
 
-**Verification: PR-TEST-0100, PR-TEST-0111.**
+**Verification: PR-TEST-0100, PR-TEST-0111, PR-TEST-0325.**
 
 ### PR-REQ-0277 - Action execution owner mechanism
 
@@ -117,7 +124,7 @@ finishes it.
 This requirement selects the mechanism for Action Runs. M6 MAY generalize it to
 later managed-execution types without introducing a parallel ownership model.
 
-**Verification: PR-TEST-0086, PR-TEST-0111.**
+**Verification: PR-TEST-0086, PR-TEST-0111, PR-TEST-0325.**
 
 ### PR-REQ-0061 - Plan is not a replay contract
 
@@ -125,7 +132,7 @@ An Execution Plan MUST remain ephemeral. Recovery MUST NOT require durable Plan
 serialization and MUST NOT recompile the original request, resume workflow
 steps, replay a Hook, or require globally deterministic Hook behavior.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0304, PR-TEST-0317, PR-TEST-0326.**
 
 ### PR-REQ-0062 - Self-sufficient RunRecoveryState
 
@@ -135,7 +142,7 @@ Pactrun-owned recovery action, resulting Instance consequence, recovery
 references, and sufficient diagnostics. A reconciler MUST be able to use this
 state without the Plan.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0304, PR-TEST-0317, PR-TEST-0326.**
 
 ### PR-REQ-0063 - Atomic boundary advancement
 
@@ -148,7 +155,7 @@ transaction with a service filesystem, database, Docker volume, or external
 resource, and it does not predefine how future ServiceStorage-backed Managed
 Service Resource continuity or retention is durably represented.
 
-**Verification: PR-TEST-0085.**
+**Verification: PR-TEST-0085, PR-TEST-0326, PR-TEST-0330.**
 
 ### PR-REQ-0246 - Service transformation target-publication boundary
 
@@ -181,7 +188,7 @@ After confirmed owner loss, a reconciler MUST read only durable recovery state,
 perform only authorized Pactrun-owned recovery, apply the materialized Instance
 consequence, and finish the Run as `Interrupted`.
 
-**Verification: PR-TEST-0112.**
+**Verification: PR-TEST-0112, PR-TEST-0325, PR-TEST-0330.**
 
 ### PR-REQ-0065 - Recovery-reference lifetime
 
@@ -190,7 +197,7 @@ unresolved recovery obligation may need them. Execution-only recovery state MAY
 be removed or compacted only after terminal reconciliation and after no managed
 object requires the references.
 
-**Verification: PR-TEST-0085.**
+**Verification: PR-TEST-0085, PR-TEST-0327.**
 
 ## ManualRecoveryRequired
 
@@ -201,7 +208,7 @@ consistent but Pactrun cannot assert that service-owned state matches it. It
 MUST be an Instance trust guard, not a Run outcome, persistence-corruption
 marker, or synonym for a failed Run.
 
-**Verification: PR-TEST-0084.**
+**Verification: PR-TEST-0084, PR-TEST-0325.**
 
 ### PR-REQ-0067 - Guard behavior
 
@@ -209,7 +216,7 @@ While an Instance is in `ManualRecoveryRequired`, ordinary managed executions
 MUST be blocked by default. Read-only inspection and otherwise legal
 Pactrun-owned Input management MAY continue without clearing the guard.
 
-**Verification: PR-TEST-0091.**
+**Verification: PR-TEST-0091, PR-TEST-0327, PR-TEST-0329.**
 
 ### PR-REQ-0068 - One-execution recovery override
 
@@ -218,7 +225,7 @@ execution. It MUST NOT clear the guard or bypass exact compatibility,
 operation-specific requirements, stale-plan checks, exact references, Secret
 declassification authorization, mutation conflicts, or other invariants.
 
-**Verification: PR-TEST-0091.**
+**Verification: PR-TEST-0091, PR-TEST-0329.**
 
 ### PR-REQ-0069 - ResolveManualRecovery
 
@@ -227,7 +234,7 @@ no-Hook, no-Compiler, no-Run management mutation. It MUST acquire the mutation
 guard, clear the trust guard, and publish a new Instance state version. Pactrun
 MUST NOT infer resolution by running an Action with a particular name.
 
-**Verification: PR-TEST-0088.**
+**Verification: PR-TEST-0088, PR-TEST-0327, PR-TEST-0330.**
 
 ### PR-REQ-0070 - Automatic recovery resolution
 
@@ -240,7 +247,11 @@ subject to the publication checks in
 A failed, cancelled, timed-out, or interrupted Restore MUST NOT clear a
 pre-existing guard. Successful Instance deletion removes the object.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0259, PR-TEST-0260, PR-TEST-0264, PR-TEST-0306, PR-TEST-0329.**
+
+Evidence covers existing Action/Capture/Migration overrides and Restore guard
+publication. The successful Instance deletion clause remains pending under M7;
+this mapping does not claim deletion support.
 
 ### PR-REQ-0071 - Recovery provenance
 
@@ -248,4 +259,4 @@ An unresolved manual-recovery obligation MUST retain durable trigger and reason
 information sufficient for operator diagnosis without depending on an
 ephemeral Execution Plan.
 
-**Verification: PR-TEST-0085.**
+**Verification: PR-TEST-0085, PR-TEST-0327, PR-TEST-0330.**
