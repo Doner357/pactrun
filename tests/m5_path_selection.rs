@@ -258,9 +258,9 @@ fn operator_acquisition_and_invalid_target_fail_without_acceptance() {
 }
 
 // Test-ID: PR-TEST-0300
-// Verifies: PR-REQ-0309, PR-REQ-0312
+// Verifies: PR-REQ-0309, PR-REQ-0325
 #[test]
-fn real_cli_requires_explicit_v5_upgrade_preserving_inputs_and_path_ids() {
+fn real_cli_requires_explicit_v6_upgrade_preserving_inputs_and_path_ids() {
     let f = setup(false);
     let input = f.source.join("upgrade-secret");
     fs::write(&input, b"preserved secret bytes").unwrap();
@@ -294,16 +294,16 @@ fn real_cli_requires_explicit_v5_upgrade_preserving_inputs_and_path_ids() {
         }
         let tx = db.transaction().unwrap();
         for table in [
-            "run_migration_checkpoint_bindings",
-            "run_migration_payload_pins",
-            "run_migration_revision_pins",
-            "run_migration_boundaries",
-            "run_migration_progress",
-            "run_migration_edges",
-            "run_migration_invocations",
-            "run_capture_invocations",
-            "run_restore_invocations",
-            "run_operation_kinds",
+            "run_service_edge_commits",
+            "run_service_resource_targets",
+            "run_service_storage_targets",
+            "run_service_storage_pins",
+            "instance_service_resources",
+            "instance_service_storages",
+            "service_storage_run_origins",
+            "service_storage_preparations",
+            "service_storage_protections",
+            "service_storage_allocations",
             "writable_admissions",
         ] {
             assert_eq!(
@@ -314,14 +314,16 @@ fn real_cli_requires_explicit_v5_upgrade_preserving_inputs_and_path_ids() {
             );
             tx.execute_batch(&format!("DROP TABLE {table};")).unwrap();
         }
-        let v5 = include_str!("../src/persistence/persistence_schema_v5_additions.sql");
-        tx.execute_batch(
-            v5.split("CREATE TABLE instance_recovery_consequence_versions")
-                .next()
-                .unwrap(),
-        )
-        .unwrap();
-        tx.pragma_update(None, "user_version", 5).unwrap();
+        let v6 = include_str!("../src/persistence/persistence_schema_v6_additions.sql")
+            .replace("\r\n", "\n");
+        let admission_ddl = v6
+            .split("CREATE TABLE v6_run_operation_kinds")
+            .next()
+            .unwrap()
+            .strip_prefix("DROP TABLE writable_admissions;\n")
+            .unwrap();
+        tx.execute_batch(admission_ddl).unwrap();
+        tx.pragma_update(None, "user_version", 6).unwrap();
         tx.commit().unwrap();
     }
     let rejected = command(
@@ -341,8 +343,8 @@ fn real_cli_requires_explicit_v5_upgrade_preserving_inputs_and_path_ids() {
         Some(2)
     );
     let first = successful(&f.root, &["storage", "upgrade"]);
-    assert!(first.contains("V6 (upgraded)"));
-    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V6 (already current)"));
+    assert!(first.contains("V7 (upgraded)"));
+    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V7 (already current)"));
     assert_eq!(
         paths,
         ids(&successful(
@@ -385,7 +387,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
 }
 
 // Test-ID: PR-TEST-0290
@@ -660,7 +662,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
     let manifest = fs::read_to_string(f.source.join("pactrun.yaml")).unwrap();
     fs::write(
         f.source.join("pactrun.yaml"),
-        manifest.replace("protocol_version: 1", "protocol_version: 2"),
+        manifest.replace("protocol_version: 1", "protocol_version: 3"),
     )
     .unwrap();
     let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])

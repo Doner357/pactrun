@@ -48,6 +48,7 @@ opaque_id!(InstanceStateVersion);
 opaque_id!(ManagedInputPayloadId);
 opaque_id!(RunId);
 opaque_id!(SnapshotId);
+opaque_id!(ServiceAllocationId);
 
 /// The SHA-256 content identity owned by RevisionCoreFormatV1.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

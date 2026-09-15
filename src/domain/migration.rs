@@ -28,6 +28,7 @@ pub(crate) enum MigrationError {
     OutputsWithoutHook,
     InvalidCompletion,
     UnsupportedProtocol,
+    ServiceMapping(ServiceMigrationError),
 }
 
 impl fmt::Display for MigrationError {
@@ -54,6 +55,7 @@ impl fmt::Display for MigrationError {
             Self::OutputsWithoutHook => f.write_str("Migration outputs require a Hook"),
             Self::InvalidCompletion => f.write_str("Migration completion must submit every declared output once on success, none on failure"),
             Self::UnsupportedProtocol => f.write_str("Migration Hook protocol is unsupported"),
+            Self::ServiceMapping(error) => error.fmt(f),
         }
     }
 }
@@ -62,7 +64,7 @@ impl std::error::Error for MigrationError {}
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MigrationRevision {
     pub(crate) identity: RevisionIdentity,
-    pub(crate) content: ValidatedRevisionContentV1,
+    pub(crate) content: ValidatedRevisionContent,
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +74,7 @@ pub(crate) struct MigrationCompilationObservation {
     pub(crate) active_revision: RevisionIdentity,
     pub(crate) revisions: Vec<MigrationRevision>,
     pub(crate) bindings: Vec<MigrationBinding>,
+    pub(crate) service_state: Option<InstanceServiceState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +82,7 @@ pub(crate) struct MigrationCompiledEdge {
     pub(crate) bindings: MigrationEdgePlan,
     pub(crate) runtime: Vec<RuntimeFileV1>,
     pub(crate) launch: Option<CompiledHookLaunch>,
+    pub(crate) service: Option<ServiceMigrationEdge>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -365,7 +369,7 @@ pub(super) fn migration_successors(
                 RevisionContentDigest::from_bytes(edge.source_revision_digest.to_bytes()),
             );
             if let Some(previous) = nodes.get(&from)
-                && relationally_valid(edge, &previous.content.core)
+                && relationally_valid(edge, &previous.content.core, &node.content.core)
             {
                 successors
                     .entry(from)
@@ -448,13 +452,22 @@ fn revision_map(
     Ok(result)
 }
 
-fn relationally_valid(edge: &MigrationV1, source: &RevisionCoreV1) -> bool {
-    edge.requires_source
+fn relationally_valid(edge: &MigrationV1, source: &RevisionCore, target: &RevisionCore) -> bool {
+    let inputs = edge
+        .requires_source
         .iter()
         .chain(edge.transitions.iter().map(MigrationTransitionV1::source))
         .all(|reference| {
             let declared = source.inputs().iter().any(|i| i.id == reference.input_id);
             declared == (reference.role == InputBindingRoleV1::Active)
+        });
+    inputs
+        && target.service_core().is_none_or(|target| {
+            validate_service_sources_v2(
+                target,
+                &BTreeMap::from([(edge.source_revision_digest.clone(), source.service_source())]),
+            )
+            .is_ok()
         })
 }
 
@@ -617,13 +630,13 @@ fn evaluate_edge(
     operators: &BTreeSet<MigrationTargetInput>,
     authorize: bool,
 ) -> Result<MigrationEdgePlan, MigrationError> {
-    if !relationally_valid(edge, &source.content.core) {
+    if !relationally_valid(edge, &source.content.core, &target.content.core) {
         return Err(MigrationError::InvalidEdge);
     }
     if edge
         .hook
         .as_ref()
-        .is_some_and(|h| h.protocol_version.get() != 1)
+        .is_some_and(|h| !matches!(h.protocol_version.get(), 1 | 2))
     {
         return Err(MigrationError::UnsupportedProtocol);
     }

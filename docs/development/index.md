@@ -31,6 +31,13 @@ M7 Cleanup/deletion. Bounded M6 S0-S4 is complete and integrated; its
 [implementation record](./m6-implementation-status.md) records evidence and integration.
 ServiceStorage implementation approval remains separate.
 
+The [M6.5 baseline](./design-notes/m6-5-servicestorage-baseline.md) links the
+approved design direction. Continued S1-S7 work is now authorized; the
+[implementation record](./m6-5-implementation-status.md) separates current
+implemented runtime/installer support from final-source verification and Git
+integration. The [format review](./design-notes/m6-5-format-activation-review.md)
+records the independent Core/Hook V2 Freeze gate.
+
 ## Change discipline
 
 For behavior-preserving work, choose local implementation details without

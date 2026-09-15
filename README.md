@@ -22,14 +22,27 @@ adds Migration path-ID selection, read-only planning, target-qualified operator
 file inputs, declarative and Hook-backed chains, atomic per-edge commits, and
 no-replay owner-loss reconciliation. [Migration commands](./docs/spec/behavior/m5-migration-command-reference.md)
 use [PersistenceSchemaV6](./docs/spec/persistence/persistence-schema-v6.md).
-This checkout initializes V6 and upgrades only exact V5 through explicit
-`pactrun storage upgrade`; V4 and earlier first need a compatible M4 build.
+That integrated baseline initializes V6 and upgrades only exact V5 through
+explicit `pactrun storage upgrade`.
 M6 and ServiceStorage representation/runtime remain outside the completed M5 scope.
 
 Bounded [M6 recovery](./docs/development/m6-implementation-status.md) is now
 complete and integrated into local develop. It adds cross-operation recovery
 evidence and fault-injection coverage while preserving V6 and existing runtime
-semantics. M6.5 ServiceStorage is next, with separate design approval required.
+semantics.
+
+This feature checkout adds [M6.5 ServiceStorage](./docs/development/m6-5-implementation-status.md):
+explicit YAML/Core V2 installation, persistent Instance-isolated service storage,
+resource inspection/observation/path disclosure, independently selected Hook V2,
+and target-owned resource reuse, retention, reattachment and transformation.
+It initializes [PersistenceSchemaV7](./docs/spec/persistence/persistence-schema-v7.md)
+and upgrades only exact V6 through explicit `pactrun storage upgrade`; earlier
+stores first require a compatible historical build. Live service bytes are not
+Managed Inputs or automatic Snapshot contents. See the
+[ServiceStorage commands](./docs/spec/behavior/m6-5-service-storage-command-reference.md)
+and [format review](./docs/development/design-notes/m6-5-format-activation-review.md).
+Final-source validation and Git integration are distinct from implementation;
+M7 Cleanup, deletion and abandonment remain outside this checkout's scope.
 
 ## Repository layout
 

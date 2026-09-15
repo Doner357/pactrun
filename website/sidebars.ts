@@ -57,6 +57,14 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v5',
           'spec/persistence/persistence-schema-v6',
         ]},
+        {type: 'category', label: 'M6.5 Candidate Contracts', items: [
+          'spec/contracts/revision-core-format-v2',
+          'spec/contracts/pack-source-yaml-v2',
+          'spec/contracts/hook-protocol-v2',
+          'spec/persistence/persistence-schema-v7',
+          'spec/execution/m6-5-service-storage-execution',
+          'spec/behavior/m6-5-service-storage-command-reference',
+        ]},
       ],
     },
     {
@@ -68,6 +76,7 @@ const sidebars: SidebarsConfig = {
         'development/implementation-roadmap', 'development/development-and-verification',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
+        'development/m6-5-implementation-status',
         'development/spec-migration-review',
         {type: 'category', label: 'Design syntheses and history', items: [
           'development/design-notes/non-identity-metadata-semantic-baseline',
@@ -75,6 +84,7 @@ const sidebars: SidebarsConfig = {
           'development/design-notes/service-storage-semantic-baseline',
           'development/design-notes/service-storage-staged-design-alignment',
           'development/design-notes/m6-recovery-implementation-baseline',
+          'development/design-notes/m6-5-servicestorage-baseline',
           'development/design-notes/m3-action-execution-approval-baseline',
           'development/design-references', 'development/history/documentation-edition-1',
         ]},

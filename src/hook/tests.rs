@@ -61,6 +61,9 @@ mod restore_runtime {
 mod migration_runtime {
     include!("migration_tests.rs");
 }
+mod v2_runtime {
+    include!("service_runtime_tests.rs");
+}
 
 // Test-ID: PR-TEST-0122
 // Verifies: PR-REQ-0286

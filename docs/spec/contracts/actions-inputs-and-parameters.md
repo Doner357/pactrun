@@ -105,8 +105,8 @@ same abstraction.
 A ServiceStorage-backed Managed Service Resource exposure contract MUST keep
 read exposure separate from its user mutation route. Read exposure is
 conceptually hidden or readable. User mutation is conceptually unavailable,
-direct, or mediated by a Pack operation. Representation of those choices
-remains future format work.
+direct, or mediated by a Pack operation. Their M6.5 representation is specified
+by [Core V2](./revision-core-format-v2.md).
 
 Direct mutation MUST mean only that the user is authorized to modify the same
 service-authoritative live state. It MUST NOT imply that the service can safely
@@ -117,7 +117,12 @@ service-specific validation, quiescence, reload, or restart, the Package MUST
 own that behavior through an operation and its Hook rather than relying on the
 direct-exposure contract.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0357, PR-TEST-0359.**
+
+Partial CLI coverage: hidden/readable separation, direct path disclosure without
+content mutation or InstanceStateVersion advancement, and operation-route hints
+without invoking an operation. M6.5 execution and explicit reattachment have
+separate evidence; destructive lifecycle operations remain M7 work.
 
 ## Secrets
 

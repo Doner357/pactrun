@@ -7,19 +7,18 @@ use std::{
 
 use crate::{
     authoring::{
-        NormalizedPackDefinition, NormalizedPackSourceCandidate, PortableMetadataTemplate,
-        SecureSourceRoot, SourceRelativePathV1, parse_pack_source_yaml_v1,
+        NormalizedPackDefinition, PortableMetadataTemplate, SecureSourceRoot, SourceRelativePathV1,
+        VersionedPackSourceCandidate, parse_pack_source_yaml,
     },
     domain::{
         CurrentState, ReferenceLabelBinding, RevisionContentDigest, RevisionIdentity,
         RevisionMetadataMutation, RevisionMetadataMutationBatch, RuntimeContentProjectionInputV1,
-        RuntimeFileKindV1, RuntimeFileV1, Sha256Digest, ValidatedRevisionContentV1,
-        project_runtime_content_closure_v1, validate_revision_content_v1,
-        validate_revision_sources_v1,
+        RuntimeFileKindV1, RuntimeFileV1, Sha256Digest, ValidatedRevisionContent,
+        project_runtime_content_closure_v1, validate_revision_sources_v1,
     },
     managed_data::{StagedRuntimeSource, StagingSession},
     persistence::{PactrunPersistence, StoredRuntimeBlob},
-    revision_core_v1::calculate_revision_content_digest_v1,
+    revision_content::{calculate_revision_content_digest, validate_revision_content},
 };
 
 use super::ApplicationError;
@@ -74,16 +73,20 @@ pub(super) fn install_pack_source(
             operation: "read pactrun.yaml",
             source,
         })?;
-    let source_candidate = parse_pack_source_yaml_v1(&manifest_bytes)?;
+    // Select the declared source version before acquisition; never retry a
+    // failed V1 parse as V2 or change an installed Revision's identity.
+    let source_candidate = parse_pack_source_yaml(&manifest_bytes)?;
     let candidate = resolve_candidate(staging, &root, source_candidate)?;
 
     // Intrinsic validation and Frozen projection precede every durable blob.
-    let content = validate_revision_content_v1(
+    let content = validate_revision_content(
         candidate.definition.revision.clone(),
         candidate.definition.runtime_content.clone(),
-    )?;
+    )
+    .map_err(ApplicationError::RevisionContent)?;
     validate_staged_coverage(&content, &candidate.staged)?;
-    let digest = calculate_revision_content_digest_v1(&content)?;
+    let digest =
+        calculate_revision_content_digest(&content).map_err(ApplicationError::RevisionContent)?;
     let identity = RevisionIdentity::new(candidate.definition.package_id, digest);
     let metadata = metadata_batch(
         &identity,
@@ -94,7 +97,7 @@ pub(super) fn install_pack_source(
 
     // Physical publication is deduplicated solely by byte-derived digest.
     let publications = publish_distinct_blobs(persistence, &candidate.staged)?;
-    let revision = persistence.persist_revision_with_metadata(
+    let revision = persistence.persist_versioned_revision_with_metadata(
         identity.package_id,
         &content,
         &publications,
@@ -111,7 +114,7 @@ pub(super) fn install_pack_source(
 fn resolve_candidate(
     staging: &StagingSession,
     root: &SecureSourceRoot,
-    candidate: NormalizedPackSourceCandidate,
+    candidate: VersionedPackSourceCandidate,
 ) -> Result<RevisionCandidate, ApplicationError> {
     let mut acquired = BTreeMap::<SourceRelativePathV1, Arc<StagedRuntimeSource>>::new();
     for record in &candidate.runtime_sources {
@@ -160,7 +163,7 @@ fn resolve_candidate(
 }
 
 fn validate_staged_coverage(
-    content: &ValidatedRevisionContentV1,
+    content: &ValidatedRevisionContent,
     staged: &StagedRuntimeContentSet,
 ) -> Result<(), ApplicationError> {
     if content.runtime_content.files().len() != staged.entries.len() {
@@ -216,7 +219,7 @@ fn metadata_batch(
 
 fn validate_metadata_plan(
     revision: &RevisionIdentity,
-    content: &ValidatedRevisionContentV1,
+    content: &ValidatedRevisionContent,
     batch: &RevisionMetadataMutationBatch,
 ) -> Result<(), ApplicationError> {
     for operation in batch.operations() {
@@ -279,7 +282,7 @@ fn publish_distinct_blobs(
 fn inspect_migrations(
     persistence: &PactrunPersistence,
     target: &RevisionIdentity,
-    content: &ValidatedRevisionContentV1,
+    content: &ValidatedRevisionContent,
 ) -> Result<Vec<MigrationRelationView>, ApplicationError> {
     let mut result = Vec::new();
     for migration in content.core.migrations() {
@@ -297,7 +300,20 @@ fn inspect_migrations(
                     .map(|input| input.id.clone())
                     .collect::<BTreeSet<_>>();
                 let context = BTreeMap::from([(migration.source_revision_digest.clone(), ids)]);
-                match validate_revision_sources_v1(&content.core, &context) {
+                let relation = if let Some(core) = content.core.service_core() {
+                    crate::domain::validate_service_sources_v2(
+                        core,
+                        &BTreeMap::from([(
+                            migration.source_revision_digest.clone(),
+                            source.content.core.service_source(),
+                        )]),
+                    )
+                    .map_err(|e| e.to_string())
+                } else {
+                    validate_revision_sources_v1(content.core.common(), &context)
+                        .map_err(|e| e.to_string())
+                };
+                match relation {
                     Ok(_) => MigrationRelationState::Valid,
                     Err(error) => MigrationRelationState::Invalid(error.to_string()),
                 }
@@ -359,6 +375,59 @@ mod tests {
             .collect::<Vec<_>>();
         names.sort();
         names
+    }
+
+    // Test-ID: PR-TEST-0379
+    // Verifies: PR-REQ-0318, PR-REQ-0320
+    #[test]
+    fn versioned_source_acquisition_and_publication_do_not_erase_core_identity() {
+        let (_temporary, storage, source) = roots();
+        let yaml=b"source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
+        fs::write(source.join("pactrun.yaml"), yaml).unwrap();
+        let p = PactrunPersistence::open(&storage).unwrap();
+        let candidate = crate::authoring::parse_pack_source_yaml(yaml).unwrap();
+        assert_eq!(candidate.revision.version(), 2);
+        let root = SecureSourceRoot::open(&source).unwrap();
+        let staged = resolve_candidate(p.staging_session().unwrap(), &root, candidate).unwrap();
+        let content = validate_revision_content(
+            staged.definition.revision,
+            staged.definition.runtime_content,
+        )
+        .unwrap();
+        validate_staged_coverage(&content, &staged.staged).unwrap();
+        let digest = calculate_revision_content_digest(&content).unwrap();
+        let installed = p
+            .persist_versioned_revision_with_metadata(
+                staged.definition.package_id,
+                &content,
+                &[],
+                &empty_metadata(),
+            )
+            .unwrap();
+        assert_eq!(installed.content_digest, digest);
+        let loaded = p.load_revision(&installed).unwrap().unwrap();
+        assert_eq!(loaded.content.core.version(), 2);
+        assert_eq!(
+            loaded.content.core.service_core().unwrap().resources()[0]
+                .locator
+                .as_str(),
+            "Config.json"
+        );
+        assert!(!storage.join("service-storage").exists()); // installation is not allocation
+        for token in ["2.0", "'2'", "3"] {
+            let invalid = String::from_utf8(yaml.to_vec())
+                .unwrap()
+                .replace("source_format: 2", &format!("source_format: {token}"));
+            assert!(crate::authoring::parse_pack_source_yaml(invalid.as_bytes()).is_err());
+        }
+        let legacy=b"source_format: 1\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
+        assert_eq!(
+            crate::authoring::parse_pack_source_yaml(legacy)
+                .unwrap()
+                .revision
+                .version(),
+            1
+        );
     }
 
     // Supporting coverage for PR-TEST-0069.
@@ -500,17 +569,19 @@ runtime_content:
         );
 
         let root = SecureSourceRoot::open(&source).unwrap();
-        let candidate =
-            parse_pack_source_yaml_v1(&fs::read(source.join("pactrun.yaml")).unwrap()).unwrap();
-        let candidate = resolve_candidate(&staging, &root, candidate).unwrap();
-        let content = validate_revision_content_v1(
+        let candidate = crate::authoring::parse_pack_source_yaml_v1(
+            &fs::read(source.join("pactrun.yaml")).unwrap(),
+        )
+        .unwrap();
+        let candidate = resolve_candidate(&staging, &root, candidate.into()).unwrap();
+        let content = validate_revision_content(
             candidate.definition.revision,
             candidate.definition.runtime_content,
         )
         .unwrap();
         let expected_revision = RevisionIdentity::new(
             candidate.definition.package_id,
-            calculate_revision_content_digest_v1(&content).unwrap(),
+            calculate_revision_content_digest(&content).unwrap(),
         );
         assert!(
             persistence

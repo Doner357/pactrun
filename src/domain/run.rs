@@ -425,6 +425,12 @@ pub(crate) struct AdmissionFacts<'a> {
     pub(crate) active_bindings: &'a [ActiveInstanceBindingReference],
     pub(crate) runtime_content: &'a [RuntimeFileV1],
     pub(crate) launch: &'a CompiledHookLaunch,
+    /// Compiled association facts, not caller-granted authority. Admission
+    /// re-derives the declaration and mapping inside its write transaction.
+    pub(crate) service: Option<(
+        &'a super::HookServiceContractV2,
+        &'a super::ServiceHookBindings,
+    )>,
 }
 
 /// The typed Admission refusal, evaluated in the precedence of PR-REQ-0279.

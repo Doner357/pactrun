@@ -298,6 +298,54 @@ pub(super) fn execute(
                     format_revision(bindings.target())
                 )
                 .map_err(io_operation)?;
+                if let Some(service) = &edge.service {
+                    writeln!(
+                        output,
+                        "  service_transform: {} (live presence and contents are not observed by this plan)",
+                        service.transform
+                    )
+                    .map_err(io_operation)?;
+                    for id in &service.created_storages {
+                        writeln!(
+                            output,
+                            "  create_storage: {} (allocation deferred to this edge)",
+                            id.as_str()
+                        )
+                        .map_err(io_operation)?;
+                    }
+                    for id in &service.consumed_storages {
+                        writeln!(
+                            output,
+                            "  consume_source_storage: {} (no content deletion)",
+                            id.as_str()
+                        )
+                        .map_err(io_operation)?;
+                    }
+                    for id in &service.consumed_resources {
+                        writeln!(
+                            output,
+                            "  consume_source_resource: {} (no content deletion)",
+                            id.as_str()
+                        )
+                        .map_err(io_operation)?;
+                    }
+                    for (presence, resource) in &service.create_presence {
+                        writeln!(
+                            output,
+                            "  create_resource: {} presence={presence:?} (runtime check)",
+                            resource.declaration.id.as_str()
+                        )
+                        .map_err(io_operation)?;
+                    }
+                    for (requirement, _) in &service.requires {
+                        writeln!(
+                            output,
+                            "  service_requires: {:?} {:?} (runtime check)",
+                            requirement.reference, requirement.presence
+                        )
+                        .map_err(io_operation)?;
+                    }
+                }
                 for input in plan
                     .operator_inputs()
                     .iter()

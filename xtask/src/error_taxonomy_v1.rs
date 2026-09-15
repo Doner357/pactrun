@@ -920,4 +920,51 @@ mod tests {
         assert_eq!(semantic_projection(&catalog), semantic_projection(&frozen));
         super::super::revision_core_v1::verify_traceability(&workspace_root()).unwrap();
     }
+
+    // Test-ID: PR-TEST-0356
+    // Verifies: PR-REQ-0328, PR-REQ-0222
+    #[test]
+    fn service_storage_registry_appends_approved_codes_without_reclassifying_legacy_codes() {
+        let (catalog, _, sources) = loaded();
+        for (code, category) in [
+            ("allocation_unavailable", "execution"),
+            ("corrupt_storage_state", "persistence"),
+            ("exposure_denied", "admission"),
+            ("mapping_conflict", "relational_semantic_validation"),
+            ("observation_unknown", "execution"),
+            ("resource_absent", "admission"),
+            ("resource_kind_mismatch", "admission"),
+            ("target_publication_rejected", "execution"),
+            ("unknown_resource", "resolution"),
+            ("unsafe_path", "admission"),
+        ] {
+            require_code(&catalog, "service_storage", code, category).unwrap();
+        }
+        verify_append_only_examples(&catalog, &sources).unwrap();
+        verify_semantic_boundaries(&catalog).unwrap();
+    }
+
+    // Test-ID: PR-TEST-0363
+    // Verifies: PR-REQ-0321, PR-REQ-0322, PR-REQ-0222
+    #[test]
+    fn hook_v2_codes_have_an_independent_append_only_owner() {
+        let (catalog, _, sources) = loaded();
+        for code in [
+            "invalid_authority",
+            "invalid_frame",
+            "invalid_target_proposal",
+            "unexpected_message",
+        ] {
+            require_code(&catalog, "hook_protocol_v2", code, "protocol").unwrap();
+        }
+        require_code(
+            &catalog,
+            "hook_protocol_v1",
+            "completion_with_open_risk",
+            "protocol",
+        )
+        .unwrap();
+        verify_append_only_examples(&catalog, &sources).unwrap();
+        verify_semantic_boundaries(&catalog).unwrap();
+    }
 }

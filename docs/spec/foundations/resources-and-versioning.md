@@ -220,9 +220,12 @@ authority, compatibility, access, prerequisite, continuity, retention, discard,
 migration-coordination, Cleanup coordination, non-destruction, and durable-
 representation encodings and mechanisms remain formal design gates rather than
 properties of V1. Whether non-ServiceStorage-backed service-owned resources use
-the same abstraction remains a separate taxonomy gate.
+the same abstraction remains a separate taxonomy gate. M6.5 supplies the
+independently versioned [Core V2](../contracts/revision-core-format-v2.md) and
+[Hook V2](../contracts/hook-protocol-v2.md) representations; M7 still owns
+destructive finalization, Cleanup receipts and abandonment.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0331, PR-TEST-0369, PR-TEST-0385.**
 
 ### PR-REQ-0083 - Structured CLI version
 

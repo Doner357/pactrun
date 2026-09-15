@@ -23,6 +23,7 @@ use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
 mod migrations;
+mod service_storage;
 mod snapshots;
 
 use crate::{
@@ -52,6 +53,11 @@ Usage:\n\
   pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]\n\
   pactrun instance resolve-manual-recovery <instance> [--if-version <token>]\n\
   pactrun input list <instance>\n\
+  pactrun service-storage list <instance> [--retained]\n\
+  pactrun resource list <instance> [--retained]\n\
+  pactrun resource show <instance> <resource-id> [--retained]\n\
+  pactrun resource observe <instance> <resource-id> [--retained]\n\
+  pactrun resource locate <instance> <resource-id> --intent <read|write> [--retained]\n\
   pactrun input set <instance> <input-id> (--file <path> | --stdin) [--if-version <token>]\n\
   pactrun input export <instance> <input-id> --output <path|-> [--authorize-secret-export]\n\
   pactrun input delete <instance> <input-id> [--if-version <token>]\n\
@@ -74,11 +80,12 @@ Snapshot execution options: --param, --param-file, --param-stdin, --plan, --auth
   --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
 Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
 Snapshot bundles use filesystem paths only, never stdin/stdout.\n\
-Migration supports declared no-Hook edges; Hook execution and operator file inputs are not yet available.\n\
+Migration supports declared paths, Hook edges and explicit per-target Input files.\n\
 \n\
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
     Snapshot(snapshots::SnapshotCommand),
     Help,
@@ -460,6 +467,8 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         "action" => parse_action(&mut parser),
         "invoke" => parse_invoke(&mut parser),
         "snapshot" => snapshots::parse(&mut parser).map(Command::Snapshot),
+        "service-storage" => service_storage::parse(&mut parser, true).map(Command::ServiceStorage),
+        "resource" => service_storage::parse(&mut parser, false).map(Command::ServiceStorage),
         "run" => parse_run(&mut parser),
         "storage" => {
             let operation = required_value_string(&mut parser, "storage command")?;
@@ -821,6 +830,9 @@ fn execute(
     }
     if let Command::Snapshot(command) = command {
         return snapshots::execute(command, &storage_root, stdin, stdout, stderr, cancellation);
+    }
+    if let Command::ServiceStorage(command) = command {
+        return service_storage::execute(command, &storage_root, stdout);
     }
     if matches!(command, Command::UpgradeStorage) {
         if !storage_root.is_absolute() {
@@ -1193,7 +1205,8 @@ fn execute(
         | Command::GeneratePackageId
         | Command::UpgradeStorage
         | Command::Migration(_)
-        | Command::Snapshot(_) => {
+        | Command::Snapshot(_)
+        | Command::ServiceStorage(_) => {
             unreachable!()
         }
     }

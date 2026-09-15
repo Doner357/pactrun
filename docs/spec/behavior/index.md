@@ -18,5 +18,9 @@ These are behavior contracts, not usage tutorials. Consult implementation status
 
 - [M5 Migration Commands](./m5-migration-command-reference.md): Path-ID discovery/selection, read-only planning, target-qualified files, and declarative/Hook-backed execution.
 
+The [M6.5 ServiceStorage commands](./m6-5-service-storage-command-reference.md)
+are implemented human CLI spellings for contract inspection, point-in-time
+observation and authorized path disclosure, not generic service-content editing.
+
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

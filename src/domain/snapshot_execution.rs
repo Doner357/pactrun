@@ -32,8 +32,9 @@ pub(crate) struct SnapshotIntent {
 pub(crate) struct SnapshotCompilationObservation {
     pub(crate) instance: InstanceView,
     pub(crate) active_bindings: Vec<ActiveInstanceBindingReference>,
-    pub(crate) revision: ValidatedRevisionContentV1,
+    pub(crate) revision: ValidatedRevisionContent,
     pub(crate) snapshot: Option<SnapshotManifest>,
+    pub(crate) service_state: Option<InstanceServiceState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,9 +48,17 @@ pub(crate) struct SnapshotExecutionPlan {
     runtime: Vec<RuntimeFileV1>,
     hook: HookV1,
     launch: CompiledHookLaunch,
+    service_hook: HookServiceContractV2,
+    service_bindings: ServiceHookBindings,
 }
 
 impl SnapshotExecutionPlan {
+    pub(crate) fn service_bindings(&self) -> &ServiceHookBindings {
+        &self.service_bindings
+    }
+    pub(crate) fn service_hook(&self) -> &HookServiceContractV2 {
+        &self.service_hook
+    }
     pub(crate) fn steps(&self) -> &'static [SnapshotPlanStep] {
         &[
             SnapshotPlanStep::EstablishSession,
@@ -85,6 +94,7 @@ impl SnapshotExecutionPlan {
     }
     pub(crate) fn admission_facts(&self) -> AdmissionFacts<'_> {
         AdmissionFacts {
+            service: Some((self.service_hook(), self.service_bindings())),
             expected_state_version: self.state,
             active_bindings: &self.active_bindings,
             runtime_content: &self.runtime,
@@ -185,8 +195,8 @@ pub(crate) fn build_snapshot_plan(
         ));
     }
     let core = &observation.revision.core;
-    let (parameters, hook) = snapshot_hook(core, intent.operation)?;
-    if hook.protocol_version.get() != 1 {
+    let (parameters, hook) = snapshot_hook(core.common(), intent.operation)?;
+    if !matches!(hook.protocol_version.get(), 1 | 2) {
         return Err(SnapshotPlanError::Invalid(
             "Snapshot Hook protocol is unsupported",
         ));
@@ -236,8 +246,20 @@ pub(crate) fn build_snapshot_plan(
         }
     };
     let access = operation
-        .authoritative_access(core)
+        .authoritative_access(core.common())
         .map_err(|_| SnapshotPlanError::Invalid("Snapshot capability is unavailable"))?;
+    let service_hook = core.service_hook(&match intent.operation {
+        SnapshotOperation::Capture => ServiceHookSite::Capture,
+        SnapshotOperation::Restore(_) => ServiceHookSite::Restore,
+    });
+    let service_bindings = bind_current_service_hook(
+        &service_hook,
+        observation.service_state.as_ref(),
+        intent.instance,
+        observation.instance.state_version,
+        &observation.instance.active_revision,
+    )
+    .map_err(|_| SnapshotPlanError::Invalid("Snapshot service associations changed"))?;
     Ok(SnapshotExecutionPlan {
         instance: intent.instance,
         state: observation.instance.state_version,
@@ -252,5 +274,7 @@ pub(crate) fn build_snapshot_plan(
         runtime: observation.revision.runtime_content.files().to_vec(),
         hook: hook.clone(),
         launch,
+        service_bindings,
+        service_hook,
     })
 }

@@ -9,7 +9,10 @@ mod platform;
 mod protocol;
 mod restore;
 mod runtime;
+pub(crate) mod service_storage;
 mod snapshots;
+mod versioned_protocol;
+pub(crate) use migrations::TargetCommitPermit;
 #[cfg(test)]
 pub(crate) use migrations::accept_declarative_migration;
 #[cfg(test)]
@@ -340,6 +343,7 @@ impl fmt::Debug for FinalizationState {
 
 #[derive(Debug)]
 pub(crate) enum OwnerContinuation {
+    TargetReady(runtime::TargetRuntimeFacts),
     Migration(Box<migrations::MigrationOwnerState>),
     CaptureFinalization(Box<capture::CaptureFinalization>),
     RestoreFinalization(Box<restore::RestoreFinalization>),
@@ -359,6 +363,7 @@ pub(crate) struct ProcessControlRetry {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ProcessControlOperation {
     AwaitExit,
+    AwaitTree,
     TerminateTree,
 }
 
@@ -431,6 +436,7 @@ impl OwnerContinuationRegistry {
         {
             Some(RegistryEntry::Stable(continuation)) => Some(match **continuation {
                 OwnerContinuation::ReadyToFinalize(_) => "ready",
+                OwnerContinuation::TargetReady(_) => "target_ready",
                 OwnerContinuation::RetryProcessControl(_) => "process",
                 OwnerContinuation::RetryDurableOperation(_) => "durable",
                 OwnerContinuation::RetryFinalization(_) => "finalization",
@@ -1000,11 +1006,50 @@ pub(super) enum FailureKind {
     HookReportedProtocol,
     HookFailure,
     Protocol(protocol::ProtocolFailure),
+    ProtocolV2(protocol::v2::Failure),
+    ServiceAccess(&'static str),
+    ServicePrerequisite,
 }
 
 impl FailureKind {
+    fn materialization(error: &materialize::MaterializationError) -> Self {
+        use service_storage::NativeServiceError;
+        match error {
+            materialize::MaterializationError::Service(NativeServiceError::Access(error)) => {
+                Self::ServiceAccess(error.code())
+            }
+            materialize::MaterializationError::Service(NativeServiceError::Prerequisite) => {
+                Self::ServicePrerequisite
+            }
+            materialize::MaterializationError::Service(NativeServiceError::Storage(
+                PersistenceError::CorruptServiceStorage(_),
+            )) => Self::ServiceAccess("corrupt_storage_state"),
+            materialize::MaterializationError::Service(NativeServiceError::Storage(
+                PersistenceError::ServiceStorageUnavailable(_),
+            )) => Self::ServiceAccess("allocation_unavailable"),
+            _ => Self::SessionMaterialization,
+        }
+    }
     fn record(&self) -> (&'static str, &'static str, ActionPlanStep, &'static str) {
         match self {
+            Self::ProtocolV2(error) => (
+                "hook_protocol_v2",
+                error.code,
+                ActionPlanStep::AcceptCompletion,
+                "Hook V2 protocol failed",
+            ),
+            Self::ServiceAccess(code) => (
+                "service_storage",
+                code,
+                ActionPlanStep::EstablishSession,
+                "ServiceStorage authority qualification failed",
+            ),
+            Self::ServicePrerequisite => (
+                "admission",
+                "plan_invalidated",
+                ActionPlanStep::EstablishSession,
+                "service presence prerequisite is not satisfied",
+            ),
             Self::CapturePublication(message) => (
                 "execution",
                 "managed_output_publication_failed",

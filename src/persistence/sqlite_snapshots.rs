@@ -407,6 +407,11 @@ impl PactrunPersistence {
             SnapshotOperation::Restore(id) => Some(qualify_restore_snapshot(&tx, &instance, id)?),
         };
         Ok(SnapshotCompilationObservation {
+            service_state: if stored.content.core.service_core().is_some() {
+                super::sqlite_service_views::load_instance_service_state_from(&tx, intent.instance)?
+            } else {
+                None
+            },
             instance,
             active_bindings,
             revision: stored.content,

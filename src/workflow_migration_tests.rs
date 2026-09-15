@@ -78,7 +78,7 @@ fn revision(number: u8, incoming: Option<u8>, with_hook: bool) -> MigrationRevis
             PackageId::from_bytes([1; 16]),
             RevisionContentDigest::from_bytes([number; 32]),
         ),
-        content: validate_revision_content_v1(core, closure).unwrap(),
+        content: validate_revision_content_v1(core, closure).unwrap().into(),
     }
 }
 fn setup(with_hook: bool) -> (TransitionRevision, Repository) {
@@ -95,6 +95,7 @@ fn setup(with_hook: bool) -> (TransitionRevision, Repository) {
         authorize_declassification: false,
     };
     let repo = Repository(MigrationCompilationObservation {
+        service_state: None,
         instance: intent.instance,
         state_version: intent.expected_state_version,
         active_revision: intent.source.clone(),

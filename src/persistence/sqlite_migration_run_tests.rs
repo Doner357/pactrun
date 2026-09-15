@@ -162,6 +162,7 @@ fn plan(
         .edges()
         .iter()
         .map(|e| MigrationCompiledEdge {
+            service: None,
             bindings: e.clone(),
             runtime: observed
                 .revisions
@@ -211,6 +212,7 @@ fn observe(p: &PactrunPersistence, instance: InstanceId, file: &RuntimeFileV1, t
     p.admit_run(
         run,
         &AdmissionFacts {
+            service: None,
             expected_state_version: state.state_version,
             active_bindings: &state.active_bindings,
             runtime_content: std::slice::from_ref(file),
@@ -236,6 +238,61 @@ fn assert_released(p: &PactrunPersistence, run: RunId) {
     ] {
         assert_eq!(count(&db, table, run).unwrap(), 0, "{table}");
     }
+}
+
+// Test-ID: PR-TEST-0344
+// Verifies: PR-REQ-0325
+#[test]
+fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
+    let (_tmp, root) = root();
+    let p = PactrunPersistence::open(&root).unwrap();
+    let (instance, path, _) = fixture(&p);
+    let plan = plan(&p, instance.id, &path);
+    let owner = p.staging_session().unwrap().owner();
+    let run = accepted(&p, &plan, 95);
+    p.admit_declarative_migration(run, &owner, &plan, false)
+        .unwrap()
+        .unwrap();
+    p.publish_declarative_migration_edge(run, &owner, 0)
+        .unwrap();
+    p.open_recovery_risk(run).unwrap();
+    let before = p.load_managed_run(run).unwrap().unwrap();
+    let before_instance = p.load_instance_by_id(instance.id).unwrap().unwrap();
+    p.abandon_execution_owner();
+    let mut db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    crate::persistence::sqlite_revision_store::configure_connection(&db).unwrap();
+    crate::persistence::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
+    drop(db);
+    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    let p = PactrunPersistence::open_read_only(&root).unwrap();
+    assert_eq!(p.load_managed_run(run).unwrap().unwrap(), before);
+    assert_eq!(
+        p.load_instance_by_id(instance.id)
+            .unwrap()
+            .unwrap()
+            .state_version,
+        before_instance.state_version
+    );
+    assert!(
+        p.load_instance_recovery_guard(instance.id)
+            .unwrap()
+            .is_none()
+    );
+    let app = crate::application::PactrunApplication::open(&root).unwrap();
+    assert_eq!(app.reconcile_lost_managed_owners().unwrap(), vec![run]);
+    assert_eq!(
+        p.load_instance_by_id(instance.id)
+            .unwrap()
+            .unwrap()
+            .active_revision,
+        path[1]
+    );
+    assert!(
+        p.load_instance_recovery_guard(instance.id)
+            .unwrap()
+            .is_some()
+    );
+    assert_released(&p, run);
 }
 
 // Test-ID: PR-TEST-0301

@@ -29,6 +29,12 @@ M6.5 remains `Proposed` until its own baseline and representation contracts are
 approved; the M6 authorization does not extend to ServiceStorage implementation.
 Bounded M6 is now integrated into local develop as recorded in the
 [M6 closeout](../m6-implementation-status.md); M6.5 is the next design gate.
+The [M6.5 S0 package](./m6-5-servicestorage-baseline.md) supplied concrete
+proposals under the original S0-only authorization. That stop was satisfied:
+after review on 2026-09-15 the operator authorized continued S1-S7 implementation
+with mapped-source consumption. These historical M6 approval limits do not
+revoke the later M6.5 approval. Format Freeze and implementation verification
+remain distinct gates, and M7 destructive operations remain outside M6.5.
 See the [M6 baseline](./m6-recovery-implementation-baseline.md) and
 [roadmap](../implementation-roadmap.md#m65---servicestorage).
 

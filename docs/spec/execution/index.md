@@ -14,5 +14,10 @@ Read these boundaries before choosing a transaction, ownership, retry, or recove
 
 - [M5 Migration Execution](./m5-migration-execution.md): Exact paths, whole-chain binding preflight, staged operator/Hook values, per-edge commits and bounded reconciliation.
 
+The [M6.5 execution contract](./m6-5-service-storage-execution.md) defines the
+implemented ServiceStorage target-publication path and durable M7 handoff
+boundary. It preserves the existing no-replay and manual-recovery constraints;
+M7 destructive operations remain separate work.
+
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

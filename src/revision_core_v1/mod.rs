@@ -96,8 +96,16 @@ fn decode_semantic_revision_content_internal_v1(
 fn decode_semantic_revision_core_internal_v1(
     bytes: &[u8],
 ) -> Result<RevisionCoreV1, RevisionCoreV1Error> {
+    project_core_value_v1(raw_json::parse_json(bytes)?)
+}
+
+/// Shared typed V1-field validation; the caller must already have strict-parsed
+/// the AST. V2 uses this only for its unchanged common fields, never its identity.
+pub(crate) fn project_core_value_v1(
+    value: RawJsonValue,
+) -> Result<RevisionCoreV1, RevisionCoreV1Error> {
     let mut object = closed_object(
-        raw_json::parse_json(bytes)?,
+        value,
         "RevisionCoreV1",
         &["format_version", "inputs", "actions", "migrations"],
         &["snapshot", "cleanup"],
@@ -429,7 +437,7 @@ fn parse_runtime_file(value: RawJsonValue) -> Result<RuntimeFileV1, RevisionCore
     })
 }
 
-fn exact_integer(value: RawJsonValue) -> Result<i64, RevisionCoreV1Error> {
+pub(crate) fn exact_integer(value: RawJsonValue) -> Result<i64, RevisionCoreV1Error> {
     let RawJsonValue::Number(token) = value else {
         return Err(RevisionCoreV1Error::internal(
             "invalid_type",

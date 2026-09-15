@@ -19,7 +19,7 @@ use crate::{
         ManagedInputPayloadId, ManagedInputProtection, ManagedInputRole, RevisionContentDigest,
         RevisionCoreV1, RevisionIdentity,
     },
-    revision_core_v1::decode_canonical_revision_core_v1,
+    revision_content::decode_canonical_revision_core,
 };
 
 const PAYLOAD_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
@@ -60,6 +60,25 @@ impl PactrunPersistence {
         let state_version = InstanceStateVersion::generate().map_err(|error| {
             PersistenceError::InvalidManagedInput(format!("generate state version: {error}"))
         })?;
+        let selected = self
+            .load_revision(&active_revision)?
+            .ok_or_else(|| PersistenceError::MissingRevision(active_revision.clone()))?;
+        for input in initial.iter() {
+            if !selected
+                .content
+                .core
+                .inputs()
+                .iter()
+                .any(|d| d.id == input.input_id)
+                || input.byte_len > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1
+            {
+                return Err(PersistenceError::InvalidManagedInput(
+                    "invalid initial Input declaration or length".to_owned(),
+                ));
+            }
+        }
+        let prepared = self.prepare_instance_storage(instance_id, &active_revision)?;
+        let has_service_storage = !prepared.is_empty();
         let mut database = self
             .database
             .lock()
@@ -103,9 +122,20 @@ impl PactrunPersistence {
             let payload_id = insert_payload(&transaction, instance_id, protection, input)?;
             insert_binding(&transaction, instance_id, &input.input_id, payload_id)?;
         }
+        prepared.publish(&transaction, instance_id, &active_revision)?;
+        if has_service_storage {
+            super::sqlite_revision_store::fault(
+                super::sqlite_revision_store::FaultPoint::BeforeServiceInstanceCommit,
+            );
+        }
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("commit Instance creation", error))?;
+        if has_service_storage {
+            super::sqlite_revision_store::fault(
+                super::sqlite_revision_store::FaultPoint::AfterServiceInstanceCommit,
+            );
+        }
         drop(database);
         self.load_instance_by_id(instance_id)?.ok_or_else(|| {
             PersistenceError::CorruptManagedInput("created Instance disappeared".to_owned())
@@ -170,11 +200,20 @@ impl PactrunPersistence {
         &self,
         id: InstanceId,
     ) -> Result<Option<InstanceView>, PersistenceError> {
-        let database = self
+        let mut database = self
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        load_instance_view_from(&database, id)
+        // The header and service/Input associations must come from one read
+        // snapshot, not opposite sides of another process's target commit.
+        let transaction = database
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|e| PersistenceError::sqlite("begin Instance inspection", e))?;
+        let view = load_instance_view_from(&transaction, id)?;
+        transaction
+            .commit()
+            .map_err(|e| PersistenceError::sqlite("finish Instance inspection", e))?;
+        Ok(view)
     }
 
     pub(crate) fn observe_instance_compilation_state(
@@ -510,6 +549,7 @@ fn load_instance_from(
     let revision = revision_identity(package, digest)?;
     let state_version = state_version(version)?;
     let core = load_revision_core(database, &revision)?;
+    super::sqlite_service_storage::validate_current_service_associations(database, id, &revision)?;
     let active = core
         .inputs()
         .iter()
@@ -635,7 +675,9 @@ pub(super) fn load_revision_core(
         .optional()
         .map_err(|error| PersistenceError::sqlite("load active Revision Core", error))?
         .ok_or_else(|| PersistenceError::MissingRevision(identity.clone()))?;
-    decode_canonical_revision_core_v1(&bytes)
+    super::sqlite_revision_store::validate_core_storage_version(database, &bytes)?;
+    decode_canonical_revision_core(&bytes)
+        .map(|core| core.common().clone())
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))
 }
 

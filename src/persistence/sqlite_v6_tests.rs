@@ -121,7 +121,7 @@ fn v6_worker() {
     let root = PathBuf::from(root);
     match std::env::var("PACTRUN_V6_TEST_MODE").unwrap().as_str() {
         "upgrade" => {
-            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
         }
         "legacy-held" | "legacy-late" => {
             let session = StagingSession::prepare(&root).unwrap();
@@ -236,12 +236,11 @@ fn v6_schema_preserves_v5_payload_tables_and_adds_exact_migration_structure() {
 #[test]
 fn only_exact_v5_upgrades_and_current_v6_is_a_read_only_noop() {
     let (_tmp, current) = root();
-    assert!(PactrunPersistence::upgrade_storage(&current).is_err());
+    assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&current).is_err());
     assert!(!db_path(&current).exists());
-    let p = PactrunPersistence::open(&current).unwrap();
+    source(&current, 6);
     assert_eq!(version(&current), 6);
-    assert!(!PactrunPersistence::upgrade_storage(&current).unwrap());
-    drop(p);
+    assert!(!PactrunPersistence::upgrade_v5_to_v6_fixture(&current).unwrap());
     for v in 1..=5 {
         let (_tmp, root) = root();
         source(&root, v);
@@ -252,11 +251,11 @@ fn only_exact_v5_upgrades_and_current_v6_is_a_read_only_noop() {
         assert!(PactrunPersistence::open_read_only(&root).is_err());
         assert!(sentinel.join("sentinel").exists());
         if v == 5 {
-            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
             assert_eq!(version(&root), 6);
             assert!(sentinel.join("sentinel").exists());
         } else {
-            assert!(PactrunPersistence::upgrade_storage(&root).is_err());
+            assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).is_err());
             assert_eq!(version(&root), v as i64);
         }
     }
@@ -277,7 +276,7 @@ fn only_exact_v5_upgrades_and_current_v6_is_a_read_only_noop() {
                 .unwrap();
         }
         drop(db);
-        assert!(PactrunPersistence::upgrade_storage(&root).is_err());
+        assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).is_err());
         assert_eq!(self::version(&root), version);
     }
 }
@@ -291,7 +290,7 @@ fn admitted_live_and_unknown_owners_block_but_unadmitted_sessions_do_not() {
     let child = worker(&root, "legacy-held", &[]);
     wait(&root.join("writer-ready"));
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_v5_to_v6_fixture(&root),
         Err(PersistenceError::ActiveWriters)
     ));
     assert_eq!(version(&root), 5);
@@ -306,13 +305,13 @@ fn admitted_live_and_unknown_owners_block_but_unadmitted_sessions_do_not() {
     )
     .unwrap();
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_v5_to_v6_fixture(&root),
         Err(PersistenceError::ActiveWriters)
     ));
     db.execute("DELETE FROM writable_admissions", []).unwrap();
     drop(db);
     let _prepared = StagingSession::prepare(&root).unwrap();
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
 }
 
 // Test-ID: PR-TEST-0296
@@ -365,7 +364,7 @@ fn upgrade_crashes_publish_only_complete_v5_or_v6_and_roll_back_failed_copy() {
         assert_eq!(version(&root), expected);
         validate_schema(&Connection::open(db_path(&root)).unwrap(), expected).unwrap();
         assert_eq!(
-            PactrunPersistence::upgrade_storage(&root).unwrap(),
+            PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap(),
             expected == 5
         );
     }
@@ -381,7 +380,7 @@ fn upgrade_crashes_publish_only_complete_v5_or_v6_and_roll_back_failed_copy() {
     .unwrap();
     let before = contents(&db);
     drop(db);
-    assert!(PactrunPersistence::upgrade_storage(&root).is_err());
+    assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).is_err());
     let db = Connection::open(db_path(&root)).unwrap();
     assert_eq!(version(&root), 5);
     validate_schema(&db, 5).unwrap();
@@ -530,6 +529,9 @@ fn migration_references_retain_payloads_and_operation_kinds_are_not_inferred() {
 fn make_v5_fixture(root: &Path) {
     let mut db = Connection::open(db_path(root)).unwrap();
     configure_connection(&db).unwrap();
+    if version(root) == 7 {
+        super::super::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
+    }
     validate_schema(&db, 6).unwrap();
     db.pragma_update(None, "foreign_keys", false).unwrap();
     let tx = db.transaction().unwrap();
@@ -577,7 +579,7 @@ fn make_v5_fixture(root: &Path) {
 }
 
 // Test-ID: PR-TEST-0298
-// Verifies: PR-REQ-0311, PR-REQ-0312
+// Verifies: PR-REQ-0311, PR-REQ-0312, PR-REQ-0325
 #[test]
 fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
     use sha2::{Digest, Sha256};
@@ -713,6 +715,7 @@ fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
             p.admit_run(
                 run,
                 &AdmissionFacts {
+                    service: None,
                     expected_state_version: current.state_version,
                     active_bindings: &observed.active_bindings,
                     runtime_content: &files,
@@ -760,7 +763,7 @@ fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
     p.abandon_execution_owner();
     make_v5_fixture(&root);
     let before = contents(&Connection::open(db_path(&root)).unwrap());
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
     let db = Connection::open(db_path(&root)).unwrap();
     assert_eq!(contents(&db), before);
     assert_eq!(
@@ -770,7 +773,7 @@ fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
         0
     );
     drop(db);
-    let p = PactrunPersistence::open_read_only(&root).unwrap();
+    let p = super::super::sqlite_v7::legacy_v6_read_fixture(&root);
     for tag in [11, 12, 13] {
         assert!(matches!(
             p.load_managed_run(RunId::from_bytes([tag; 16]))
@@ -781,4 +784,17 @@ fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
         ));
     }
     assert_eq!(p.recovery_consequence_version(instance.id).unwrap(), 1);
+    drop(p);
+    // The historical V5 -> V6 result above is checked independently; the
+    // current public upgrade then preserves every one of those legacy rows.
+    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    let after = contents(&Connection::open(db_path(&root)).unwrap());
+    for (table, rows) in &before {
+        assert_eq!(after.get(table), Some(rows), "{table}");
+    }
+    for (table, rows) in &after {
+        if !before.contains_key(table) {
+            assert!(rows.is_empty(), "new service table {table} was synthesized");
+        }
+    }
 }

@@ -22,6 +22,10 @@ M6.5 ServiceStorage, M7 Cleanup/deletion/AbandonManagement, then M8. The
 delivery gates. Scheduling does not close the representation choices below or
 approve runtime implementation. Closed semantics on this page are unchanged.
 
+The [M6.5 S0 design package](./m6-5-servicestorage-baseline.md) now proposes
+concrete representations for review. Its delivery does not close the approval
+gates below, change these closed semantics or establish runtime coverage.
+
 ## Scope
 
 This closure covers Pactrun-provided `ServiceStorage` and ServiceStorage-backed

@@ -3,9 +3,9 @@ use super::runtime_content_store::{
     validate_existing_regular_entry, validate_supported_storage_root,
 };
 use super::sqlite_revision_store::{
-    DatabaseState, FaultPoint, SCHEMA_V5_VERSION, SCHEMA_V6_ADDITIONS_SQL, SCHEMA_VERSION,
-    classify_database, configure_connection, configure_read_connection, establish_wal_mode, fault,
-    validate_schema,
+    DatabaseState, FaultPoint, SCHEMA_V5_VERSION, SCHEMA_V6_ADDITIONS_SQL,
+    SCHEMA_V6_VERSION as SCHEMA_VERSION, classify_database, configure_connection,
+    configure_read_connection, establish_wal_mode, fault, validate_schema,
 };
 use super::{PactrunPersistence, PersistenceError};
 use crate::managed_data::StagingSession;
@@ -19,7 +19,7 @@ fn unsupported() -> PersistenceError {
 }
 
 impl PactrunPersistence {
-    pub(crate) fn upgrade_storage(root: &Path) -> Result<bool, PersistenceError> {
+    pub(crate) fn upgrade_v5_to_v6_fixture(root: &Path) -> Result<bool, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         let database_root = validate_supported_storage_root(&root.join("database"))?;
         validate_existing_regular_entry(&database_root, "pactrun.sqlite3")?;

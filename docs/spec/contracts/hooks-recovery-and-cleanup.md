@@ -68,7 +68,7 @@ Revision, enlarge authority, or redefine the workflow.
 
 ### PR-REQ-0244 - Persistent storage authority and prerequisites
 
-A future protocol-mediated authority model for ServiceStorage-backed resources
+The protocol-mediated authority model for ServiceStorage-backed resources
 MUST support both whole-ServiceStorage and individual-resource semantic scopes.
 Each Hook Session MUST receive only the least authority required by its
 operation; resource authority MUST NOT silently expand into storage-wide access,
@@ -81,10 +81,21 @@ observation, but that prerequisite MUST remain distinct from Managed Input
 readiness and from access authority. When Pactrun is responsible for evaluating
 a definitive presence prerequisite, `Unknown` MUST NOT satisfy it. A Package MAY
 instead perform a service-specific runtime check in its Hook. The authority
-wire shape, observer, admission mechanism, and path mapping remain future
-design work, and Workspace MUST remain execution-scoped scratch.
+wire shape, observer, admission mechanism, and path mapping are specified by
+[Hook V2](./hook-protocol-v2.md) and the
+[M6.5 execution contract](../execution/m6-5-service-storage-execution.md).
+Workspace MUST remain execution-scoped scratch.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0364, PR-TEST-0368, PR-TEST-0370, PR-TEST-0386.**
+
+Partial Session-construction coverage: individual-resource scope, exact admitted
+grant matching, no scope expansion and authority-handle uniqueness. Physical
+cross-Instance pin refusal and a live absent prerequisite are covered by the
+native qualification helper in PR-TEST-0368. PR-TEST-0370 covers real V2 Action
+grants and absence prerequisites with isolated live allocations, and V2
+Capture/Restore access to those resources. PR-TEST-0386 exercises actual nested
+target directory/file grants in a transforming Migration. Crash and target
+publication evidence is separately owned by PR-REQ-0322 and PR-REQ-0326.
 
 ### PR-REQ-0170 - Session authority is not host isolation
 
