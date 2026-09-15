@@ -9,7 +9,7 @@ title: M6.5 ServiceStorage Commands
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-These commands are available on the M6.5 feature branch; their complete
+These commands are available in the integrated M6.5 baseline; their complete
 cross-platform and compatibility closeout remains in progress.
 Read [Core V2](../contracts/revision-core-format-v2.md),
 [execution](../execution/m6-5-service-storage-execution.md), and
@@ -94,7 +94,7 @@ Run inspection do not leak them, service contents or derived content hashes.
 ### Proposed diagnostics and existing operations
 
 The following ErrorTaxonomyV1 entries use owner `service_storage`. S0 proposed
-them without registration; the M6.5 feature branch now appends them to the
+them without registration; the integrated M6.5 implementation appends them to the
 catalog under this approved contract. Registration is not runtime coverage.
 Existing error identities and fixed categories remain unchanged.
 

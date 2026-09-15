@@ -6,9 +6,8 @@ title: Internal persistence
 
 **Status: Informative navigation.**
 
-V7 is current on the M6.5 feature branch, with explicit exact-V6 upgrade only.
-V6 remains the integrated develop baseline until separately authorized Git
-integration. Older schemas retain their historical and compatibility
+V7 is the integrated develop baseline, with explicit exact-V6 upgrade only.
+V6 is the historical M5/M6 baseline. Older schemas retain their historical and compatibility
 obligations; their presence is not permission for an implicit upgrade chain.
 
 - [Persistence Schema V2](./persistence-schema-v2.md): Historical internal contract; not an implicit upgrade path.

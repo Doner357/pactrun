@@ -1,5 +1,5 @@
 ---
-title: Baseline and M6.5 ServiceStorage Handoff
+title: Baseline and M7 Lifecycle Handoff
 ---
 
 # Current baseline and next milestone
@@ -24,15 +24,17 @@ is recorded in the closeout; remote publication is separate from integration.
 
 [M6 bounded recovery](./m6-implementation-status.md) is also implemented and
 integrated into local develop. It closes existing-operation recovery evidence
-on V6 without adding a new recovery engine, schema or service rollback. The next
-milestone is M6.5 ServiceStorage, whose approved implementation is now on the
-feature branch and undergoing final-source verification.
+on V6 without adding a new recovery engine, schema or service rollback.
+[M6.5 ServiceStorage](./m6-5-implementation-status.md) is now implemented and
+integrated into local develop, including V7, V2 installation and service
+execution. M7 lifecycle design is the next proposed milestone.
 
-- Current feature-branch persistence: [V7](../spec/persistence/persistence-schema-v7.md), internal and non-Frozen, with explicit exact-V6 upgrade only. Integrated develop remains V6 pending separately authorized Git integration.
+- Current integrated persistence: [V7](../spec/persistence/persistence-schema-v7.md), internal and non-Frozen, with explicit exact-V6 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
-- Pack source spelling: [Candidate V1](../spec/contracts/pack-source-yaml-v1.md), not a public compatibility promise.
+- Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
 - Frozen [Core](../spec/contracts/revision-core-format-v1.md), [Hook protocol](../spec/contracts/hook-protocol-v1.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
+- [Core V2](../spec/contracts/revision-core-format-v2.md) and [Hook V2](../spec/contracts/hook-protocol-v2.md) are independently Frozen; their format numbers do not force one another.
 
 ## M5 is implemented and integrated into develop
 
@@ -56,7 +58,7 @@ configured destination and a non-force branch-state check.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | M5 and bounded M6 S0-S4 integrated into local develop; M6.5 is next and remains separately gated |
+| Scope and work order | M5, bounded M6 and M6.5 are integrated into local develop; M7 remains Proposed and needs its own approval |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -86,11 +88,11 @@ S2 durable evidence/publication, S3 guard/diagnostics and S4 crash verification.
 No replay, resumed Interrupted Run, uncommitted-output salvage, new CLI spelling
 or silent V6 change is authorized.
 
-## M6.5 ServiceStorage is next, before M7
+## M6.5 ServiceStorage is complete; M7 is next
 
 The fixed order is **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. M6.5 is the dedicated
 [ServiceStorage milestone](./implementation-roadmap.md#m65---servicestorage),
-not an indefinitely deferred runtime. It is now `In progress` under its own
+not an indefinitely deferred runtime. It is now `Complete` under its own
 reviewed Core, authority, persistence, access, compatibility and upgrade
 contracts. M6 completion removed the work-order prerequisite; the separate
 2026-09-15 M6.5 approval authorized these representations.
@@ -99,16 +101,15 @@ The [M6.5 S0 design package](./design-notes/m6-5-servicestorage-baseline.md)
 was reviewed and the user authorized continued S1-S7 implementation on
 2026-09-15. Mapped sources are consumed atomically; only unmapped source-only
 associations are retained, with no persistent alias mechanism. Core/YAML V2
-conformance, V7 persistence and runtime paths are present on the feature branch;
-V6 remains the integrated develop baseline. Public V2 installation and the
-Core/Hook V2 Freeze gate are implemented; final-source verification and Git
-integration remain distinct gates.
-See [M6.5 implementation status](./m6-5-implementation-status.md) for current
-current runtime evidence and the remaining activation/verification work, not a
-production-support claim.
+conformance, V7 persistence and runtime paths are integrated into local develop.
+Public V2 installation and the Core/Hook V2 Freeze gate are implemented;
+final-source verification, Git integration and release remain distinct claims.
+See [M6.5 implementation status](./m6-5-implementation-status.md) for runtime
+evidence and the authorized integration record. This is not a release or push.
 
-M6.5 must align retention, finalization and abandonment persistence ownership
-with M7 before schema approval. M7 delivers actual Cleanup coordination,
+M6.5 closes the retention, finalization and abandonment ownership boundary:
+V7 preserves custody, and M7 must add explicit versioned durable receipts before
+destructive operations. M7 delivers actual Cleanup coordination,
 do-not-replay/finalization, deletion and AbandonManagement operations. M6 does
 not claim their runtime coverage or wait for Cleanup to exist; M6.5 must not
 expose deletion that bypasses M7. M7 and M8 retain their existing numbering.
@@ -124,6 +125,7 @@ taxonomy does not block bounded M6.5.
 ## Evidence caveat
 
 Managed Input Migration requirements now link to their direct automated evidence.
-Broader pending requirements, especially ServiceStorage and Package/service-owned
-transformation rules, remain pending. Related Managed Input tests do not
-automatically close those rules or retrospectively certify every future promise.
+M6.5 ServiceStorage and transformation rules have their own real-resource,
+cross-process and format evidence. M7 lifecycle and broader resource-taxonomy
+requirements remain outside that coverage. Related Managed Input tests never
+substitute for those independent obligations.

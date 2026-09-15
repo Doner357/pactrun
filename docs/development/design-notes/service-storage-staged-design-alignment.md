@@ -4,8 +4,8 @@ title: ServiceStorage Staged Design Alignment
 
 # ServiceStorage staged design alignment
 
-**Status: Informative delivery alignment. Scheduling and design-stage scope
-approved on 2026-09-14; representation and runtime implementation not approved.**
+**Status: Informative delivery alignment. M6 and M6.5 are implemented and
+integrated; M7 lifecycle design and implementation require separate approval.**
 
 This record implements the approved work order, not new product requirements.
 The [semantic baseline](./service-storage-semantic-baseline.md) and its owning
@@ -25,16 +25,19 @@ reopened, and Frozen formats are unchanged.
 M6.5 is explicitly scheduled after M6 and before M7. Scheduling does not satisfy
 its design gates or promote it to `Planned`. The subsequent 2026-09-14 operator
 authorization approves bounded M6 S0-S4 implementation without per-slice stops.
-M6.5 remains `Proposed` until its own baseline and representation contracts are
-approved; the M6 authorization does not extend to ServiceStorage implementation.
+M6.5 originally remained `Proposed` until its own baseline and representation
+contracts were approved; the M6 authorization did not extend to ServiceStorage implementation.
 Bounded M6 is now integrated into local develop as recorded in the
-[M6 closeout](../m6-implementation-status.md); M6.5 is the next design gate.
+[M6 closeout](../m6-implementation-status.md).
 The [M6.5 S0 package](./m6-5-servicestorage-baseline.md) supplied concrete
 proposals under the original S0-only authorization. That stop was satisfied:
 after review on 2026-09-15 the operator authorized continued S1-S7 implementation
 with mapped-source consumption. These historical M6 approval limits do not
 revoke the later M6.5 approval. Format Freeze and implementation verification
 remain distinct gates, and M7 destructive operations remain outside M6.5.
+M6.5 has now been integrated under explicit Git authorization; the
+[M6.5 closeout](../m6-5-implementation-status.md) records its implementation and
+verification. M7 still needs its own lifecycle design gate.
 See the [M6 baseline](./m6-recovery-implementation-baseline.md) and
 [roadmap](../implementation-roadmap.md#m65---servicestorage).
 

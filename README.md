@@ -31,7 +31,7 @@ complete and integrated into local develop. It adds cross-operation recovery
 evidence and fault-injection coverage while preserving V6 and existing runtime
 semantics.
 
-This feature checkout adds [M6.5 ServiceStorage](./docs/development/m6-5-implementation-status.md):
+The integrated develop baseline adds [M6.5 ServiceStorage](./docs/development/m6-5-implementation-status.md):
 explicit YAML/Core V2 installation, persistent Instance-isolated service storage,
 resource inspection/observation/path disclosure, independently selected Hook V2,
 and target-owned resource reuse, retention, reattachment and transformation.
@@ -41,8 +41,9 @@ stores first require a compatible historical build. Live service bytes are not
 Managed Inputs or automatic Snapshot contents. See the
 [ServiceStorage commands](./docs/spec/behavior/m6-5-service-storage-command-reference.md)
 and [format review](./docs/development/design-notes/m6-5-format-activation-review.md).
-Final-source validation and Git integration are distinct from implementation;
-M7 Cleanup, deletion and abandonment remain outside this checkout's scope.
+M6.5 is integrated into local develop; its delivery record distinguishes
+final-source validation from Git integration. M7 Cleanup, deletion and
+abandonment require separate design approval and remain outside this scope.
 
 ## Repository layout
 
@@ -53,7 +54,7 @@ M7 Cleanup, deletion and abandonment remain outside this checkout's scope.
 
 English Markdown is canonical. The [Spec map](docs/spec/index.md) is the product
 specification entry; [Development](docs/development/index.md) provides reading
-paths, verification policy, and the [M6.5 handoff](docs/development/next-milestone.md).
+paths, verification policy, and the [baseline / M7 handoff](docs/development/next-milestone.md).
 All existing requirement-bearing documents have moved into Spec. Usage guides
 remain planned placeholders; their completion is a later task.
 

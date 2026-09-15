@@ -88,9 +88,10 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
   assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
-  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: In progress\./);
+  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
+  assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Proposed\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
-  assert.match(current, /PersistenceSchemaV6.*integrated `develop` persistence baseline/);
+  assert.match(current, /PersistenceSchemaV7.*integrated `develop` persistence baseline/);
   assert.doesNotMatch(current, /Migration and Cleanup execution remain deferred/);
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /Hook and operator-input execution remain pending/);
 
@@ -102,7 +103,7 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   const closeout = document('m6-implementation-status.md').replace(/\s+/g, ' ');
   assert.match(closeout, /Status: Complete\. Bounded M6 S0-S4 is implemented and integrated into local develop/);
   assert.match(closeout, /explicitly without push/);
-  assert.match(document('next-milestone.md'), /M6\.5 ServiceStorage is next/);
+  assert.match(document('next-milestone.md'), /M6\.5 ServiceStorage is complete; M7 is next/);
   assert.doesNotMatch(document('next-milestone.md'), /M6 is `In progress`/);
   const alignment = document('design-notes/service-storage-staged-design-alignment.md').replace(/\s+/g, ' ');
   assert.match(alignment, /before approving the storage schema/);
@@ -160,7 +161,7 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
       assert.match(rules[1].replace(/\s+/g, ' '), /do not implement M7 Cleanup/);
     }
     if (name === 'behavior/m6-5-service-storage-command-reference.md') {
-      assert.match(body, /available on the M6\.5 feature branch/);
+      assert.match(body, /available in the integrated M6\.5 baseline/);
       assert.match(body, /CLI runtime coverage/);
       assert.match(body, /production V2 installation, cross-version retention and explicit reattachment/);
     }
@@ -168,7 +169,11 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 7;/);
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
-  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: In progress\./);
+  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
+  const closeout = docs.find(([name]) => name === 'development/m6-5-implementation-status.md')[1];
+  assert.match(closeout.replace(/\s+/g, ' '), /Status: Complete\. M6\.5 S1-S7 is implemented and integrated into local develop/);
+  assert.match(closeout, /cf7562d77201d1e0cf29f298101cc4116a51a72b/);
+  assert.match(closeout, /without push/);
 });
 
 async function rustFiles(directory) {

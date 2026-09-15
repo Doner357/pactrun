@@ -192,7 +192,7 @@ An uncertain receipt must not be guessed successful by the Hook or replayed.
 V2 error proposal: owner `hook_protocol_v2`, protocol-category codes
 `invalid_frame`, `unexpected_message`, `invalid_authority`, and
 `invalid_target_proposal`. Messages remain fixed safe text without raw frames,
-paths or service contents. S0 did not register them; the M6.5 feature branch now
+paths or service contents. S0 did not register them; the integrated M6.5 implementation
 appends these approved entries under the existing ErrorTaxonomyV1 process,
 without modifying Frozen V1 codes or claiming completed V2 runtime integration.
 

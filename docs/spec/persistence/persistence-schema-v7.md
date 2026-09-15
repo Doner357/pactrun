@@ -6,8 +6,8 @@ title: Persistence Schema V7
 
 **Status: Implemented normative internal schema and explicit V6-to-V7 upgrade. Non-Frozen and non-public.**
 
-The M6.5 feature build now initializes V7 and implements explicit exact-V6
-upgrade. The integrated develop baseline remains V6 until M6.5 integration.
+The integrated M6.5 build initializes V7 and implements explicit exact-V6
+upgrade. V6 remains a historical schema, not the current writer's target.
 This document's DDL is mirrored by the internal implementation, not a public
 manual upgrade entry point. Live ServiceStorage allocation and logical runtime
 invariants have separate evidence below; schema shape alone is not runtime proof.

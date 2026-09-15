@@ -53,5 +53,5 @@ reattachment. PR-TEST-0382 adds real split/merge multi-Hook evidence.
 Post-activation focused tests are recorded in the implementation status; the
 delivery report must supply the final exact-source full-CI result. This review
 is not an M6.5 integration, commit or push record. See
-the [implementation status](../m6-5-implementation-status.md) for the current
-remaining work and validation results.
+the [implementation status](../m6-5-implementation-status.md) for the later
+authorized integration and validation record.

@@ -69,9 +69,10 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV6](../spec/persistence/persistence-schema-v6.md) is the integrated
-  `develop` persistence baseline, with explicit exact-V5 upgrade and writable
+- [PersistenceSchemaV7](../spec/persistence/persistence-schema-v7.md) is the integrated
+  `develop` persistence baseline, with explicit exact-V6 upgrade and writable
   admission. It preserves the earlier contracts, including
+  [V6](../spec/persistence/persistence-schema-v6.md) from M5/M6,
   [V5](../spec/persistence/persistence-schema-v5.md) from M4 and
   [V4](../spec/persistence/persistence-schema-v4.md) from M3 Slice 2.
 - M5 Managed Input Migration is implemented and integrated into `develop`,
@@ -80,9 +81,9 @@ driven development.
 - Bounded M6 recovery is `Complete` and integrated into local `develop`, with
   cross-operation crash, owner/concurrency, guard and reference-lifetime evidence
   on unchanged V6. See the [M6 closeout](./m6-implementation-status.md). M6.5
-  ServiceStorage is implemented on its separately approved feature branch;
-  final-source verification and authorized develop integration remain its
-  closure gates.
+  ServiceStorage is `Complete` and integrated into local develop under its own
+  approval. See the [M6.5 closeout](./m6-5-implementation-status.md) for the
+  implementation, integration and exact-source verification record.
 - M4 Snapshot lifecycle is `Complete`, with S0-S8 integrated into `develop`.
   Capture writes Frozen integrity V2; V1/V2 import, export, verification and
   exact-compatible Restore are available through the human CLI.
@@ -112,7 +113,7 @@ milestone state taxonomy above:
 | ServiceStorage semantic closure | **Closed.** |
 | ServiceStorage staged design alignment | **Approved.** Initial scheduling on 2026-09-14; M6.5 S1-S7 authorized on 2026-09-15 after S0 review. |
 | M6 bounded recovery baseline | **Approved and implemented.** The 2026-09-14 S0 audit retains V6; S0-S4 are integrated into local develop. |
-| ServiceStorage representation and runtime | **Approved M6.5 design; implementation in progress.** Format Freeze and final verification remain separate gates. |
+| ServiceStorage representation and runtime | **Implemented and integrated into develop.** Core/Hook V2 are Frozen; final-source validation is recorded separately from Git integration. |
 | M6.5 S0 design package | **Reviewed; continued S1-S7 authorized on 2026-09-15.** Mapped sources are consumed; unmapped source-only associations are retained. |
 | Cleanup completion/finalization coordination | **Assigned to M7 design.** V7 preserves allocation custody; M7 must add explicit versioned receipts before destructive finalization. |
 | Abandon non-destruction durable representation | **M6.5/M7 ownership boundary agreed.** V7 custody cannot be erased by Instance cascade; M7 owns the later explicit handoff representation and operation. |
@@ -131,7 +132,7 @@ and non-identity metadata persistence closure are integrated into the canonical
 `develop` baseline. A later ServiceStorage representation or runtime design
 does not reopen the closed ServiceStorage semantics unless review finds a
 substantive conflict. M1-D was integrated against PersistenceSchemaV2; its
-metadata contract is preserved by the current PersistenceSchemaV6.
+metadata contract is preserved by the current PersistenceSchemaV7.
 
 The Pre-M2 closure and M2 implementation are integrated. M2 is `Complete`.
 Candidate `PackSourceYamlV1` remains a non-Frozen authoring contract. M2
@@ -740,16 +741,16 @@ Completion gate:
 
 ### M6.5 - ServiceStorage
 
-**State: In progress. S1-S7 authorized after S0 review on 2026-09-15.**
+**State: Complete. S1-S7 implemented and integrated into local develop.**
 
 The operator confirmed mapped-source consumption: atomic target replacement,
 not a retained live alias. Only unmapped source-only associations are retained.
 The earlier S0-only stop below is historical and superseded by that approval.
 Core V2 conformance, V7 persistence and ServiceStorage runtime are implemented
-on the feature branch; V6 remains the integrated develop baseline. Formal V2
-installer activation and format Freeze are complete; final milestone
-verification remains in progress.
-No partial slice is evidence of complete ServiceStorage runtime support.
+and integrated into local develop, including formal V2 installer activation and
+independent Core/Hook format Freeze. The implementation commit is `ec4ef91` and
+the merge is `cf7562d`; the delivery report records final post-closeout full CI
+and source-manifest checks. No partial slice substitutes for that evidence.
 
 The operator originally authorized only S0 design delivery on 2026-09-14. The
 [S0 baseline and approval matrix](./design-notes/m6-5-servicestorage-baseline.md)
