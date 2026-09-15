@@ -243,7 +243,15 @@ M3 Slice 5 appends the execution-owned references
 `execution.workspace_cleanup_failed` from PR-REQ-0282. These references do not
 reclassify Hook-owned completion codes or add a synthetic Hook-failure code.
 
-**Verification: PR-TEST-0034, PR-TEST-0036.**
+M6.5 appends the `service_storage` owner and the ten approved references in
+PR-REQ-0328. This is append-only registration, not a change to V1 reference
+encoding/categories and not evidence that every ServiceStorage runtime path is
+implemented.
+
+M6.5 also appends the independent `hook_protocol_v2` owner and its four protocol
+codes under PR-REQ-0321/0322; V1 peer failures keep their original owner/codes.
+
+**Verification: PR-TEST-0034, PR-TEST-0036, PR-TEST-0356, PR-TEST-0363.**
 
 ### PR-REQ-0223 - Error identity is not outcome or precedence
 

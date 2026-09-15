@@ -12,6 +12,7 @@ impl MaterializedExecution {
         index: usize,
         compiled: &MigrationCompiledEdge,
         inputs: &BTreeMap<MigrationTargetInput, StagedFile>,
+        service: Option<&crate::domain::ServiceMigrationEdge>,
     ) -> Result<Self, MaterializationError> {
         let operators = inputs
             .keys()
@@ -91,7 +92,7 @@ impl MaterializedExecution {
             let session_id = random_handle()?;
             let revision = |r: &crate::domain::RevisionIdentity| json!({"package_id":r.package_id.to_string(),"revision_content_digest":r.content_digest.to_string()});
             let session = json!({
-                "type":"session_start", "protocol_version":1, "session_id":session_id,
+                "type":"session_start", "protocol_version":hook.protocol_version.get(), "session_id":session_id,
                 "run_id":run.to_string(), "revision":revision(edge.target()), "parameters":[],
                 "workspace":{"handle":random_handle()?, "root_path":host_path(&workspace)?},
                 "io":{"terminal":terminal_name(hook.io.terminal)},
@@ -110,7 +111,7 @@ impl MaterializedExecution {
         })();
         match result {
             Ok((program, arguments, session_id, session, migration_outputs, terminal)) => {
-                Ok(Self {
+                let materialized = Self {
                     directory,
                     program,
                     arguments,
@@ -121,7 +122,28 @@ impl MaterializedExecution {
                     outputs: Vec::new(),
                     capture: None,
                     operation: super::super::protocol::SessionOperation::Migration,
-                })
+                    v2_state: None,
+                    v2_transport: None,
+                    _service_access: None,
+                };
+                let bindings = service
+                    .map(crate::domain::ServiceMigrationEdge::hook_bindings)
+                    .transpose()
+                    .map_err(|_| MaterializationError::InvalidParameter)?
+                    .unwrap_or_default();
+                materialized.with_service_target(
+                    p,
+                    staging,
+                    run,
+                    edge.declaration()
+                        .hook
+                        .as_ref()
+                        .expect("Hook edge")
+                        .protocol_version
+                        .get(),
+                    &bindings,
+                    service.is_some_and(|e| e.transform),
+                )
             }
             Err(error) => {
                 let _ = directory.cleanup();

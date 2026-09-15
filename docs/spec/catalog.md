@@ -51,8 +51,27 @@ website build. They do not constitute additional requirements.
 | [M5 Migration Commands](behavior/m5-migration-command-reference.md) | Implemented normative Migration CLI. |
 | [Persistence Schema V6](persistence/persistence-schema-v6.md) | Implemented normative internal schema and explicit V5-to-V6 upgrade. Non-Frozen and non-public. |
 
+## M6.5 contracts {#proposed-m65-s0-designs-not-active-contracts}
+
+The historical S0 anchor is retained for existing links. The M6.5 design was
+approved on 2026-09-15, including mapped-source consumption. Core/Hook V2 are
+Frozen and the runtime/installer is implemented on the feature branch; final
+verification and integration are recorded separately. Current feature-branch
+persistence is V7; the integrated develop baseline remains V6. Frozen V1
+contracts are unchanged.
+
+| Contract | Status |
+| --- | --- |
+| [Revision Core V2](contracts/revision-core-format-v2.md) | Frozen normative Package contract specification. |
+| [Pack Source YAML V2](contracts/pack-source-yaml-v2.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and not a public compatibility promise. |
+| [Hook Protocol V2](contracts/hook-protocol-v2.md) | Frozen normative Package contract specification. |
+| [Persistence V7](persistence/persistence-schema-v7.md) | Implemented normative internal schema and explicit V6-to-V7 upgrade. Non-Frozen and non-public. |
+| [M6.5 Execution](execution/m6-5-service-storage-execution.md) | Implemented normative ServiceStorage execution contract. |
+| [M6.5 Commands](behavior/m6-5-service-storage-command-reference.md) | Implemented normative human CLI contract. Non-Frozen human output. |
+
 For V2 and V3 persistence, references to V4 as a successor record an intermediate
-historical baseline. [V6](./persistence/persistence-schema-v6.md) is current.
+historical baseline. [V7](./persistence/persistence-schema-v7.md) is current on
+the M6.5 feature branch.
 Preserve the exact documented upgrade gates rather than inferring one from this
 index. See [remaining decisions](../development/next-milestone.md) for deferred
 runtime work, not just the historical status on a format page.

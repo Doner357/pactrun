@@ -31,8 +31,8 @@ use super::{
     materialize::MaterializedAction,
     outcome_and_failure,
     platform::{ProcessSupervisor, ProtocolListener},
-    protocol::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
     ready_cancelled, ready_failure,
+    versioned_protocol::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
 };
 
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
@@ -42,6 +42,20 @@ const POLL_INTERVAL: Duration = Duration::from_millis(5);
 /// to reach end of stream and gives up after this quiet window so a
 /// descendant that inherited the stream cannot stall terminalization.
 const EXIT_DRAIN_WINDOW: Duration = Duration::from_millis(250);
+
+pub(crate) struct TargetRuntimeFacts {
+    pub(super) run: RunId,
+    pub(super) proposal: super::protocol::v2::AcceptedTargetProposal,
+    pub(super) execution: crate::managed_data::ExecutionDirectory,
+    pub(super) outputs: Vec<super::MigrationOutputSlot>,
+}
+impl fmt::Debug for TargetRuntimeFacts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TargetRuntimeFacts")
+            .field("run", &self.run)
+            .finish_non_exhaustive()
+    }
+}
 
 pub(super) trait RecoveryRiskPersistence {
     fn set_recovery_risk(&self, run: RunId, requested: RecoveryRiskState) -> Result<(), ()>;
@@ -66,6 +80,8 @@ pub(crate) struct LiveExecution {
     winner: OutcomeArbiter,
     hook_completion: Option<HookCompletionRecord>,
     completion_accepted: bool,
+    target_proposal: Option<super::protocol::v2::AcceptedTargetProposal>,
+    protocol_eof: bool,
     submitted_handles: Vec<String>,
     captured_at: Option<crate::domain::SnapshotTimestamp>,
     capture_submitted: Vec<crate::domain::CaptureServiceContentSubmission>,
@@ -136,7 +152,9 @@ pub(super) fn execute_registered(
     }
     let materialized = match MaterializedAction::create(persistence, staging, &admitted) {
         Ok(materialized) => materialized,
-        Err(_) => return ready_failure(run, FailureKind::SessionMaterialization, Vec::new(), None),
+        Err(error) => {
+            return ready_failure(run, FailureKind::materialization(&error), Vec::new(), None);
+        }
     };
     execute_materialized(risk_persistence, run, materialized, policy, cancellation)
 }
@@ -144,7 +162,7 @@ pub(super) fn execute_registered(
 pub(super) fn execute_materialized(
     risk_persistence: &dyn RecoveryRiskPersistence,
     run: RunId,
-    materialized: MaterializedAction,
+    mut materialized: MaterializedAction,
     policy: HookRuntimePolicy,
     cancellation: ActionCancellation,
 ) -> OwnerContinuation {
@@ -183,7 +201,9 @@ pub(super) fn execute_materialized(
         }
     };
     let started = Instant::now();
-    let state = if materialized.operation() == super::protocol::SessionOperation::Migration {
+    let state = if let Some(state) = materialized.take_v2_state() {
+        ProtocolState::V2(state)
+    } else if materialized.operation() == super::protocol::SessionOperation::Migration {
         ProtocolState::new_migration(
             materialized.session_id().to_owned(),
             materialized.output_handle_set(),
@@ -205,6 +225,8 @@ pub(super) fn execute_materialized(
             winner: OutcomeArbiter::default(),
             hook_completion: None,
             completion_accepted: false,
+            target_proposal: None,
+            protocol_eof: false,
             submitted_handles: Vec::new(),
             captured_at: None,
             capture_submitted: Vec::new(),
@@ -260,7 +282,7 @@ pub(super) fn execute_snapshot_with_risk(
         Ok(value) => value,
         Err(error) => {
             let (outcome, mut primary_failure) =
-                outcome_and_failure(OutcomeWinner::Failed(FailureKind::SessionMaterialization));
+                outcome_and_failure(OutcomeWinner::Failed(FailureKind::materialization(&error)));
             if let Some(primary) = &mut primary_failure {
                 primary.step =
                     crate::domain::RunFailedStep::for_operation(primary.step.rank(), kind)
@@ -304,7 +326,7 @@ pub(super) fn execute_snapshot_with_risk(
     };
     let mut pending_materialization = Some(materialized);
     match claim.launch_once(|_| {
-        let materialized = pending_materialization.take().expect("one launch attempt");
+        let mut materialized = pending_materialization.take().expect("one launch attempt");
         match ProcessSupervisor::spawn(
             materialized.program(),
             materialized.arguments(),
@@ -313,7 +335,9 @@ pub(super) fn execute_snapshot_with_risk(
         ) {
             Ok(supervisor) => {
                 let started = Instant::now();
-                let state = if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
+                let state = if let Some(state) = materialized.take_v2_state() {
+                    ProtocolState::V2(state)
+                } else if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
                     ProtocolState::new_restore(materialized.session_id().to_owned())
                 } else {
                     ProtocolState::new_capture(materialized.session_id().to_owned())
@@ -327,6 +351,8 @@ pub(super) fn execute_snapshot_with_risk(
                     winner: OutcomeArbiter::default(),
                     hook_completion: None,
                     completion_accepted: false,
+                    target_proposal: None,
+                    protocol_eof: false,
                     submitted_handles: Vec::new(),
                     captured_at: None,
                     capture_submitted: Vec::new(),
@@ -429,18 +455,31 @@ fn drive_execution(
         if let LiveProtocol::Listening(listener) = &mut live.protocol {
             match listener.try_accept() {
                 Ok(Some(stream)) => {
-                    let connected = match live.materialized.operation() {
-                        super::protocol::SessionOperation::Action => {
-                            ConnectedProtocol::start(stream, live.materialized.session())
-                        }
-                        super::protocol::SessionOperation::Capture => {
-                            ConnectedProtocol::start_capture(stream, live.materialized.session())
-                        }
-                        super::protocol::SessionOperation::Restore => {
-                            ConnectedProtocol::start_restore(stream, live.materialized.session())
-                        }
-                        super::protocol::SessionOperation::Migration => {
-                            ConnectedProtocol::start_migration(stream, live.materialized.session())
+                    let connected = if let Some(transport) = live.materialized.take_v2_transport() {
+                        ConnectedProtocol::start_v2(stream, transport)
+                    } else {
+                        match live.materialized.operation() {
+                            super::protocol::SessionOperation::Action => {
+                                ConnectedProtocol::start(stream, live.materialized.session())
+                            }
+                            super::protocol::SessionOperation::Capture => {
+                                ConnectedProtocol::start_capture(
+                                    stream,
+                                    live.materialized.session(),
+                                )
+                            }
+                            super::protocol::SessionOperation::Restore => {
+                                ConnectedProtocol::start_restore(
+                                    stream,
+                                    live.materialized.session(),
+                                )
+                            }
+                            super::protocol::SessionOperation::Migration => {
+                                ConnectedProtocol::start_migration(
+                                    stream,
+                                    live.materialized.session(),
+                                )
+                            }
                         }
                     };
                     match connected {
@@ -496,7 +535,7 @@ fn handle_wire_event(
 ) -> Flow {
     match event {
         WireEvent::Message(message) => {
-            if let super::protocol::HookMessage::Complete(completion) = &message
+            if let Some(completion) = message.completion()
                 && completion.status == HookCompletionStatus::Success
                 && live.state.risk() == RecoveryRiskState::Open
             {
@@ -512,14 +551,15 @@ fn handle_wire_event(
             }
             let step = match live.state.accept(message) {
                 Ok(step) => step,
-                Err(failure) => return Flow::Fail(FailureKind::Protocol(failure)),
+                Err(failure) => return Flow::Fail(failure),
             };
             apply_step(risk_persistence, live, step)
         }
-        WireEvent::Failure(failure) => Flow::Fail(FailureKind::Protocol(failure)),
+        WireEvent::Failure(failure) => Flow::Fail(failure),
         WireEvent::EndOfStream => match live.state.end_of_stream() {
-            Some(failure) => Flow::Fail(FailureKind::Protocol(failure)),
+            Some(failure) => Flow::Fail(failure),
             None => {
+                live.protocol_eof = true;
                 live.protocol = LiveProtocol::Closed;
                 Flow::Continue
             }
@@ -534,7 +574,21 @@ fn apply_step(
     step: ProtocolStep,
 ) -> Flow {
     match step {
+        ProtocolStep::TargetProposed(proposal) => {
+            let LiveProtocol::Connected(connected) = &mut live.protocol else {
+                return Flow::Fail(FailureKind::ProtocolTransport);
+            };
+            if connected.writer.write_value(&proposal.receipt()).is_err() {
+                return Flow::Fail(FailureKind::ProtocolTransport);
+            }
+            live.target_proposal = Some(proposal);
+            crate::persistence::fault(crate::persistence::FaultPoint::AfterTargetProposalReceipt);
+            // Keep reading through EOF: any message after the proposal fails
+            // the operation. No successful Hook completion or risk clear exists.
+            Flow::Continue
+        }
         ProtocolStep::Ready => {
+            live.startup_deadline = None;
             if let Some(termination) = live.termination {
                 send_cancel(live, termination.reason);
             }
@@ -692,6 +746,7 @@ pub(super) fn resume_registered(
     continuation: OwnerContinuation,
 ) -> OwnerContinuation {
     match continuation {
+        OwnerContinuation::TargetReady(facts) => OwnerContinuation::TargetReady(facts),
         OwnerContinuation::Migration(state) => OwnerContinuation::Migration(state),
         OwnerContinuation::RestoreFinalization(state) => {
             OwnerContinuation::RestoreFinalization(state)
@@ -717,6 +772,7 @@ fn resume_process_control(
 ) -> OwnerContinuation {
     match retry.operation {
         ProcessControlOperation::AwaitExit => await_exit(risk_persistence, retry.live),
+        ProcessControlOperation::AwaitTree => finish_after_exit(risk_persistence, retry.live),
         ProcessControlOperation::TerminateTree => force_termination(risk_persistence, retry.live),
     }
 }
@@ -753,13 +809,17 @@ fn terminate_for_failure(
     failure: FailureKind,
 ) -> OwnerContinuation {
     live.winner.claim(OutcomeWinner::Failed(failure.clone()));
-    if let (LiveProtocol::Connected(connected), FailureKind::Protocol(protocol)) =
-        (&mut live.protocol, &failure)
-    {
-        let _ = connected.writer.write_value(&json!({
-            "type": "protocol_error",
-            "code": protocol.code,
-        }));
+    if let LiveProtocol::Connected(connected) = &mut live.protocol {
+        let code = match &failure {
+            FailureKind::Protocol(p) => Some(p.code),
+            FailureKind::ProtocolV2(p) => Some(p.code),
+            _ => None,
+        };
+        if let Some(code) = code {
+            let _ = connected
+                .writer
+                .write_value(&json!({"type":"protocol_error", "code":code}));
+        }
     }
     live.protocol = LiveProtocol::Closed;
     force_termination(risk_persistence, live)
@@ -831,6 +891,33 @@ fn finish_after_exit(
         }
     }
     live.protocol = LiveProtocol::Closed;
+    if live.target_proposal.is_some() {
+        observe_control(&mut live);
+        if !live.exit_status.as_ref().is_some_and(ExitStatus::success) || !live.protocol_eof {
+            live.winner
+                .claim(OutcomeWinner::Failed(FailureKind::ProtocolTransport));
+        }
+        if !live.supervisor.tree_terminated().unwrap_or(false) {
+            if live.winner.winner.is_some() {
+                let _ = live.supervisor.terminate_tree();
+            }
+            return OwnerContinuation::RetryProcessControl(ProcessControlRetry {
+                live,
+                operation: ProcessControlOperation::AwaitTree,
+            });
+        }
+        if live.winner.winner.is_none() {
+            let proposal = live.target_proposal.take().expect("validated proposal");
+            let outputs = live.materialized.take_migration_outputs();
+            let (execution, _) = live.materialized.into_execution();
+            return OwnerContinuation::TargetReady(TargetRuntimeFacts {
+                run: live.run,
+                proposal,
+                execution,
+                outputs,
+            });
+        }
+    }
     if live.winner.winner.is_none() {
         live.winner
             .claim(OutcomeWinner::Failed(FailureKind::ProtocolTransport));

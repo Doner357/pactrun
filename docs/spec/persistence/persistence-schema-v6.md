@@ -15,9 +15,11 @@ The [implementation record](../../development/m5-implementation-status.md)
 records Migration runtime coverage and the remaining verification gates.
 <!-- spec-navigation:end -->
 
-V6 is the current internal schema. The writer initializes V6 directly and the
-explicit upgrade accepts exact V5 only. Declarative Migration execution and edge
-publication are separately implemented under PR-REQ-0313; Hook integration remains pending.
+V6 is the historical integrated M5/M6 schema. A V6 writer initializes V6 and
+accepts exact V5 for its explicit upgrade. The current M6.5 writer instead uses
+[V7](./persistence-schema-v7.md) and accepts exact V6; this page does not authorize
+an implicit multi-version upgrade. Declarative and Hook Migration execution and
+edge publication are implemented under PR-REQ-0313 and the M5 execution contract.
 
 ### PR-REQ-0308 - V6 Migration persistence and upgrade boundary
 
@@ -229,4 +231,8 @@ bytes, Run outcomes and artifacts, live recovery obligations, and snapshots.
 Upgrade is not a global Snapshot-content or Run-semantic integrity certificate.
 
 **Verification: PR-TEST-0294, PR-TEST-0295, PR-TEST-0296, PR-TEST-0297,
-PR-TEST-0298, PR-TEST-0300.**
+PR-TEST-0298.**
+
+The current CLI path-ID preservation test PR-TEST-0300 now targets V6-to-V7.
+The historical exact V5-to-V6 contract remains enforced by the tests above;
+this does not create an implicit upgrade chain in the current binary.

@@ -116,6 +116,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
                 .edges()
                 .iter()
                 .map(|edge| MigrationCompiledEdge {
+                    service: None,
                     bindings: edge.clone(),
                     runtime: content.runtime_content.files().to_vec(),
                     launch: None,
@@ -147,6 +148,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
                     run,
                     &owner,
                     &AdmissionFacts {
+                        service: None,
                         expected_state_version: view.state_version,
                         active_bindings: &bindings(p, view.id),
                         runtime_content: std::slice::from_ref(&file),

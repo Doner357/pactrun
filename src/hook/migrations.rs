@@ -1,6 +1,7 @@
 //! Per-edge Migration ownership, reusing the shared supervisor and lease substrate.
 use super::*;
 use crate::{domain::*, executor::ExecutorError, persistence::AcceptanceError};
+use std::collections::BTreeSet;
 
 #[cfg(test)]
 thread_local! { static ACCEPTANCE_FAULT:std::cell::Cell<u8> = const { std::cell::Cell::new(0) }; }
@@ -26,6 +27,21 @@ pub(crate) struct MigrationOwnerState {
     hook_finish: Option<RunFinish>,
     hook_outputs: BTreeMap<InputIdentity, StagedFile>,
     secondary_failures: Vec<RunFailureRecord>,
+    service_prepared: Option<(usize, ServiceMigrationEdge)>,
+    target_commit: Option<TargetCommitPermit>,
+}
+/// Owner-memory proof only, created after the proposal receipt, zero exit/tree
+/// termination, output acquisition and scratch cleanup. Never serialized.
+#[derive(Debug)]
+pub(crate) struct TargetCommitPermit {
+    run: RunId,
+    owner: ExecutionOwnerSession,
+    edge: usize,
+}
+impl TargetCommitPermit {
+    pub(crate) fn matches(&self, run: RunId, owner: &ExecutionOwnerSession, edge: usize) -> bool {
+        self.run == run && &self.owner == owner && self.edge == edge
+    }
 }
 
 pub(crate) struct MigrationExecutionSettings {
@@ -128,6 +144,8 @@ pub(crate) fn accept_migration_inputs(
         cancellation,
         uncertain: false,
         failure: None,
+        service_prepared: None,
+        target_commit: None,
         inputs,
         policy,
         hook: None,
@@ -271,9 +289,46 @@ pub(super) fn advance(
         state.hook_edge = None;
         state.hook_outputs.clear();
         state.hook_finish = None;
+        state.target_commit = None;
     }
     let edge = &state.plan.edges()[progress.committed_edges];
-    if state.hook_finish.is_some() && progress.step == MigrationPlanStep::LaunchHook {
+    if state
+        .service_prepared
+        .as_ref()
+        .is_some_and(|(index, _)| *index < progress.committed_edges)
+    {
+        state.service_prepared = None;
+    }
+    if edge.service.is_some() && state.service_prepared.is_none() {
+        drop(gate);
+        match p.prepare_migration_service_targets(state.run, &state.owner, progress.committed_edges)
+        {
+            Ok(prepared) => state.service_prepared = Some((progress.committed_edges, prepared)),
+            Err(PersistenceError::ServiceStorageUnavailable(_)) => {
+                state.failure = Some(RunFinish {
+                    outcome: RunOutcome::Failed,
+                    primary_failure: Some(RunPrimaryFailure {
+                        failure: RunFailureRecord {
+                            error: PactrunErrorRefV1::new(
+                                "service_storage",
+                                "allocation_unavailable",
+                            )
+                            .expect("registered error"),
+                            message: String::new(),
+                        },
+                        step: RunFailedStep::MigrationPlan(MigrationPlanStep::EstablishSession),
+                    }),
+                    secondary_failures: vec![],
+                    hook_completion: None,
+                });
+            }
+            Err(error) => return Err(error),
+        }
+        return Ok(false);
+    }
+    if (state.hook_finish.is_some() || state.target_commit.is_some())
+        && progress.step == MigrationPlanStep::LaunchHook
+    {
         p.mark_migration_step(
             state.run,
             &state.owner,
@@ -282,7 +337,7 @@ pub(super) fn advance(
         )?;
         return Ok(false);
     }
-    if edge.launch.is_some() && state.hook_finish.is_none() {
+    if edge.launch.is_some() && state.hook_finish.is_none() && state.target_commit.is_none() {
         drop(gate);
         if state.materialized.is_none() {
             p.mark_migration_step(
@@ -299,6 +354,7 @@ pub(super) fn advance(
                 progress.committed_edges,
                 edge,
                 &state.inputs,
+                state.service_prepared.as_ref().map(|(_, edge)| edge),
             ) {
                 Ok(materialized) => state.materialized = Some(materialized),
                 Err(_) => {
@@ -397,6 +453,7 @@ pub(super) fn advance(
         &state.owner,
         progress.committed_edges,
         &mut crate::persistence::MigrationEdgePublication {
+            target: state.target_commit.as_ref(),
             operator_inputs: &mut writes,
             hook_outputs: &mut output_writes,
             completion: state
@@ -438,6 +495,53 @@ pub(super) fn advance(
 
 impl MigrationOwnerState {
     fn accept_hook_progress(&mut self, staging: &StagingSession, continuation: OwnerContinuation) {
+        if let OwnerContinuation::TargetReady(facts) = continuation {
+            let edge = self.hook_edge;
+            let valid = facts.run == self.run
+                && self
+                    .service_prepared
+                    .as_ref()
+                    .is_some_and(|(index, service)| Some(*index) == edge && service.transform)
+                && facts.proposal.outputs().iter().collect::<BTreeSet<_>>()
+                    == facts
+                        .outputs
+                        .iter()
+                        .map(|slot| &slot.handle)
+                        .collect::<BTreeSet<_>>();
+            let outputs = if valid {
+                facts
+                    .outputs
+                    .iter()
+                    .map(|slot| {
+                        staging
+                            .stage_action_output(&slot.path)
+                            .map(|file| (slot.input.clone(), file))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()
+                    .ok()
+            } else {
+                None
+            };
+            let cleaned = facts.execution.cleanup().is_ok();
+            if let Some(outputs) = outputs.filter(|_| cleaned) {
+                self.hook_outputs = outputs;
+                self.target_commit = Some(TargetCommitPermit {
+                    run: self.run,
+                    owner: self.owner.clone(),
+                    edge: edge.expect("validated edge"),
+                });
+            } else {
+                let mut failure = migration_publication_failure();
+                if !cleaned {
+                    failure.secondary_failures.push(safe_execution_failure(
+                        "workspace_cleanup_failed",
+                        "Migration workspace cleanup failed",
+                    ));
+                }
+                self.failure = Some(failure);
+            }
+            return;
+        }
         let OwnerContinuation::ReadyToFinalize(state) = continuation else {
             self.hook = Some(Box::new(continuation));
             return;

@@ -1,10 +1,11 @@
 use std::{fmt, path::PathBuf};
 
 use super::{
-    ActionIdentity, ActionV1, ContentId, FiniteF64, HostExecutableName, InputIdentity, InstanceId,
-    InstanceStateVersion, ManagedInputPayloadId, ManagedInputProtection, ManagedOutputIdentity,
-    OperationAccessV1, ParameterDefaultV1, ParameterIdentity, ParameterTypeV1, PositiveVersion,
-    RevisionIdentity, RuntimeFileV1, SafeIntegerV1, TerminalContractV1, ValidatedRevisionContentV1,
+    ActionIdentity, ActionV1, ContentId, FiniteF64, HookServiceContractV2, HostExecutableName,
+    InputIdentity, InstanceId, InstanceStateVersion, ManagedInputPayloadId, ManagedInputProtection,
+    ManagedOutputIdentity, OperationAccessV1, ParameterDefaultV1, ParameterIdentity,
+    ParameterTypeV1, PositiveVersion, RevisionIdentity, RuntimeFileV1, SafeIntegerV1,
+    TerminalContractV1, ValidatedRevisionContent,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -145,7 +146,8 @@ pub(crate) struct ActionCompilationObservation {
     pub(crate) active_revision: RevisionIdentity,
     pub(crate) active_bindings: Vec<ActiveInstanceBindingReference>,
     pub(crate) required_inputs_satisfied: bool,
-    pub(crate) revision_content: ValidatedRevisionContentV1,
+    pub(crate) revision_content: ValidatedRevisionContent,
+    pub(crate) service_state: Option<super::InstanceServiceState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -159,6 +161,8 @@ pub(crate) struct CompilationFacts {
     pub(crate) parameters: Vec<ParameterBinding>,
     pub(crate) runtime_content: Vec<RuntimeFileV1>,
     pub(crate) launch: CompiledHookLaunch,
+    pub(crate) service_hook: HookServiceContractV2,
+    pub(crate) service_bindings: super::ServiceHookBindings,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -187,9 +191,17 @@ pub(crate) struct ActionExecutionPlan {
     outputs: Vec<ManagedOutputIdentity>,
     launch: CompiledHookLaunch,
     steps: Vec<ActionPlanStep>,
+    service_hook: HookServiceContractV2,
+    service_bindings: super::ServiceHookBindings,
 }
 
 impl ActionExecutionPlan {
+    pub(crate) fn service_bindings(&self) -> &super::ServiceHookBindings {
+        &self.service_bindings
+    }
+    pub(crate) fn service_hook(&self) -> &HookServiceContractV2 {
+        &self.service_hook
+    }
     pub(crate) fn instance(&self) -> InstanceId {
         self.instance
     }
@@ -295,6 +307,7 @@ impl std::error::Error for ActionResolutionError {}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlanCompilationError {
     InconsistentFacts,
+    UnsupportedHookProtocol(PositiveVersion),
     InvalidLauncherSearchDirectory,
     LauncherNotFound,
     MissingRuntimeContent(ContentId),
@@ -306,6 +319,11 @@ impl fmt::Display for PlanCompilationError {
             Self::InconsistentFacts => {
                 formatter.write_str("compilation facts do not match the resolved intent")
             }
+            Self::UnsupportedHookProtocol(version) => write!(
+                formatter,
+                "Hook protocol version {} is unsupported",
+                version.get()
+            ),
             Self::InvalidLauncherSearchDirectory => {
                 formatter.write_str("launcher search directories must be absolute")
             }
@@ -497,6 +515,8 @@ pub(crate) fn build_action_plan(
         hook_args: action.hook.args,
         outputs: action.outputs.into_iter().map(|output| output.id).collect(),
         launch: facts.launch,
+        service_hook: facts.service_hook,
+        service_bindings: facts.service_bindings,
         steps: vec![
             ActionPlanStep::EstablishSession,
             ActionPlanStep::LaunchHook,

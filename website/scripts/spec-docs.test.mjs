@@ -88,7 +88,7 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
   assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
-  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Proposed\./);
+  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: In progress\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
   assert.match(current, /PersistenceSchemaV6.*integrated `develop` persistence baseline/);
   assert.doesNotMatch(current, /Migration and Cleanup execution remain deferred/);
@@ -116,6 +116,59 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   assert.match(sidebar, /development\/design-notes\/service-storage-staged-design-alignment/);
   assert.match(sidebar, /development\/design-notes\/m6-recovery-implementation-baseline/);
   assert.match(sidebar, /development\/m6-implementation-status/);
+});
+
+test('M6.5 design direction preserves the separate runtime and Freeze gates', async () => {
+  const proposals = [
+    'contracts/revision-core-format-v2.md',
+    'contracts/pack-source-yaml-v2.md',
+    'contracts/hook-protocol-v2.md',
+    'persistence/persistence-schema-v7.md',
+    'execution/m6-5-service-storage-execution.md',
+    'behavior/m6-5-service-storage-command-reference.md',
+  ];
+  const baseline = docs.find(([name]) => name === 'development/design-notes/m6-5-servicestorage-baseline.md')[1];
+  assert.match(baseline.replace(/\s+/g, ' '), /S1-S7 may proceed/);
+  const core = docs.find(([file]) => file === 'spec/contracts/revision-core-format-v2.md')[1];
+  assert.match(core, /A source named by reuse, reattach or transform is consumed/);
+  for (const name of proposals) {
+    const body = docs.find(([file]) => file === 'spec/' + name)?.[1];
+    assert.ok(body, 'Missing S0 proposal: ' + name);
+    if (name === 'contracts/revision-core-format-v2.md' || name === 'contracts/hook-protocol-v2.md') {
+      assert.match(body, /Status: Frozen normative Package contract specification/);
+      assert.match(body, /m6-5-format-activation-review\.md/);
+    } else if (name === 'contracts/pack-source-yaml-v2.md') {
+      assert.match(body, /Candidate normative Package authoring contract; versioned, non-Frozen/);
+    } else {
+      assert.match(body, /Status: Implemented normative/);
+    }
+    assert.match(baseline, new RegExp(name.replaceAll('.', '\\.')));
+    const rules = body.split(/^### PR-REQ-\d+/m).slice(1);
+    assert.ok(rules.length > 0, 'No proposed requirements: ' + name);
+    for (const rule of rules) assert.match(rule, /\*\*Verification:/);
+    if (name === 'contracts/hook-protocol-v2.md') {
+      assert.match(rules[0], /Codec, authority and ordinary-runtime evidence/);
+      assert.match(rules[1], /Protocol and target-runtime evidence/);
+      assert.match(body, /no persisted proposal flag exists/);
+      assert.match(body.replace(/\s+/g, ' '), /Codec tests alone are not completed Migration target-publication evidence/);
+    }
+    if (name === 'execution/m6-5-service-storage-execution.md') {
+      assert.match(rules[0], /\*\*Verification: PR-TEST-0354, PR-TEST-0355, PR-TEST-0366, PR-TEST-0367, PR-TEST-0368, PR-TEST-0370, PR-TEST-0371, PR-TEST-0373, PR-TEST-0374, PR-TEST-0375, PR-TEST-0376, PR-TEST-0377, PR-TEST-0378, PR-TEST-0380, PR-TEST-0381, PR-TEST-0382, PR-TEST-0383, PR-TEST-0386, PR-TEST-0387, PR-TEST-0388\.\*\*/);
+      assert.match(rules[0], /Filesystem observation substrate coverage/);
+      assert.match(rules[0], /final-source closeout results/);
+      assert.match(rules[1], /M6\.5 association\/lifetime evidence only/);
+      assert.match(rules[1].replace(/\s+/g, ' '), /do not implement M7 Cleanup/);
+    }
+    if (name === 'behavior/m6-5-service-storage-command-reference.md') {
+      assert.match(body, /available on the M6\.5 feature branch/);
+      assert.match(body, /CLI runtime coverage/);
+      assert.match(body, /production V2 installation, cross-version retention and explicit reattachment/);
+    }
+  }
+  const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
+  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 7;/);
+  const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
+  assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: In progress\./);
 });
 
 async function rustFiles(directory) {

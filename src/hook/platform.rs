@@ -202,6 +202,15 @@ impl ProcessSupervisor {
         let status = self.child.try_wait()?;
         #[cfg(unix)]
         if status.is_some() {
+            // A descendant may still hold the PTY. Do not block the owner in
+            // join(): it must continue observing cancellation and deadlines.
+            if self
+                .output_relay
+                .as_ref()
+                .is_some_and(|relay| !relay.is_finished())
+            {
+                return Ok(None);
+            }
             self.join_output_relay();
         }
         Ok(status)
@@ -224,6 +233,22 @@ impl ProcessSupervisor {
             let child = rustix::process::Pid::from_child(&self.child);
             rustix::process::kill_process_group(child, rustix::process::Signal::KILL)
                 .map_err(io::Error::from)
+        }
+    }
+    pub(super) fn tree_terminated(&self) -> io::Result<bool> {
+        #[cfg(windows)]
+        {
+            self.child.tree_terminated()
+        }
+        #[cfg(unix)]
+        {
+            match rustix::process::test_kill_process_group(rustix::process::Pid::from_child(
+                &self.child,
+            )) {
+                Err(rustix::io::Errno::SRCH) => Ok(true),
+                Ok(()) => Ok(false),
+                Err(error) => Err(error.into()),
+            }
         }
     }
 

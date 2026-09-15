@@ -617,7 +617,11 @@ service-owned file as implicit bidirectionally synchronized authoritative
 copies. Explicit future ownership transfer into a Managed Input may be designed
 separately, but is not the default solution for service-owned live state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0346, PR-TEST-0370.**
+
+Isolated live bytes are not mirrored into Inputs or Snapshots, including real
+V2 Action writes. Cross-Revision continuity and target publication have separate
+evidence under PR-REQ-0237 and PR-REQ-0326.
 
 ### PR-REQ-0236 - Managed Service Resource declaration and existence
 
@@ -637,10 +641,14 @@ declare a resource that is currently absent and that the service creates later.
 
 The identity encoding, association schema, access encoding, prerequisite
 encoding, authoring form, wire authority, and durable representation remain
-future-version design gates. This requirement does not classify non-
-ServiceStorage-backed service-owned resources.
+independent version boundaries implemented by Core/Hook V2 and V7. This
+requirement does not classify non-ServiceStorage-backed service-owned resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0346.**
+
+This declaration/existence test covers eager isolated storage and independently
+absent file/directory objects. Cross-Run access and continuity are separately
+covered under PR-REQ-0244 and PR-REQ-0237.
 
 ### PR-REQ-0241 - ServiceStorage and resource semantic identity
 
@@ -658,7 +666,12 @@ storage-relative locator identifies its contractual logical location within the
 associated storage; it MUST NOT become resource identity, a host-path contract,
 an existence assertion, or evidence of representation compatibility.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0346, PR-TEST-0371.**
+
+These tests enforce separate Instance allocations, explicit identity/locator
+mapping and rejection of cross-Package continuity. Preserving an identity's
+long-lived semantic meaning remains a Package-author obligation; Pactrun does
+not infer that meaning from service contents.
 
 ### PR-REQ-0242 - Declaration, existence, and observation
 
@@ -675,7 +688,15 @@ advance `InstanceStateVersion` merely because observed existence or live bytes
 change, or apply Managed Input presence and mutation linearization to the live
 resource.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0346, PR-TEST-0354, PR-TEST-0357, PR-TEST-0387, PR-TEST-0388.**
+
+Partial coverage: external live-byte changes do not advance InstanceStateVersion.
+PR-TEST-0354 additionally covers point-in-time absence and actual leaf kinds in
+the internal filesystem primitive. PR-TEST-0357 covers CLI observation and
+missing protected-root Unknown without state mutation. PR-TEST-0387 exercises
+native Linux permission denial; PR-TEST-0388 separates runtime predicates from
+read-only planning. These point-in-time observations do not exclude subsequent
+external-service races.
 
 ### PR-REQ-0248 - M1-D metadata boundary
 

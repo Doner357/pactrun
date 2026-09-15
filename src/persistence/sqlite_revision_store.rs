@@ -20,15 +20,20 @@ use super::runtime_content_store::{
     validate_existing_regular_entry, validate_supported_storage_root,
 };
 use super::sqlite_revision_metadata::apply_revision_metadata_in_transaction;
+#[cfg(test)]
+use crate::revision_core_v1::{
+    calculate_revision_content_digest_v1, encode_canonical_revision_core_v1,
+};
 use crate::{
     domain::{
         PackageId, RevisionIdentity, RevisionMetadataMutationBatch, RunId, Sha256Digest,
-        ValidatedRevisionContentV1,
+        ValidatedRevisionContent, ValidatedRevisionContentV1,
     },
-    revision_core_v1::{
-        calculate_revision_content_digest_v1, decode_canonical_revision_content_v1,
-        encode_canonical_revision_core_v1, encode_canonical_runtime_content_v1,
+    revision_content::{
+        calculate_revision_content_digest, core_format_version, decode_canonical_revision_content,
+        encode_canonical_revision_core,
     },
+    revision_core_v1::encode_canonical_runtime_content_v1,
 };
 
 const DATABASE_DIRECTORY: &str = "database";
@@ -40,7 +45,8 @@ const SCHEMA_V2_VERSION: i64 = 2;
 pub(super) const SCHEMA_V3_VERSION: i64 = 3;
 pub(super) const SCHEMA_V4_VERSION: i64 = 4;
 pub(super) const SCHEMA_V5_VERSION: i64 = 5;
-pub(crate) const SCHEMA_VERSION: i64 = 6;
+pub(super) const SCHEMA_V6_VERSION: i64 = 6;
+pub(crate) const SCHEMA_VERSION: i64 = 7;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -108,16 +114,19 @@ pub(super) const SCHEMA_V5_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v5_additions.sql");
 pub(super) const SCHEMA_V6_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v6_additions.sql");
+pub(super) const SCHEMA_V7_ADDITIONS_SQL: &str =
+    include_str!("persistence_schema_v7_additions.sql");
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 6] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 7] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
     (SCHEMA_V4_ADDITIONS_SQL, "PersistenceSchemaV4 additions"),
     (SCHEMA_V5_ADDITIONS_SQL, "PersistenceSchemaV5 additions"),
     (SCHEMA_V6_ADDITIONS_SQL, "PersistenceSchemaV6 changes"),
+    (SCHEMA_V7_ADDITIONS_SQL, "PersistenceSchemaV7 additions"),
 ];
 
 #[derive(Debug)]
@@ -130,9 +139,9 @@ pub(crate) struct PactrunPersistence {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct StoredRevisionContentV1 {
+pub(crate) struct StoredRevisionContent {
     pub(crate) identity: RevisionIdentity,
-    pub(crate) content: ValidatedRevisionContentV1,
+    pub(crate) content: ValidatedRevisionContent,
 }
 
 #[derive(Debug)]
@@ -180,6 +189,8 @@ pub(crate) enum PersistenceError {
     SnapshotCodec(crate::snapshot_integrity::SnapshotCodecError),
     CorruptSnapshot(&'static str),
     UnauthorizedSnapshotExport,
+    ServiceStorageUnavailable(&'static str),
+    CorruptServiceStorage(&'static str),
 }
 
 impl PersistenceError {
@@ -191,6 +202,8 @@ impl PersistenceError {
 impl fmt::Display for PersistenceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ServiceStorageUnavailable(message) => write!(formatter,"service storage unavailable: {message}"),
+            Self::CorruptServiceStorage(message) => write!(formatter,"corrupt service storage: {message}"),
             Self::RuntimeContent(source) => write!(formatter, "runtime content: {source}"),
             Self::Sqlite { operation, source } => write!(formatter, "{operation}: {source}"),
             Self::Io { operation, source } => write!(formatter, "{operation}: {source}"),
@@ -247,7 +260,7 @@ impl fmt::Display for PersistenceError {
             Self::SnapshotCodec(error) => error.fmt(formatter),
             Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
             Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V5 requires explicit pactrun storage upgrade to V6"),
+            Self::UpgradeRequired => formatter.write_str("exact V6 requires explicit pactrun storage upgrade to V7"),
             Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
             Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
             Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
@@ -327,12 +340,12 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V6 {
-            if state == DatabaseState::V5 {
+        if state != DatabaseState::V7 {
+            if state == DatabaseState::V6 {
                 return Err(PersistenceError::UpgradeRequired);
             }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires exact V6; use a compatible build to reach V5 before explicit upgrade".to_owned(),
+                "read-only opening requires exact V7; use a compatible build to reach V6 before explicit upgrade".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -364,7 +377,7 @@ impl PactrunPersistence {
         content: &ValidatedRevisionContentV1,
         publications: &[StoredRuntimeBlob],
     ) -> Result<RevisionIdentity, PersistenceError> {
-        self.persist_revision_internal(package_id, content, publications, None)
+        self.persist_revision_internal(package_id, &content.clone().into(), publications, None)
     }
 
     pub(crate) fn persist_revision_with_metadata(
@@ -374,24 +387,44 @@ impl PactrunPersistence {
         publications: &[StoredRuntimeBlob],
         metadata: &RevisionMetadataMutationBatch,
     ) -> Result<RevisionIdentity, PersistenceError> {
+        self.persist_revision_internal(
+            package_id,
+            &content.clone().into(),
+            publications,
+            Some(metadata),
+        )
+    }
+
+    pub(crate) fn persist_versioned_revision_with_metadata(
+        &self,
+        package_id: PackageId,
+        content: &ValidatedRevisionContent,
+        publications: &[StoredRuntimeBlob],
+        metadata: &RevisionMetadataMutationBatch,
+    ) -> Result<RevisionIdentity, PersistenceError> {
         self.persist_revision_internal(package_id, content, publications, Some(metadata))
     }
 
-    fn persist_revision_internal(
+    pub(super) fn persist_revision_internal(
         &self,
         package_id: PackageId,
-        content: &ValidatedRevisionContentV1,
+        content: &ValidatedRevisionContent,
         publications: &[StoredRuntimeBlob],
         metadata: Option<&RevisionMetadataMutationBatch>,
     ) -> Result<RevisionIdentity, PersistenceError> {
-        let core_jcs = encode_canonical_revision_core_v1(&content.core)
+        if content.core.version() > 1 && SCHEMA_VERSION < 7 {
+            return Err(PersistenceError::CorruptRevision(
+                "Core V2 requires the V7 persistence boundary".to_owned(),
+            ));
+        }
+        let core_jcs = encode_canonical_revision_core(&content.core)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
         let runtime_content_jcs = encode_canonical_runtime_content_v1(&content.runtime_content)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
-        let content_digest = calculate_revision_content_digest_v1(content)
+        let content_digest = calculate_revision_content_digest(content)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
         let identity = RevisionIdentity::new(package_id, content_digest);
-        let expected_references = derive_references(content);
+        let expected_references = derive_references(&content.runtime_content);
 
         let mut database = self
             .database
@@ -426,7 +459,7 @@ impl PactrunPersistence {
         validate_publications(
             &self.runtime_content,
             publications,
-            &distinct_blob_digests(content),
+            &distinct_blob_digests(&content.runtime_content),
         )?;
 
         transaction
@@ -479,7 +512,7 @@ impl PactrunPersistence {
     pub(crate) fn load_revision(
         &self,
         identity: &RevisionIdentity,
-    ) -> Result<Option<StoredRevisionContentV1>, PersistenceError> {
+    ) -> Result<Option<StoredRevisionContent>, PersistenceError> {
         let database = self
             .database
             .lock()
@@ -503,13 +536,33 @@ impl PactrunPersistence {
 pub(super) fn load_revision_from(
     database: &Connection,
     identity: &RevisionIdentity,
-) -> Result<Option<StoredRevisionContentV1>, PersistenceError> {
+) -> Result<Option<StoredRevisionContent>, PersistenceError> {
     let Some(raw) = load_raw_revision(database, identity)? else {
         return Ok(None);
     };
     ensure_package_exists(database, &identity.package_id)?;
+    validate_core_storage_version(database, &raw.core_jcs)?;
     let references = load_reference_rows(database, identity)?;
     validate_raw_revision(identity, raw, references).map(Some)
+}
+
+pub(super) fn validate_core_storage_version(
+    database: &Connection,
+    core: &[u8],
+) -> Result<(), PersistenceError> {
+    let version =
+        core_format_version(core).map_err(|e| PersistenceError::CorruptRevision(e.to_string()))?;
+    if version > 1 {
+        let schema: i64 = database
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map_err(|e| PersistenceError::sqlite("check Core storage compatibility", e))?;
+        if schema < 7 {
+            return Err(PersistenceError::CorruptRevision(
+                "Core V2 is not valid in a pre-V7 store".to_owned(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 impl PactrunPersistence {
@@ -589,7 +642,7 @@ pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, Persist
             fault(FaultPoint::BeforeSchemaMigrationCommit);
             true
         }
-        DatabaseState::V5 | DatabaseState::V6 => {
+        DatabaseState::V5 | DatabaseState::V6 | DatabaseState::V7 => {
             return Err(PersistenceError::DatabaseOwnership(
                 "legacy V4 binary rejects newer schema".to_owned(),
             ));
@@ -727,6 +780,7 @@ pub(super) enum DatabaseState {
     V4,
     V5,
     V6,
+    V7,
 }
 
 impl DatabaseState {
@@ -738,7 +792,8 @@ impl DatabaseState {
             Self::V3 => Some(SCHEMA_V3_VERSION),
             Self::V4 => Some(SCHEMA_V4_VERSION),
             Self::V5 => Some(SCHEMA_V5_VERSION),
-            Self::V6 => Some(SCHEMA_VERSION),
+            Self::V6 => Some(SCHEMA_V6_VERSION),
+            Self::V7 => Some(SCHEMA_VERSION),
         }
     }
 }
@@ -774,9 +829,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
             validate_schema(database, SCHEMA_V5_VERSION)?;
             Ok(DatabaseState::V5)
         }
+        (APPLICATION_ID, SCHEMA_V6_VERSION, true) => {
+            validate_schema(database, SCHEMA_V6_VERSION)?;
+            Ok(DatabaseState::V6)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V6)
+            Ok(DatabaseState::V7)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -1074,39 +1133,41 @@ fn validate_raw_revision(
     identity: &RevisionIdentity,
     raw: RawRevision,
     actual_references: BTreeMap<String, [u8; 32]>,
-) -> Result<StoredRevisionContentV1, PersistenceError> {
-    let content = decode_canonical_revision_content_v1(&raw.core_jcs, &raw.runtime_content_jcs)
+) -> Result<StoredRevisionContent, PersistenceError> {
+    let content = decode_canonical_revision_content(&raw.core_jcs, &raw.runtime_content_jcs)
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
-    let calculated = calculate_revision_content_digest_v1(&content)
+    let calculated = calculate_revision_content_digest(&content)
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
     if calculated != identity.content_digest {
         return Err(PersistenceError::CorruptRevision(
             "stored canonical components do not match the Revision identity".to_owned(),
         ));
     }
-    if derive_references(&content) != actual_references {
+    if derive_references(&content.runtime_content) != actual_references {
         return Err(PersistenceError::CorruptRevision(
             "runtime reference index differs from the canonical closure".to_owned(),
         ));
     }
-    Ok(StoredRevisionContentV1 {
+    Ok(StoredRevisionContent {
         identity: identity.clone(),
         content,
     })
 }
 
-fn derive_references(content: &ValidatedRevisionContentV1) -> BTreeMap<String, [u8; 32]> {
+fn derive_references(
+    content: &crate::domain::RuntimeContentClosureIdentityV1,
+) -> BTreeMap<String, [u8; 32]> {
     content
-        .runtime_content
         .files()
         .iter()
         .map(|file| (file.id.as_str().to_owned(), file.blob_digest.to_bytes()))
         .collect()
 }
 
-fn distinct_blob_digests(content: &ValidatedRevisionContentV1) -> BTreeSet<Sha256Digest> {
+fn distinct_blob_digests(
+    content: &crate::domain::RuntimeContentClosureIdentityV1,
+) -> BTreeSet<Sha256Digest> {
     content
-        .runtime_content
         .files()
         .iter()
         .map(|file| file.blob_digest.clone())
@@ -1156,6 +1217,13 @@ pub(crate) enum FaultPoint {
     AfterWritableAdmission,
     AfterLegacySessionInspection,
     AfterV5AdmissionInspection,
+    AfterV6AdmissionInspection,
+    BeforeServiceAllocationIntentCommit,
+    AfterServiceAllocationIntentCommit,
+    AfterServiceAllocationDirectory,
+    BeforeServiceInstanceCommit,
+    AfterServiceInstanceCommit,
+    AfterTargetProposalReceipt,
     BeforeMigrationEdgeCommit,
     AfterMigrationEdgeCommit,
     AfterWalBeforeBootstrap,
@@ -1191,6 +1259,13 @@ impl FaultPoint {
             Self::AfterWritableAdmission => "after_writable_admission",
             Self::AfterLegacySessionInspection => "after_legacy_session_inspection",
             Self::AfterV5AdmissionInspection => "after_v5_admission_inspection",
+            Self::AfterV6AdmissionInspection => "after_v6_admission_inspection",
+            Self::BeforeServiceAllocationIntentCommit => "before_service_allocation_intent_commit",
+            Self::AfterServiceAllocationIntentCommit => "after_service_allocation_intent_commit",
+            Self::AfterServiceAllocationDirectory => "after_service_allocation_directory",
+            Self::BeforeServiceInstanceCommit => "before_service_instance_commit",
+            Self::AfterServiceInstanceCommit => "after_service_instance_commit",
+            Self::AfterTargetProposalReceipt => "after_target_proposal_receipt",
             Self::BeforeMigrationEdgeCommit => "before_migration_edge_commit",
             Self::AfterMigrationEdgeCommit => "after_migration_edge_commit",
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
@@ -1269,6 +1344,60 @@ mod tests {
     };
 
     const WORKER_TEST: &str = "persistence::sqlite_revision_store::tests::m1c_subprocess_worker";
+
+    // Test-ID: PR-TEST-0339
+    // Verifies: PR-REQ-0318
+    #[test]
+    fn candidate_v2_cannot_be_interpreted_as_v1_inside_an_exact_v6_store() {
+        let (_temporary, root) = test_root();
+        let writer = PactrunPersistence::open(&root).unwrap();
+        drop(writer);
+        let mut db = Connection::open(database_path(&root)).unwrap();
+        configure_connection(&db).unwrap();
+        super::super::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
+        drop(db);
+        let p = super::super::sqlite_v7::legacy_v6_read_fixture(&root);
+        let core=br#"{"actions":[],"format_version":2,"inputs":[],"migrations":[],"service_resources":[],"service_storages":[]}"#;
+        let runtime = br#"{"files":[]}"#;
+        let candidate =
+            crate::revision_core_v2::decode_canonical_revision_content_v2(core, runtime).unwrap();
+        let id = RevisionIdentity::new(
+            package(65),
+            crate::revision_core_v2::calculate_revision_content_digest_v2(&candidate).unwrap(),
+        );
+        // Deliberately corrupt V6 via raw fixture SQL. This is not a production
+        // publisher for V2 identities and must be refused on every V6 read.
+        {
+            let db = Connection::open(database_path(&root)).unwrap();
+            db.execute(
+                "INSERT INTO packages VALUES(?1)",
+                [id.package_id.as_bytes().as_slice()],
+            )
+            .unwrap();
+            db.execute(
+                "INSERT INTO revisions VALUES(?1,?2,?3,?4)",
+                params![
+                    id.package_id.as_bytes().as_slice(),
+                    id.content_digest.as_bytes().as_slice(),
+                    core.as_slice(),
+                    runtime.as_slice()
+                ],
+            )
+            .unwrap();
+        }
+        assert!(matches!(
+            p.load_revision(&id),
+            Err(PersistenceError::CorruptRevision(_))
+        ));
+        assert!(matches!(
+            p.load_revision_metadata(&id),
+            Err(PersistenceError::CorruptRevision(_))
+        ));
+        assert!(
+            p.persist_revision_internal(id.package_id, &candidate.into(), &[], None)
+                .is_err()
+        );
+    }
 
     fn digest(bytes: &[u8]) -> Sha256Digest {
         Sha256Digest::from_bytes(Sha256::digest(bytes).into())
@@ -1674,15 +1803,15 @@ mod tests {
         assert_eq!(stored, (expected_core.clone(), expected_runtime.clone()));
         assert_eq!(
             load_reference_rows(&database, &identity).unwrap(),
-            derive_references(&content)
+            derive_references(&content.runtime_content)
         );
         drop(database);
 
         let loaded = persistence.load_revision(&identity).unwrap().unwrap();
         assert_eq!(loaded.identity, identity);
-        assert_eq!(loaded.content, content);
+        assert_eq!(loaded.content, content.clone().into());
         assert_eq!(
-            calculate_revision_content_digest_v1(&loaded.content).unwrap(),
+            calculate_revision_content_digest(&loaded.content).unwrap(),
             identity.content_digest
         );
 
@@ -1968,7 +2097,7 @@ mod tests {
                 fs::write(blob_path, b"externally corrupted").unwrap();
             }
             let loaded = persistence.load_revision(&identity).unwrap().unwrap();
-            assert_eq!(loaded.content, content);
+            assert_eq!(loaded.content, content.clone().into());
             assert!(
                 persistence
                     .verify_revision_runtime_content(&identity)
@@ -1984,7 +2113,7 @@ mod tests {
         let before_digest = calculate_revision_content_digest_v1(&content).unwrap();
         let loaded = canonical.load_revision(&identity).unwrap().unwrap();
         assert_eq!(
-            encode_canonical_revision_core_v1(&loaded.content.core).unwrap(),
+            encode_canonical_revision_core(&loaded.content.core).unwrap(),
             before_core
         );
         assert_eq!(
@@ -1992,7 +2121,7 @@ mod tests {
             before_runtime
         );
         assert_eq!(
-            calculate_revision_content_digest_v1(&loaded.content).unwrap(),
+            calculate_revision_content_digest(&loaded.content).unwrap(),
             before_digest
         );
 

@@ -2,6 +2,7 @@
 
 mod installation;
 mod migrations;
+mod service_storage;
 mod snapshots;
 
 use std::{
@@ -70,6 +71,7 @@ pub(crate) enum ApplicationError {
     SourceAcquisition(SourceAcquisitionError),
     Staging(StagingError),
     Revision(RevisionCoreV1Error),
+    RevisionContent(crate::revision_content::RevisionContentError),
     Persistence(PersistenceError),
     ActionResolution(ActionResolutionError),
     PlanCompilation(PlanCompilationError),
@@ -78,6 +80,7 @@ pub(crate) enum ApplicationError {
     Execution(ExecutorError),
     InvalidInstallation(String),
     InvalidRequest(String),
+    ServiceStorage(crate::domain::ServiceAccessError),
     LockPoisoned,
 }
 
@@ -92,6 +95,7 @@ impl fmt::Display for ApplicationError {
             Self::SourceAcquisition(source) => write!(formatter, "Pack source: {source}"),
             Self::Staging(source) => write!(formatter, "staging: {source}"),
             Self::Revision(source) => write!(formatter, "Revision candidate: {source}"),
+            Self::RevisionContent(source) => write!(formatter, "Revision candidate: {source}"),
             Self::Persistence(source) => write!(formatter, "persistence: {source}"),
             Self::ActionResolution(source) => write!(formatter, "resolution: {source}"),
             Self::PlanCompilation(source) => write!(formatter, "compilation: {source}"),
@@ -102,6 +106,7 @@ impl fmt::Display for ApplicationError {
                 write!(formatter, "Migration compilation: {source}")
             }
             Self::Execution(source) => write!(formatter, "execution: {source}"),
+            Self::ServiceStorage(source) => source.fmt(formatter),
             Self::LockPoisoned => formatter.write_str("Instance mutation lock is poisoned"),
         }
     }
@@ -115,12 +120,14 @@ impl std::error::Error for ApplicationError {
             Self::SourceAcquisition(source) => Some(source),
             Self::Staging(source) => Some(source),
             Self::Revision(source) => Some(source),
+            Self::RevisionContent(source) => Some(source),
             Self::Persistence(source) => Some(source),
             Self::ActionResolution(source) => Some(source),
             Self::PlanCompilation(source) => Some(source),
             Self::SnapshotCompilation(source) => Some(source),
             Self::MigrationCompilation(source) => Some(source),
             Self::Execution(source) => Some(source),
+            Self::ServiceStorage(source) => Some(source),
             Self::Configuration(_)
             | Self::InvalidInstallation(_)
             | Self::InvalidRequest(_)
@@ -665,6 +672,12 @@ impl PactrunApplication {
             .persistence
             .load_revision(&before.active_revision)?
             .ok_or_else(|| PersistenceError::MissingRevision(before.active_revision.clone()))?;
+        let service_state = if revision.content.core.service_core().is_some() {
+            self.persistence
+                .load_instance_service_state(intent.instance)?
+        } else {
+            None
+        };
         let after = self
             .persistence
             .observe_instance_compilation_state(intent.instance)?
@@ -679,6 +692,7 @@ impl PactrunApplication {
             active_bindings: before.active_bindings,
             required_inputs_satisfied: before.required_inputs_satisfied,
             revision_content: revision.content,
+            service_state,
         })
     }
     pub(crate) fn set_input(
@@ -1245,6 +1259,7 @@ runtime_content:
             .admit_run(
                 run,
                 &AdmissionFacts {
+                    service: None,
                     expected_state_version: instance.state_version,
                     active_bindings: &bindings,
                     runtime_content: files,

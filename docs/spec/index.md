@@ -56,6 +56,12 @@ An internal schema does not become a public API by appearing on this website.
 Pending verification declarations are not removed by this document migration.
 See [implementation status and remaining decisions](../development/next-milestone.md).
 
+The [M6.5 contracts](./catalog.md#proposed-m65-s0-designs-not-active-contracts)
+originated as conditional S0 designs. Their later approval, independent
+Core/Hook V2 Freeze and implementation evidence are recorded separately in the
+linked baseline and implementation record. A requirement ID alone never
+establishes approval or runtime completion.
+
 ## Changes and conflicts
 
 Moving or clarifying a rule does not authorize changing its meaning, reusing its

@@ -142,7 +142,7 @@ This requirement does not change `SnapshotIntegrityFormatV1` schema, canonical
 bytes, framing, digest, or vectors and does not classify non-ServiceStorage-
 backed service-owned resources.
 
-**Verification: PR-TEST-0246.**
+**Verification: PR-TEST-0246, PR-TEST-0370.**
 
 ### PR-REQ-0151 - Restore staged context
 

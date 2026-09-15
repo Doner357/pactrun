@@ -241,6 +241,10 @@ impl RevisionCoreV1 {
         &self.migrations
     }
 
+    pub(crate) fn cleanup(&self) -> Option<&CleanupV1> {
+        self.cleanup.as_ref()
+    }
+
     pub(crate) fn contains_presentation_target(&self, target: &PresentationTargetV1) -> bool {
         match target {
             PresentationTargetV1::Revision => true,
@@ -1027,7 +1031,7 @@ fn is_runtime_path(value: &str) -> bool {
     })
 }
 
-fn is_windows_reserved(value: &str) -> bool {
+pub(super) fn is_windows_reserved(value: &str) -> bool {
     let stem = value
         .split('.')
         .next()

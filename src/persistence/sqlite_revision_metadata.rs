@@ -17,9 +17,7 @@ use crate::{
         RevisionMetadataItem, RevisionMetadataMutation, RevisionMetadataMutationBatch,
         RevisionMetadataView, SourceUri, TrustAssessment,
     },
-    revision_core_v1::{
-        calculate_revision_content_digest_v1, decode_canonical_revision_content_v1,
-    },
+    revision_content::{calculate_revision_content_digest, decode_canonical_revision_content},
 };
 
 impl PactrunPersistence {
@@ -1263,16 +1261,19 @@ fn load_revision_core(
         .optional()
         .map_err(|error| PersistenceError::sqlite("load metadata target Revision", error))?
         .ok_or_else(|| PersistenceError::MissingRevision(revision.clone()))?;
-    let content = decode_canonical_revision_content_v1(&raw.0, &raw.1)
+    super::sqlite_revision_store::validate_core_storage_version(database, &raw.0)?;
+    let content = decode_canonical_revision_content(&raw.0, &raw.1)
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
-    let digest = calculate_revision_content_digest_v1(&content)
+    let digest = calculate_revision_content_digest(&content)
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
     if digest != revision.content_digest {
         return Err(PersistenceError::CorruptRevision(
             "stored canonical components do not match the metadata target Revision".to_owned(),
         ));
     }
-    Ok(content.core)
+    // Presentation targets use the shared declarations, not service authority
+    // or an identity re-encoding. The full versioned digest was checked above.
+    Ok(content.core.common().clone())
 }
 
 fn revision_exists(
@@ -1700,7 +1701,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            52 // V5's 45 tables plus seven V6 Migration relations.
+            62 // V6's 52 tables plus ten separately owned V7 service relations.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
@@ -1768,7 +1769,7 @@ mod tests {
         let content = full_content(&digest);
         let identity = RevisionIdentity::new(
             package(2),
-            calculate_revision_content_digest_v1(&content).unwrap(),
+            crate::revision_core_v1::calculate_revision_content_digest_v1(&content).unwrap(),
         );
         initialize_v1(&root, Some((&identity, &content)));
         let persistence = legacy_v4_fixture(&root).unwrap();
@@ -1778,7 +1779,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .content,
-            content
+            content.clone().into()
         );
         assert_eq!(
             persistence
@@ -2360,12 +2361,38 @@ mod tests {
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        assert!(schema_names.iter().all(|name| {
-            !name.contains("json")
-                && !name.contains("service_storage")
-                && !name.contains("resource")
-                && !name.contains("orphan")
-        }));
+        // V7 service custody is a separate contract, not an M1-D metadata
+        // payload. Exempt only its exact approved relations from the historical
+        // no-surrogate-schema check; arbitrary resource/JSON/orphan tables are
+        // still forbidden here.
+        let service_tables = [
+            "service_storage_allocations",
+            "service_storage_preparations",
+            "service_storage_protections",
+            "service_storage_run_origins",
+            "instance_service_storages",
+            "instance_service_resources",
+            "run_service_storage_pins",
+            "run_service_storage_targets",
+            "run_service_resource_targets",
+            "run_service_edge_commits",
+        ];
+        assert!(
+            service_tables
+                .iter()
+                .all(|table| schema_names.iter().any(|name| name == table))
+        );
+        assert!(
+            schema_names
+                .iter()
+                .filter(|name| !service_tables.contains(&name.as_str()))
+                .all(|name| {
+                    !name.contains("json")
+                        && !name.contains("service_storage")
+                        && !name.contains("resource")
+                        && !name.contains("orphan")
+                })
+        );
         let deletion = database.transaction().unwrap();
         deletion
             .execute(

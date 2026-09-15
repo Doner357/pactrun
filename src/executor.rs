@@ -197,6 +197,7 @@ pub(crate) fn admit_existing<L: HostLauncherLookup>(
         });
     }
     let facts = AdmissionFacts {
+        service: Some((plan.service_hook(), plan.service_bindings())),
         expected_state_version: plan.expected_state_version(),
         active_bindings: plan.active_bindings(),
         runtime_content: plan.runtime_content(),

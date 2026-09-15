@@ -35,7 +35,8 @@ impl PactrunApplication {
             .persistence
             .load_revision(&instance.active_revision)?
             .ok_or(PersistenceError::MissingRevision(instance.active_revision))?;
-        let (parameters, hook) = crate::domain::snapshot_hook(&revision.content.core, operation)?;
+        let (parameters, hook) =
+            crate::domain::snapshot_hook(revision.content.core.common(), operation)?;
         Ok((id, parameters.to_vec(), hook.clone()))
     }
 

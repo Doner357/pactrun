@@ -19,6 +19,7 @@ fn main() -> ExitCode {
         Some("system-test") => run_system_tests(&workspace_root),
         Some("docs-build") => build_docs(&workspace_root),
         Some("revision-core-v1-verify") => revision_core_v1::verify(&workspace_root),
+        Some("revision-core-v2-verify") => verify_revision_core_v2(&workspace_root),
         Some("revision-core-v1-calculate") => revision_core_v1::calculate(&workspace_root),
         Some("snapshot-integrity-v1-verify") => snapshot_integrity_v1::verify(&workspace_root),
         Some("snapshot-integrity-v2-verify") => snapshot_integrity_v2::verify(&workspace_root),
@@ -36,7 +37,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("error: {error}");
             eprintln!(
-                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-core-v1-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|snapshot-integrity-v2-verify|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
+                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-core-v1-verify|revision-core-v2-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|snapshot-integrity-v2-verify|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
             );
             ExitCode::FAILURE
         }
@@ -52,6 +53,7 @@ fn workspace_root() -> PathBuf {
 
 fn run_ci(workspace_root: &Path) -> Result<(), String> {
     revision_core_v1::verify(workspace_root)?;
+    verify_revision_core_v2(workspace_root)?;
     snapshot_integrity_v1::verify(workspace_root)?;
     snapshot_integrity_v2::verify(workspace_root)?;
     hook_protocol_v1::verify(workspace_root)?;
@@ -63,6 +65,41 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
         &["--dir", "website", "run", "typecheck"],
     )?;
     build_docs(workspace_root)
+}
+
+fn verify_revision_core_v2(workspace_root: &Path) -> Result<(), String> {
+    run(
+        workspace_root,
+        "node",
+        &[
+            "tests/oracles/revision_core_format_v2.mjs",
+            "tests/vectors/revision_core_format_v2/vectors.json",
+        ],
+    )?;
+    run(
+        workspace_root,
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "pactrun",
+            "--lib",
+            "--all-features",
+            "revision_core_v2::tests",
+        ],
+    )?;
+    run(
+        workspace_root,
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "pactrun",
+            "--lib",
+            "--all-features",
+            "authoring::v2::tests",
+        ],
+    )
 }
 
 fn run_rust_ci(workspace_root: &Path) -> Result<(), String> {

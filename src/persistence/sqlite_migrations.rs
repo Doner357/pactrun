@@ -92,6 +92,15 @@ impl PactrunPersistence {
                 });
             }
         }
+        let service_state = if tx
+            .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .map_err(|e| PersistenceError::sqlite("read service observation version", e))?
+            >= 7
+        {
+            super::sqlite_service_views::load_instance_service_state_from(&tx, id)?
+        } else {
+            None
+        };
         tx.commit()
             .map_err(|e| PersistenceError::sqlite("finish Migration observation", e))?;
         Ok(MigrationCompilationObservation {
@@ -100,6 +109,7 @@ impl PactrunPersistence {
             active_revision: instance.active_revision,
             revisions,
             bindings,
+            service_state,
         })
     }
 }

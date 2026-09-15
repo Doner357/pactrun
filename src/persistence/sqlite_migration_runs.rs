@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 mod hook;
 
 pub(crate) struct MigrationEdgePublication<'a, 'b> {
+    pub(crate) target: Option<&'a crate::hook::TargetCommitPermit>,
     pub(crate) operator_inputs: &'a mut [super::ManagedInputWrite<'b>],
     pub(crate) hook_outputs: &'a mut [super::ManagedInputWrite<'b>],
     pub(crate) completion: Option<HookCompletionRecord>,
@@ -343,6 +344,36 @@ pub(super) fn validate_links(
             }
         }
     }
+    if db
+        .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+        .map_err(|e| PersistenceError::sqlite("read service evidence schema", e))?
+        >= 7
+    {
+        for index in 0..committed {
+            if let Some(target) = load_revision_from(db, &invocation.path()[index + 1])? {
+                let source =
+                    Sha256Digest::from_bytes(*invocation.path()[index].content_digest.as_bytes());
+                let transformed = target
+                    .content
+                    .core
+                    .service_core()
+                    .and_then(|c| c.migrations().get(&source))
+                    .is_some_and(|m| {
+                        m.resources
+                            .iter()
+                            .any(|r| matches!(r, ResourceTransitionV2::Transform { .. }))
+                    });
+                let recorded:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits WHERE run_id=?1 AND edge_index=?2)",params![run.as_bytes().as_slice(),index as i64],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate committed service evidence",e))?;
+                if transformed != recorded {
+                    return Err(corrupt());
+                }
+            }
+        }
+        let dangling:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits s LEFT JOIN run_migration_boundaries b ON b.run_id=s.run_id AND b.edge_index=s.edge_index WHERE s.run_id=?1 AND b.run_id IS NULL)",[run.as_bytes().as_slice()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate service boundary references",e))?;
+        if dangling {
+            return Err(corrupt());
+        }
+    }
     Ok(())
 }
 
@@ -476,6 +507,7 @@ impl PactrunPersistence {
         let ManagedRunIdentity::Migration(invocation) = &view.operation else {
             return Err(rejected("not a Migration Run"));
         };
+        let mut service_dependencies = BTreeSet::new();
         let decision = (|| {
             if *invocation != plan.invocation() || view.instance != plan.instance() {
                 return Ok(Some(AdmissionRefusal::PlanInvalidated(
@@ -512,6 +544,9 @@ impl PactrunPersistence {
                     stream_payload(&tx, view.instance, id, &mut std::io::sink())?;
                 }
             }
+            let mut service_state =
+                super::sqlite_service_migrations::state_from(&tx, view.instance)?;
+            let mut previous_core = None;
             for (index, identity) in invocation.path().iter().enumerate() {
                 let Some(stored) = load_revision_from(&tx, identity)? else {
                     return Ok(Some(AdmissionRefusal::PlanInvalidated(
@@ -547,7 +582,49 @@ impl PactrunPersistence {
                             "Migration declaration changed".to_owned(),
                         )));
                     }
+                    if let Some(before) = &service_state {
+                        let evaluated = match evaluate_service_migration_edge(
+                            before,
+                            previous_core.as_ref().expect("preceding path node"),
+                            identity,
+                            &stored.content.core,
+                            index - 1,
+                        ) {
+                            Ok(evaluated) => evaluated,
+                            Err(_) => {
+                                return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                                    "Migration service mapping is no longer valid".into(),
+                                )));
+                            }
+                        };
+                        if compiled.service.as_ref()
+                            != super::sqlite_service_migrations::needed(&evaluated)
+                                .then_some(&evaluated)
+                        {
+                            return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                                "Migration service association facts changed".into(),
+                            )));
+                        }
+                        service_dependencies.extend(
+                            super::sqlite_service_migrations::existing_dependencies(&evaluated),
+                        );
+                        service_state = Some(evaluated.after);
+                    } else if compiled.service.is_some() {
+                        return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                            "Migration service observation unavailable".into(),
+                        )));
+                    }
                 }
+                previous_core = Some(stored.content.core);
+            }
+            match self.qualify_service_roots(&tx, view.instance, &service_dependencies) {
+                Ok(_) => (),
+                Err(PersistenceError::ServiceStorageUnavailable(_)) => {
+                    return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                        "Migration source allocation unavailable".into(),
+                    )));
+                }
+                Err(error) => return Err(error),
             }
             if let Some(other) = managed_mutation_conflict(&tx, view.instance, run)? {
                 return Ok(Some(AdmissionRefusal::MutationConflict(other)));
@@ -573,6 +650,11 @@ impl PactrunPersistence {
                 ],
             )
             .map_err(|e| PersistenceError::sqlite("anchor Migration admission", e))?;
+            super::sqlite_service_admission::pin_service_allocations(
+                &tx,
+                run,
+                &service_dependencies,
+            )?;
             for identity in invocation.path() {
                 tx.execute(
                     "INSERT INTO run_migration_revision_pins VALUES (?1,?2,?3)",
@@ -625,6 +707,7 @@ impl PactrunPersistence {
             owner,
             edge_index,
             &mut MigrationEdgePublication {
+                target: None,
                 operator_inputs: inputs,
                 hook_outputs: &mut [],
                 completion: None,
@@ -669,9 +752,12 @@ impl PactrunPersistence {
             return Err(rejected("Migration edge or owner mismatch"));
         }
         let (_, active, current) = instance_header(&tx, view.instance)?;
+        let target_permitted = publication
+            .target
+            .is_some_and(|permit| permit.matches(run, owner, edge_index));
         if active != progress.boundary_revision
             || current != progress.boundary_state_version
-            || execution.risk_state != RecoveryRiskState::Clear
+            || (execution.risk_state != RecoveryRiskState::Clear && !target_permitted)
         {
             finish_migration_in_transaction(
                 &tx,
@@ -692,6 +778,38 @@ impl PactrunPersistence {
             load_revision_from(&tx, &invocation.path()[edge_index])?.ok_or_else(corrupt)?;
         let target =
             load_revision_from(&tx, &invocation.path()[edge_index + 1])?.ok_or_else(corrupt)?;
+        let service = super::sqlite_service_migrations::state_from(&tx, view.instance)?
+            .map(|before| {
+                evaluate_service_migration_edge(
+                    &before,
+                    &source.content.core,
+                    &invocation.path()[edge_index + 1],
+                    &target.content.core,
+                    edge_index,
+                )
+            })
+            .transpose()
+            .map_err(|_| rejected("Migration service mapping is invalid"))?;
+        let service = service
+            .map(|edge| {
+                if super::sqlite_service_migrations::needed(&edge) {
+                    super::sqlite_service_targets::load_prepared(&tx, run, edge_index, &edge)
+                } else {
+                    Ok(edge)
+                }
+            })
+            .transpose()?;
+        let transforming = service.as_ref().is_some_and(|edge| edge.transform);
+        if transforming != publication.target.is_some()
+            || (transforming
+                && (!target_permitted
+                    || execution.risk_state != RecoveryRiskState::Open
+                    || publication.completion.is_some()))
+        {
+            return Err(rejected(
+                "transform publication requires its owner-held target permit and Open risk",
+            ));
+        }
         let bindings = registry(&tx, view.instance)?;
         let operators: BTreeSet<_> = inputs
             .iter()
@@ -718,8 +836,9 @@ impl PactrunPersistence {
         )
         .map_err(|_| rejected("Migration edge completion is invalid"))?;
         if evaluated.declaration().hook.is_some() {
-            if publication.completion.as_ref().map(|c| c.status)
-                != Some(HookCompletionStatus::Success)
+            if !transforming
+                && publication.completion.as_ref().map(|c| c.status)
+                    != Some(HookCompletionStatus::Success)
             {
                 return Err(rejected("Migration Hook success is required"));
             }
@@ -736,6 +855,10 @@ impl PactrunPersistence {
                 .collect::<Vec<_>>(),
         )
         .map_err(|_| rejected("Migration output set is invalid"))?;
+        if transforming {
+            tx.execute("UPDATE run_executions SET risk_state=0 WHERE run_id=?1 AND owner_session=?2 AND risk_state=1",
+                params![run.as_bytes().as_slice(),owner.as_str().as_bytes()]).map_err(|e|PersistenceError::sqlite("clear transform risk with target commit",e))?;
+        }
         let final_edge = edge_index + 1 == invocation.edge_count();
         if final_edge {
             let mut finish = failed(RunOutcome::Succeeded);
@@ -796,6 +919,33 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("publish Migration binding", e))?;
         }
         let next = fresh_state_version()?;
+        let _service_roots = service
+            .as_ref()
+            .map(|edge| {
+                self.publish_existing_service_edge(
+                    &tx,
+                    view.instance,
+                    edge,
+                    evaluated.declaration().hook.is_some(),
+                )
+            })
+            .transpose()?;
+        if service.is_some() {
+            tx.execute(
+                "DELETE FROM run_service_resource_targets WHERE run_id=?1 AND edge_index=?2",
+                params![run.as_bytes().as_slice(), edge_index as i64],
+            )
+            .map_err(|e| {
+                PersistenceError::sqlite("release published resource target selections", e)
+            })?;
+            tx.execute(
+                "DELETE FROM run_service_storage_targets WHERE run_id=?1 AND edge_index=?2",
+                params![run.as_bytes().as_slice(), edge_index as i64],
+            )
+            .map_err(|e| {
+                PersistenceError::sqlite("release published storage target selections", e)
+            })?;
+        }
         tx.execute("UPDATE instances SET active_revision_content_digest=?2,instance_state_version=?3 WHERE instance_id=?1",params![view.instance.as_bytes().as_slice(),evaluated.target().content_digest.as_bytes().as_slice(),next.as_bytes().as_slice()]).map_err(|e|PersistenceError::sqlite("publish Migration target",e))?;
         tx.execute(
             "INSERT INTO run_migration_boundaries VALUES (?1,?2,?3,?4)",
@@ -807,6 +957,13 @@ impl PactrunPersistence {
             ],
         )
         .map_err(|e| PersistenceError::sqlite("publish edge evidence", e))?;
+        if transforming {
+            tx.execute(
+                "INSERT INTO run_service_edge_commits VALUES(?1,?2)",
+                params![run.as_bytes().as_slice(), edge_index as i64],
+            )
+            .map_err(|e| PersistenceError::sqlite("record committed service transform", e))?;
+        }
         tx.execute("UPDATE run_migration_progress SET committed_edge_count=?2,step_rank=?3,boundary_revision_digest=?4,boundary_state_version=?5 WHERE run_id=?1",params![run.as_bytes().as_slice(),(edge_index+1) as i64,if final_edge {4}else{0},evaluated.target().content_digest.as_bytes().as_slice(),next.as_bytes().as_slice()]).map_err(|e|PersistenceError::sqlite("advance recovery boundary",e))?;
         if !final_edge {
             keep_checkpoint(&tx, run, view.instance)?;

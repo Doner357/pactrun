@@ -25,10 +25,10 @@ is recorded in the closeout; remote publication is separate from integration.
 [M6 bounded recovery](./m6-implementation-status.md) is also implemented and
 integrated into local develop. It closes existing-operation recovery evidence
 on V6 without adding a new recovery engine, schema or service rollback. The next
-proposed milestone is M6.5 ServiceStorage, starting with its representation
-design gate rather than runtime implementation.
+milestone is M6.5 ServiceStorage, whose approved implementation is now on the
+feature branch and undergoing final-source verification.
 
-- Current persistence: [V6](../spec/persistence/persistence-schema-v6.md), internal and non-Frozen, with explicit exact-V5 upgrade only.
+- Current feature-branch persistence: [V7](../spec/persistence/persistence-schema-v7.md), internal and non-Frozen, with explicit exact-V6 upgrade only. Integrated develop remains V6 pending separately authorized Git integration.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: [Candidate V1](../spec/contracts/pack-source-yaml-v1.md), not a public compatibility promise.
@@ -90,10 +90,22 @@ or silent V6 change is authorized.
 
 The fixed order is **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. M6.5 is the dedicated
 [ServiceStorage milestone](./implementation-roadmap.md#m65---servicestorage),
-not an indefinitely deferred runtime. Its implementation remains `Proposed`
-until the separately reviewed Core, authority where needed, persistence,
-access, compatibility and upgrade contracts are approved. M6 completion removes
-the work-order prerequisite; it does not approve these representations.
+not an indefinitely deferred runtime. It is now `In progress` under its own
+reviewed Core, authority, persistence, access, compatibility and upgrade
+contracts. M6 completion removed the work-order prerequisite; the separate
+2026-09-15 M6.5 approval authorized these representations.
+
+The [M6.5 S0 design package](./design-notes/m6-5-servicestorage-baseline.md)
+was reviewed and the user authorized continued S1-S7 implementation on
+2026-09-15. Mapped sources are consumed atomically; only unmapped source-only
+associations are retained, with no persistent alias mechanism. Core/YAML V2
+conformance, V7 persistence and runtime paths are present on the feature branch;
+V6 remains the integrated develop baseline. Public V2 installation and the
+Core/Hook V2 Freeze gate are implemented; final-source verification and Git
+integration remain distinct gates.
+See [M6.5 implementation status](./m6-5-implementation-status.md) for current
+current runtime evidence and the remaining activation/verification work, not a
+production-support claim.
 
 M6.5 must align retention, finalization and abandonment persistence ownership
 with M7 before schema approval. M7 delivers actual Cleanup coordination,

@@ -7,10 +7,12 @@
     {"owner":"domain_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0009"},{"kind":"requirement","id":"PR-REQ-0010"}]},
     {"owner":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0007"},{"kind":"requirement","id":"PR-REQ-0008"}]},
     {"owner":"hook_protocol_v1","normative_sources":[{"kind":"requirement","id":"PR-REQ-0082"},{"kind":"requirement","id":"PR-REQ-0217"}]},
+    {"owner":"hook_protocol_v2","normative_sources":[{"kind":"requirement","id":"PR-REQ-0321"},{"kind":"requirement","id":"PR-REQ-0322"}]},
     {"owner":"persistence","normative_sources":[{"kind":"requirement","id":"PR-REQ-0078"}]},
     {"owner":"recovery","normative_sources":[{"kind":"requirement","id":"PR-REQ-0057"},{"kind":"requirement","id":"PR-REQ-0062"}]},
     {"owner":"resolution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0038"}]},
     {"owner":"revision_core_format_v1","normative_sources":[{"kind":"requirement","id":"PR-REQ-0079"},{"kind":"requirement","id":"PR-REQ-0193"}]},
+    {"owner":"service_storage","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
     {"owner":"snapshot_integrity_format_v1","normative_sources":[{"kind":"requirement","id":"PR-REQ-0080"},{"kind":"requirement","id":"PR-REQ-0203"}]}
   ],
   "codes": [
@@ -45,6 +47,11 @@
     {"owner":"hook_protocol_v1","code":"unknown_field","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"features_field_removed"}]},
     {"owner":"hook_protocol_v1","code":"unsupported_protocol_version","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"unsupported_version"}]},
 
+    {"owner":"hook_protocol_v2","code":"invalid_authority","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0321"},{"kind":"requirement","id":"PR-REQ-0322"}]},
+    {"owner":"hook_protocol_v2","code":"invalid_frame","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0321"}]},
+    {"owner":"hook_protocol_v2","code":"invalid_target_proposal","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0322"}]},
+    {"owner":"hook_protocol_v2","code":"unexpected_message","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0321"},{"kind":"requirement","id":"PR-REQ-0322"}]},
+
     {"owner":"resolution","code":"ambiguous_reference","category":"resolution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0019"},{"kind":"requirement","id":"PR-REQ-0086"}]},
 
     {"owner":"revision_core_format_v1","code":"duplicate_property","category":"representation_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0193"},{"kind":"frozen_vector","suite":"revision_core_format_v1","name":"duplicate_property"}]},
@@ -54,6 +61,17 @@
     {"owner":"revision_core_format_v1","code":"invalid_source_binding_role","category":"relational_semantic_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0190"},{"kind":"frozen_vector","suite":"revision_core_format_v1","name":"relational_active_mismatch"}]},
     {"owner":"revision_core_format_v1","code":"invalid_unicode_scalar","category":"representation_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0187"},{"kind":"frozen_vector","suite":"revision_core_format_v1","name":"lone_high_surrogate"}]},
     {"owner":"revision_core_format_v1","code":"unknown_field","category":"representation_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0184"},{"kind":"frozen_vector","suite":"revision_core_format_v1","name":"unknown_core_field"}]},
+
+    {"owner":"service_storage","code":"allocation_unavailable","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"corrupt_storage_state","category":"persistence","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"exposure_denied","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"mapping_conflict","category":"relational_semantic_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"observation_unknown","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"resource_absent","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"resource_kind_mismatch","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"target_publication_rejected","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"unknown_resource","category":"resolution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
+    {"owner":"service_storage","code":"unsafe_path","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0328"}]},
 
     {"owner":"snapshot_integrity_format_v1","code":"content_digest_mismatch","category":"relational_semantic_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0200"},{"kind":"frozen_vector","suite":"snapshot_integrity_format_v1","name":"content_digest_mismatch"}]},
     {"owner":"snapshot_integrity_format_v1","code":"duplicate_property","category":"representation_validation","normative_sources":[{"kind":"requirement","id":"PR-REQ-0201"},{"kind":"frozen_vector","suite":"snapshot_integrity_format_v1","name":"duplicate_property"}]},

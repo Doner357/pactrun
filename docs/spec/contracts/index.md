@@ -22,5 +22,13 @@ Authoring, normalized identity, wire, errors, and transport are distinct contrac
 - [Snapshot Integrity Format V2](./snapshot-integrity-format-v2.md): Read the current M4 capture-writer integrity format. V1 and V2 remain distinct supported identities, not interchangeable encodings.
 - [Snapshots and Managed Data](./snapshots-and-managed-data.md): Understand Snapshot declarations, managed-data selection, and restore roles before implementing transport or command presentation.
 
+## M6.5 formats
+
+[Core V2](./revision-core-format-v2.md) and [Hook V2](./hook-protocol-v2.md) are
+independently Frozen contracts. [YAML V2](./pack-source-yaml-v2.md) is an accepted,
+explicitly versioned Candidate authoring contract, not a Frozen source promise.
+See the [format review](../../development/design-notes/m6-5-format-activation-review.md)
+and [approved baseline](../../development/design-notes/m6-5-servicestorage-baseline.md).
+
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

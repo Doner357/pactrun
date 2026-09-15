@@ -112,6 +112,18 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
         parameters: intent.parameters.clone(),
         runtime_content,
         launch,
+        service_hook: observation.revision_content.core.service_hook(
+            &crate::domain::ServiceHookSite::Action(intent.action.clone()),
+        ),
+        service_bindings: crate::domain::bind_current_service_hook(
+            &observation.revision_content.core.service_hook(
+                &crate::domain::ServiceHookSite::Action(intent.action.clone()),
+            ),
+            observation.service_state.as_ref(),
+            intent.instance,
+            intent.expected_state_version,
+            &intent.active_revision,
+        )?,
     };
     Ok(build_action_plan(intent, facts)?)
 }
@@ -122,6 +134,11 @@ fn compile_hook_launch<L: HostLauncherLookup>(
     runtime_content: &[RuntimeFileV1],
     launcher_search_directories: &[PathBuf],
 ) -> Result<CompiledHookLaunch, PlanCompilationError> {
+    if !matches!(hook.protocol_version.get(), 1 | 2) {
+        return Err(PlanCompilationError::UnsupportedHookProtocol(
+            hook.protocol_version,
+        ));
+    }
     Ok(match &hook.launch {
         HookLaunchV1::Direct { executable } => {
             let executable = runtime_file(runtime_content, executable)?;
@@ -168,7 +185,8 @@ pub(crate) fn compile_snapshot<R: SnapshotCompilationRepository, L: HostLauncher
     directories: &[PathBuf],
 ) -> Result<crate::domain::SnapshotExecutionPlan, crate::application::ApplicationError> {
     let observation = repository.observe_snapshot_compilation(intent)?;
-    let (_, hook) = crate::domain::snapshot_hook(&observation.revision.core, intent.operation)?;
+    let (_, hook) =
+        crate::domain::snapshot_hook(observation.revision.core.common(), intent.operation)?;
     let launch = compile_hook_launch(
         launcher,
         hook,
@@ -234,13 +252,54 @@ pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLaunch
         return Err(MigrationError::InvalidObservation.into());
     }
     let bindings = build_migration_binding_plan(intent, &observed.revisions, &observed.bindings)?;
+    if observed.service_state.as_ref().is_some_and(|s| {
+        s.instance != intent.instance
+            || s.state_version != intent.expected_state_version
+            || s.current_revision != intent.source
+    }) {
+        return Err(MigrationError::InvalidObservation.into());
+    }
+    let mut service_state = observed
+        .service_state
+        .as_ref()
+        .map(ServiceMigrationState::from_observed)
+        .transpose()
+        .map_err(MigrationError::ServiceMapping)?;
     let mut compiled = Vec::new();
-    for edge in bindings.edges() {
+    for (index, edge) in bindings.edges().iter().enumerate() {
         let revision = observed
             .revisions
             .iter()
             .find(|r| &r.identity == edge.target())
             .ok_or(MigrationError::MissingRevision)?;
+        let service = if let Some(before) = &service_state {
+            let source = observed
+                .revisions
+                .iter()
+                .find(|r| &r.identity == edge.source())
+                .ok_or(MigrationError::MissingRevision)?;
+            let transition = evaluate_service_migration_edge(
+                before,
+                &source.content.core,
+                &revision.identity,
+                &revision.content.core,
+                index,
+            )
+            .map_err(MigrationError::ServiceMapping)?;
+            let needed = !transition.before.storages.is_empty()
+                || !transition.before.resources.is_empty()
+                || !transition.after.storages.is_empty()
+                || !transition.after.resources.is_empty()
+                || !transition.grants.is_empty()
+                || !transition.requires.is_empty();
+            service_state = Some(transition.after.clone());
+            needed.then_some(transition)
+        } else {
+            if revision.content.core.service_core().is_some() {
+                return Err(MigrationError::InvalidObservation.into());
+            }
+            None
+        };
         let runtime = revision.content.runtime_content.files().to_vec();
         repository.verify_migration_runtime(&revision.identity)?;
         let launch = edge
@@ -250,6 +309,7 @@ pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLaunch
             .map(|hook| compile_hook_launch(launcher, hook, &runtime, directories))
             .transpose()?;
         compiled.push(MigrationCompiledEdge {
+            service,
             bindings: edge.clone(),
             runtime,
             launch,
@@ -372,7 +432,8 @@ mod tests {
             active_revision: revision_id,
             active_bindings: vec![binding],
             required_inputs_satisfied: true,
-            revision_content: content,
+            revision_content: content.into(),
+            service_state: None,
         });
         (intent, repository)
     }
@@ -398,6 +459,121 @@ mod tests {
                 ActionPlanStep::PublishDeclaredOutputs,
                 ActionPlanStep::Finalize
             ]
+        );
+    }
+
+    // Test-ID: PR-TEST-0366
+    // Verifies: PR-REQ-0326
+    #[test]
+    fn action_compilation_preserves_v2_authority_and_prerequisites_without_observing_live_bytes() {
+        use serde_json::json;
+        let (mut intent, mut repository) = setup(false);
+        let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
+        source["format_version"] = json!(2);
+        source["service_storages"] = json!([{"id":"state"}]);
+        source["service_resources"] = json!([{"id":"live_config","storage_id":"state","locator":"service/config.json","kind":"file","read_exposure":"hidden","user_mutation":{"kind":"unavailable"}}]);
+        let reference =
+            json!({"view":"current","role":"active","kind":"resource","id":"live_config"});
+        source["actions"][0]["hook"]["protocol_version"] = json!(2);
+        source["actions"][0]["hook"]["service_access"] =
+            json!([{"reference":reference,"mode":"read"}]);
+        source["actions"][0]["hook"]["service_requires"] =
+            json!([{"reference":reference,"presence":"present"}]);
+        let core = crate::revision_core_v2::project_revision_core_source_v2(
+            &serde_json::to_vec(&source).unwrap(),
+        )
+        .unwrap();
+        let expected = core.hooks()[&ServiceHookSite::Action(intent.action.clone())].clone();
+        let content = crate::revision_core_v2::validate_revision_content_v2(
+            core,
+            repository.0.revision_content.runtime_content.clone(),
+        )
+        .unwrap();
+        let digest =
+            crate::revision_core_v2::calculate_revision_content_digest_v2(&content).unwrap();
+        intent.active_revision.content_digest = digest;
+        repository.0.active_revision = intent.active_revision.clone();
+        repository.0.revision_content = content.into();
+        let allocation = ServiceAllocationId::from_bytes([13; 16]);
+        let core = repository.0.revision_content.core.service_core().unwrap();
+        repository.0.service_state = Some(InstanceServiceState {
+            instance: intent.instance,
+            state_version: intent.expected_state_version,
+            current_revision: intent.active_revision.clone(),
+            storages: core
+                .storages()
+                .iter()
+                .map(|s| ServiceStorageAssociation {
+                    declaration: s.clone(),
+                    declaration_revision: intent.active_revision.clone(),
+                    allocation,
+                    role: ServiceRole::Active,
+                })
+                .collect(),
+            resources: core
+                .resources()
+                .iter()
+                .map(|r| ServiceResourceAssociation {
+                    declaration: r.clone(),
+                    declaration_revision: intent.active_revision.clone(),
+                    allocation,
+                    role: ServiceRole::Active,
+                })
+                .collect(),
+            preserved: vec![],
+        });
+        // Association metadata is supplied, not allocated here. No filesystem
+        // observation exists: presence remains an admission-to-launch check.
+        let plan = compile_action(
+            &repository,
+            &FakeLauncherLookup(PathBuf::from("unused")),
+            &intent,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(plan.service_hook(), &expected);
+        assert_eq!(plan.protocol_version().get(), 2);
+        assert_eq!(plan.service_hook().requires.len(), 1);
+        assert_eq!(plan.service_bindings().grants[0].1.allocation(), allocation);
+        repository.0.service_state = None;
+        assert!(
+            compile_action(
+                &repository,
+                &FakeLauncherLookup(PathBuf::from("unused")),
+                &intent,
+                &[]
+            )
+            .is_err()
+        );
+        repository.0.revision_content = revision(false).into();
+        assert_eq!(plan.service_hook(), &expected);
+        assert_eq!(plan.service_bindings().grants[0].1.allocation(), allocation);
+    }
+
+    // Test-ID: PR-TEST-0367
+    // Verifies: PR-REQ-0317, PR-REQ-0326
+    #[test]
+    fn future_hook_versions_remain_format_representable_but_fail_action_compilation() {
+        let (mut intent, mut repository) = setup(false);
+        let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
+        source["actions"][0]["hook"]["protocol_version"] = serde_json::json!(3);
+        let core = crate::revision_core_v1::project_revision_core_source_v1(
+            &serde_json::to_vec(&source).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(core.actions()[0].hook.protocol_version.get(), 3);
+        let content = validate_revision_content_v1(
+            core,
+            repository.0.revision_content.runtime_content.clone(),
+        )
+        .unwrap();
+        intent.active_revision.content_digest =
+            crate::revision_core_v1::calculate_revision_content_digest_v1(&content).unwrap();
+        repository.0.active_revision = intent.active_revision.clone();
+        repository.0.revision_content = content.into();
+        assert!(
+            matches!(compile_action(&repository, &FakeLauncherLookup(PathBuf::from("unused")), &intent, &[]),
+            Err(crate::application::ApplicationError::PlanCompilation(PlanCompilationError::UnsupportedHookProtocol(version))) if version.get() == 3)
         );
     }
 
@@ -430,6 +606,11 @@ mod tests {
             parameters: intent.parameters.clone(),
             runtime_content,
             launch,
+            service_hook: observation
+                .revision_content
+                .core
+                .service_hook(&ServiceHookSite::Action(intent.action.clone())),
+            service_bindings: ServiceHookBindings::default(),
         };
 
         let mut wrong_instance = facts.clone();

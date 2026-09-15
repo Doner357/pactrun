@@ -34,8 +34,9 @@ mod implementation {
         Wdk::{
             Foundation::OBJECT_ATTRIBUTES,
             Storage::FileSystem::{
-                FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_REPARSE_POINT,
-                FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+                FILE_CREATE, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN,
+                FILE_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT, FILE_WRITE_THROUGH,
+                NtCreateFile,
             },
         },
         Win32::{
@@ -53,14 +54,15 @@ mod implementation {
                 TOKEN_INFORMATION_CLASS, TOKEN_QUERY, TOKEN_USER, TokenRestrictedSids, TokenUser,
             },
             Storage::FileSystem::{
-                DELETE, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
-                FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_FIRST_PIPE_INSTANCE,
-                FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_OVERLAPPED, FILE_FLAG_WRITE_THROUGH,
-                FILE_NAME_NORMALIZED, FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE,
-                FILE_SHARE_READ, FILE_SHARE_WRITE, FileRenameInfo, FlushFileBuffers, GetDriveTypeW,
-                GetFinalPathNameByHandleW, GetVolumeInformationByHandleW, GetVolumePathNameW,
-                PIPE_ACCESS_DUPLEX, ReadFile, SYNCHRONIZE, SetFileInformationByHandle,
-                VOLUME_NAME_DOS, WriteFile,
+                BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY,
+                FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+                FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OPEN_REPARSE_POINT, FILE_FLAG_OVERLAPPED,
+                FILE_FLAG_WRITE_THROUGH, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES,
+                FILE_RENAME_INFO, FILE_RENAME_INFO_0, FILE_SHARE_DELETE, FILE_SHARE_READ,
+                FILE_SHARE_WRITE, FileRenameInfo, FlushFileBuffers, GetDriveTypeW,
+                GetFileInformationByHandle, GetFinalPathNameByHandleW,
+                GetVolumeInformationByHandleW, GetVolumePathNameW, PIPE_ACCESS_DUPLEX, ReadFile,
+                SYNCHRONIZE, SetFileInformationByHandle, VOLUME_NAME_DOS, WriteFile,
             },
             System::WindowsProgramming::DRIVE_FIXED,
             System::{
@@ -217,6 +219,10 @@ mod implementation {
     }
 
     fn owner_pipe_descriptor() -> io::Result<Vec<u16>> {
+        owner_descriptor(false)
+    }
+
+    fn owner_descriptor(inherit: bool) -> io::Result<Vec<u16>> {
         let mut token = ptr::null_mut();
         if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
             return Err(io::Error::last_os_error());
@@ -224,7 +230,11 @@ mod implementation {
         let token = unsafe { OwnedHandle::from_raw_handle(token.cast()) };
         let user_storage = token_information(&token, TokenUser)?;
         let user = unsafe { &*user_storage.as_ptr().cast::<TOKEN_USER>() };
-        let mut descriptor = format!("D:P(A;;GA;;;SY)(A;;GA;;;{})", sid_text(user.User.Sid)?);
+        let flags = if inherit { "OICI" } else { "" };
+        let mut descriptor = format!(
+            "D:P(A;{flags};GA;;;SY)(A;{flags};GA;;;{})",
+            sid_text(user.User.Sid)?
+        );
 
         // Restricted-token access checks evaluate the DACL twice: once with
         // the ordinary token SIDs and once with the restricting SIDs. Keep the
@@ -234,7 +244,7 @@ mod implementation {
         let restricted = unsafe { &*restricted_storage.as_ptr().cast::<TOKEN_GROUPS>() };
         for index in 0..restricted.GroupCount as usize {
             let group = unsafe { &*restricted.Groups.as_ptr().add(index) };
-            descriptor.push_str("(A;;GA;;;");
+            descriptor.push_str(&format!("(A;{flags};GA;;;"));
             descriptor.push_str(&sid_text(group.Sid)?);
             descriptor.push(')');
         }
@@ -429,6 +439,147 @@ mod implementation {
             current = next;
         }
         Ok(current)
+    }
+
+    /// Creates one new private directory relative to an already qualified root.
+    /// The caller must persist allocation intent before invoking this primitive.
+    /// FILE_CREATE is no-replace; FILE_WRITE_THROUGH and the explicit flush are
+    /// required rather than treating an ordinary mkdir return as publication.
+    pub fn create_service_directory(root: &File, segment: &str) -> io::Result<File> {
+        validate_service_segment(segment)?;
+        let mut name = wide_nul(OsStr::new(segment));
+        let length = u16::try_from((name.len() - 1) * size_of::<u16>())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "directory name too long"))?;
+        let maximum_length = u16::try_from(name.len() * size_of::<u16>())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "directory name too long"))?;
+        let unicode = UNICODE_STRING {
+            Length: length,
+            MaximumLength: maximum_length,
+            Buffer: name.as_mut_ptr(),
+        };
+        let descriptor_text = owner_descriptor(true)?;
+        let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+        // SAFETY: descriptor_text is NUL-terminated; the API returns a LocalFree
+        // allocation, released after the synchronous NtCreateFile call below.
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                descriptor_text.as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let attributes = OBJECT_ATTRIBUTES {
+            Length: u32::try_from(size_of::<OBJECT_ATTRIBUTES>())
+                .expect("object attributes fit u32"),
+            RootDirectory: root.as_raw_handle().cast(),
+            ObjectName: &unicode,
+            Attributes: 0,
+            SecurityDescriptor: descriptor.cast(),
+            SecurityQualityOfService: ptr::null_mut(),
+        };
+        let mut handle: HANDLE = ptr::null_mut();
+        let mut status_block = IO_STATUS_BLOCK::default();
+        // SAFETY: the counted name and security descriptor stay alive for the
+        // synchronous call; root owns its handle. A successful returned handle
+        // is immediately transferred to File, including all later error paths.
+        let status = unsafe {
+            NtCreateFile(
+                &mut handle,
+                GENERIC_READ | GENERIC_WRITE | DELETE | SYNCHRONIZE,
+                &attributes,
+                &mut status_block,
+                ptr::null(),
+                FILE_ATTRIBUTE_DIRECTORY,
+                SHARE_ALL,
+                FILE_CREATE,
+                FILE_DIRECTORY_FILE
+                    | FILE_WRITE_THROUGH
+                    | FILE_SYNCHRONOUS_IO_NONALERT
+                    | FILE_OPEN_REPARSE_POINT,
+                ptr::null(),
+                0,
+            )
+        };
+        unsafe {
+            LocalFree(descriptor.cast());
+        }
+        if status < 0 {
+            return Err(io::Error::from_raw_os_error(
+                unsafe { RtlNtStatusToDosError(status) } as i32,
+            ));
+        }
+        let file = unsafe { File::from_raw_handle(handle.cast()) };
+        validate_entry(&file, EntryKind::Directory)?;
+        validate_exact_opened_name(&file, segment)?;
+        flush(&file)?;
+        Ok(file)
+    }
+
+    pub fn open_service_directory(root: &File, segment: &str) -> io::Result<File> {
+        validate_service_segment(segment)?;
+        let file = open_relative_component(root, segment, false)?;
+        validate_entry(&file, EntryKind::Directory)?;
+        validate_exact_opened_name(&file, segment)?;
+        Ok(file)
+    }
+
+    /// Compare opened objects, not path spellings or mutable directory metadata.
+    pub fn same_opened_object(left: &File, right: &File) -> io::Result<bool> {
+        fn identity(file: &File) -> io::Result<(u32, u32, u32)> {
+            let mut info = BY_HANDLE_FILE_INFORMATION::default();
+            // SAFETY: File owns a live handle; info is writable for the complete
+            // output structure and is read only after the API reports success.
+            if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut info) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok((
+                info.dwVolumeSerialNumber,
+                info.nFileIndexHigh,
+                info.nFileIndexLow,
+            ))
+        }
+        Ok(identity(left)? == identity(right)?)
+    }
+
+    /// Metadata-only, no-follow acquisition of a service leaf for observation.
+    pub fn open_service_entry(root: &File, segment: &str) -> io::Result<(File, u32)> {
+        validate_service_segment(segment)?;
+        let file = open_relative_with(root, segment, 0, FILE_READ_ATTRIBUTES | SYNCHRONIZE)?;
+        if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "service entry is a reparse point",
+            ));
+        }
+        validate_exact_opened_name(&file, segment)?;
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: File owns a live handle and info is the full writable output.
+        // No service content is read by this metadata query.
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut info) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok((file, info.nNumberOfLinks))
+    }
+
+    fn validate_service_segment(segment: &str) -> io::Result<()> {
+        if segment.is_empty()
+            || segment == "."
+            || segment == ".."
+            || segment.len() > 128
+            || !segment
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "expected one service directory component",
+            ));
+        }
+        Ok(())
     }
 
     pub fn open_lock(path: &Path) -> io::Result<File> {
@@ -632,6 +783,19 @@ mod implementation {
         segment: &str,
         final_component: bool,
     ) -> io::Result<File> {
+        open_relative_with(
+            root,
+            segment,
+            if final_component {
+                FILE_NON_DIRECTORY_FILE
+            } else {
+                FILE_DIRECTORY_FILE
+            },
+            GENERIC_READ | SYNCHRONIZE,
+        )
+    }
+
+    fn open_relative_with(root: &File, segment: &str, kind: u32, access: u32) -> io::Result<File> {
         let mut name = segment.encode_utf16().collect::<Vec<_>>();
         let name_bytes = name
             .len()
@@ -658,11 +822,6 @@ mod implementation {
         };
         let mut handle: HANDLE = ptr::null_mut();
         let mut status_block = IO_STATUS_BLOCK::default();
-        let kind = if final_component {
-            FILE_NON_DIRECTORY_FILE
-        } else {
-            FILE_DIRECTORY_FILE
-        };
         // SAFETY: every pointer references initialized stack storage for the
         // duration of the synchronous call. `root` owns a valid directory
         // handle, and ownership of a successful returned handle is immediately
@@ -670,7 +829,7 @@ mod implementation {
         let status = unsafe {
             NtCreateFile(
                 &mut handle,
-                GENERIC_READ | SYNCHRONIZE,
+                access,
                 &attributes,
                 &mut status_block,
                 ptr::null(),

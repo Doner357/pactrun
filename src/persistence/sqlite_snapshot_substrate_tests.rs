@@ -537,8 +537,8 @@ fn snapshot_parameters_protocol_and_runtime_are_qualified_without_persisting_val
     let restore = compile(&app, &view, SnapshotOperation::Restore(source));
     assert_eq!(restore.parameters()[0].id.as_str(), "enabled");
     assert!(restore.parameters()[0].value() == &InvocationParameterValue::Boolean(true));
-    let foreign = specialized_revision(&p, 2);
-    let unsupported = empty_instance(&p, &foreign, "protocol-two");
+    let foreign = specialized_revision(&p, 3);
+    let unsupported = empty_instance(&p, &foreign, "protocol-three");
     let mut future = intent.clone();
     future.instance = unsupported.id;
     assert!(compile_snapshot(&app, &PlatformHostLauncherLookup, &future, &[]).is_err());
@@ -591,7 +591,7 @@ fn forged_compiler_observations_cannot_waive_access_or_readiness_at_admission() 
     })
     .unwrap();
     observed.revision =
-        validate_revision_content_v1(core, observed.revision.runtime_content).unwrap();
+        validate_revision_content_v1(core, observed.revision.runtime_content).unwrap().into();
     let launch = CompiledHookLaunch::Direct {
         executable: observed.revision.runtime_content.files()[0].clone(),
     };

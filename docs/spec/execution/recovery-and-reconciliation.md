@@ -72,7 +72,7 @@ Pactrun MUST NOT claim that service-owned live state remains coherent with the
 currently committed source Revision merely because the Pactrun-owned boundary
 was recovered.
 
-**Verification: PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0174, PR-TEST-0326, PR-TEST-0328.**
+**Verification: PR-TEST-0156, PR-TEST-0159, PR-TEST-0173, PR-TEST-0174, PR-TEST-0326, PR-TEST-0328, PR-TEST-0370.**
 
 ### PR-REQ-0058 - No inferred compensation
 
@@ -180,7 +180,7 @@ and the Instance MUST enter `ManualRecoveryRequired`. That guard means Pactrun
 cannot assert that the service-owned state matches the committed source; it does
 not authorize Hook replay, compensation, or service-state rollback.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0377, PR-TEST-0378, PR-TEST-0380, PR-TEST-0381, PR-TEST-0382.**
 
 ### PR-REQ-0064 - Orphan reconciliation
 
@@ -247,7 +247,7 @@ subject to the publication checks in
 A failed, cancelled, timed-out, or interrupted Restore MUST NOT clear a
 pre-existing guard. Successful Instance deletion removes the object.
 
-**Verification: PR-TEST-0259, PR-TEST-0260, PR-TEST-0264, PR-TEST-0306, PR-TEST-0329.**
+**Verification: PR-TEST-0259, PR-TEST-0260, PR-TEST-0264, PR-TEST-0306, PR-TEST-0329, PR-TEST-0370.**
 
 Evidence covers existing Action/Capture/Migration overrides and Restore guard
 publication. The successful Instance deletion clause remains pending under M7;

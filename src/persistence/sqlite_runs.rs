@@ -556,6 +556,13 @@ impl PactrunPersistence {
                         ],
                     )
                     .map_err(|error| PersistenceError::sqlite("insert Run Revision pin", error))?;
+                if let Some((_, bindings)) = facts.service {
+                    super::sqlite_service_admission::pin_service_bindings(
+                        &transaction,
+                        run,
+                        bindings,
+                    )?;
+                }
                 if matches!(operation, ManagedRunIdentity::Capture { .. }) {
                     transaction.execute(
                         "INSERT INTO run_payload_pins(run_id,instance_id,input_identity,payload_id) \
@@ -1303,6 +1310,15 @@ fn admission_decision(
         )));
     }
     let core = load_revision_core(transaction, &active_revision)?;
+    if let Some(reason) = super::sqlite_service_admission::qualify_current_service_facts(
+        transaction,
+        header.instance,
+        &active_revision,
+        &invocation,
+        facts,
+    )? {
+        return Ok(Err(AdmissionRefusal::PlanInvalidated(reason)));
+    }
     if let Some(plan) = qualification.plan {
         if plan.operation() != &invocation || plan.instance() != header.instance {
             return Ok(Err(AdmissionRefusal::PlanInvalidated(
@@ -1436,7 +1452,7 @@ fn validate_snapshot_plan_declaration(
         .authoritative_access(core)
         .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
     if hook != plan.hook()
-        || hook.protocol_version.get() != 1
+        || !matches!(hook.protocol_version.get(), 1 | 2)
         || access != plan.access()
         || parameters.len() != plan.parameters().len()
     {
@@ -1550,7 +1566,7 @@ fn validate_capture_facts(
         }
         _ => false,
     };
-    if !launch_matches || capture.hook.protocol_version.get() != 1 {
+    if !launch_matches || !matches!(capture.hook.protocol_version.get(), 1 | 2) {
         return Ok(Some(
             "Capture Hook launch or protocol is not supported by the exact compiled facts"
                 .to_owned(),
@@ -3049,6 +3065,7 @@ mod tests {
             executable: files[0].clone(),
         };
         let facts = AdmissionFacts {
+            service: None,
             expected_state_version: expected,
             active_bindings,
             runtime_content: files,
@@ -3501,6 +3518,7 @@ mod tests {
         };
         let active_bindings = bindings(&persistence, view.id);
         let facts = AdmissionFacts {
+            service: None,
             expected_state_version: view.state_version,
             active_bindings: &active_bindings,
             runtime_content: files,
@@ -4030,7 +4048,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            24 // V4's twelve, five V5 relations, and seven V6 Migration relations.
+            28 // V4 twelve + V5 five + V6 seven + V7 four run-service relations.
         );
         assert!(
             columns

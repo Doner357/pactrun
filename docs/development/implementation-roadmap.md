@@ -80,7 +80,9 @@ driven development.
 - Bounded M6 recovery is `Complete` and integrated into local `develop`, with
   cross-operation crash, owner/concurrency, guard and reference-lifetime evidence
   on unchanged V6. See the [M6 closeout](./m6-implementation-status.md). M6.5
-  ServiceStorage remains separately gated and Proposed.
+  ServiceStorage is implemented on its separately approved feature branch;
+  final-source verification and authorized develop integration remain its
+  closure gates.
 - M4 Snapshot lifecycle is `Complete`, with S0-S8 integrated into `develop`.
   Capture writes Frozen integrity V2; V1/V2 import, export, verification and
   exact-compatible Restore are available through the human CLI.
@@ -108,11 +110,12 @@ milestone state taxonomy above:
 | --- | --- |
 | ServiceStorage architecture correction | **Closed.** |
 | ServiceStorage semantic closure | **Closed.** |
-| ServiceStorage staged design alignment | **Scheduling and design-stage scope approved on 2026-09-14.** No runtime approval. |
+| ServiceStorage staged design alignment | **Approved.** Initial scheduling on 2026-09-14; M6.5 S1-S7 authorized on 2026-09-15 after S0 review. |
 | M6 bounded recovery baseline | **Approved and implemented.** The 2026-09-14 S0 audit retains V6; S0-S4 are integrated into local develop. |
-| ServiceStorage representation and runtime | **Scheduled for M6.5, after M6 and before M7.** Representation approval still required. |
-| Cleanup completion/finalization coordination | **Assigned to M7 design.** Lifecycle persistence alignment required before M6.5 schema approval. |
-| Abandon non-destruction durable representation | **Cross-stage M6.5/M7 design gate.** M7 owns the operation; no representation selected. |
+| ServiceStorage representation and runtime | **Approved M6.5 design; implementation in progress.** Format Freeze and final verification remain separate gates. |
+| M6.5 S0 design package | **Reviewed; continued S1-S7 authorized on 2026-09-15.** Mapped sources are consumed; unmapped source-only associations are retained. |
+| Cleanup completion/finalization coordination | **Assigned to M7 design.** V7 preserves allocation custody; M7 must add explicit versioned receipts before destructive finalization. |
+| Abandon non-destruction durable representation | **M6.5/M7 ownership boundary agreed.** V7 custody cannot be erased by Instance cascade; M7 owns the later explicit handoff representation and operation. |
 | Broader service-owned resource taxonomy | **Deferred.** |
 | Non-identity metadata semantic and persistence closure | **Closed.** |
 | M1-D non-identity metadata implementation | **Complete.** |
@@ -737,7 +740,23 @@ Completion gate:
 
 ### M6.5 - ServiceStorage
 
-**State: Proposed. Scheduled after M6 and before M7; implementation approval pending.**
+**State: In progress. S1-S7 authorized after S0 review on 2026-09-15.**
+
+The operator confirmed mapped-source consumption: atomic target replacement,
+not a retained live alias. Only unmapped source-only associations are retained.
+The earlier S0-only stop below is historical and superseded by that approval.
+Core V2 conformance, V7 persistence and ServiceStorage runtime are implemented
+on the feature branch; V6 remains the integrated develop baseline. Formal V2
+installer activation and format Freeze are complete; final milestone
+verification remains in progress.
+No partial slice is evidence of complete ServiceStorage runtime support.
+
+The operator originally authorized only S0 design delivery on 2026-09-14. The
+[S0 baseline and approval matrix](./design-notes/m6-5-servicestorage-baseline.md)
+link the reviewed Core/YAML/Hook/V7/CLI contracts and test scenarios. The S0 stop
+was satisfied and superseded by the 2026-09-15 continuation approval. Their
+current implementation and format status is recorded separately in the
+[implementation status](./m6-5-implementation-status.md).
 
 After M6 completion, close and approve the representation gates below under the
 [staged alignment](./design-notes/service-storage-staged-design-alignment.md).

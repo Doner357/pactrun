@@ -14,9 +14,17 @@ mod sqlite_migrations;
 mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
+mod sqlite_service_admission;
+mod sqlite_service_migrations;
+mod sqlite_service_preparations;
+mod sqlite_service_storage;
+mod sqlite_service_targets;
+mod sqlite_service_views;
 mod sqlite_snapshots;
 mod sqlite_v5;
+#[cfg(test)]
 mod sqlite_v6;
+mod sqlite_v7;
 pub(crate) use sqlite_revision_store::SCHEMA_VERSION;
 pub(crate) use sqlite_snapshots::{
     SnapshotImportReceipt, SnapshotInspection, SnapshotVerification,
@@ -76,7 +84,7 @@ pub(crate) use sqlite_migration_runs::MigrationEdgePublication;
 pub(crate) use sqlite_migration_runs::fail_next_edge_ack_for_test as fail_next_migration_edge_ack_for_test;
 #[allow(unused_imports)]
 pub(crate) use sqlite_revision_store::{
-    FaultPoint, PactrunPersistence, PersistenceError, StoredRevisionContentV1, fault,
+    FaultPoint, PactrunPersistence, PersistenceError, StoredRevisionContent, fault,
 };
 #[cfg(test)]
 pub(crate) use sqlite_runs::fail_next_capture_publication_for_test;

@@ -13,6 +13,9 @@ use yaml_rust2::{
 };
 
 mod source_acquisition;
+#[path = "authoring_v2.rs"]
+mod v2;
+pub(crate) use v2::{NormalizedPackSourceCandidateV2, parse_pack_source_yaml_v2};
 
 pub(crate) use source_acquisition::{SecureSourceRoot, SourceAcquisitionError};
 
@@ -84,9 +87,63 @@ pub(crate) struct NormalizedPackSourceCandidate {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct NormalizedPackDefinition {
     pub(crate) package_id: PackageId,
-    pub(crate) revision: RevisionCoreV1,
+    pub(crate) revision: crate::domain::RevisionCore,
     pub(crate) runtime_content: RuntimeContentClosureIdentityV1,
     pub(crate) portable_metadata: PortableMetadataTemplate,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct VersionedPackSourceCandidate {
+    pub(crate) package_id: PackageId,
+    pub(crate) revision: crate::domain::RevisionCore,
+    pub(crate) runtime_sources: Vec<RuntimeSourceRecordV1>,
+    pub(crate) portable_metadata: PortableMetadataTemplate,
+}
+impl From<NormalizedPackSourceCandidate> for VersionedPackSourceCandidate {
+    fn from(source: NormalizedPackSourceCandidate) -> Self {
+        Self {
+            package_id: source.package_id,
+            revision: source.revision.into(),
+            runtime_sources: source.runtime_sources,
+            portable_metadata: source.portable_metadata,
+        }
+    }
+}
+impl From<NormalizedPackSourceCandidateV2> for VersionedPackSourceCandidate {
+    fn from(source: NormalizedPackSourceCandidateV2) -> Self {
+        Self {
+            package_id: source.package_id,
+            revision: source.revision.into(),
+            runtime_sources: source.runtime_sources,
+            portable_metadata: source.portable_metadata,
+        }
+    }
+}
+
+/// Explicit source-version selection, not fallback after a failed V1 parse.
+pub(crate) fn parse_pack_source_yaml(
+    source: &[u8],
+) -> Result<VersionedPackSourceCandidate, AuthoringError> {
+    let text = std::str::from_utf8(source)
+        .map_err(|_| AuthoringError::new("pactrun.yaml must be valid UTF-8"))?;
+    reject_forbidden_tokens(text)?;
+    let mut root = closed_map(
+        parse_document(text)?,
+        &["source_format", "package_id", "revision", "runtime_content"],
+        &["portable_metadata"],
+        "Pack source",
+    )?;
+    let version = take_scalar(&mut root, "source_format")?;
+    if version.style != TScalarStyle::Plain {
+        return Err(AuthoringError::new(
+            "source_format must use a supported plain integer token",
+        ));
+    }
+    match capture_numeric_token(text, &version)?.as_str() {
+        "1" => parse_pack_source_yaml_v1(source).map(Into::into),
+        "2" => parse_pack_source_yaml_v2(source).map(Into::into),
+        _ => Err(AuthoringError::new("unsupported source_format")),
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

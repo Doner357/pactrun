@@ -198,9 +198,11 @@ explicit. Loss of an active declaration does not promise future discovery,
 exposure, or reattachment. This requirement does not introduce, imply, or name a
 persisted retained-resource registry, binding registry, state table, or other
 durable representation. How continuity, compatibility, retention, and discard
-map to Pactrun-owned durable state remains a future design gate.
+map to Pactrun-owned durable state is defined for M6.5 by
+[Core V2](./revision-core-format-v2.md) and
+[V7](../persistence/persistence-schema-v7.md). Destructive discard remains M7 work.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0374.**
 
 ### PR-REQ-0238 - Service transformation and recovery boundary
 
@@ -231,7 +233,7 @@ coordination mechanism, operation-prerequisite representation, user-access
 encoding, and persistence ownership remain future design gates. This section
 does not classify non-ServiceStorage-backed service-owned resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0378, PR-TEST-0382, PR-TEST-0386.**
 
 ### PR-REQ-0245 - Explicit compatibility and resource mapping
 
@@ -246,6 +248,8 @@ an identity change and requires an explicit source-to-target mapping; one-to-
 many and many-to-one relationships likewise require explicit mappings and any
 necessary Migration Hook transformation. These semantics do not define the
 future declaration fields, mapping syntax, compatibility algorithm, or durable
-continuity representation.
+continuity representation. The approved M6.5 forms and algorithms are specified
+in [Core V2](./revision-core-format-v2.md) and
+[service execution](../execution/m6-5-service-storage-execution.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0371, PR-TEST-0374, PR-TEST-0388.**

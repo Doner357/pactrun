@@ -309,7 +309,7 @@ fn revision(
             .unwrap();
     MigrationRevision {
         identity: identity(value),
-        content: validate_revision_content_v1(core, closure).unwrap(),
+        content: validate_revision_content_v1(core, closure).unwrap().into(),
     }
 }
 fn hook() -> HookV1 {

@@ -24,6 +24,9 @@ use crate::{
 
 use super::platform::ProtocolStream;
 
+#[path = "protocol_v2.rs"]
+pub(super) mod v2;
+
 pub(super) const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
 pub(super) const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
 
