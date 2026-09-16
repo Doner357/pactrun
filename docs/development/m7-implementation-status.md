@@ -4,12 +4,14 @@ title: M7 Implementation Status
 
 # M7 implementation status
 
-**Status: Implementation and verification complete; not integrated.**
+**Status: Implemented, verified and integrated into local develop.**
 
 The operator authorized continuous S0-S7 implementation on 2026-09-16 under the
 [M7 baseline](./design-notes/m7-cleanup-deletion-implementation-baseline.md).
-Work remains on `feature/m7-instance-retirement`; no commit, merge, push, release
-or deployment is implied. Unrelated untracked workflow/archive files are untouched.
+The operator separately authorized local commit and integration on 2026-09-16.
+Implementation commit `443c42d` was merged into local develop by `d86c690`;
+the merge tree exactly matches the verified feature tree. No remote push, release
+or deployment was performed. Unrelated untracked workflow/archive files are untouched.
 Pactrun remains a local, offline CLI; configured SSH is development verification
 infrastructure, not a product feature.
 
@@ -121,9 +123,11 @@ not represented as a second fresh run after editorial closeout.
 
 ## Handoff
 
-S0-S7 implementation and verification are complete on the feature branch. Git
-review, commit and integration into develop require the operator's separate
-instruction; no merge or remote publication is inferred. M8 and release-readiness
+S0-S7 implementation and verification are complete and integrated into local
+develop. The authorized merge was conflict-free and changed no verified runtime
+inputs. Existing full-CI evidence is reused, not claimed as a fresh integration
+run; integration-status documentation and its assertions are checked separately.
+Remote publication still requires separate instruction. M8 and release-readiness
 work are not started by this closeout. The product remains an offline CLI with
 trusted local Hooks; it is not a sandbox against deliberate control-store
 tampering or a service supervisor.
