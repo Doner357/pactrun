@@ -38,6 +38,14 @@ support, final-source verification and Git integration. M7 is the next proposed
 milestone and requires its own approval. The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 
+## Release readiness is a separate planning dimension
+
+The [release-readiness checklist](./release-readiness.md) records approved work
+that must be accepted before formal publication, with timing left unassigned.
+It is not an automatic continuation after M8 and does not change M7/M8 status.
+The [owning compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+separates this future product commitment from today's implemented format checks.
+
 ## Change discipline
 
 For behavior-preserving work, choose local implementation details without

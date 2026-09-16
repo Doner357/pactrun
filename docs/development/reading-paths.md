@@ -21,6 +21,15 @@ Within each page, use the reading map and section headings to narrow the context
 | Change CLI or diagnostics | [Command contract](../spec/behavior/command-and-output-reference.md), [Snapshot commands](../spec/behavior/m4-snapshot-command-reference.md) | [Error identity](../spec/contracts/error-taxonomy-v1.md); distinguish specified, open, and implemented spellings |
 | Change persistence or upgrade behavior | [V7](../spec/persistence/persistence-schema-v7.md), [identity/state](../spec/foundations/identity-and-state.md) | Earlier [schema contracts](../spec/persistence/index.md), [recovery](../spec/execution/recovery-and-reconciliation.md), exact crash boundaries |
 
+## Versioning and publication planning
+
+For formal-release compatibility, read the
+[owning product policy](../spec/foundations/product-versioning-and-compatibility.md)
+and [independent version domains](../spec/foundations/resources-and-versioning.md).
+For task scope, dependencies and acceptance gates, read
+[release readiness](./release-readiness.md). Do not infer a fixed post-M8 schedule,
+an implemented tool-version requirement field or publication authorization.
+
 ## When a decision seems missing
 
 Check the actual owning rule and its linked dependencies before treating an

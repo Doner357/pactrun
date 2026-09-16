@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
           'spec/foundations/index',
           'spec/foundations/identity-and-state',
           'spec/foundations/resources-and-versioning',
+          'spec/foundations/product-versioning-and-compatibility',
           'spec/foundations/system-model',
         ]},
         {type: 'category', label: 'Observable behavior', items: [
@@ -74,6 +75,7 @@ const sidebars: SidebarsConfig = {
         'development/index', 'development/product-overview',
         'development/reading-paths', 'development/next-milestone',
         'development/implementation-roadmap', 'development/development-and-verification',
+        'development/release-readiness',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',

@@ -857,6 +857,22 @@ Managed Inputs or M1-D metadata as a live-file or operational-state mirror.
 Hook-produced Managed Input or explicit ownership adoption may be designed
 separately and is not expanded here.
 
+## Release-readiness prerequisites (timing unassigned)
+
+The approved [release-readiness plan](./release-readiness.md) is independent of
+the numbered milestone sequence. It covers versioning-mechanism design and
+implementation, baseline reorganization/reset, internal testing/correction, and
+release-mechanism design and implementation. These are required before formal
+release, not tasks automatically scheduled immediately after M8. Completing M8
+does not start them, change the software version or authorize publication.
+
+Their owning observable rules are in the
+[product compatibility policy](../spec/foundations/product-versioning-and-compatibility.md).
+This records approved direction, not completed implementation. Work may overlap
+or return to design as needed; final acceptance must cover the actual candidate
+baseline and release artifact. Formal publication remains a separate controlled
+action after readiness acceptance. M7 and M8 retain their existing states.
+
 ## Cross-cutting completion rules
 
 Every milestone must:
@@ -870,8 +886,11 @@ Every milestone must:
 - report `Pending automated coverage` honestly until a real test artifact exists;
 - stop on a Domain conflict or oracle mismatch instead of changing normative
   expectations to match one implementation;
-- run local workspace-safe checks and the complete configured-remote
-  `cargo xtask ci` before merge;
+- use the [risk-based validation policy](./development-and-verification.md#risk-based-validation-scope)
+  for routine iterations; obtain complete configured-remote `cargo xtask ci`
+  evidence for a stable runtime-bearing milestone integration candidate, with
+  dependency-aware reuse for subsequent documentation-only closeout or identical
+  merges rather than unconditional per-edit reruns;
 - report documentation impact and retained external resources;
 - use an isolated `feature/*` branch based on `develop` and avoid unrelated
   workspace changes.

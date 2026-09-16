@@ -10,6 +10,7 @@ Read these contracts to understand the scope and ownership model before changing
 
 - [Identity and State](./identity-and-state.md): Look up exact identities, non-identity metadata, Instance state, Managed Inputs, and the separately closed ServiceStorage semantics. This is not a CLI tutorial.
 - [Resources and Versioning](./resources-and-versioning.md): Use this contract for resource lifetimes, retention and pins, local trust, and independent format/runtime version boundaries.
+- [Product Versioning and Compatibility](./product-versioning-and-compatibility.md): Approved formal-release Major compatibility and pre-release reset policy; its mechanisms and reset are not implemented by documenting it.
 - [System Model](./system-model.md): Start here for the product boundary, data ownership, and architectural constraints that apply to every operation.
 
 Return to the [specification map](../index.md). For current runtime support and

@@ -61,6 +61,84 @@ formats, requirement IDs, or the implementation approval state of milestones.
 
 ## Verification and traceability
 
+### Risk-based validation scope
+
+Select the smallest sufficient checks from the actual behavioral and dependency
+impact, not just the file extension. Routine edits MUST NOT automatically run
+the complete product suite. This is the current contributor policy; blanket
+full-CI-after-every-closeout-edit instructions in completed milestone records
+describe those historical deliveries, not additional per-edit gates.
+
+| Change class | Required validation |
+| --- | --- |
+| Editorial documentation, plans, navigation or status-only closeout, with no implemented behavior change | Relevant documentation structure/link checks, traceability, and affected site typecheck/build. No full Rust product suite by default. |
+| Normative specifications, embedded DDL, canonical bytes, wire rules or fixtures | Owning conformance/contract tests plus documentation and traceability checks. Escalate to full CI when implemented high-risk semantics or broad runtime behavior change. |
+| Localized implementation change with bounded impact | Formatting, Clippy and the unit/integration tests that prove the affected contract, including negative cases. A unit test is not enough for a persistence or process-level promise. |
+| High-risk or cross-cutting runtime change, or impact that cannot be safely bounded | Complete configured-remote `cargo xtask ci`, plus any platform-specific evidence needed by the changed contract. |
+
+High-risk runtime changes include identity/digest/canonicalization, persistence
+schema or migration, execution ownership, Hook wire/authority, Secret access,
+concurrency, crash/recovery and target-publication boundaries. Relevant
+dependency, toolchain, build-configuration or validation-runner changes must be
+assessed for the behavior they can affect; uncertain broad impact requires full
+CI. An explicit request for full CI always overrides a narrower default.
+
+Complete CI remains a gate for a stable runtime-bearing milestone integration
+candidate and for formal release. During implementation, focused checks support
+iteration; do not rerun the whole suite after every small edit. Documentation-only
+merges are not runtime-bearing integration gates merely because Git creates a
+new commit. No test, assertion or required coverage may be weakened to reduce
+the selected scope, and a filter that executes zero intended tests is not proof.
+
+Markdown can be executable test input: inspect `include_str!`, extracted SQL,
+protocol definitions, golden vectors and generated inputs before classifying a
+change as documentation-only. A new approved but unimplemented design can use
+the specification-only transitional state below without pretending that runtime
+tests already verify it.
+
+### Evidence scope and reuse
+
+Record the chosen scope, commands, result and tested inputs/source snapshot.
+Earlier passing evidence may be reused only when its relevant production code,
+tests, fixtures, dependencies, toolchain/build settings and other consumed
+inputs remain unchanged. Recheck affected documentation or contract inputs
+after later edits; do not automatically invalidate unrelated runtime evidence.
+
+A commit SHA change alone is not a reason to repeat full CI. An identical merge
+or documentation-only closeout may reuse prior runtime evidence after checking
+the relevant tree/inputs and running the affected checks. Merge conflict
+resolutions, consumed Git/build metadata and generated or toolchain changes
+must be evaluated rather than assumed harmless. If equivalence cannot be
+established, run the affected suites or full CI as the risk requires.
+
+Distinguish checks run now from evidence reused from an earlier snapshot.
+Report full CI as `Not run` when only narrower checks ran; do not describe a
+focused pass or reused result as a freshly passed complete pipeline. Reuse is
+an evidence decision, not a new automatic cache or filename-based skip system.
+
+### Existing command entry points
+
+For documentation-only work, use the existing commands as appropriate:
+
+```text
+cargo test -p xtask candidate_or_frozen_metadata_and_traceability_are_valid -- --test-threads=1
+pnpm --dir website run typecheck
+cargo xtask docs-build
+```
+
+The documentation build includes document/link tests and the generated site.
+An isolated local `node --test website/scripts/spec-docs.test.mjs
+website/scripts/text-docs.test.mjs` run can provide quicker feedback when its
+temporary files stay inside the permitted workspace. Build the documentation
+on the configured remote when the workspace policy requires it.
+
+Use existing format verifiers and filtered Cargo suites for contract/localized
+changes. `cargo xtask ci` retains its complete conformance, Rust and documentation
+coverage unchanged; `cargo xtask rust-ci` and `cargo xtask system-test` are broader
+Rust/executable-level checks, not documentation shortcuts.
+
+### Required evidence remains unchanged
+
 Every mechanically verifiable normative requirement must have at least one real
 automated verification artifact before implementation of that requirement can
 be considered complete. The relationship may be many-to-many and must optimize
@@ -341,6 +419,8 @@ of its necessity.
       level required by the promise.
 - [ ] No requirement or regression protection was weakened for convenience.
 - [ ] Traceability and relevant suites pass.
+- [ ] Validation scope follows the risk-based policy; required full-CI gates
+      are met, and reused evidence is distinguished from newly executed checks.
 - [ ] Documentation impact is explicitly reported as `none` or as a list of
       affected requirements and pages.
 

@@ -54,9 +54,13 @@ The complete contributor contract is the
 
 ## Verification
 
-Run `cargo xtask ci` for the same ordered checks used by the remote environment
-and GitHub Actions. Every change must report its verification status and
-documentation impact.
+Choose the minimum sufficient checks using the
+[risk-based validation policy](./docs/development/development-and-verification.md#risk-based-validation-scope).
+Documentation-only edits use document/link/traceability checks and affected site
+typecheck/build, not the complete Rust product suite. Full `cargo xtask ci`
+remains the high-risk runtime, milestone-integration and formal-release gate.
+Every change must report its verification scope, status and documentation impact;
+identify reused evidence separately from checks run now.
 
 Commits, pushes, host-level toolchain installation, and machine configuration
 require separate explicit authorization.
