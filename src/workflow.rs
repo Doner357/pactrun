@@ -128,6 +128,35 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
     Ok(build_action_plan(intent, facts)?)
 }
 
+pub(crate) fn compile_deletion<L: HostLauncherLookup>(
+    intent: &crate::domain::DeleteInstance,
+    observation: crate::domain::DeletionCompilationObservation,
+    lookup: &L,
+    search: &[PathBuf],
+) -> Result<crate::domain::DeletionPlan, crate::application::ApplicationError> {
+    let launch = if intent.mode == crate::domain::DeletionMode::ManagedCleanup
+        && observation.obligation.is_none()
+    {
+        observation
+            .revision
+            .core
+            .cleanup()
+            .map(|cleanup| {
+                compile_hook_launch(
+                    lookup,
+                    &cleanup.hook,
+                    observation.revision.runtime_content.files(),
+                    search,
+                )
+            })
+            .transpose()?
+    } else {
+        None
+    };
+    crate::domain::build_deletion_plan(intent, observation, launch)
+        .map_err(crate::application::ApplicationError::DeletionCompilation)
+}
+
 fn compile_hook_launch<L: HostLauncherLookup>(
     launcher_lookup: &L,
     hook: &crate::domain::HookV1,

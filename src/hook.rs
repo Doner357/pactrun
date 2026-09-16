@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 mod capture;
+mod deletions;
 mod materialize;
 mod migrations;
 mod platform;
@@ -12,6 +13,7 @@ mod runtime;
 pub(crate) mod service_storage;
 mod snapshots;
 mod versioned_protocol;
+pub(crate) use deletions::{accept_deletion, execute_ready as execute_ready_deletion};
 pub(crate) use migrations::TargetCommitPermit;
 #[cfg(test)]
 pub(crate) use migrations::accept_declarative_migration;
@@ -343,6 +345,8 @@ impl fmt::Debug for FinalizationState {
 
 #[derive(Debug)]
 pub(crate) enum OwnerContinuation {
+    Deletion(Box<deletions::DeletionOwnerState>),
+    CleanupFinalization(Box<deletions::CleanupFinalization>),
     TargetReady(runtime::TargetRuntimeFacts),
     Migration(Box<migrations::MigrationOwnerState>),
     CaptureFinalization(Box<capture::CaptureFinalization>),
@@ -436,6 +440,8 @@ impl OwnerContinuationRegistry {
         {
             Some(RegistryEntry::Stable(continuation)) => Some(match **continuation {
                 OwnerContinuation::ReadyToFinalize(_) => "ready",
+                OwnerContinuation::Deletion(_) => "deletion",
+                OwnerContinuation::CleanupFinalization(_) => "cleanup_finalization",
                 OwnerContinuation::TargetReady(_) => "target_ready",
                 OwnerContinuation::RetryProcessControl(_) => "process",
                 OwnerContinuation::RetryDurableOperation(_) => "durable",
@@ -489,6 +495,7 @@ pub(crate) struct ContinuationGuard<'a> {
 impl ContinuationGuard<'_> {
     pub(crate) fn managed_mutation_instance(&self) -> Option<crate::domain::InstanceId> {
         match self.continuation() {
+            OwnerContinuation::Deletion(state) => Some(state.instance()),
             OwnerContinuation::Migration(state) => Some(state.instance()),
             other => snapshots::instance(other),
         }
@@ -708,6 +715,15 @@ pub(crate) fn advance_owner_continuation(
     }
     if matches!(guard.continuation(), OwnerContinuation::Snapshot(_)) {
         return snapshots::advance(persistence, staging, guard);
+    }
+    if matches!(guard.continuation(), OwnerContinuation::Deletion(_)) {
+        return deletions::advance(persistence, staging, guard);
+    }
+    if matches!(
+        guard.continuation(),
+        OwnerContinuation::CleanupFinalization(_)
+    ) {
+        return deletions::finalize(persistence, staging, guard);
     }
     let continuation = guard
         .continuation

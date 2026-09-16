@@ -46,7 +46,8 @@ pub(super) const SCHEMA_V3_VERSION: i64 = 3;
 pub(super) const SCHEMA_V4_VERSION: i64 = 4;
 pub(super) const SCHEMA_V5_VERSION: i64 = 5;
 pub(super) const SCHEMA_V6_VERSION: i64 = 6;
-pub(crate) const SCHEMA_VERSION: i64 = 7;
+pub(super) const SCHEMA_V7_VERSION: i64 = 7;
+pub(crate) const SCHEMA_VERSION: i64 = 8;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -119,7 +120,7 @@ pub(super) const SCHEMA_V7_ADDITIONS_SQL: &str =
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 7] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 8] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
@@ -127,6 +128,10 @@ pub(super) const SCHEMA_LADDER: [(&str, &str); 7] = [
     (SCHEMA_V5_ADDITIONS_SQL, "PersistenceSchemaV5 additions"),
     (SCHEMA_V6_ADDITIONS_SQL, "PersistenceSchemaV6 changes"),
     (SCHEMA_V7_ADDITIONS_SQL, "PersistenceSchemaV7 additions"),
+    (
+        super::sqlite_v8::SCHEMA_V8_ADDITIONS_SQL,
+        "PersistenceSchemaV8 lifecycle changes",
+    ),
 ];
 
 #[derive(Debug)]
@@ -260,7 +265,7 @@ impl fmt::Display for PersistenceError {
             Self::SnapshotCodec(error) => error.fmt(formatter),
             Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
             Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V6 requires explicit pactrun storage upgrade to V7"),
+            Self::UpgradeRequired => formatter.write_str("exact V7 requires explicit pactrun storage upgrade to V8"),
             Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
             Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
             Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
@@ -340,12 +345,12 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V7 {
-            if state == DatabaseState::V6 {
+        if state != DatabaseState::V8 {
+            if state == DatabaseState::V7 {
                 return Err(PersistenceError::UpgradeRequired);
             }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires exact V7; use a compatible build to reach V6 before explicit upgrade".to_owned(),
+                "read-only opening requires exact V8; use a compatible build to reach V7 before explicit upgrade".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -642,7 +647,7 @@ pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, Persist
             fault(FaultPoint::BeforeSchemaMigrationCommit);
             true
         }
-        DatabaseState::V5 | DatabaseState::V6 | DatabaseState::V7 => {
+        DatabaseState::V5 | DatabaseState::V6 | DatabaseState::V7 | DatabaseState::V8 => {
             return Err(PersistenceError::DatabaseOwnership(
                 "legacy V4 binary rejects newer schema".to_owned(),
             ));
@@ -781,6 +786,7 @@ pub(super) enum DatabaseState {
     V5,
     V6,
     V7,
+    V8,
 }
 
 impl DatabaseState {
@@ -793,7 +799,8 @@ impl DatabaseState {
             Self::V4 => Some(SCHEMA_V4_VERSION),
             Self::V5 => Some(SCHEMA_V5_VERSION),
             Self::V6 => Some(SCHEMA_V6_VERSION),
-            Self::V7 => Some(SCHEMA_VERSION),
+            Self::V7 => Some(SCHEMA_V7_VERSION),
+            Self::V8 => Some(SCHEMA_VERSION),
         }
     }
 }
@@ -833,9 +840,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
             validate_schema(database, SCHEMA_V6_VERSION)?;
             Ok(DatabaseState::V6)
         }
+        (APPLICATION_ID, SCHEMA_V7_VERSION, true) => {
+            validate_schema(database, SCHEMA_V7_VERSION)?;
+            Ok(DatabaseState::V7)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V7)
+            Ok(DatabaseState::V8)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -1218,6 +1229,14 @@ pub(crate) enum FaultPoint {
     AfterLegacySessionInspection,
     AfterV5AdmissionInspection,
     AfterV6AdmissionInspection,
+    AfterV7AdmissionInspection,
+    BeforeCleanupBoundaryCommit,
+    AfterCleanupBoundaryCommit,
+    AfterDiscardIntentCommit,
+    AfterDiscardRemoval,
+    AfterDiscardCompletionCommit,
+    AfterFinalizationIdentityCommit,
+    AfterFinalizationRemoval,
     BeforeServiceAllocationIntentCommit,
     AfterServiceAllocationIntentCommit,
     AfterServiceAllocationDirectory,
@@ -1260,6 +1279,14 @@ impl FaultPoint {
             Self::AfterLegacySessionInspection => "after_legacy_session_inspection",
             Self::AfterV5AdmissionInspection => "after_v5_admission_inspection",
             Self::AfterV6AdmissionInspection => "after_v6_admission_inspection",
+            Self::AfterV7AdmissionInspection => "after_v7_admission_inspection",
+            Self::BeforeCleanupBoundaryCommit => "before_cleanup_boundary_commit",
+            Self::AfterCleanupBoundaryCommit => "after_cleanup_boundary_commit",
+            Self::AfterDiscardIntentCommit => "after_discard_intent_commit",
+            Self::AfterDiscardRemoval => "after_discard_removal",
+            Self::AfterDiscardCompletionCommit => "after_discard_completion_commit",
+            Self::AfterFinalizationIdentityCommit => "after_finalization_identity_commit",
+            Self::AfterFinalizationRemoval => "after_finalization_removal",
             Self::BeforeServiceAllocationIntentCommit => "before_service_allocation_intent_commit",
             Self::AfterServiceAllocationIntentCommit => "after_service_allocation_intent_commit",
             Self::AfterServiceAllocationDirectory => "after_service_allocation_directory",

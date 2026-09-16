@@ -14,13 +14,13 @@ pub use process::{
 mod implementation {
 
     use std::{
-        ffi::OsStr,
+        ffi::{OsStr, OsString},
         fmt,
         fs::{File, OpenOptions},
         io,
         mem::size_of,
         os::windows::{
-            ffi::OsStrExt,
+            ffi::{OsStrExt, OsStringExt},
             fs::{MetadataExt, OpenOptionsExt},
             io::{AsRawHandle, FromRawHandle, OwnedHandle},
             process::ExitStatusExt,
@@ -545,6 +545,220 @@ mod implementation {
         Ok(identity(left)? == identity(right)?)
     }
 
+    /// Internal physical-incarnation evidence, never a Pactrun Domain identity.
+    pub fn retirement_identity(file: &File) -> io::Result<[u8; 40]> {
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: File owns the live handle and the complete output is writable.
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut info) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let words = [
+            4u64,
+            u64::from(info.dwVolumeSerialNumber),
+            (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+            (u64::from(info.ftCreationTime.dwHighDateTime) << 32)
+                | u64::from(info.ftCreationTime.dwLowDateTime),
+            0,
+        ];
+        let mut key = [0u8; 40];
+        for (chunk, word) in key.as_chunks_mut::<8>().0.iter_mut().zip(words) {
+            chunk.copy_from_slice(&word.to_le_bytes());
+        }
+        Ok(key)
+    }
+
+    pub fn open_retirement_directory(root: &File, segment: &str) -> io::Result<File> {
+        validate_service_segment(segment)?;
+        let file = open_relative_native_with_sharing(
+            root,
+            OsStr::new(segment),
+            FILE_DIRECTORY_FILE | FILE_WRITE_THROUGH,
+            GENERIC_READ | GENERIC_WRITE | DELETE | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+        )?;
+        validate_entry(&file, EntryKind::Directory)?;
+        validate_exact_opened_name(&file, segment)?;
+        Ok(file)
+    }
+
+    /// Pin the allocator parent against rename without requesting DELETE on
+    /// it. Independent allocation removers can share this non-destructive guard.
+    pub fn open_retirement_parent(root: &File, segment: &str) -> io::Result<File> {
+        validate_service_segment(segment)?;
+        let file = open_relative_native_with_sharing(
+            root,
+            OsStr::new(segment),
+            FILE_DIRECTORY_FILE | FILE_WRITE_THROUGH,
+            GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+        )?;
+        validate_entry(&file, EntryKind::Directory)?;
+        validate_exact_opened_name(&file, segment)?;
+        Ok(file)
+    }
+
+    /// Enumerate the opened directory, not a reconstructed pathname. Returned
+    /// native names are data and are opened only relative to that same handle.
+    fn retirement_names(file: &File) -> io::Result<std::collections::VecDeque<OsString>> {
+        use windows_sys::Wdk::Storage::FileSystem::{FileNamesInformation, NtQueryDirectoryFile};
+        let mut names = std::collections::VecDeque::new();
+        let mut buffer = vec![0u64; 8192];
+        loop {
+            let mut status_block = IO_STATUS_BLOCK::default();
+            // SAFETY: all handles/pointers remain live for this synchronous
+            // call; buffer is aligned and writable for the supplied byte count.
+            let status = unsafe {
+                NtQueryDirectoryFile(
+                    file.as_raw_handle().cast(),
+                    ptr::null_mut(),
+                    None,
+                    ptr::null(),
+                    &mut status_block,
+                    buffer.as_mut_ptr().cast(),
+                    (buffer.len() * 8) as u32,
+                    FileNamesInformation,
+                    true,
+                    ptr::null(),
+                    false,
+                )
+            };
+            if status as u32 == 0x8000_0006 {
+                break;
+            } // STATUS_NO_MORE_FILES
+            if status < 0 {
+                return Err(io::Error::from_raw_os_error(
+                    unsafe { RtlNtStatusToDosError(status) } as i32,
+                ));
+            }
+            let bytes = status_block.Information;
+            if bytes < 12 || bytes > buffer.len() * 8 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid native directory result",
+                ));
+            }
+            let base = buffer.as_ptr().cast::<u8>();
+            // SAFETY: the successful bounded result has the fixed 12-byte
+            // FILE_NAMES_INFORMATION prefix. The name slice is checked below.
+            let length = unsafe { ptr::read_unaligned(base.add(8).cast::<u32>()) } as usize;
+            if length == 0 || !length.is_multiple_of(2) || length > bytes - 12 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid native directory name",
+                ));
+            }
+            // SAFETY: offset 12 is u16-aligned; the checked range is inside the
+            // initialized result. OsString copies it before the next call.
+            let name = OsString::from_wide(unsafe {
+                std::slice::from_raw_parts(base.add(12).cast::<u16>(), length / 2)
+            });
+            if name != "." && name != ".." {
+                names.push_back(name);
+            }
+        }
+        Ok(names)
+    }
+
+    fn mark_retired(file: &File) -> io::Result<()> {
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_FORCE_IMAGE_SECTION_CHECK,
+            FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
+            FILE_DISPOSITION_INFO_EX, FileDispositionInfoEx,
+        };
+        let info = FILE_DISPOSITION_INFO_EX {
+            Flags: FILE_DISPOSITION_FLAG_DELETE
+                | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+                | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE
+                | FILE_DISPOSITION_FLAG_FORCE_IMAGE_SECTION_CHECK,
+        };
+        // SAFETY: the live DELETE-capable handle and exact initialized structure
+        // remain valid for this synchronous call. No pathname is resolved here.
+        if unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle().cast(),
+                FileDispositionInfoEx,
+                (&info as *const FILE_DISPOSITION_INFO_EX).cast(),
+                size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub fn remove_retirement_tree(
+        parent: &File,
+        name: &str,
+        expected: &[u8; 40],
+    ) -> io::Result<()> {
+        let root = open_retirement_directory(parent, name)?;
+        if &retirement_identity(&root)? != expected {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "allocation root was replaced",
+            ));
+        }
+        let entries = retirement_names(&root)?;
+        let mut stack = vec![(root, entries)];
+        while let Some((directory, names)) = stack.last_mut() {
+            if let Some(name) = names.pop_front() {
+                let hint =
+                    open_relative_native(directory, &name, 0, FILE_READ_ATTRIBUTES | SYNCHRONIZE)?;
+                let metadata = hint.metadata()?;
+                if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "retirement refuses reparse points",
+                    ));
+                }
+                let child = open_relative_native_with_sharing(
+                    directory,
+                    &name,
+                    if metadata.is_dir() {
+                        FILE_DIRECTORY_FILE | FILE_WRITE_THROUGH
+                    } else {
+                        FILE_NON_DIRECTORY_FILE
+                    },
+                    (if metadata.is_dir() {
+                        GENERIC_READ | GENERIC_WRITE
+                    } else {
+                        FILE_READ_ATTRIBUTES
+                    }) | DELETE
+                        | SYNCHRONIZE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                )?;
+                if !same_opened_object(&hint, &child)? {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "retirement entry changed before its namespace was pinned",
+                    ));
+                }
+                drop(hint);
+                if metadata.is_dir() {
+                    validate_entry(&child, EntryKind::Directory)?;
+                    let entries = retirement_names(&child)?;
+                    stack.push((child, entries));
+                } else if metadata.is_file() {
+                    mark_retired(&child)?;
+                    drop(child);
+                    flush(directory)?;
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "unsupported retirement entry",
+                    ));
+                }
+            } else {
+                let (directory, _) = stack.pop().expect("nonempty retirement stack");
+                mark_retired(&directory)?;
+                drop(directory);
+                flush(stack.last().map_or(parent, |(file, _)| file))?;
+            }
+        }
+        Ok(())
+    }
+
     /// Metadata-only, no-follow acquisition of a service leaf for observation.
     pub fn open_service_entry(root: &File, segment: &str) -> io::Result<(File, u32)> {
         validate_service_segment(segment)?;
@@ -796,7 +1010,36 @@ mod implementation {
     }
 
     fn open_relative_with(root: &File, segment: &str, kind: u32, access: u32) -> io::Result<File> {
-        let mut name = segment.encode_utf16().collect::<Vec<_>>();
+        open_relative_native(root, OsStr::new(segment), kind, access)
+    }
+
+    fn open_relative_native(
+        root: &File,
+        segment: &OsStr,
+        kind: u32,
+        access: u32,
+    ) -> io::Result<File> {
+        open_relative_native_with_sharing(root, segment, kind, access, SHARE_ALL)
+    }
+
+    fn open_relative_native_with_sharing(
+        root: &File,
+        segment: &OsStr,
+        kind: u32,
+        access: u32,
+        sharing: u32,
+    ) -> io::Result<File> {
+        let mut name = segment.encode_wide().collect::<Vec<_>>();
+        if name.is_empty()
+            || name == [46]
+            || name == [46, 46]
+            || name.iter().any(|c| matches!(*c, 0 | 47 | 58 | 92))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid relative native entry name",
+            ));
+        }
         let name_bytes = name
             .len()
             .checked_mul(size_of::<u16>())
@@ -834,7 +1077,7 @@ mod implementation {
                 &mut status_block,
                 ptr::null(),
                 FILE_ATTRIBUTE_NORMAL,
-                SHARE_ALL,
+                sharing,
                 FILE_OPEN,
                 kind | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
                 ptr::null(),

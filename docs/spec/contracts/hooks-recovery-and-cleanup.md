@@ -199,7 +199,7 @@ Cleanup MUST be an optional Package-defined implementation of Pactrun's
 Instance deletion lifecycle, not an Action. When present, normal deletion MUST
 run it before Pactrun removes Instance state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0404, PR-TEST-0426.**
 
 ### PR-REQ-0177 - Cleanup requirements and context
 
@@ -208,7 +208,7 @@ MUST receive a corresponding Cleanup context. Those requirements govern
 admission rather than access control. Cleanup MUST NOT inherit the active
 Revision's whole ordinary readiness predicate.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0396, PR-TEST-0404, PR-TEST-0418, PR-TEST-0424.**
 
 ### PR-REQ-0178 - Missing Cleanup requirements
 
@@ -216,7 +216,7 @@ If a Cleanup requirement is absent, Pactrun MUST reject before Hook launch and
 leave the Instance unchanged. The user may supply the requirement, repair state,
 retry, or explicitly abandon management.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0418, PR-TEST-0424.**
 
 ### PR-REQ-0179 - Cleanup risk protocol
 
@@ -225,7 +225,7 @@ permits deletion; non-success with clear risk retains a Normal Instance; open
 risk on non-success or reported success retains the Instance in
 `ManualRecoveryRequired`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0405, PR-TEST-0425.**
 
 ### PR-REQ-0180 - Retry guidance without magic flags
 
@@ -236,7 +236,7 @@ be interpreted as permission to replay Cleanup after an ambiguous completion;
 the Frozen completion rule in PR-REQ-0216 prohibits inferred replay or
 compensation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0407, PR-TEST-0425.**
 
 ### PR-REQ-0181 - Abandonment skips Package code
 
@@ -249,4 +249,4 @@ cleanup, or another maintenance path. The durable representation of this
 non-destruction obligation, later discovery, operator handoff, and explicit
 discard remain future persistence and runtime design gates.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0406, PR-TEST-0409, PR-TEST-0417, PR-TEST-0418, PR-TEST-0437.**

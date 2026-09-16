@@ -293,6 +293,7 @@ fn common_session(operation: SessionOperation) -> Value {
         SessionOperation::Restore => {
             json!({"kind":"snapshot_restore","snapshot_id":SESSION,"bindings":[binding],"snapshot_content":{"handle":"00000000000000000000000000000012","readonly_root_path":native_path(),"logical_descriptors":[]}})
         }
+        SessionOperation::Cleanup => json!({"kind":"cleanup","bindings":[binding]}),
     };
     json!({"type":"session_start","protocol_version":2,"session_id":SESSION,"run_id":SESSION,
         "revision":{"package_id":SESSION,"revision_content_digest":format!("sha256:{}", "0".repeat(64))},

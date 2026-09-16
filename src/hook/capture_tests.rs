@@ -334,6 +334,41 @@ fn published_capture_outlives_its_actual_creator_origin_and_producer_installatio
     );
 }
 
+// Test-ID: PR-TEST-0421
+// Verifies: PR-REQ-0072, PR-REQ-0073, PR-REQ-0103, PR-REQ-0338
+#[test]
+fn managed_retirement_preserves_real_capture_and_action_artifact_lifetimes() {
+    for mode in [DeletionMode::ManagedCleanup, DeletionMode::AbandonManagement] {
+        let f = fixture("observe");
+        let capture = accept_capture(&f, "success", &f.marker("retirement-capture"), ActionCancellation::default());
+        f.application.execute_admitted_capture(capture, policy(None, None, Some(100))).unwrap();
+        assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+        let snapshot = result_id(&f, capture);
+        let original = manifest(&f, snapshot).canonical_bytes().to_vec();
+        let admitted = f.admit("output_subset", "output_subset", &f.marker("retirement-artifact"));
+        let action = admitted.run();
+        f.application.execute_admitted_action(admitted, policy(None, None, Some(100)), ActionCancellation::default());
+        assert_eq!(finish(&f, action).outcome, RunOutcome::Succeeded);
+        let intent = f.application.resolve_deletion(&f.instance.name, None, mode).unwrap();
+        let plan = f.application.compile_deletion(&intent, &[]).unwrap();
+        let deletion = f.application.accept_deletion_plan(plan, AdmissionOptions::default(), ActionCancellation::default(), policy(None, None, Some(100))).unwrap();
+        assert_eq!(finish(&f, deletion).outcome, RunOutcome::Succeeded);
+        let p = persistence(&f.storage);
+        assert!(p.load_instance_by_id(f.instance.id).unwrap().is_none());
+        assert_eq!(p.list_managed_runs(f.instance.id).unwrap().len(), 3);
+        assert!(p.managed_run_inspection(capture).unwrap().is_some());
+        assert!(p.managed_run_inspection(action).unwrap().is_some());
+        let verified = p.verify_snapshot(snapshot).unwrap();
+        assert_eq!(verified.inspection.origin, f.instance.id);
+        assert_eq!(manifest(&f, snapshot).canonical_bytes(), original);
+        let mut bytes = Vec::new();
+        p.open_run_artifact(action, &ManagedOutputIdentity::parse("report").unwrap(), &mut bytes).unwrap();
+        assert_eq!(bytes, b"unpublished-output");
+        assert_eq!(p.list_snapshots(Some(f.instance.id)).unwrap().len(), 1);
+        assert_eq!(db(&f).query_row("SELECT count(*) FROM run_revision_pins", [], |r| r.get::<_,i64>(0)).unwrap(), 0);
+    }
+}
+
 // Test-ID: PR-TEST-0246
 // Verifies: PR-REQ-0100, PR-REQ-0145, PR-REQ-0146, PR-REQ-0147, PR-REQ-0150, PR-REQ-0152, PR-REQ-0191, PR-REQ-0239, PR-REQ-0289, PR-REQ-0290, PR-REQ-0298
 #[test]

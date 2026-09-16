@@ -784,12 +784,20 @@ Completion gate:
 
 ### M7 - Cleanup and deletion
 
-**State: Proposed.**
+**State: Implemented and verified; integration pending.**
+
+The operator approved continuous implementation of the
+[M7 baseline](./design-notes/m7-cleanup-deletion-implementation-baseline.md)
+without per-slice approval stops. The S0-S7 implementation and source-matched
+acceptance results are recorded in the [implementation record](./m7-implementation-status.md).
+They are complete on the feature branch; commit, integration, push and deployment
+remain separately controlled. The approved scope does not change Frozen contracts.
 
 M7 follows M6.5 and owns the concrete Cleanup ambiguous-completion coordination,
 durable do-not-replay boundary, storage finalization and AbandonManagement
-operations. Its lifecycle persistence dependencies must be aligned before M6.5
-schema approval. Reuse M6 recovery and M6.5 storage, not a parallel substrate.
+operations. The earlier M6.5 dependency review is historical; M7 now supplies V8
+and the physical retirement implementation while reusing M6 recovery and M6.5
+storage rather than introducing a parallel recovery engine.
 
 Implement typed Cleanup requirements and context, the shared risk protocol,
 cleanup-before-delete behavior, retry semantics, and explicit
@@ -800,8 +808,8 @@ Service Resource merely because a Revision stops naming it. Cleanup success is
 not itself the durable do-not-replay boundary. An ambiguous completion does not
 authorize replay, while a published Cleanup-completed boundary permits only
 Pactrun-owned storage finalization. Abandonment does not authorize present or
-later GC deletion of service-owned state; the durable representations remain
-open.
+later GC deletion of service-owned state. The implemented durable representations
+and explicit discard boundary are defined in the M7 and V8 contracts.
 
 Completion gate:
 

@@ -7,6 +7,7 @@
 // contract gains a production caller.
 #![allow(dead_code)]
 
+mod deletion;
 mod error;
 mod execution;
 mod identity;
@@ -24,6 +25,8 @@ mod snapshot;
 mod snapshot_capability;
 mod snapshot_execution;
 
+#[allow(unused_imports)]
+pub(crate) use deletion::*;
 pub(crate) use error::PactrunErrorRefV1;
 #[allow(unused_imports)]
 pub(crate) use execution::*;

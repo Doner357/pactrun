@@ -75,6 +75,7 @@ struct FinishAuthority<'a> {
     capture: Option<CapturePublication<'a>>,
     restore: bool,
     migration: bool,
+    deletion: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -230,6 +231,7 @@ impl PactrunPersistence {
                 capture: None,
                 restore: !conflict,
                 migration: false,
+                deletion: false,
             },
         )?;
         if next.is_some() {
@@ -298,6 +300,7 @@ impl PactrunPersistence {
                 capture: Some(CapturePublication { manifest, blobs }),
                 restore: false,
                 migration: false,
+                deletion: false,
             },
         )?;
         #[cfg(test)]
@@ -338,8 +341,10 @@ impl PactrunPersistence {
         owner: &ExecutionOwnerSession,
         arbiter: &impl AcceptanceArbiter,
     ) -> Result<RunId, AcceptanceError> {
-        if matches!(operation, ManagedRunIdentity::Migration(_))
-            && self.staging_session().is_none_or(|s| s.owner() != *owner)
+        if matches!(
+            operation,
+            ManagedRunIdentity::Migration(_) | ManagedRunIdentity::Deletion { .. }
+        ) && self.staging_session().is_none_or(|s| s.owner() != *owner)
         {
             return Err(AcceptanceError::NotCommitted {
                 run,
@@ -517,9 +522,12 @@ impl PactrunPersistence {
                 "Restore requires staged Snapshot admission; Action/Capture admission cannot qualify it".to_owned(),
             ));
         }
-        if matches!(operation, ManagedRunIdentity::Migration(_)) {
+        if matches!(
+            operation,
+            ManagedRunIdentity::Migration(_) | ManagedRunIdentity::Deletion { .. }
+        ) {
             return Err(PersistenceError::InvalidRunTransition(
-                "Migration requires its own whole-path admission".to_owned(),
+                "Migration and deletion require operation-specific admission".to_owned(),
             ));
         }
         let boundary = if has_revision_pin(&transaction, run)? {
@@ -670,6 +678,21 @@ impl PactrunPersistence {
         &self,
         run: RunId,
     ) -> Result<Vec<crate::domain::PinnedInputBinding>, PersistenceError> {
+        self.admitted_current_registry(run, false)
+    }
+
+    pub(crate) fn admitted_cleanup_registry(
+        &self,
+        run: RunId,
+    ) -> Result<Vec<crate::domain::PinnedInputBinding>, PersistenceError> {
+        self.admitted_current_registry(run, true)
+    }
+
+    fn admitted_current_registry(
+        &self,
+        run: RunId,
+        cleanup: bool,
+    ) -> Result<Vec<crate::domain::PinnedInputBinding>, PersistenceError> {
         use crate::domain::{
             InputProtectionV1, ManagedInputProtection, ManagedInputRole, PinnedInputBinding,
         };
@@ -680,7 +703,18 @@ impl PactrunPersistence {
                 PersistenceError::sqlite("begin pinned Capture registry read", error)
             })?;
         let view = load_managed_run_from(&transaction, run)?;
-        if !matches!(view.operation, ManagedRunIdentity::Capture { .. })
+        let matching = if cleanup {
+            matches!(
+                view.operation,
+                ManagedRunIdentity::Deletion {
+                    mode: crate::domain::DeletionMode::ManagedCleanup,
+                    ..
+                }
+            )
+        } else {
+            matches!(view.operation, ManagedRunIdentity::Capture { .. })
+        };
+        if !matching
             || !matches!(
                 view.state,
                 RunState::Running(RunExecutionView {
@@ -726,7 +760,7 @@ impl PactrunPersistence {
             };
             let (payload, protection) = match pinned.remove(&declaration.id) {
                 Some((payload, stored)) if stored >= declared => (Some(payload), stored),
-                None if !declaration.required => (None, declared),
+                None if !declaration.required || cleanup => (None, declared),
                 _ => {
                     return Err(PersistenceError::CorruptRun(
                         "Capture active pin is missing or violates declared protection".to_owned(),
@@ -1181,6 +1215,7 @@ impl PactrunPersistence {
             secondary_failures: Vec::new(),
             hook_completion: None,
         };
+        super::sqlite_deletions::reconcile_obligation(&transaction, run)?;
         finish_run_in_transaction_owned(
             &transaction,
             run,
@@ -1296,8 +1331,22 @@ fn admission_decision(
         return Ok(Err(AdmissionRefusal::RecoveryGuardActive));
     }
 
+    if super::sqlite_deletions::obligation_from(transaction, header.instance)?.is_some() {
+        return Ok(Err(AdmissionRefusal::PlanInvalidated(
+            "Instance has a deletion obligation".to_owned(),
+        )));
+    }
+
     // 2. Stale compilation or state facts.
-    let (_, active_revision, current) = instance_header(transaction, header.instance)?;
+    let (_, active_revision, current) = match instance_header(transaction, header.instance) {
+        Ok(header) => header,
+        Err(PersistenceError::MissingInstance(_)) => {
+            return Ok(Err(AdmissionRefusal::PlanInvalidated(
+                "Instance has been retired".to_owned(),
+            )));
+        }
+        Err(error) => return Err(error),
+    };
     if current != facts.expected_state_version || current != header.accepted_state_version {
         return Ok(Err(AdmissionRefusal::PlanInvalidated(
             "the Instance state version changed since compilation".to_owned(),
@@ -1441,7 +1490,9 @@ fn validate_snapshot_plan_declaration(
     let operation = match plan.operation() {
         ManagedRunIdentity::Capture { .. } => SnapshotOperation::Capture,
         ManagedRunIdentity::Restore { snapshot, .. } => SnapshotOperation::Restore(*snapshot),
-        ManagedRunIdentity::Action(_) | ManagedRunIdentity::Migration(_) => {
+        ManagedRunIdentity::Action(_)
+        | ManagedRunIdentity::Migration(_)
+        | ManagedRunIdentity::Deletion { .. } => {
             return Ok(Some("Snapshot Plan contains another operation".to_owned()));
         }
     };
@@ -1852,6 +1903,56 @@ fn validate_capture_publication(
     Ok(())
 }
 
+pub(super) fn finish_deletion_refusal(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    refusal: &AdmissionRefusal,
+) -> Result<(), PersistenceError> {
+    let header = run_header(transaction, run)?;
+    let finish = RunFinish {
+        outcome: RunOutcome::Failed,
+        primary_failure: Some(refusal.primary_failure()),
+        secondary_failures: Vec::new(),
+        hook_completion: None,
+    };
+    finish_run_in_transaction(transaction, run, &header, &finish, &mut [])?;
+    Ok(())
+}
+
+pub(super) fn finish_deletion_in_transaction(
+    transaction: &Transaction<'_>,
+    run: RunId,
+    owner: &ExecutionOwnerSession,
+    finish: &RunFinish,
+    retirement: bool,
+) -> Result<(), PersistenceError> {
+    let header = run_header(transaction, run)?;
+    if !matches!(
+        managed_invocation_row(transaction, run)?,
+        ManagedRunIdentity::Deletion { .. }
+    ) {
+        return Err(PersistenceError::InvalidRunTransition(
+            "not a deletion Run".to_owned(),
+        ));
+    }
+    finish_run_authorized(
+        transaction,
+        run,
+        &header,
+        finish,
+        &mut [],
+        FinishAuthority {
+            owner: Some(owner),
+            outputs: Some(&[]),
+            capture: None,
+            restore: false,
+            migration: false,
+            deletion: retirement,
+        },
+    )?;
+    Ok(())
+}
+
 fn finish_run_in_transaction(
     transaction: &Transaction<'_>,
     run: RunId,
@@ -1883,6 +1984,7 @@ fn finish_run_in_transaction_owned(
             capture: None,
             restore: false,
             migration: false,
+            deletion: false,
         },
     )
 }
@@ -1930,6 +2032,7 @@ fn finish_run_authorized(
             && authority.capture.is_none()
             && !authority.restore
             && !authority.migration
+            && !authority.deletion
         {
             return Err(PersistenceError::InvalidRunTransition(
                 "managed success requires atomic operation-specific result publication".to_owned(),
@@ -1952,6 +2055,23 @@ fn finish_run_authorized(
         return Err(PersistenceError::InvalidRunTransition(
             "Capture publication requires an owned admitted successful completion".to_owned(),
         ));
+    }
+    if authority.deletion {
+        let receipt: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM instance_retirement_receipts WHERE instance_id=?1 AND retirement_run_id=?2)",
+            params![header.instance.as_bytes().as_slice(),run.as_bytes().as_slice()], |r| r.get(0),
+        ).map_err(|e| PersistenceError::sqlite("qualify deletion terminal authority", e))?;
+        if !receipt
+            || !matches!(operation, ManagedRunIdentity::Deletion { .. })
+            || finish.outcome != RunOutcome::Succeeded
+            || boundary != ActionRunBoundary::Admitted
+            || expected_owner.is_none()
+            || live_risk != RecoveryRiskState::Clear
+        {
+            return Err(PersistenceError::InvalidRunTransition(
+                "deletion success requires owned atomic retirement".to_owned(),
+            ));
+        }
     }
     if authority.restore
         && (!matches!(operation, ManagedRunIdentity::Restore { .. })
@@ -2193,6 +2313,7 @@ pub(super) fn finish_migration_in_transaction(
             capture: None,
             restore: false,
             migration: publishing_success,
+            deletion: false,
         },
     )
 }
@@ -2279,7 +2400,26 @@ fn run_header(database: &Connection, run: RunId) -> Result<RunHeader, Persistenc
         .ok_or(PersistenceError::MissingRun(run))?;
     super::sqlite_v5::validate_run_operation(database, run)?;
     let instance = instance_id(row.0)?;
-    super::sqlite_v5::load_consequence_version(database, instance)?;
+    let live: bool = database
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM instances WHERE instance_id=?1)",
+            [instance.as_bytes().as_slice()],
+            |r| r.get(0),
+        )
+        .map_err(|e| PersistenceError::sqlite("qualify historical Run Instance", e))?;
+    if live {
+        super::sqlite_v5::load_consequence_version(database, instance)?;
+    } else {
+        let retired: bool = database.query_row(
+            "SELECT EXISTS(SELECT 1 FROM instance_retirement_receipts t JOIN instance_history_identities h ON h.instance_id=t.instance_id JOIN runs r ON r.run_id=t.retirement_run_id JOIN run_outcomes o ON o.run_id=r.run_id JOIN run_deletion_invocations d ON d.run_id=r.run_id JOIN run_operation_kinds k ON k.run_id=r.run_id WHERE t.instance_id=?1 AND r.instance_id=t.instance_id AND o.outcome_rank=0 AND k.operation_kind=4 AND d.deletion_mode=t.retirement_mode)",
+            [instance.as_bytes().as_slice()], |r| r.get(0),
+        ).map_err(|_| PersistenceError::CorruptRun("missing live Instance or valid retirement evidence".to_owned()))?;
+        if !retired {
+            return Err(PersistenceError::CorruptRun(
+                "missing live Instance or valid retirement evidence".to_owned(),
+            ));
+        }
+    }
     Ok(RunHeader {
         instance,
         accepted_state_version: state_version(row.1)?,
@@ -2302,6 +2442,9 @@ fn insert_managed_invocation(
         revision.content_digest.as_bytes().as_slice(),
     );
     let result = match operation {
+        ManagedRunIdentity::Deletion { mode, .. } => transaction.execute(
+            "INSERT INTO run_deletion_invocations(run_id,package_id,revision_content_digest,deletion_mode) VALUES (?1,?2,?3,?4)",
+            params![common.0,common.1,common.2,mode.rank()]),
         ManagedRunIdentity::Migration(_) => unreachable!("handled exact Migration invocation"),
         ManagedRunIdentity::Action(action) => transaction.execute(
             "INSERT INTO run_action_invocations(run_id,package_id,revision_content_digest,action_identity) VALUES (?1,?2,?3,?4)",
@@ -2324,6 +2467,17 @@ fn managed_invocation_row(
 ) -> Result<ManagedRunIdentity, PersistenceError> {
     use crate::domain::ManagedExecutionKind;
     let kind = super::sqlite_v5::validate_run_operation(database, run)?;
+    if kind == ManagedExecutionKind::Deletion {
+        let (package, digest, mode) = database.query_row(
+            "SELECT package_id, revision_content_digest, deletion_mode FROM run_deletion_invocations WHERE run_id=?1",
+            [run.as_bytes().as_slice()], |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, i64>(2)?)),
+        ).map_err(|error| PersistenceError::sqlite("load deletion invocation", error))?;
+        return Ok(ManagedRunIdentity::Deletion {
+            revision: revision_identity(package, digest)?,
+            mode: crate::domain::DeletionMode::from_rank(mode)
+                .map_err(|_| PersistenceError::CorruptRun("invalid deletion mode".to_owned()))?,
+        });
+    }
     if kind == ManagedExecutionKind::Migration {
         return super::sqlite_migration_runs::load_invocation(database, run)
             .map(ManagedRunIdentity::Migration);
@@ -2336,7 +2490,9 @@ fn managed_invocation_row(
             ManagedExecutionKind::SnapshotRestore => {
                 "SELECT package_id, revision_content_digest, snapshot_id FROM run_restore_invocations WHERE run_id=?1"
             }
-            ManagedExecutionKind::Action | ManagedExecutionKind::Migration => unreachable!(),
+            ManagedExecutionKind::Action
+            | ManagedExecutionKind::Migration
+            | ManagedExecutionKind::Deletion => unreachable!(),
         };
         let (package, digest, snapshot) = database
             .query_row(sql, [run.as_bytes().as_slice()], |row| {
@@ -2367,7 +2523,9 @@ fn managed_invocation_row(
                         })?,
                 ),
             }),
-            ManagedExecutionKind::Action | ManagedExecutionKind::Migration => unreachable!(),
+            ManagedExecutionKind::Action
+            | ManagedExecutionKind::Migration
+            | ManagedExecutionKind::Deletion => unreachable!(),
         };
     }
     let row = database
@@ -4048,7 +4206,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            28 // V4 twelve + V5 five + V6 seven + V7 four run-service relations.
+            29 // V7's 28 relations plus the typed V8 deletion invocation.
         );
         assert!(
             columns

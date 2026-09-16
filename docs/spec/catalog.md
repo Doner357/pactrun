@@ -76,3 +76,14 @@ the integrated M6.5 develop baseline.
 Preserve the exact documented upgrade gates rather than inferring one from this
 index. See [remaining decisions](../development/next-milestone.md) for deferred
 runtime work, not just the historical status on a format page.
+
+## M7 approved implementation contracts
+
+M7 is implemented and verified on its feature branch, but not integrated or
+published. See the [acceptance record](../development/m7-implementation-status.md).
+The branch writes V8; this does not change the historical M6.5 integration record.
+
+| Contract | Status |
+| --- | --- |
+| [M7 Instance retirement](execution/m7-instance-retirement.md) | Approved M7 contract; runtime activation and verification are separate. |
+| [Persistence V8](persistence/persistence-schema-v8.md) | Approved M7 internal contract; non-Frozen. |

@@ -43,7 +43,7 @@ succeed and a compiled Plan is accepted as an execution attempt, Pactrun MUST
 create a durable Run before evaluating admission. Successful admission MUST
 continue execution in that same Run.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0396, PR-TEST-0397, PR-TEST-0416, PR-TEST-0422, PR-TEST-0425, PR-TEST-0436, PR-TEST-0446.**
 
 ## Resolution and compilation
 
@@ -54,7 +54,7 @@ The Compiler input operation MUST be a closed sum of `InvokeAction`,
 `DeleteInstance`, with deletion distinguishing `ManagedCleanup` from
 `AbandonManagement`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0396.**
 
 ### PR-REQ-0038 - Resolver ownership
 

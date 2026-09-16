@@ -85,7 +85,7 @@ impl PactrunPersistence {
                  OR EXISTS(SELECT 1 FROM run_service_resource_targets WHERE allocation_id=?1)",
                 [allocation.as_slice()], |r| r.get(0),
             ).map_err(|e| PersistenceError::sqlite("qualify preparation references", e))?;
-            if referenced {
+            if referenced || super::sqlite_deletions::finalization_references_allocation(&tx, id)? {
                 continue;
             }
             let absent = match fs::open_directory(&root, "service-storage") {

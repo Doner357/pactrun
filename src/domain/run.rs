@@ -82,6 +82,7 @@ closed_rank!(ManagedExecutionKind, "managed execution kind", {
     SnapshotCapture = 1,
     SnapshotRestore = 2,
     Migration = 3,
+    Deletion = 4,
 });
 
 closed_rank!(RecoveryRiskState, "recovery risk", {
@@ -113,6 +114,16 @@ pub(crate) enum RunFailedStep {
     Plan(ActionPlanStep),
     SnapshotPlan(SnapshotPlanStep),
     MigrationPlan(super::MigrationPlanStep),
+    DeletionPlan(DeletionPlanStep),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DeletionPlanStep {
+    EstablishSession,
+    LaunchCleanup,
+    AcceptCompletion,
+    AuthorizeFinalization,
+    FinalizeStorage,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,6 +138,13 @@ pub(crate) enum SnapshotPlanStep {
 impl RunFailedStep {
     pub(crate) fn rank(self) -> i64 {
         match self {
+            Self::DeletionPlan(step) => match step {
+                DeletionPlanStep::EstablishSession => 1,
+                DeletionPlanStep::LaunchCleanup => 2,
+                DeletionPlanStep::AcceptCompletion => 3,
+                DeletionPlanStep::AuthorizeFinalization => 4,
+                DeletionPlanStep::FinalizeStorage => 5,
+            },
             Self::MigrationPlan(step) => step.rank() + 1,
             Self::Admission => 0,
             Self::Plan(ActionPlanStep::EstablishSession) => 1,
@@ -168,6 +186,16 @@ impl RunFailedStep {
             return super::MigrationPlanStep::from_rank(rank - 1)
                 .map(Self::MigrationPlan)
                 .map_err(|_| RunRecordError::new("invalid Migration step"));
+        }
+        if kind == ManagedExecutionKind::Deletion {
+            return Ok(Self::DeletionPlan(match rank {
+                1 => DeletionPlanStep::EstablishSession,
+                2 => DeletionPlanStep::LaunchCleanup,
+                3 => DeletionPlanStep::AcceptCompletion,
+                4 => DeletionPlanStep::AuthorizeFinalization,
+                5 => DeletionPlanStep::FinalizeStorage,
+                _ => unreachable!("validated step"),
+            }));
         }
         Ok(Self::SnapshotPlan(match rank {
             1 => SnapshotPlanStep::EstablishSession,
@@ -237,6 +265,10 @@ pub(crate) struct ActionRunIdentity {
 /// it is resolved against the operation's authoritative Revision declaration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ManagedRunIdentity {
+    Deletion {
+        revision: RevisionIdentity,
+        mode: super::DeletionMode,
+    },
     Migration(super::MigrationRunIdentity),
     Action(ActionRunIdentity),
     Capture {
@@ -251,6 +283,7 @@ pub(crate) enum ManagedRunIdentity {
 impl ManagedRunIdentity {
     pub(crate) fn kind(&self) -> ManagedExecutionKind {
         match self {
+            Self::Deletion { .. } => ManagedExecutionKind::Deletion,
             Self::Migration(_) => ManagedExecutionKind::Migration,
             Self::Action(_) => ManagedExecutionKind::Action,
             Self::Capture { .. } => ManagedExecutionKind::SnapshotCapture,
@@ -261,7 +294,9 @@ impl ManagedRunIdentity {
         match self {
             Self::Migration(migration) => migration.source(),
             Self::Action(action) => &action.revision,
-            Self::Capture { revision } | Self::Restore { revision, .. } => revision,
+            Self::Capture { revision }
+            | Self::Restore { revision, .. }
+            | Self::Deletion { revision, .. } => revision,
         }
     }
 
@@ -270,7 +305,7 @@ impl ManagedRunIdentity {
         core: &super::RevisionCoreV1,
     ) -> Result<super::OperationAccessV1, RunRecordError> {
         match self {
-            Self::Migration(_) => Some(super::OperationAccessV1::Mutate),
+            Self::Migration(_) | Self::Deletion { .. } => Some(super::OperationAccessV1::Mutate),
             Self::Action(action) => core
                 .actions()
                 .iter()

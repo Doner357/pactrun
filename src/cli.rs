@@ -23,6 +23,7 @@ use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
 mod migrations;
+mod retirements;
 mod service_storage;
 mod snapshots;
 
@@ -49,11 +50,18 @@ Usage:\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
   pactrun instance list\n\
   pactrun instance show <instance>\n\
+  pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]\n\
+  pactrun instance abandon <instance> [--plan] [--if-version <token>]\n\
+  pactrun instance deletion show <instance-id>\n\
+  pactrun instance deletion confirm-complete <instance-id> --attempt <run-id> --if-version <token> --assert-cleanup-complete\n\
   pactrun instance migration-paths <instance> --to <reference> [--limit <1..100>] [--after <path-id>]\n\
   pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]\n\
   pactrun instance resolve-manual-recovery <instance> [--if-version <token>]\n\
   pactrun input list <instance>\n\
   pactrun service-storage list <instance> [--retained]\n\
+  pactrun service-storage detached list\n\
+  pactrun service-storage detached show <allocation-id> [--reveal-location]\n\
+  pactrun service-storage detached discard <allocation-id> --confirm-discard\n\
   pactrun resource list <instance> [--retained]\n\
   pactrun resource show <instance> <resource-id> [--retained]\n\
   pactrun resource observe <instance> <resource-id> [--retained]\n\
@@ -81,10 +89,13 @@ Snapshot execution options: --param, --param-file, --param-stdin, --plan, --auth
 Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
 Snapshot bundles use filesystem paths only, never stdin/stdout.\n\
 Migration supports declared paths, Hook edges and explicit per-target Input files.\n\
+Retirement execution options: --authorize-recovery-override, --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
+Cleanup has no parameters. Abandon never launches Cleanup. Detached discard never stops external processes.\n\
 \n\
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    Retirement(retirements::RetirementCommand),
     ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
     Snapshot(snapshots::SnapshotCommand),
@@ -467,8 +478,8 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         "action" => parse_action(&mut parser),
         "invoke" => parse_invoke(&mut parser),
         "snapshot" => snapshots::parse(&mut parser).map(Command::Snapshot),
-        "service-storage" => service_storage::parse(&mut parser, true).map(Command::ServiceStorage),
-        "resource" => service_storage::parse(&mut parser, false).map(Command::ServiceStorage),
+        "service-storage" => service_storage::parse(&mut parser, true),
+        "resource" => service_storage::parse(&mut parser, false),
         "run" => parse_run(&mut parser),
         "storage" => {
             let operation = required_value_string(&mut parser, "storage command")?;
@@ -499,6 +510,9 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
 
 fn parse_instance(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "instance command")?.as_str() {
+        operation @ ("delete" | "abandon" | "deletion") => {
+            retirements::parse_instance(parser, operation).map(Command::Retirement)
+        }
         "migration-paths" => migrations::parse(parser, true).map(Command::Migration),
         "migrate" => migrations::parse(parser, false).map(Command::Migration),
         "create" => {
@@ -825,6 +839,9 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
+    if let Command::Retirement(command) = command {
+        return retirements::execute(command, &storage_root, stdout, stderr, cancellation);
+    }
     if let Command::Migration(command) = command {
         return migrations::execute(command, &storage_root, stdout, cancellation);
     }
@@ -1206,6 +1223,7 @@ fn execute(
         | Command::UpgradeStorage
         | Command::Migration(_)
         | Command::Snapshot(_)
+        | Command::Retirement(_)
         | Command::ServiceStorage(_) => {
             unreachable!()
         }
@@ -1420,6 +1438,14 @@ fn format_native_path(path: &Path) -> String {
 
 fn format_failed_step(step: crate::domain::RunFailedStep) -> String {
     match step {
+        crate::domain::RunFailedStep::DeletionPlan(step) => match step {
+            crate::domain::DeletionPlanStep::EstablishSession => "establish_session",
+            crate::domain::DeletionPlanStep::LaunchCleanup => "launch_cleanup",
+            crate::domain::DeletionPlanStep::AcceptCompletion => "accept_completion",
+            crate::domain::DeletionPlanStep::AuthorizeFinalization => "authorize_finalization",
+            crate::domain::DeletionPlanStep::FinalizeStorage => "finalize_storage",
+        }
+        .to_owned(),
         crate::domain::RunFailedStep::MigrationPlan(step) => match step {
             crate::domain::MigrationPlanStep::EstablishSession => "establish_session",
             crate::domain::MigrationPlanStep::LaunchHook => "launch_hook",

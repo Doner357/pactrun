@@ -70,7 +70,7 @@ Origin Instance information MUST be provenance rather than ownership. A
 Snapshot MAY restore to another exact-compatible Instance and MAY outlive its
 origin Instance, producer Revision installation, and creator Run.
 
-**Verification: PR-TEST-0275.**
+**Verification: PR-TEST-0275, PR-TEST-0421.**
 
 ### PR-REQ-0104 - Sensitive Snapshot export
 
@@ -168,7 +168,7 @@ the Cleanup-completed boundary defined by PR-REQ-0247. With or without a Cleanup
 capability, successful normal deletion requires the Pactrun-provided Instance
 storage lifetime to have ended before Pactrun removes the Instance state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0404, PR-TEST-0408.**
 
 ### PR-REQ-0112 - Cleanup failure result
 
@@ -177,7 +177,7 @@ unchanged. A terminal Cleanup non-success with clear risk MUST retain a Normal
 Instance. Open risk MUST retain the Instance in `ManualRecoveryRequired`.
 Pactrun MUST NOT create persistent `Deleting` or `DeletionFailed` states.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0405.**
 
 ### PR-REQ-0113 - AbandonManagement intent
 
@@ -189,7 +189,7 @@ manual recovery. It MUST warn that service-owned resources, files, processes,
 or credentials may remain. It MUST remain a managed execution with Run history
 that distinguishes explicit abandonment from successful managed cleanup.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0406.**
 
 ### PR-REQ-0247 - Cleanup finalization and abandonment
 
@@ -226,4 +226,4 @@ durable non-destruction representation, later discoverability, operator handoff,
 and explicit discard remain future persistence and runtime design gates. This
 requirement introduces no orphan-storage or retained-resource registry.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0407, PR-TEST-0408, PR-TEST-0409, PR-TEST-0410, PR-TEST-0411, PR-TEST-0412, PR-TEST-0413, PR-TEST-0414, PR-TEST-0433, PR-TEST-0445.**

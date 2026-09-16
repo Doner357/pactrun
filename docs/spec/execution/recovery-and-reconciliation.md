@@ -197,7 +197,7 @@ unresolved recovery obligation may need them. Execution-only recovery state MAY
 be removed or compacted only after terminal reconciliation and after no managed
 object requires the references.
 
-**Verification: PR-TEST-0085, PR-TEST-0327.**
+**Verification: PR-TEST-0085, PR-TEST-0327, PR-TEST-0423, PR-TEST-0428.**
 
 ## ManualRecoveryRequired
 

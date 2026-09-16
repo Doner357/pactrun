@@ -83,7 +83,7 @@ file-descriptor sandbox, immutable file identity, read-only mount or writer lock
 No user exposure setting enlarges Hook authority and no Hook grant authorizes a
 user path disclosure. Protected allocations survive process/Run termination.
 
-**Verification: PR-TEST-0360, PR-TEST-0362, PR-TEST-0363, PR-TEST-0364, PR-TEST-0365, PR-TEST-0368, PR-TEST-0369, PR-TEST-0370, PR-TEST-0385, PR-TEST-0386.**
+**Verification: PR-TEST-0360, PR-TEST-0362, PR-TEST-0363, PR-TEST-0364, PR-TEST-0365, PR-TEST-0368, PR-TEST-0369, PR-TEST-0370, PR-TEST-0385, PR-TEST-0386, PR-TEST-0426.**
 
 Codec, authority and ordinary-runtime evidence: explicit V2 preamble/handshake, strict common and
 target-proposal message decoding, and rejection of V1 fallback. The outgoing

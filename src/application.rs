@@ -1,5 +1,6 @@
 //! Application orchestration and dependency-resolution ownership.
 
+mod deletions;
 mod installation;
 mod migrations;
 mod service_storage;
@@ -77,6 +78,7 @@ pub(crate) enum ApplicationError {
     PlanCompilation(PlanCompilationError),
     SnapshotCompilation(crate::domain::SnapshotPlanError),
     MigrationCompilation(crate::domain::MigrationError),
+    DeletionCompilation(crate::domain::DeletionPlanError),
     Execution(ExecutorError),
     InvalidInstallation(String),
     InvalidRequest(String),
@@ -106,6 +108,9 @@ impl fmt::Display for ApplicationError {
                 write!(formatter, "Migration compilation: {source}")
             }
             Self::Execution(source) => write!(formatter, "execution: {source}"),
+            Self::DeletionCompilation(source) => {
+                write!(formatter, "deletion compilation: {source}")
+            }
             Self::ServiceStorage(source) => source.fmt(formatter),
             Self::LockPoisoned => formatter.write_str("Instance mutation lock is poisoned"),
         }
@@ -126,6 +131,7 @@ impl std::error::Error for ApplicationError {
             Self::PlanCompilation(source) => Some(source),
             Self::SnapshotCompilation(source) => Some(source),
             Self::MigrationCompilation(source) => Some(source),
+            Self::DeletionCompilation(source) => Some(source),
             Self::Execution(source) => Some(source),
             Self::ServiceStorage(source) => Some(source),
             Self::Configuration(_)

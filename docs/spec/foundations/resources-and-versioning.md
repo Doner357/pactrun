@@ -27,7 +27,7 @@ expiry in the initial product scope. Instance and Revision deletion MUST NOT
 cascade-delete Snapshots, and Snapshot content MUST NOT depend on the creating
 Run or Run Artifact remaining available.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0421.**
 
 ### PR-REQ-0073 - Run, Artifact, and workspace lifetime
 
@@ -61,7 +61,7 @@ After confirmed owner loss, orphaned Action Workspace bytes are cleanup-eligible
 under the selected ownership mechanism. Their cleanup MUST NOT recover or
 publish uncommitted output slots.
 
-**Verification: PR-TEST-0106, PR-TEST-0110.**
+**Verification: PR-TEST-0106, PR-TEST-0110, PR-TEST-0421.**
 
 ### PR-REQ-0282 - Execution-workspace housekeeping failures
 
@@ -85,7 +85,7 @@ Transition checkpoints and durable recovery state MUST remain until no recovery
 or reference obligation exists. Execution-only pins MAY be released only after
 the Run is terminal and no recovery state needs them.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0423, PR-TEST-0428.**
 
 ### PR-REQ-0075 - Revision deletion guards
 

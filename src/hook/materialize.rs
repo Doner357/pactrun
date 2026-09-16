@@ -22,6 +22,9 @@ use super::LiveOutputSlot;
 #[path = "migration_materialize.rs"]
 mod migration;
 
+#[path = "cleanup_materialize.rs"]
+mod cleanup;
+
 pub(super) struct MaterializedExecution {
     directory: ExecutionDirectory,
     outputs: Vec<MaterializedOutputSlot>,

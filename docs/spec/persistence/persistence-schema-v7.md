@@ -305,4 +305,4 @@ Snapshots, Artifacts and metadata. No storage directory is allocated for a V1
 Instance during upgrade; no replay, reconciliation, rehash or implicit service
 adoption occurs. Schema upgrade does not imply service allocation or recovery.
 
-**Verification: PR-TEST-0205, PR-TEST-0298, PR-TEST-0300, PR-TEST-0341, PR-TEST-0342, PR-TEST-0343, PR-TEST-0344.**
+**Verification: PR-TEST-0205, PR-TEST-0298, PR-TEST-0341, PR-TEST-0342, PR-TEST-0343, PR-TEST-0344.**

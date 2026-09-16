@@ -95,6 +95,9 @@ impl PreparedSession {
                 array_handles(&mut handles, &op["bindings"])?;
                 insert_handle(&mut handles, &op["snapshot_content"]["handle"])?;
             }
+            SessionOperation::Cleanup => {
+                array_handles(&mut handles, &op["bindings"])?;
+            }
             SessionOperation::Migration => {
                 array_handles(&mut handles, &op["source_bindings"])?;
                 array_handles(&mut handles, &op["target_bindings"])?;
@@ -110,7 +113,9 @@ impl PreparedSession {
                     || (reference.view == ServiceView::Target
                         && reference.role == ServiceRole::Active)
             } else {
-                reference.view == ServiceView::Current && reference.role == ServiceRole::Active
+                reference.view == ServiceView::Current
+                    && (reference.role == ServiceRole::Active
+                        || operation == SessionOperation::Cleanup)
             };
             if !valid_role
                 || (matches!(

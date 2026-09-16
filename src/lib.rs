@@ -13,6 +13,7 @@ mod managed_data;
 mod opened_files;
 mod output_publication;
 mod persistence;
+mod retirement_fs;
 mod revision_content;
 mod revision_core_v1;
 mod revision_core_v2;

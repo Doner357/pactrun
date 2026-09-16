@@ -263,6 +263,7 @@ fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
     crate::persistence::sqlite_revision_store::configure_connection(&db).unwrap();
     crate::persistence::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
     drop(db);
+    assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
     assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     assert_eq!(p.load_managed_run(run).unwrap().unwrap(), before);

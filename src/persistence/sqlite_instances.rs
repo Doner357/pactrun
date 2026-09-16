@@ -112,6 +112,10 @@ impl PactrunPersistence {
             )
             .map_err(|error| PersistenceError::sqlite("insert Instance", error))?;
         transaction.execute(
+            "INSERT INTO instance_history_identities(instance_id, instance_name) VALUES (?1, ?2)",
+            params![instance_id.as_bytes().as_slice(), name.as_bytes()],
+        ).map_err(|error| PersistenceError::sqlite("record Instance history identity", error))?;
+        transaction.execute(
             "INSERT INTO instance_recovery_consequence_versions(instance_id, consequence_version) VALUES (?1, 0)",
             [instance_id.as_bytes().as_slice()],
         ).map_err(|error| PersistenceError::sqlite("initialize Instance consequence version", error))?;
