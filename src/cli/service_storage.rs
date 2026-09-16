@@ -19,8 +19,11 @@ enum ServiceOperation {
     Locate(ServiceResourceIdentity, ServiceAccessIntent),
 }
 
-pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<ServiceCommand, CliError> {
+pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<Command, CliError> {
     let operation = required_value_string(parser, "service command")?;
+    if storage && operation == "detached" {
+        return retirements::parse_detached(parser).map(Command::Retirement);
+    }
     if (storage && operation != "list")
         || (!storage && !matches!(operation.as_str(), "list" | "show" | "observe" | "locate"))
     {
@@ -66,7 +69,7 @@ pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<ServiceCommand
         ),
         _ => unreachable!("closed operation"),
     };
-    Ok(ServiceCommand {
+    Ok(Command::ServiceStorage(ServiceCommand {
         name,
         role: if retained {
             ServiceRole::Retained
@@ -74,7 +77,7 @@ pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<ServiceCommand
             ServiceRole::Active
         },
         operation,
-    })
+    }))
 }
 
 pub(super) fn execute(

@@ -65,6 +65,10 @@ mod v2_runtime {
     include!("service_runtime_tests.rs");
 }
 
+mod deletion_runtime {
+    include!("deletion_tests.rs");
+}
+
 // Test-ID: PR-TEST-0122
 // Verifies: PR-REQ-0286
 #[test]

@@ -166,19 +166,28 @@ pub(super) fn execute_materialized(
     policy: HookRuntimePolicy,
     cancellation: ActionCancellation,
 ) -> OwnerContinuation {
+    let cleanup = materialized.operation() == super::protocol::SessionOperation::Cleanup;
     if cancellation.is_requested() {
         let (execution, outputs) = materialized.into_execution();
-        return ready_cancelled(run, outputs, Some(execution));
+        return super::deletions::adapt_early(
+            ready_cancelled(run, outputs, Some(execution)),
+            cleanup,
+            false,
+        );
     }
     let listener = match ProtocolListener::bind() {
         Ok(listener) => listener,
         Err(_) => {
             let (execution, outputs) = materialized.into_execution();
-            return ready_failure(
-                run,
-                FailureKind::ProtocolTransport,
-                outputs,
-                Some(execution),
+            return super::deletions::adapt_early(
+                ready_failure(
+                    run,
+                    FailureKind::ProtocolTransport,
+                    outputs,
+                    Some(execution),
+                ),
+                cleanup,
+                false,
             );
         }
     };
@@ -193,16 +202,26 @@ pub(super) fn execute_materialized(
         Ok(Some(supervisor)) => supervisor,
         Ok(None) => {
             let (execution, outputs) = materialized.into_execution();
-            return ready_cancelled(run, outputs, Some(execution));
+            return super::deletions::adapt_early(
+                ready_cancelled(run, outputs, Some(execution)),
+                cleanup,
+                false,
+            );
         }
         Err(_) => {
             let (execution, outputs) = materialized.into_execution();
-            return ready_failure(run, FailureKind::Launch, outputs, Some(execution));
+            return super::deletions::adapt_early(
+                ready_failure(run, FailureKind::Launch, outputs, Some(execution)),
+                cleanup,
+                true,
+            );
         }
     };
     let started = Instant::now();
     let state = if let Some(state) = materialized.take_v2_state() {
         ProtocolState::V2(state)
+    } else if cleanup {
+        ProtocolState::new_cleanup(materialized.session_id().to_owned())
     } else if materialized.operation() == super::protocol::SessionOperation::Migration {
         ProtocolState::new_migration(
             materialized.session_id().to_owned(),
@@ -470,6 +489,12 @@ fn drive_execution(
                             }
                             super::protocol::SessionOperation::Restore => {
                                 ConnectedProtocol::start_restore(
+                                    stream,
+                                    live.materialized.session(),
+                                )
+                            }
+                            super::protocol::SessionOperation::Cleanup => {
+                                ConnectedProtocol::start_cleanup(
                                     stream,
                                     live.materialized.session(),
                                 )
@@ -746,6 +771,9 @@ pub(super) fn resume_registered(
     continuation: OwnerContinuation,
 ) -> OwnerContinuation {
     match continuation {
+        state @ (OwnerContinuation::Deletion(_) | OwnerContinuation::CleanupFinalization(_)) => {
+            state
+        }
         OwnerContinuation::TargetReady(facts) => OwnerContinuation::TargetReady(facts),
         OwnerContinuation::Migration(state) => OwnerContinuation::Migration(state),
         OwnerContinuation::RestoreFinalization(state) => {
@@ -931,6 +959,7 @@ fn finish_after_exit(
     let submitted_outputs = live.materialized.submitted_outputs(&live.submitted_handles);
     let capture_mode = live.materialized.operation() == super::protocol::SessionOperation::Capture;
     let restore_mode = live.materialized.operation() == super::protocol::SessionOperation::Restore;
+    let cleanup_mode = live.materialized.operation() == super::protocol::SessionOperation::Cleanup;
     let capture = live.materialized.take_capture();
     let migration_outputs = live.materialized.take_migration_outputs();
     let (execution, outputs) = live.materialized.into_execution();
@@ -952,6 +981,9 @@ fn finish_after_exit(
     }
     if restore_mode {
         return super::restore::terminal(facts);
+    }
+    if cleanup_mode {
+        return super::deletions::terminal_with_cancellation(facts, true, live.cancellation);
     }
     OwnerContinuation::ReadyToFinalize(FinalizationState {
         facts,

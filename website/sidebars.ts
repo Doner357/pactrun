@@ -48,6 +48,7 @@ const sidebars: SidebarsConfig = {
           'spec/execution/execution-and-concurrency',
           'spec/execution/m4-snapshot-lifecycle-approval-baseline',
           'spec/execution/m5-migration-execution',
+          'spec/execution/m7-instance-retirement',
           'spec/execution/recovery-and-reconciliation',
         ]},
         {type: 'category', label: 'Internal persistence', items: [
@@ -57,6 +58,7 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v4',
           'spec/persistence/persistence-schema-v5',
           'spec/persistence/persistence-schema-v6',
+          'spec/persistence/persistence-schema-v8',
         ]},
         {type: 'category', label: 'M6.5 Candidate Contracts', items: [
           'spec/contracts/revision-core-format-v2',
@@ -79,6 +81,8 @@ const sidebars: SidebarsConfig = {
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',
+        'development/m7-implementation-status',
+        'development/design-notes/m7-cleanup-deletion-implementation-baseline',
         'development/spec-migration-review',
         {type: 'category', label: 'Design syntheses and history', items: [
           'development/design-notes/non-identity-metadata-semantic-baseline',

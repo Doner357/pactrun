@@ -367,6 +367,14 @@ fn retry_or_fail(
 }
 fn operation_name(operation: &ManagedRunIdentity) -> &'static str {
     match operation {
+        ManagedRunIdentity::Deletion {
+            mode: crate::domain::DeletionMode::ManagedCleanup,
+            ..
+        } => "instance_delete",
+        ManagedRunIdentity::Deletion {
+            mode: crate::domain::DeletionMode::AbandonManagement,
+            ..
+        } => "instance_abandon",
         ManagedRunIdentity::Migration(_) => "migration",
         ManagedRunIdentity::Action(_) => "action",
         ManagedRunIdentity::Capture { .. } => "snapshot_capture",
@@ -528,7 +536,7 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
             "stored Snapshot content or representation is corrupt; no repair was performed"
         }
         ApplicationError::Persistence(PersistenceError::UpgradeRequired) => {
-            "storage upgrade required; run pactrun storage upgrade with a supported exact V4 store"
+            "storage upgrade required; run pactrun storage upgrade with a supported exact V7 store"
         }
         ApplicationError::Persistence(
             PersistenceError::SchemaMismatch(_) | PersistenceError::DatabaseOwnership(_),

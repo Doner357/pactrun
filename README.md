@@ -45,6 +45,14 @@ M6.5 is integrated into local develop; its delivery record distinguishes
 final-source validation from Git integration. M7 Cleanup, deletion and
 abandonment require separate design approval and remain outside this scope.
 
+The separately approved [M7 implementation](./docs/development/m7-implementation-status.md)
+is now implemented and verified on its feature branch, not yet integrated.
+It adds Cleanup/deletion, explicit completion assertion, Abandon, detached
+handoff/discard and [V8](./docs/spec/persistence/persistence-schema-v8.md) with
+exact-V7 upgrade. Native retirement is qualified against concurrent namespace
+changes and retains durable no-replay/retry evidence. No product network
+feature, daemon, release, Git integration or documentation deployment is implied.
+
 ## Repository layout
 
 - `src/` contains the production crate and crate-private architecture modules.

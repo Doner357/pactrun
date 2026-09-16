@@ -107,6 +107,12 @@ impl ConnectedProtocol {
             receiver: Receiver::V2(c.receiver),
         })
     }
+    pub(super) fn start_cleanup(
+        stream: ProtocolStream,
+        session: &serde_json::Value,
+    ) -> io::Result<Self> {
+        v1::ConnectedProtocol::start_cleanup(stream, session).map(Self::v1)
+    }
 }
 pub(super) enum ProtocolStep {
     Ready,
@@ -150,6 +156,9 @@ impl ProtocolState {
     }
     pub(super) fn new_restore(id: String) -> Self {
         Self::V1(v1::ProtocolState::new_restore(id))
+    }
+    pub(super) fn new_cleanup(id: String) -> Self {
+        Self::V1(v1::ProtocolState::new_cleanup(id))
     }
     pub(super) fn new_migration(id: String, outputs: BTreeSet<String>) -> Self {
         Self::V1(v1::ProtocolState::new_migration(id, outputs))

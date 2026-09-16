@@ -85,6 +85,7 @@ pub(super) fn qualify_current_service_facts(
         ManagedRunIdentity::Action(action) => ServiceHookSite::Action(action.action.clone()),
         ManagedRunIdentity::Capture { .. } => ServiceHookSite::Capture,
         ManagedRunIdentity::Restore { .. } => ServiceHookSite::Restore,
+        ManagedRunIdentity::Deletion { .. } => ServiceHookSite::Cleanup,
         ManagedRunIdentity::Migration(_) => {
             return Err(PersistenceError::InvalidRunTransition(
                 "Migration requires edge-specific service admission".into(),

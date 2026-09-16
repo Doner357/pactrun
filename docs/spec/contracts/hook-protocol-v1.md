@@ -529,7 +529,7 @@ failure before accepted completion prevents protocol success. Their Run and
 Instance consequences remain Pactrun-owned and depend on the durable risk state;
 Pactrun MUST NOT infer replay or compensation.
 
-**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093, PR-TEST-0097, PR-TEST-0152, PR-TEST-0153, PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177, PR-TEST-0242, PR-TEST-0243, PR-TEST-0245, PR-TEST-0248, PR-TEST-0260.**
+**Verification: PR-TEST-0027, PR-TEST-0028, PR-TEST-0030, PR-TEST-0093, PR-TEST-0097, PR-TEST-0152, PR-TEST-0153, PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177, PR-TEST-0242, PR-TEST-0243, PR-TEST-0245, PR-TEST-0248, PR-TEST-0260, PR-TEST-0399.**
 
 ### PR-REQ-0217 - Local protocol errors and ownership
 

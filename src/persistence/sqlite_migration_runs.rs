@@ -146,6 +146,7 @@ pub(super) fn require_no_migration_mutator(
     tx: &Transaction<'_>,
     instance: InstanceId,
 ) -> Result<(), PersistenceError> {
+    super::sqlite_deletions::require_ordinary_lifecycle(tx, instance)?;
     let run:Option<Vec<u8>>=tx.query_row("SELECT r.run_id FROM runs r JOIN run_executions e ON e.run_id=r.run_id JOIN run_revision_pins p ON p.run_id=r.run_id JOIN run_operation_kinds k ON k.run_id=r.run_id WHERE r.instance_id=?1 AND k.operation_kind=3 ORDER BY r.run_id LIMIT 1",[instance.as_bytes().as_slice()],|r|r.get(0)).optional().map_err(|e|PersistenceError::sqlite("check Migration management exclusion",e))?;
     if let Some(run) = run {
         let run = RunId::from_bytes(run.try_into().map_err(|_| corrupt())?);
@@ -524,7 +525,20 @@ impl PactrunPersistence {
             if guarded && !override_guard {
                 return Ok(Some(AdmissionRefusal::RecoveryGuardActive));
             }
-            let (_, active, version) = instance_header(&tx, view.instance)?;
+            if super::sqlite_deletions::obligation_from(&tx, view.instance)?.is_some() {
+                return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                    "Instance has a deletion obligation".to_owned(),
+                )));
+            }
+            let (_, active, version) = match instance_header(&tx, view.instance) {
+                Ok(header) => header,
+                Err(PersistenceError::MissingInstance(_)) => {
+                    return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                        "Instance has been retired".to_owned(),
+                    )));
+                }
+                Err(error) => return Err(error),
+            };
             if active != *invocation.source()
                 || version != plan.expected_state_version()
                 || version != view.accepted_state_version

@@ -37,6 +37,7 @@ pub(super) enum SessionOperation {
     Capture,
     Restore,
     Migration,
+    Cleanup,
 }
 impl SessionOperation {
     fn wire_name(self) -> &'static str {
@@ -45,6 +46,7 @@ impl SessionOperation {
             Self::Capture => "snapshot_capture",
             Self::Restore => "snapshot_restore",
             Self::Migration => "migration",
+            Self::Cleanup => "cleanup",
         }
     }
 }
@@ -87,6 +89,9 @@ impl ConnectedProtocol {
     }
     pub(super) fn start_migration(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
         Self::start_for(stream, session, SessionOperation::Migration)
+    }
+    pub(super) fn start_cleanup(stream: ProtocolStream, session: &Value) -> io::Result<Self> {
+        Self::start_for(stream, session, SessionOperation::Cleanup)
     }
 
     fn start_for(
@@ -464,7 +469,9 @@ fn parse_completion(
             SessionOperation::Capture => {
                 &["operation", "status", "service_content", "code", "message"]
             }
-            SessionOperation::Restore => &["operation", "status", "code", "message"],
+            SessionOperation::Restore | SessionOperation::Cleanup => {
+                &["operation", "status", "code", "message"]
+            }
             SessionOperation::Migration => &[
                 "operation",
                 "status",
@@ -756,6 +763,12 @@ impl ProtocolState {
             ..Self::new(session_id, BTreeSet::new())
         }
     }
+    pub(super) fn new_cleanup(session_id: String) -> Self {
+        Self {
+            operation: SessionOperation::Cleanup,
+            ..Self::new(session_id, BTreeSet::new())
+        }
+    }
     pub(super) fn new_migration(session_id: String, outputs: BTreeSet<String>) -> Self {
         Self {
             operation: SessionOperation::Migration,
@@ -1024,4 +1037,9 @@ mod capture_tests {
 #[cfg(test)]
 mod migration_tests {
     include!("migration_protocol_tests.rs");
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    include!("cleanup_protocol_tests.rs");
 }

@@ -8,7 +8,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-const WORKER: &str = "persistence::sqlite_v7::tests::v7_worker";
+const WORKER: &str = "persistence::sqlite_v8::upgrade_tests::v8_worker";
 const TABLES: [&str; 10] = [
     "service_storage_allocations",
     "service_storage_preparations",
@@ -22,7 +22,7 @@ const TABLES: [&str; 10] = [
     "run_service_edge_commits",
 ];
 fn root() -> (tempfile::TempDir, PathBuf) {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m65-v7-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m7-v8-tests");
     fs::create_dir_all(&parent).unwrap();
     let temp = tempfile::tempdir_in(parent).unwrap();
     let root = temp.path().join("store");
@@ -69,8 +69,8 @@ impl Drop for Worker {
 fn worker(root: &Path, mode: &str, extra: &[(&str, &str)]) -> Worker {
     let mut cmd = Command::new(std::env::current_exe().unwrap());
     cmd.args(["--exact", WORKER, "--nocapture"])
-        .env("PACTRUN_V7_ROOT", root)
-        .env("PACTRUN_V7_MODE", mode)
+        .env("PACTRUN_V8_ROOT", root)
+        .env("PACTRUN_V8_MODE", mode)
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     for (k, v) in extra {
@@ -79,27 +79,27 @@ fn worker(root: &Path, mode: &str, extra: &[(&str, &str)]) -> Worker {
     Worker(cmd.spawn().unwrap())
 }
 #[test]
-fn v7_worker() {
-    let Some(root) = std::env::var_os("PACTRUN_V7_ROOT") else {
+fn v8_worker() {
+    let Some(root) = std::env::var_os("PACTRUN_V8_ROOT") else {
         return;
     };
     let root = PathBuf::from(root);
-    match std::env::var("PACTRUN_V7_MODE").unwrap().as_str() {
+    match std::env::var("PACTRUN_V8_MODE").unwrap().as_str() {
         "upgrade" => {
-            assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
         }
         "held" | "late" => {
             let session = StagingSession::prepare(&root).unwrap();
             let mut db = Connection::open(db_path(&root)).unwrap();
             configure_connection(&db).unwrap();
-            let late = std::env::var("PACTRUN_V7_MODE").unwrap() == "late";
+            let late = std::env::var("PACTRUN_V8_MODE").unwrap() == "late";
             if !late {
                 let tx = db
                     .transaction_with_behavior(TransactionBehavior::Immediate)
                     .unwrap();
-                validate_schema(&tx, 6).unwrap();
+                validate_schema(&tx, 7).unwrap();
                 tx.execute(
-                    "INSERT INTO writable_admissions VALUES(?1,6)",
+                    "INSERT INTO writable_admissions VALUES(?1,7)",
                     [session.owner().as_str().as_bytes()],
                 )
                 .unwrap();
@@ -111,7 +111,7 @@ fn v7_worker() {
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .unwrap();
             if late {
-                assert!(validate_schema(&tx, 6).is_err());
+                assert!(validate_schema(&tx, 7).is_err());
                 fs::write(root.join("legacy-refused"), []).unwrap();
             } else {
                 tx.execute(
@@ -126,12 +126,12 @@ fn v7_worker() {
     }
 }
 
-// Test-ID: PR-TEST-0340
-// Verifies: PR-REQ-0323
+// Test-ID: PR-TEST-0400
+// Verifies: PR-REQ-0338
 #[test]
-fn v7_exact_ddl_preserves_legacy_tables_and_protects_allocation_custody() {
+fn v8_exact_ddl_preserves_legacy_tables_and_protects_allocation_custody() {
     let document =
-        include_str!("../../docs/spec/persistence/persistence-schema-v7.md").replace("\r\n", "\n");
+        include_str!("../../docs/spec/persistence/persistence-schema-v8.md").replace("\r\n", "\n");
     let approved = document
         .split("```sql\n")
         .nth(1)
@@ -141,14 +141,14 @@ fn v7_exact_ddl_preserves_legacy_tables_and_protects_allocation_custody() {
         .unwrap();
     assert_eq!(
         approved.trim(),
-        SCHEMA_V7_ADDITIONS_SQL.replace("\r\n", "\n").trim()
+        SCHEMA_V8_ADDITIONS_SQL.replace("\r\n", "\n").trim()
     );
     let (_temp, root) = root();
-    source(&root, 7);
-    assert_eq!(version(&root), 7);
+    source(&root, 8);
+    assert_eq!(version(&root), 8);
     let db = Connection::open(db_path(&root)).unwrap();
     configure_connection(&db).unwrap();
-    validate_schema(&db, 7).unwrap();
+    validate_schema(&db, 8).unwrap();
     for t in TABLES {
         assert_eq!(
             db.query_row(
@@ -190,25 +190,25 @@ fn v7_exact_ddl_preserves_legacy_tables_and_protects_allocation_custody() {
     );
 }
 
-// Test-ID: PR-TEST-0341
-// Verifies: PR-REQ-0325
+// Test-ID: PR-TEST-0401
+// Verifies: PR-REQ-0339
 #[test]
-fn only_exact_v6_upgrades_without_allocating_or_replaying_any_service() {
+fn only_exact_v7_upgrades_without_allocating_or_replaying_any_service() {
     let (_temp, root) = root();
-    assert!(PactrunPersistence::upgrade_storage_v7(&root).is_err());
+    assert!(PactrunPersistence::upgrade_storage(&root).is_err());
     assert!(!db_path(&root).exists());
-    for old in 1..=7 {
+    for old in 1..=8 {
         let (_temp, root) = self::root();
         source(&root, old);
-        let result = PactrunPersistence::upgrade_storage_v7(&root);
+        let result = PactrunPersistence::upgrade_storage(&root);
         match old {
-            6 => assert!(result.unwrap()),
-            7 => assert!(!result.unwrap()),
+            7 => assert!(result.unwrap()),
+            8 => assert!(!result.unwrap()),
             _ => assert!(result.is_err()),
         }
-        assert_eq!(version(&root), if old >= 6 { 7 } else { old as i64 });
+        assert_eq!(version(&root), if old >= 7 { 8 } else { old as i64 });
         assert!(!root.join("service-storage").exists());
-        if old == 6 {
+        if old == 7 {
             let db = Connection::open(db_path(&root)).unwrap();
             configure_connection(&db).unwrap();
             for t in TABLES {
@@ -228,13 +228,13 @@ fn only_exact_v6_upgrades_without_allocating_or_replaying_any_service() {
         }
     }
     for (app, v, drift) in [
-        (APPLICATION_ID, 8, false),
-        (17, 6, false),
-        (APPLICATION_ID, 6, true),
+        (APPLICATION_ID, 9, false),
+        (17, 7, false),
+        (APPLICATION_ID, 7, true),
         (0, 0, true),
     ] {
         let (_temp, root) = self::root();
-        source(&root, 6);
+        source(&root, 7);
         let db = Connection::open(db_path(&root)).unwrap();
         db.pragma_update(None, "application_id", app).unwrap();
         db.pragma_update(None, "user_version", v).unwrap();
@@ -243,50 +243,50 @@ fn only_exact_v6_upgrades_without_allocating_or_replaying_any_service() {
                 .unwrap();
         }
         drop(db);
-        assert!(PactrunPersistence::upgrade_storage_v7(&root).is_err());
+        assert!(PactrunPersistence::upgrade_storage(&root).is_err());
         assert_eq!(version(&root), v);
     }
 }
 
-// Test-ID: PR-TEST-0342
-// Verifies: PR-REQ-0325
+// Test-ID: PR-TEST-0402
+// Verifies: PR-REQ-0339
 #[test]
-fn upgrade_rechecks_live_unknown_and_late_v6_writer_admissions() {
+fn upgrade_rechecks_live_unknown_and_late_v7_writer_admissions() {
     let (_temp, root) = root();
-    source(&root, 6);
+    source(&root, 7);
     let mut held = worker(&root, "held", &[]);
     wait(&root.join("writer-ready"));
     assert!(matches!(
-        PactrunPersistence::upgrade_storage_v7(&root),
+        PactrunPersistence::upgrade_storage(&root),
         Err(PersistenceError::ActiveWriters)
     ));
-    assert_eq!(version(&root), 6);
+    assert_eq!(version(&root), 7);
     fs::write(root.join("writer-release"), []).unwrap();
     assert!(held.0.wait().unwrap().success());
     let unknown = "session-dddddddddddddddddddddddddddddddd";
     fs::create_dir(root.join("staging").join(unknown)).unwrap();
     let db = Connection::open(db_path(&root)).unwrap();
     db.execute(
-        "INSERT INTO writable_admissions VALUES(?1,6)",
+        "INSERT INTO writable_admissions VALUES(?1,7)",
         [unknown.as_bytes()],
     )
     .unwrap();
     assert!(matches!(
-        PactrunPersistence::upgrade_storage_v7(&root),
+        PactrunPersistence::upgrade_storage(&root),
         Err(PersistenceError::ActiveWriters)
     ));
     db.execute("DELETE FROM writable_admissions", []).unwrap();
     drop(db);
-    assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     let (_temp, root) = self::root();
-    source(&root, 6);
+    source(&root, 7);
     let barrier = root.join("upgrade-barrier");
     fs::create_dir(&barrier).unwrap();
     let mut upgrader = worker(
         &root,
         "upgrade",
         &[
-            ("PACTRUN_M4_SYNC", "after_v6_admission_inspection"),
+            ("PACTRUN_M4_SYNC", "after_v7_admission_inspection"),
             ("PACTRUN_M4_SYNC_DIR", barrier.to_str().unwrap()),
         ],
     );
@@ -298,19 +298,19 @@ fn upgrade_rechecks_live_unknown_and_late_v6_writer_admissions() {
     assert!(upgrader.0.wait().unwrap().success());
     assert!(late.0.wait().unwrap().success());
     assert!(root.join("legacy-refused").exists());
-    assert_eq!(version(&root), 7);
+    assert_eq!(version(&root), 8);
 }
 
-// Test-ID: PR-TEST-0343
-// Verifies: PR-REQ-0325
+// Test-ID: PR-TEST-0403
+// Verifies: PR-REQ-0339
 #[test]
 fn upgrade_crashes_leave_exact_versions_without_rewriting_or_inventing_history() {
     for (point, expected) in [
-        ("before_schema_migration_commit", 6),
-        ("after_schema_migration_commit", 7),
+        ("before_schema_migration_commit", 7),
+        ("after_schema_migration_commit", 8),
     ] {
         let (_temp, root) = root();
-        source(&root, 6);
+        source(&root, 7);
         let db = Connection::open(db_path(&root)).unwrap();
         db.execute("INSERT INTO packages VALUES(?1)", [[5u8; 16].as_slice()])
             .unwrap();

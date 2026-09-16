@@ -393,7 +393,7 @@ fn upgrade_crashes_publish_only_complete_v5_or_v6_and_roll_back_failed_copy() {
 fn migration_references_retain_payloads_and_operation_kinds_are_not_inferred() {
     let mut db = Connection::open_in_memory().unwrap();
     configure_connection(&db).unwrap();
-    for (sql, _) in SCHEMA_LADDER {
+    for (sql, _) in &SCHEMA_LADDER[..6] {
         db.execute_batch(sql).unwrap();
     }
     let instance = InstanceId::from_bytes([2; 16]);
@@ -529,7 +529,7 @@ fn migration_references_retain_payloads_and_operation_kinds_are_not_inferred() {
 fn make_v5_fixture(root: &Path) {
     let mut db = Connection::open(db_path(root)).unwrap();
     configure_connection(&db).unwrap();
-    if version(root) == 7 {
+    if matches!(version(root), 7 | 8) {
         super::super::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
     }
     validate_schema(&db, 6).unwrap();
@@ -786,8 +786,8 @@ fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
     assert_eq!(p.recovery_consequence_version(instance.id).unwrap(), 1);
     drop(p);
     // The historical V5 -> V6 result above is checked independently; the
-    // current public upgrade then preserves every one of those legacy rows.
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    // historical V7 upgrade preserves every one of those legacy rows.
+    assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
     let after = contents(&Connection::open(db_path(&root)).unwrap());
     for (table, rows) in &before {
         assert_eq!(after.get(table), Some(rows), "{table}");
