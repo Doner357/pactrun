@@ -122,6 +122,15 @@ are assigned stages, not implied design approval. Snapshot deletion and the
 broader non-ServiceStorage resource taxonomy remain outside this plan; that
 taxonomy does not block bounded M6.5.
 
+## Release readiness is not the next milestone
+
+[Pre-release readiness work](./release-readiness.md) is approved but has no
+assigned position immediately after M8. Its tasks can be scheduled as appropriate
+and must be accepted before formal publication. M8 completion is not a release
+trigger. The [formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+owns the same-Major guarantee, development-format reset and 0.1.0-to-1.0.0
+boundary; documenting that policy implements none of those new mechanisms.
+
 ## Evidence caveat
 
 Managed Input Migration requirements now link to their direct automated evidence.

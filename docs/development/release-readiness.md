@@ -1,0 +1,116 @@
+---
+title: Release Readiness
+---
+
+# Release readiness
+
+**Status: Approved pre-release work plan. Required before formal release; scheduling and implementation are not yet assigned.**
+
+The operator confirmed this direction on 2026-09-16. This is a readiness
+checklist, not the next numbered milestone or a fixed sequence after M8.
+**Completion of M8 does not trigger these tasks or a release.** Additional
+development or evaluation may occur before they are scheduled. Work items may
+start at suitable times, overlap, and return to design when testing finds gaps.
+
+The [product versioning and compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+owns the observable rules. This plan organizes delivery and evidence without
+creating a second specification. M7 and M8 retain their existing states and
+approval boundaries in the [roadmap](./implementation-roadmap.md).
+
+## Required readiness work
+
+List order is an organizational grouping, not a mandatory M8-to-release chain.
+
+| Work item | Deliverable | Acceptance evidence |
+| --- | --- | --- |
+| Versioning mechanism design and implementation | Concrete version domains, same-Major compatibility enforcement, declared support/requirement checks, internal conversion and upgrade responsibilities | Approved representations and direct tests for the policy's supported/rejected version combinations, including unchanged old meaning |
+| Baseline reorganization and reset | Current product-oriented Spec, separated history, a coherent fresh schema/format baseline and removal of shipping development-only compatibility code | Rule inventory with no lost obligations, new-baseline conformance vectors, explicit old-generation rejection and no accidental data adoption |
+| Internal testing, evaluation and correction | Real end-to-end use of the reorganized program, Packs and documentation; correctness, diagnostics, usability and operational assessment | Recorded exact builds/baselines, automated and actual-use findings, resolved blockers and reruns after relevant corrections |
+| Release mechanism design and implementation | Repeatable procedures for building supported targets, identifying/checking artifacts, version/source/tag consistency, release review and distribution | Successful rehearsal using traceable artifacts and release checks; no implied public publication |
+
+Formal publication is a separate controlled action after readiness acceptance,
+not another prerequisite that must somehow be completed before publication.
+The publication step labels and validates the actual 1.0.0 artifact, then
+publishes the checked artifact rather than silently replacing it with an
+untested rebuild. The exact platforms, distribution channels, signing and
+pipeline implementation remain release-mechanism design work.
+
+## Dependencies, not an automatic schedule
+
+- Versioning decisions and implementation must be sufficient to define and
+  validate the chosen reset baseline. The two work items can be coordinated;
+  this does not require a new milestone numbering scheme.
+- Internal evaluation must ultimately cover that final baseline. Tests of the
+  old development formats are not a substitute. Contract changes discovered
+  during evaluation return to the owning design and verification work.
+- Release-mechanism preparation can overlap internal testing. Passing a build
+  job or completing M8 does not authorize a formal release.
+- Before publication, all readiness items and required corrections must be
+  accepted. The real versioned release candidate must be checked again after
+  the product-version change; simulated compatibility tests alone are not enough.
+
+Product-version and data-generation behavior during this work is owned by
+PR-REQ-0332 and PR-REQ-0333. In particular, the reset does not itself turn 0.1.0
+into a published 1.0.0 product, and the old and reorganized 0.1.0 builds are not
+interchangeable merely because their displayed software versions match.
+
+## Documentation and code reorganization scope
+
+- Keep the active Spec organized by current product concepts and contracts,
+  not by the order of milestones, slices or prior approval sessions.
+- Extract any still-authoritative rule from a milestone document before moving
+  that document to history. Remove duplicate explanations without deleting
+  unique requirements or changing their meaning accidentally.
+- Separate user/Pack/Hook guidance, contributor instructions and historical
+  decisions. Generated HTML/text remains presentation, never a second authority.
+- Preserve or explicitly retire requirement/test identities under the existing
+  contributor policy. Cosmetic cleanup is not permission to renumber unrelated
+  IDs, reuse retired IDs or discard still-applicable regression cases.
+- Retire the development-only compatibility implementations selected by the
+  reset policy. Preserve useful design lessons and adapt still-applicable
+  invariant, negative, crash and conformance tests to the new baseline.
+- Do not copy Secrets, connection credentials or service-owned datasets into
+  source history merely to record development experience.
+
+This section scopes future reorganization; it does not perform that reorganization
+or retire today's Frozen formats. Their current constraints continue until the
+dedicated reset design and implementation are ready.
+
+## Design details still to close
+
+- Exact product-version requirements/capability declarations and how an older
+  reader identifies an unsupported contract before acting; no field name or
+  version-range syntax has been approved yet.
+- The new baseline's identifiers, encoding and reliable distinction from old
+  development data; no concrete generation marker is selected here.
+- The formal supported-format and persistence-upgrade matrices. Old-binary
+  access to newer data is not implied by new-binary backward compatibility.
+- Release artifacts, target matrix, distribution/signing procedures and the
+  explicit publication approval boundary.
+
+The same-Major/cross-Major policy and the decision not to ship development-era
+compatibility are settled direction, not open alternatives to reconsider while
+choosing these representations. No permanent cross-Major compatibility promise
+or broad CMake-style OLD/NEW policy-switch framework is adopted.
+
+## Evidence and current authorization
+
+This documentation task does not implement versioning, change Cargo's product
+version, reset data, remove codecs/migrations, start internal trials, create
+release workflows or publish anything. Documentation and regression CI results
+must be reported as such, not as proof that readiness work is already complete.
+Once implementation is scheduled, keep stable requirement/test traceability and
+follow the [risk-based validation policy](./development-and-verification.md#risk-based-validation-scope).
+Focused iteration does not remove its full-CI integration and formal-release
+gates; documentation-only updates do not trigger the full product suite.
+
+Commit/merge/push and actual public publication remain separately controlled
+actions. The unrelated existing publication workflow is not adopted or modified
+by recording this plan.
+
+## Reference boundary
+
+Conan's client stability policy and Semantic Versioning informed the selected
+Major boundary; see [design references](./design-references.md). References do
+not override the owning Pactrun policy, import Conan's binary-ABI model, or
+automatically adopt another project's bug-fix exceptions or support cadence.

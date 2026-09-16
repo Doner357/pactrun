@@ -176,6 +176,70 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
   assert.match(closeout, /without push/);
 });
 
+test('release readiness is approved but unscheduled and does not implement future versioning', async () => {
+  const document = name => docs.find(([file]) => file === name)?.[1];
+  const plan = document('development/release-readiness.md');
+  const policy = document('spec/foundations/product-versioning-and-compatibility.md');
+  assert.ok(plan);
+  assert.ok(policy);
+  const normalizedPlan = plan.replace(/\s+/g, ' ');
+  const normalizedPolicy = policy.replace(/\s+/g, ' ');
+  assert.match(normalizedPlan, /Required before formal release; scheduling and implementation are not yet assigned/);
+  assert.match(normalizedPlan, /Completion of M8 does not trigger these tasks or a release/);
+  assert.match(normalizedPlan, /not a mandatory M8-to-release chain/);
+  for (const work of [
+    'Versioning mechanism design and implementation',
+    'Baseline reorganization and reset',
+    'Internal testing, evaluation and correction',
+    'Release mechanism design and implementation',
+  ]) assert.ok(plan.includes('| ' + work + ' |'), work);
+  assert.match(normalizedPlan, /Formal publication is a separate controlled action/);
+  assert.match(normalizedPlan, /does not implement versioning, change Cargo's product version, reset data/);
+  assert.match(normalizedPlan, /no field name or version-range syntax has been approved yet/);
+  assert.match(normalizedPolicy, /Approved formal-release compatibility design; implementation and baseline reset pending/);
+  assert.deepEqual([...policy.matchAll(/^### (PR-REQ-\d+)/gm)].map(match => match[1]), [
+    'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333',
+  ]);
+  assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 5);
+  assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
+  assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
+  assert.match(normalizedPolicy, /without backward compatibility for development-era formats or data/);
+  assert.match(normalizedPolicy, /Development-era means the retired pre-reset generation/);
+  assert.match(normalizedPolicy, /MUST remain at product version 0\.1\.0/);
+  assert.match(normalizedPolicy, /MUST NOT automatically publish or label the product 1\.0\.0/);
+  assert.match(normalizedPolicy, /MUST NOT perform another format reset/);
+  const roadmap = document('development/implementation-roadmap.md').replace(/\s+/g, ' ');
+  assert.match(roadmap, /Release-readiness prerequisites \(timing unassigned\)/);
+  assert.match(roadmap, /not tasks automatically scheduled immediately after M8/);
+  assert.match(roadmap, /### M7 - Cleanup and deletion \*\*State: Proposed\./);
+  assert.match(roadmap, /### M8 - Recipes and advanced authoring \*\*State: Proposed\./);
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.match(sidebar, /spec\/foundations\/product-versioning-and-compatibility/);
+  assert.match(sidebar, /development\/release-readiness/);
+});
+
+test('validation policy selects by impact while preserving full-suite gates and honest evidence', async () => {
+  const policy = docs.find(([name]) => name === 'development/development-and-verification.md')[1];
+  const normalized = policy.replace(/\s+/g, ' ');
+  assert.match(normalized, /Routine edits MUST NOT automatically run the complete product suite/);
+  assert.match(normalized, /No full Rust product suite by default/);
+  assert.match(normalized, /inspect `include_str!`, extracted SQL/);
+  assert.match(normalized, /An explicit request for full CI always overrides a narrower default/);
+  assert.match(normalized, /stable runtime-bearing milestone integration candidate and for formal release/);
+  assert.match(normalized, /A commit SHA change alone is not a reason to repeat full CI/);
+  assert.match(normalized, /Report full CI as `Not run` when only narrower checks ran/);
+  assert.match(normalized, /filter that executes zero intended tests is not proof/);
+  assert.match(normalized, /relevant production code, tests, fixtures, dependencies, toolchain\/build settings/);
+  assert.match(normalized, /not a new automatic cache or filename-based skip system/);
+  const contribution = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8');
+  assert.match(contribution, /risk-based-validation-scope/);
+  assert.doesNotMatch(contribution, /Run `cargo xtask ci` for the same ordered checks/);
+  const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
+  assert.match(roadmap.replace(/\s+/g, ' '), /stable runtime-bearing milestone integration candidate/);
+  const readiness = docs.find(([name]) => name === 'development/release-readiness.md')[1];
+  assert.match(readiness.replace(/\s+/g, ' '), /documentation-only updates do not trigger the full product suite/);
+});
+
 async function rustFiles(directory) {
   const files = [];
   for (const entry of await readdir(directory, {withFileTypes: true})) {

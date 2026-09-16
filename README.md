@@ -66,19 +66,26 @@ to discover these files automatically.
 
 ## Validation
 
-The shared full-verification entry point is:
+Choose the smallest sufficient checks under the
+[risk-based validation policy](docs/development/development-and-verification.md#risk-based-validation-scope).
+The shared full-verification gate, not the default for every edit, is:
 
 ```text
 cargo xtask ci
 ```
 
 It checks Rust formatting, Clippy, all workspace tests, Docusaurus types, and the
-production documentation build. The documentation-only entry point is:
+production documentation build. Documentation-only verification uses:
 
 ```text
+cargo test -p xtask candidate_or_frozen_metadata_and_traceability_are_valid -- --test-threads=1
+pnpm --dir website run typecheck
 cargo xtask docs-build
 ```
 
 Complete verification and documentation builds run on the configured POSIX
 remote and in GitHub Actions. Local checks must remain within the workspace and
 must not alter host-level configuration.
+An unchanged implementation need not rerun full CI merely because a closeout
+paragraph or commit SHA changed; the policy defines dependency-aware evidence
+reuse and the remaining full-suite gates.
