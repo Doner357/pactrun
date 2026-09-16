@@ -59,7 +59,7 @@ configured destination and a non-force branch-state check.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | M5, bounded M6, M6.5 and approved M7 S0-S7 are implemented and integrated into local develop; M8 has not started |
+| Scope and work order | M5, bounded M6, M6.5 and approved M7 S0-S7 are implemented and integrated into local develop; M8 is rejected and archived |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -89,9 +89,14 @@ S2 durable evidence/publication, S3 guard/diagnostics and S4 crash verification.
 No replay, resumed Interrupted Run, uncommitted-output salvage, new CLI spelling
 or silent V6 change is authorized.
 
-## M7 implementation is verified; integration is separate
+<a id="m7-implementation-is-verified-integration-is-separate" />
 
-The fixed order is **Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. M6.5 is the dedicated
+## M7 is integrated; M8 is rejected
+
+The completed sequence is **Pre-M6 -> M6 -> M6.5 -> M7**. M8 was removed by the
+[2026-09-16 rejection decision](./history/m8-recipes-rejected.md), not postponed.
+No next numbered milestone is selected. A public Candidate API is deferred until
+concrete demand; YAML remains the built-in frontend. M6.5 is the dedicated
 [ServiceStorage milestone](./implementation-roadmap.md#m65---servicestorage),
 not an indefinitely deferred runtime. It is now `Complete` under its own
 reviewed Core, authority, persistence, access, compatibility and upgrade
@@ -113,13 +118,13 @@ V7 preserves custody, and M7 must add explicit versioned durable receipts before
 destructive operations. M7 delivers actual Cleanup coordination,
 do-not-replay/finalization, deletion and AbandonManagement operations. M6 does
 not claim their runtime coverage or wait for Cleanup to exist; M6.5 must not
-expose deletion that bypasses M7. M7 and M8 retain their existing numbering.
+expose deletion that bypasses M7. The retired M8 number is not reused.
 
 The [M7 closeout](./m7-implementation-status.md) now records V8, real Cleanup,
 identity-bound physical finalization, explicit operator assertion, Abandon and
 detached handoff/discard, together with the fresh remote full gate and Windows
 evidence. The operator separately authorized the completed local commit and
-merge. This does not grant permission to push, publish, or begin M8. The integrated
+merge. This does not grant permission to push or publish. The integrated
 develop baseline is now M7/V8; it initializes V8 and explicitly upgrades exact V7.
 
 [Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
@@ -133,9 +138,9 @@ taxonomy does not block bounded M6.5.
 ## Release readiness is not the next milestone
 
 [Pre-release readiness work](./release-readiness.md) is approved but has no
-assigned position immediately after M8. Its tasks can be scheduled as appropriate
-and must be accepted before formal publication. M8 completion is not a release
-trigger. The [formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+assigned start after M7 or the retirement of M8. Its tasks can be scheduled as
+appropriate and must be accepted before formal publication. Removing M8 is not a
+release trigger. The [formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 owns the same-Major guarantee, development-format reset and 0.1.0-to-1.0.0
 boundary; documenting that policy implements none of those new mechanisms.
 

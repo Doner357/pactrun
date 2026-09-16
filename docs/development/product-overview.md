@@ -34,7 +34,7 @@ the underlying service tools.
 
 The minimum useful Pack can consist of metadata, one Action, and one Hook.
 Advanced Packs can add structured parameters, managed Inputs, Snapshots,
-Migrations, Recipes, managed outputs, and interactive terminal behavior without
+Migrations, managed outputs, and interactive terminal behavior without
 raising the minimum authoring cost for simple Packs.
 
 Pactrun favors a single common path, typed diagnostics, explicit capability

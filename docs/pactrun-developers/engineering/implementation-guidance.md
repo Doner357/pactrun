@@ -43,7 +43,7 @@ anchors only; do not use it as a second source of product behavior.
 [Phase 7 - Cleanup and deletion](../../development/implementation-guidance.md#phase-7---cleanup-and-deletion)
 
 <a id="phase-8---recipes-and-advanced-authoring" />
-[Phase 8 - Recipes and advanced authoring](../../development/implementation-guidance.md#phase-8---recipes-and-advanced-authoring)
+[Removed phase: M8 Recipes](../../development/implementation-guidance.md#removed-phase-m8-recipes)
 
 <a id="specification-status-and-open-work" />
 [Specification status and open work](../../development/implementation-guidance.md#specification-status-and-open-work)

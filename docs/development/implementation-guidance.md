@@ -258,12 +258,14 @@ future Hook Protocol and recovery coordination gate. After that boundary,
 storage-finalization retry must not replay Cleanup. Abandonment must not make
 service-owned state eligible for ordinary GC or unreferenced-storage cleanup.
 
-### Phase 8 - Recipes and advanced authoring
+<a id="phase-8---recipes-and-advanced-authoring" />
 
-- versioned language-neutral Authoring Contract;
-- InstallContext;
-- network- and host-dependent generation;
-- Revision Candidate output.
+### Removed phase: M8 Recipes
+
+The operator rejected M8 on 2026-09-16; it is not an implementation phase.
+See the [historical proposal and decision](./history/m8-recipes-rejected.md).
+Keep the internal Candidate boundary and built-in YAML frontend. A public
+Candidate API is deferred until concrete demand, not required pre-release work.
 
 ## Specification status and open work
 

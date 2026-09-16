@@ -86,7 +86,7 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   const document = name => docs.find(([file]) => file === 'development/' + name)[1];
   const roadmap = document('implementation-roadmap.md');
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
-  assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
+  assert.deepEqual(milestones, ['M6', 'M6.5', 'M7']);
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
   assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented, verified and integrated into local develop\./);
@@ -103,7 +103,7 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   const closeout = document('m6-implementation-status.md').replace(/\s+/g, ' ');
   assert.match(closeout, /Status: Complete\. Bounded M6 S0-S4 is implemented and integrated into local develop/);
   assert.match(closeout, /explicitly without push/);
-  assert.match(document('next-milestone.md'), /M7 implementation is verified; integration is separate/);
+  assert.match(document('next-milestone.md'), /M7 is integrated; M8 is rejected/);
   assert.doesNotMatch(document('next-milestone.md'), /M6 is `In progress`/);
   const alignment = document('design-notes/service-storage-staged-design-alignment.md').replace(/\s+/g, ' ');
   assert.match(alignment, /before approving the storage schema/);
@@ -191,8 +191,8 @@ test('release readiness is approved but unscheduled and does not implement futur
   const normalizedPlan = plan.replace(/\s+/g, ' ');
   const normalizedPolicy = policy.replace(/\s+/g, ' ');
   assert.match(normalizedPlan, /Required before formal release; scheduling and implementation are not yet assigned/);
-  assert.match(normalizedPlan, /Completion of M8 does not trigger these tasks or a release/);
-  assert.match(normalizedPlan, /not a mandatory M8-to-release chain/);
+  assert.match(normalizedPlan, /Retirement of M8 does not trigger these tasks or a release/);
+  assert.match(normalizedPlan, /not a mandatory milestone-to-release chain/);
   for (const work of [
     'Versioning mechanism design and implementation',
     'Baseline reorganization and reset',
@@ -216,12 +216,44 @@ test('release readiness is approved but unscheduled and does not implement futur
   assert.match(normalizedPolicy, /MUST NOT perform another format reset/);
   const roadmap = document('development/implementation-roadmap.md').replace(/\s+/g, ' ');
   assert.match(roadmap, /Release-readiness prerequisites \(timing unassigned\)/);
-  assert.match(roadmap, /not tasks automatically scheduled immediately after M8/);
+  assert.match(roadmap, /not tasks automatically scheduled by milestone completion or retirement/);
   assert.match(roadmap, /### M7 - Cleanup and deletion \*\*State: Implemented, verified and integrated into local develop\./);
-  assert.match(roadmap, /### M8 - Recipes and advanced authoring \*\*State: Proposed\./);
+  assert.match(roadmap, /M8 was rejected and removed from the active roadmap/);
+  assert.doesNotMatch(roadmap, /### M8 - /);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /spec\/foundations\/product-versioning-and-compatibility/);
   assert.match(sidebar, /development\/release-readiness/);
+});
+
+test('M8 rejection retires Recipe obligations but preserves identity and internal authoring boundaries', async () => {
+  const document = name => docs.find(([file]) => file === name)[1];
+  const history = document('development/history/m8-recipes-rejected.md');
+  const runtime = document('spec/contracts/recipes-and-runtime-content.md');
+  const authoring = document('spec/contracts/authoring-model.md');
+  const handoff = document('development/next-milestone.md');
+  assert.match(history, /Historical rejected proposal/);
+  assert.match(history, /2026-09-16; not deferred implementation/);
+  for (const reason of ['Open-ended Revision variation', 'No isolated execution environment',
+    'Migration declarations are only part of the problem', 'Hook behavior can grow combinatorially',
+    'Lifecycle maintenance outweighs installation convenience', 'No demonstrated need']) {
+    assert.ok(history.includes(reason), reason);
+  }
+  assert.match(history.replace(/\s+/g, ' '), /does not ban networking/);
+  assert.match(history.replace(/\s+/g, ' '), /public, versioned Candidate entry point.*deferred until a concrete need exists/);
+  for (const id of ['0137', '0139', '0140']) {
+    const section = runtime.split('### PR-REQ-' + id + ' - ')[1]?.split('\n### ')[0];
+    assert.ok(section, id);
+    assert.match(section, /Retired: M8 rejected on 2026-09-16/);
+    assert.doesNotMatch(section, /Verification: Pending automated coverage/);
+    assert.ok(history.includes('PR-REQ-' + id), id);
+  }
+  assert.match(runtime.replace(/\s+/g, ' '), /same canonical Revision Core and the same owned runtime content produce the same `RevisionContentDigest`/);
+  assert.match(runtime, /Pactrun MUST materialize runtime content/);
+  assert.match(authoring.replace(/\s+/g, ' '), /Every authoring frontend MUST ultimately produce a `RevisionCandidate`/);
+  assert.match(authoring, /is not a public API/);
+  assert.match(handoff, /No next numbered milestone is selected/);
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.match(sidebar, /development\/history\/m8-recipes-rejected/);
 });
 
 test('validation policy selects by impact while preserving full-suite gates and honest evidence', async () => {

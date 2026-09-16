@@ -15,7 +15,7 @@ Authoring, normalized identity, wire, errors, and transport are distinct contrac
 - [Hooks, Recovery, and Cleanup](./hooks-recovery-and-cleanup.md): Understand semantic Hook authority, risk reporting, and Cleanup obligations. Consult the wire specification for encoding and the roadmap for deferred runtimes.
 - [Migrations](./migrations.md): Read target-owned edges, transitions, source roles, writer validation, and per-edge semantics. Service-owned live resources are not another spelling of Managed Inputs.
 - [Pack Source YAML V1](./pack-source-yaml-v1.md): Use this Candidate source projection without confusing it with the Frozen Revision Core identity format. Candidate status is not upgraded by this migration.
-- [Recipes and Runtime Content](./recipes-and-runtime-content.md): Separate authoring-time generation from installed immutable runtime content. Recipe runtime and advanced authoring remain scoped by their milestone.
+- [Runtime Content and Retired Recipe Design](./recipes-and-runtime-content.md): Active immutable runtime-content rules and traceable retirement notices for the rejected Recipe proposal.
 - [Revision Core Format V1](./revision-core-format-v1.md): Implement the exact Frozen normalized Core encoding and identity calculation. Do not use raw Core JSON as the public Pack authoring interface.
 - [Snapshot Bundle V1](./snapshot-bundle-v1.md): Read the transport envelope and validation boundary independently of Snapshot semantic identity. Follow the separate integrity contract for exact identity.
 - [Snapshot Integrity Format V1](./snapshot-integrity-format-v1.md): Preserve the Frozen V1 identity and verification rules required by supported existing Snapshots. V2 does not make this compatibility contract disappear.

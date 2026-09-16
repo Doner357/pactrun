@@ -22,7 +22,8 @@ The original status, rules, exceptions, and verification declarations below reta
 `PackSourceYamlV1` is the closed minimal M2 authoring frontend. It projects
 authoring source into the existing Frozen `RevisionCoreV1` semantic model; it
 does not modify that format, its canonical bytes, digest, or vectors. The
-language-neutral Recipe Authoring Contract remains separate M8 work.
+install-time Recipe proposal was [rejected with M8](../../development/history/m8-recipes-rejected.md).
+An external Candidate API is deferred until concrete demand.
 
 ### PR-REQ-0258 - PackSourceYamlV1 schema, numbers, and Package lineage
 

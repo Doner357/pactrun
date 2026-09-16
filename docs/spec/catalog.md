@@ -27,7 +27,7 @@ website build. They do not constitute additional requirements.
 | [Hooks, Recovery, and Cleanup](contracts/hooks-recovery-and-cleanup.md) | Normative Package contract specification. |
 | [Migrations](contracts/migrations.md) | Normative Package contract specification. |
 | [Pack Source YAML V1](contracts/pack-source-yaml-v1.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and not a public compatibility promise. |
-| [Recipes and Runtime Content](contracts/recipes-and-runtime-content.md) | Normative Package contract specification. |
+| [Runtime Content and Retired Recipe Design](contracts/recipes-and-runtime-content.md) | Normative Package contract specification. |
 | [Revision Core Format V1](contracts/revision-core-format-v1.md) | Frozen normative Package contract specification. |
 | [Snapshot Bundle V1](contracts/snapshot-bundle-v1.md) | Normative transport contract. Adapter, application services and human CLI are implemented, verified and integrated into develop with M4. |
 | [Snapshot Integrity Format V1](contracts/snapshot-integrity-format-v1.md) | Frozen normative Package contract specification. |

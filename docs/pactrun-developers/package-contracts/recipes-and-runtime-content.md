@@ -6,14 +6,15 @@ title: Recipes and Runtime Content (moved)
 
 **Status: Informative compatibility entry; no independent specification.**
 
-Read [the current document](../../spec/contracts/recipes-and-runtime-content.md). Its original rule IDs, contract status,
-and verification evidence have been preserved. This page retains old link
+Read [the current document](../../spec/contracts/recipes-and-runtime-content.md).
+Recipe-specific rules are now retired under the [M8 rejection](../../development/history/m8-recipes-rejected.md);
+their IDs and anchors are preserved, not pending implementation. This page retains old link
 anchors only; do not use it as a second source of product behavior.
 
 ## Previous section links
 
 <a id="recipes" />
-[Recipes](../../spec/contracts/recipes-and-runtime-content.md#recipes)
+[Retired Recipe proposal](../../spec/contracts/recipes-and-runtime-content.md#retired-recipe-proposal-and-retained-identity-rule)
 
 <a id="pr-req-0137---trusted-install-time-authoring" />
 [PR-REQ-0137 - Trusted install-time authoring](../../spec/contracts/recipes-and-runtime-content.md#pr-req-0137---trusted-install-time-authoring)
