@@ -82,7 +82,7 @@ test('roadmap distinguishes historical V4 introduction from the current schema',
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /PersistenceSchemaV4 as the current canonical implemented internal schema/);
 });
 
-test('M6 integration closes recovery without approving the scheduled ServiceStorage runtime', async () => {
+test('current entries reflect M7 integration while preserving bounded M6 history', async () => {
   const document = name => docs.find(([file]) => file === 'development/' + name)[1];
   const roadmap = document('implementation-roadmap.md');
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
@@ -91,7 +91,19 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
   assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented, verified and integrated into local develop\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
-  assert.match(current, /PersistenceSchemaV7.*integrated `develop` persistence baseline/);
+  assert.match(current, /PersistenceSchemaV8\]\([^)]*\) is the integrated `develop` persistence baseline, with explicit exact-V7 upgrade only/);
+  assert.match(current, /M7 Cleanup execution is implemented, verified and integrated into local `develop`/);
+  assert.match(current, /M8 is rejected and archived; no next numbered milestone is selected/);
+  assert.doesNotMatch(current, /Cleanup execution remains Proposed/);
+  const agentEntry = docs.find(([file]) => file === 'agents/index.md')[1].replace(/\s+/g, ' ');
+  assert.match(agentEntry, /M5, bounded M6, M6\.5 ServiceStorage and M7 Cleanup\/deletion are implemented and integrated into local `develop`/);
+  assert.match(agentEntry, /current persistence baseline is V8, with explicit exact-V7 upgrade only/);
+  for (const entry of [current, agentEntry]) {
+    assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
+    assert.match(entry, /Release-readiness work has no assigned start/);
+    assert.match(entry, /integration does not authorize publication/);
+    assert.doesNotMatch(entry, /M6\.5 is next and remains Proposed/);
+  }
   assert.doesNotMatch(current, /Migration and Cleanup execution remain deferred/);
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /Hook and operator-input execution remain pending/);
 
