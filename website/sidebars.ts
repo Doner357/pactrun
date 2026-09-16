@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
           'development/design-notes/m6-5-servicestorage-baseline',
           'development/design-notes/m3-action-execution-approval-baseline',
           'development/design-references', 'development/history/documentation-edition-1',
+          'development/history/m8-recipes-rejected',
         ]},
       ],
     },

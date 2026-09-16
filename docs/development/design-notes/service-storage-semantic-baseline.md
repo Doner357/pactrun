@@ -16,7 +16,8 @@ a linked requirement, the linked requirement controls.
 
 The [staged design alignment](./service-storage-staged-design-alignment.md)
 records the 2026-09-14 scheduling approval: Pre-M6 alignment, bounded M6 recovery,
-M6.5 ServiceStorage, M7 Cleanup/deletion/AbandonManagement, then M8. The
+M6.5 ServiceStorage, M7 Cleanup/deletion/AbandonManagement, then M8 (since
+[rejected and archived](../history/m8-recipes-rejected.md) on 2026-09-16). The
 [M6 baseline](./m6-recovery-implementation-baseline.md) and
 [M6.5 roadmap](../implementation-roadmap.md#m65---servicestorage) define the
 delivery gates. Scheduling does not close the representation choices below or

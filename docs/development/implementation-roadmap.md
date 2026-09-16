@@ -697,7 +697,8 @@ Acceptance gates, retained as regression requirements:
 **State: Complete.**
 
 The initial 2026-09-14 approval covered Pre-M6 planning and the order
-**Pre-M6 -> M6 -> M6.5 -> M7 -> M8**. The operator subsequently approved
+**Pre-M6 -> M6 -> M6.5 -> M7 -> M8** (historical; M8 was
+[rejected on 2026-09-16](./history/m8-recipes-rejected.md)). The operator subsequently approved
 continuous bounded M6 implementation through S0-S4. Read
 the [staged ServiceStorage alignment](./design-notes/service-storage-staged-design-alignment.md)
 and [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md).
@@ -761,7 +762,7 @@ current implementation and format status is recorded separately in the
 
 After M6 completion, close and approve the representation gates below under the
 [staged alignment](./design-notes/service-storage-staged-design-alignment.md).
-Do not renumber M7 or M8. This milestone is no longer an unassigned deferred
+M7 keeps its number; the retired M8 number is not reused. This milestone is no longer an unassigned deferred
 runtime, but scheduling is not approval of a schema, protocol or CLI.
 
 Implement in order: format/validation; persistence and allocation/access;
@@ -819,19 +820,15 @@ Completion gate:
 - retry does not introduce an unsupported deletion lifecycle taxonomy;
 - abandonment skips Package code and records explicit operator intent.
 
-### M8 - Recipes and advanced authoring
+<a id="m8---recipes-and-advanced-authoring" />
 
-**State: Proposed.**
+## Removed proposal: M8
 
-Implement the versioned language-neutral Authoring Contract, `InstallContext`,
-network- and host-dependent generation, and `RevisionCandidate` output.
-
-Completion gate:
-
-- every frontend converges on the same normalized Candidate boundary;
-- authoring metadata and environmental observations do not alter Frozen identity
-  semantics unless the relevant format includes them;
-- source-dependent generation has deterministic validation and diagnostics.
+M8 was rejected and removed from the active roadmap on 2026-09-16, not deferred.
+The [historical proposal and rejection rationale](./history/m8-recipes-rejected.md)
+preserve its scope and explain Revision variation and Migration maintenance costs.
+Its number is not reused. YAML remains the built-in frontend; a public Candidate
+API is deferred until concrete demand. No replacement milestone is selected.
 
 ## Deferred ServiceStorage representation and runtime gates
 
@@ -872,15 +869,15 @@ The approved [release-readiness plan](./release-readiness.md) is independent of
 the numbered milestone sequence. It covers versioning-mechanism design and
 implementation, baseline reorganization/reset, internal testing/correction, and
 release-mechanism design and implementation. These are required before formal
-release, not tasks automatically scheduled immediately after M8. Completing M8
-does not start them, change the software version or authorize publication.
+release, not tasks automatically scheduled by milestone completion or retirement.
+Removing M8 does not start them, change the software version or authorize publication.
 
 Their owning observable rules are in the
 [product compatibility policy](../spec/foundations/product-versioning-and-compatibility.md).
 This records approved direction, not completed implementation. Work may overlap
 or return to design as needed; final acceptance must cover the actual candidate
 baseline and release artifact. Formal publication remains a separate controlled
-action after readiness acceptance. M7 and M8 retain their existing states.
+action after readiness acceptance. M7 remains integrated; M8 is rejected and archived.
 
 ## Cross-cutting completion rules
 

@@ -20,7 +20,7 @@ reopened, and Frozen formats are unchanged.
 | M6 | Recovery hardening for existing Action, Capture, Restore, and Migration execution | Existing-operation crash, ownership, guard, and reference-lifetime coverage; no ServiceStorage or Cleanup runtime claim |
 | M6.5 | ServiceStorage representation, persistence, and runtime | Separately approved representation contracts followed by real-resource integration and crash evidence |
 | M7 | Cleanup, deletion, and AbandonManagement | Durable do-not-replay/finalization and non-destruction behavior with integration and crash evidence |
-| M8 | Recipes and advanced authoring | Existing roadmap gates, without renumbering |
+| M8 (historical, rejected) | Recipes and advanced authoring | Removed by the [2026-09-16 decision](../history/m8-recipes-rejected.md); no implementation gate remains |
 
 M6.5 is explicitly scheduled after M6 and before M7. Scheduling does not satisfy
 its design gates or promote it to `Planned`. The subsequent 2026-09-14 operator

@@ -34,15 +34,16 @@ M6.5's separate approval and integration are recorded below; they do not approve
 The [M6.5 baseline](./design-notes/m6-5-servicestorage-baseline.md) links the
 approved design direction. M6.5 S1-S7 is implemented and integrated into develop;
 the [implementation record](./m6-5-implementation-status.md) separates runtime
-support, final-source verification and Git integration. M7 is the next proposed
-milestone and requires its own approval. The [format review](./design-notes/m6-5-format-activation-review.md)
+support, final-source verification and Git integration. [M7](./m7-implementation-status.md)
+is implemented and integrated; [M8 is rejected and archived](./history/m8-recipes-rejected.md).
+No replacement milestone is selected. The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 
 ## Release readiness is a separate planning dimension
 
 The [release-readiness checklist](./release-readiness.md) records approved work
 that must be accepted before formal publication, with timing left unassigned.
-It is not an automatic continuation after M8 and does not change M7/M8 status.
+It does not start automatically after M7 or the retirement of M8.
 The [owning compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 separates this future product commitment from today's implemented format checks.
 

@@ -55,7 +55,7 @@ anchors only; do not use it as a second source of product behavior.
 [M7 - Cleanup and deletion](../../development/implementation-roadmap.md#m7---cleanup-and-deletion)
 
 <a id="m8---recipes-and-advanced-authoring" />
-[M8 - Recipes and advanced authoring](../../development/implementation-roadmap.md#m8---recipes-and-advanced-authoring)
+[Removed proposal: M8](../../development/implementation-roadmap.md#removed-proposal-m8)
 
 <a id="deferred-servicestorage-representation-and-runtime-gates" />
 [Deferred ServiceStorage representation and runtime gates](../../development/implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)

@@ -7,19 +7,20 @@ title: Release Readiness
 **Status: Approved pre-release work plan. Required before formal release; scheduling and implementation are not yet assigned.**
 
 The operator confirmed this direction on 2026-09-16. This is a readiness
-checklist, not the next numbered milestone or a fixed sequence after M8.
-**Completion of M8 does not trigger these tasks or a release.** Additional
+checklist, not the next numbered milestone or a fixed post-milestone sequence.
+**Retirement of M8 does not trigger these tasks or a release.** See the
+[rejection decision](./history/m8-recipes-rejected.md). Additional
 development or evaluation may occur before they are scheduled. Work items may
 start at suitable times, overlap, and return to design when testing finds gaps.
 
 The [product versioning and compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 owns the observable rules. This plan organizes delivery and evidence without
-creating a second specification. M7 and M8 retain their existing states and
-approval boundaries in the [roadmap](./implementation-roadmap.md).
+creating a second specification. M7 is integrated and M8 is rejected; their
+records remain in the [roadmap](./implementation-roadmap.md).
 
 ## Required readiness work
 
-List order is an organizational grouping, not a mandatory M8-to-release chain.
+List order is an organizational grouping, not a mandatory milestone-to-release chain.
 
 | Work item | Deliverable | Acceptance evidence |
 | --- | --- | --- |
@@ -44,7 +45,7 @@ pipeline implementation remain release-mechanism design work.
   old development formats are not a substitute. Contract changes discovered
   during evaluation return to the owning design and verification work.
 - Release-mechanism preparation can overlap internal testing. Passing a build
-  job or completing M8 does not authorize a formal release.
+  job or retiring M8 does not authorize a formal release.
 - Before publication, all readiness items and required corrections must be
   accepted. The real versioned release candidate must be checked again after
   the product-version change; simulated compatibility tests alone are not enough.

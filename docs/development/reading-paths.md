@@ -27,7 +27,8 @@ For formal-release compatibility, read the
 [owning product policy](../spec/foundations/product-versioning-and-compatibility.md)
 and [independent version domains](../spec/foundations/resources-and-versioning.md).
 For task scope, dependencies and acceptance gates, read
-[release readiness](./release-readiness.md). Do not infer a fixed post-M8 schedule,
+[release readiness](./release-readiness.md). M8 is [rejected and archived](./history/m8-recipes-rejected.md).
+Do not infer a fixed next-work schedule,
 an implemented tool-version requirement field or publication authorization.
 
 ## When a decision seems missing

@@ -1,33 +1,37 @@
 ---
-title: Recipes and Runtime Content
+title: Runtime Content and Retired Recipe Design
 ---
 
-# Recipes and Runtime Content
+# Runtime content and retired Recipe design
 
 **Status: Normative Package contract specification.**
 
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Separate authoring-time generation from installed immutable runtime content. Recipe runtime and advanced authoring remain scoped by their milestone.
+Read the active immutable runtime-content rules and the retirement notices for the rejected Recipe proposal.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.
 Check [implementation status and remaining decisions](../../development/next-milestone.md)
 before treating an approved contract as available runtime behavior.
-The original status, rules, exceptions, and verification declarations below retain their meaning.
+Recipe-specific requirements below are explicitly retired; the independent identity and runtime-content rules remain active.
 <!-- spec-navigation:end -->
 
-## Recipes
+<a id="recipes" />
+
+## Retired Recipe proposal and retained identity rule
+
+M8 was rejected on 2026-09-16. The [decision and original text](../../development/history/m8-recipes-rejected.md)
+are historical, not future implementation obligations. Existing paths and
+requirement anchors remain for traceability; retired IDs are not reused.
 
 ### PR-REQ-0137 - Trusted install-time authoring
 
-A Recipe MUST be treated as a trusted install-time authoring program. It MAY
-inspect a provided InstallContext, vary by platform or architecture, fetch from
-the network, resolve mutable upstream references, run authoring tools, and stage
-Revision-owned content.
+**Retired: M8 rejected on 2026-09-16.** No install-time Recipe capability is
+required. See the [original text and rationale](../../development/history/m8-recipes-rejected.md#retired-requirement-text).
 
-**Verification: Pending automated coverage.**
+**Verification: Not applicable — retired requirement, not pending runtime coverage.**
 
 ### PR-REQ-0138 - Revision is the reproducibility boundary
 
@@ -39,20 +43,20 @@ content produce the same `RevisionContentDigest`.
 
 ### PR-REQ-0139 - Recipe output boundary
 
-The only formal Recipe output MUST be a `RevisionCandidate`. A Recipe SHOULD
-NOT perform service lifecycle side effects as part of the authoring transaction;
-service behavior belongs in Hooks.
+**Retired: M8 rejected on 2026-09-16.** The Recipe-specific output contract is
+withdrawn. The existing internal Candidate boundary in PR-REQ-0121/0122 remains
+active and does not imply a public API.
 
-**Verification: Pending automated coverage.**
+**Verification: Not applicable — retired requirement, not pending runtime coverage.**
 
 ### PR-REQ-0140 - Language-neutral Authoring Contract
 
-The Recipe Authoring Contract MUST be language-neutral at the semantic level,
-versioned independently, and isolated from Pactrun's internal domain types.
-Python, Go, Rust, or other SDKs MUST be adapters rather than separate semantic
-APIs.
+**Retired: M8 rejected on 2026-09-16.** A public Candidate API for additional
+frontends is deferred until concrete demand, not an approved implementation task.
+The [decision record](../../development/history/m8-recipes-rejected.md) distinguishes
+that possible future entry point from rejected install-time generation.
 
-**Verification: Pending automated coverage.**
+**Verification: Not applicable — retired requirement, not pending runtime coverage.**
 
 ## Runtime content
 

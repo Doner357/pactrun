@@ -123,9 +123,14 @@ current Frozen codecs or authorize a reset during ordinary implementation.
 ### PR-REQ-0077 - Separate version domains
 
 Internal persistence schema, Revision Core format and hash domain, Snapshot
-integrity format and hash domain, export bundle format, Hook Protocol, Recipe
-Authoring API, and structured CLI output MUST be independently versioned. They
+integrity format and hash domain, export bundle format, Hook Protocol, and
+structured CLI output MUST be independently versioned. They
 MUST NOT share one generalized Pactrun schema version.
+
+The former Recipe Authoring API is withdrawn with the
+[M8 rejection](../../development/history/m8-recipes-rejected.md). A possible public
+Candidate API has no approved format or implementation schedule; this list does
+not require its introduction.
 
 `PackSourceYamlV1` and `PersistenceSchemaV4` are two additional independent
 internal version domains. Their `V1` and `V4` labels do not couple them to

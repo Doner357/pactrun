@@ -21,18 +21,23 @@ The original status, rules, exceptions, and verification declarations below reta
 ## Low floor, high ceiling
 
 A minimal Pack can contain metadata, one Action, and one Hook. Structured
-parameters, persistent Inputs, managed outputs, Snapshots, Migration, Recipes,
+parameters, persistent Inputs, managed outputs, Snapshots, Migration,
 future ServiceStorage-backed Managed Service Resources, and interactive terminal
 behavior are optional capabilities and must not burden minimal Packs.
 
 Authors describe capabilities they provide. They are not required to enumerate
 large sets of negative `supports_x: false` flags.
 
+YAML V1/V2 are the current built-in frontends. The internal Candidate model below
+is not a public API. A common external entry point for third-party frontends is
+deferred until concrete demand; install-time Recipes were
+[rejected with M8](../../development/history/m8-recipes-rejected.md).
+
 ### PR-REQ-0121 - Revision Candidate output
 
 Every authoring frontend MUST ultimately produce a `RevisionCandidate`
 containing a host-source-independent `NormalizedPackDefinition` and
-Pactrun-owned staged runtime content. Source YAML, Recipe ASTs, SDK-specific
+Pactrun-owned staged runtime content. Source YAML, frontend ASTs, SDK-specific
 values, host source locators, opened handles, and staging paths MUST NOT become
 installed execution contracts directly.
 
