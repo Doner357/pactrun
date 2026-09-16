@@ -89,7 +89,7 @@ test('M6 integration closes recovery without approving the scheduled ServiceStor
   assert.deepEqual(milestones, ['M6', 'M6.5', 'M7', 'M8']);
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
-  assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented and verified; integration pending\./);
+  assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented, verified and integrated into local develop\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
   assert.match(current, /PersistenceSchemaV7.*integrated `develop` persistence baseline/);
   assert.doesNotMatch(current, /Migration and Cleanup execution remain deferred/);
@@ -169,7 +169,7 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 8;/);
   const m7 = docs.find(([name]) => name === 'development/m7-implementation-status.md')[1];
-  assert.match(m7, /Implementation and verification complete; not integrated/);
+  assert.match(m7, /Implemented, verified and integrated into local develop/);
   assert.match(m7, /513dbf3b7296f01fed2ae2fc4ddf1e4e9a36f4cec34b63122328d1b4e4af0647/);
   assert.match(m7.replace(/\s+/g, ' '), /Both original counterexamples now pass/);
   const v8 = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v8.md')[1];
@@ -217,7 +217,7 @@ test('release readiness is approved but unscheduled and does not implement futur
   const roadmap = document('development/implementation-roadmap.md').replace(/\s+/g, ' ');
   assert.match(roadmap, /Release-readiness prerequisites \(timing unassigned\)/);
   assert.match(roadmap, /not tasks automatically scheduled immediately after M8/);
-  assert.match(roadmap, /### M7 - Cleanup and deletion \*\*State: Implemented and verified; integration pending\./);
+  assert.match(roadmap, /### M7 - Cleanup and deletion \*\*State: Implemented, verified and integrated into local develop\./);
   assert.match(roadmap, /### M8 - Recipes and advanced authoring \*\*State: Proposed\./);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /spec\/foundations\/product-versioning-and-compatibility/);

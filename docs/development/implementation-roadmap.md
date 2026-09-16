@@ -784,14 +784,15 @@ Completion gate:
 
 ### M7 - Cleanup and deletion
 
-**State: Implemented and verified; integration pending.**
+**State: Implemented, verified and integrated into local develop.**
 
 The operator approved continuous implementation of the
 [M7 baseline](./design-notes/m7-cleanup-deletion-implementation-baseline.md)
 without per-slice approval stops. The S0-S7 implementation and source-matched
 acceptance results are recorded in the [implementation record](./m7-implementation-status.md).
-They are complete on the feature branch; commit, integration, push and deployment
-remain separately controlled. The approved scope does not change Frozen contracts.
+The operator separately authorized local commit and integration, now completed.
+Push and deployment remain separately controlled. The approved scope does not
+change Frozen contracts.
 
 M7 follows M6.5 and owns the concrete Cleanup ambiguous-completion coordination,
 durable do-not-replay boundary, storage finalization and AbandonManagement

@@ -27,10 +27,10 @@ integrated into local develop. It closes existing-operation recovery evidence
 on V6 without adding a new recovery engine, schema or service rollback.
 [M6.5 ServiceStorage](./m6-5-implementation-status.md) is now implemented and
 integrated into local develop, including V7, V2 installation and service
-execution. [M7 lifecycle](./m7-implementation-status.md) is implemented and
-verified on its feature branch, but has not been committed or integrated.
+execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
+and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V7](../spec/persistence/persistence-schema-v7.md), internal and non-Frozen, with explicit exact-V6 upgrade only.
+- Current integrated persistence: [V8](../spec/persistence/persistence-schema-v8.md), internal and non-Frozen, with explicit exact-V7 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
@@ -59,7 +59,7 @@ configured destination and a non-force branch-state check.
 
 | Review item | Required outcome before the affected implementation |
 | --- | --- |
-| Scope and work order | M5, bounded M6 and M6.5 are integrated into local develop; approved M7 S0-S7 implementation is verified on its feature branch, with Git integration awaiting explicit instruction |
+| Scope and work order | M5, bounded M6, M6.5 and approved M7 S0-S7 are implemented and integrated into local develop; M8 has not started |
 | Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
 | Command and diagnostic surface | [Migration spelling](../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
 | Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
@@ -118,10 +118,9 @@ expose deletion that bypasses M7. M7 and M8 retain their existing numbering.
 The [M7 closeout](./m7-implementation-status.md) now records V8, real Cleanup,
 identity-bound physical finalization, explicit operator assertion, Abandon and
 detached handoff/discard, together with the fresh remote full gate and Windows
-evidence. This does not grant permission to commit, merge, push, publish, or
-begin M8. The integrated develop baseline remains M6.5/V7 until an authorized
-integration changes it; the verified M7 feature branch initializes V8 and
-explicitly upgrades exact V7.
+evidence. The operator separately authorized the completed local commit and
+merge. This does not grant permission to push, publish, or begin M8. The integrated
+develop baseline is now M7/V8; it initializes V8 and explicitly upgrades exact V7.
 
 [Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
 remain authoritative. Inputs, metadata and Workspace are not live-service

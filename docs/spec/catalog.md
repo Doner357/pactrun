@@ -79,9 +79,9 @@ runtime work, not just the historical status on a format page.
 
 ## M7 approved implementation contracts
 
-M7 is implemented and verified on its feature branch, but not integrated or
-published. See the [acceptance record](../development/m7-implementation-status.md).
-The branch writes V8; this does not change the historical M6.5 integration record.
+M7 is implemented, verified and integrated into local develop, but not published.
+See the [acceptance record](../development/m7-implementation-status.md).
+The integrated baseline writes V8; the historical M6.5 integration record is unchanged.
 
 | Contract | Status |
 | --- | --- |
