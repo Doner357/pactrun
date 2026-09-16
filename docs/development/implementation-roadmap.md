@@ -19,7 +19,7 @@ is Frozen.
 ## Development entry after Spec migration
 
 Use the [Spec map](../spec/index.md), [task reading paths](./reading-paths.md),
-and [current baseline / M6 handoff](./next-milestone.md) before starting the next
+and [current baseline / milestone handoff](./next-milestone.md) before starting the next
 milestone. All numbered product rules now live under Spec. Design syntheses and
 milestone records remain development guidance, not competing specifications.
 
@@ -48,8 +48,8 @@ driven development.
 - `HookProtocolV1` is Frozen and merged into `develop` with Rust validation, an
   independent Node 24 valid-fixture oracle, cross-language fixtures, and
   requirement/test traceability. The Action runtime is implemented in M3
-  Slice 4; M4 Capture/Restore and M5 Migration reuse it in `develop`. Cleanup
-  execution remains Proposed under M7.
+  Slice 4; M4 Capture/Restore and M5 Migration reuse it in `develop`. M7 Cleanup
+  execution is implemented, verified and integrated into local `develop`.
 - The structured error taxonomy is Frozen and merged into `develop` with
   negative fixtures and requirement/test traceability.
 - Runtime launcher integration under `PR-REQ-0194` has Compiler, Admission,
@@ -61,7 +61,8 @@ driven development.
   Resource direction corrects the earlier assumption that every Pactrun-visible
   persistent file is an Input. Its representation-independent semantic closure
   is integrated into the canonical `develop` baseline without changing Frozen
-  V1 schemas or claiming production support.
+  V1 schemas. M6.5 subsequently added the separately approved representation
+  and runtime support, as recorded in its closeout below.
 - The non-identity metadata semantic closure and M1-D implementation are
   integrated into the canonical `develop` baseline. M1-D introduced
   PersistenceSchemaV2 for that metadata contract.
@@ -69,9 +70,10 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV7](../spec/persistence/persistence-schema-v7.md) is the integrated
-  `develop` persistence baseline, with explicit exact-V6 upgrade and writable
+- [PersistenceSchemaV8](../spec/persistence/persistence-schema-v8.md) is the integrated
+  `develop` persistence baseline, with explicit exact-V7 upgrade only and writable
   admission. It preserves the earlier contracts, including
+  [V7](../spec/persistence/persistence-schema-v7.md) from M6.5,
   [V6](../spec/persistence/persistence-schema-v6.md) from M5/M6,
   [V5](../spec/persistence/persistence-schema-v5.md) from M4 and
   [V4](../spec/persistence/persistence-schema-v4.md) from M3 Slice 2.
@@ -84,6 +86,12 @@ driven development.
   ServiceStorage is `Complete` and integrated into local develop under its own
   approval. See the [M6.5 closeout](./m6-5-implementation-status.md) for the
   implementation, integration and exact-source verification record.
+- M7 Cleanup/deletion and abandonment are `Complete`, with S0-S7 implemented,
+  verified and integrated into local `develop`. See the
+  [M7 closeout](./m7-implementation-status.md) for implementation and acceptance
+  evidence. M8 is rejected and archived; no next numbered milestone is selected.
+  Release-readiness work has no assigned start, and integration does not
+  authorize publication.
 - M4 Snapshot lifecycle is `Complete`, with S0-S8 integrated into `develop`.
   Capture writes Frozen integrity V2; V1/V2 import, export, verification and
   exact-compatible Restore are available through the human CLI.

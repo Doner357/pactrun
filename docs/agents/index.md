@@ -7,11 +7,13 @@ placeholders; do not interpret them as completed tutorials.
 ## Establish authority and state
 
 - Read the [Spec map](../spec/index.md). Only Spec defines product requirements.
-- Read [current baseline and M6.5 handoff](../development/next-milestone.md).
-  M5 and bounded M6 are integrated; M6.5 is next and remains Proposed.
-  The approved order is M6 recovery,
-  M6.5 ServiceStorage, then M7 Cleanup/deletion, with separate implementation
-  design gates. Scheduling is not runtime approval or completion evidence.
+- Read [current baseline and milestone handoff](../development/next-milestone.md).
+  M5, bounded M6, M6.5 ServiceStorage and M7 Cleanup/deletion are implemented
+  and integrated into local `develop`. The current persistence baseline is V8,
+  with explicit exact-V7 upgrade only. M8 is rejected and archived; no next
+  numbered milestone is selected. Release-readiness work has no assigned start,
+  and integration does not authorize publication. Consult the linked closeout
+  records for implementation and verification evidence.
 - In a checkout, read applicable repository instructions and CONTRIBUTING.md.
   Use the checkout revision and working-tree state to identify the source.
 - In the published text edition, [publication metadata](../publication.json)
