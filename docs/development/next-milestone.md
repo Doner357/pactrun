@@ -131,18 +131,37 @@ develop baseline is now M7/V8; it initializes V8 and explicitly upgrades exact V
 remain authoritative. Inputs, metadata and Workspace are not live-service
 mirrors, and a Pactrun commit is not atomic with service bytes. The
 [remaining design gates](./implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)
-are assigned stages, not implied design approval. Snapshot deletion and the
-broader non-ServiceStorage resource taxonomy remain outside this plan; that
-taxonomy does not block bounded M6.5.
+are assigned stages, not implied design approval. Snapshot deletion was outside
+the completed runtime scope and is now included in the completion plan below.
+The broader non-ServiceStorage resource taxonomy remains outside that scope;
+it does not block bounded M6.5.
+
+## Next planned scope and completion sequence
+
+The [product completion milestones](./product-completion-milestones.md) record
+the agreed order: managed-object lifecycle/GC with Artifact export; Snapshot
+capacity with create-and-restore; shell loader; machine-readable CLI output;
+then Versioning and Baseline Consolidation. Start detailed design with lifecycle
+ownership and references; this handoff does not claim implementation has begun.
+No new M-series identifiers are assigned and M8 is not revived.
+
+The final milestone removes development-only compatibility and chronology from
+the shipping baseline, while retaining useful Freeze/evolution history separately.
+Data fully conforming to the final contracts is accepted regardless of development
+origin; no historical-generation exclusion is required. Current contracts remain
+binding until their reviewed implementation changes. Follow the
+[updated contributor rules](./development-and-verification.md) for all new work;
+legacy code-label cleanup waits for consolidation.
 
 ## Release readiness is not the next milestone
 
-[Pre-release readiness work](./release-readiness.md) is approved but has no
-assigned start after M7 or the retirement of M8. Its tasks can be scheduled as
-appropriate and must be accepted before formal publication. Removing M8 is not a
-release trigger. The [formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
-owns the same-Major guarantee, development-format reset and 0.1.0-to-1.0.0
-boundary; documenting that policy implements none of those new mechanisms.
+[Pre-release readiness work](./release-readiness.md) remains required before
+formal publication. The combined versioning/consolidation milestone is last in
+the agreed sequence, not the next implementation task; no calendar start is set.
+Removing M8 is not a release trigger. The
+[formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+owns same-Major guarantees, origin-independent final-baseline acceptance and
+the 0.1.0-to-1.0.0 boundary; this record implements none of those mechanisms.
 
 ## Evidence caveat
 

@@ -309,6 +309,85 @@ Line, branch, and function coverage are supporting signals only. The primary
 question is whether every Pactrun promise has executable evidence that fails
 when the promise is violated.
 
+## Product-oriented functions and tests
+
+New functions and tests MUST use product concepts, behavior or invariants rather
+than milestone or slice markers. Do not introduce those markers into new names,
+bodies, code comments, fixture dependencies or executable classification. A
+behavioral test must not depend on a milestone completion paragraph or the
+continued existence of a removable milestone record as its semantic authority.
+Use the owning product contract and actual behavior instead.
+
+This rule applies to new implementation and tests now. Existing occurrences are
+deferred to Versioning and Baseline Consolidation; do not perform unrelated mass
+renaming during other work. Preserve coverage when removing such dependencies.
+Actual protocol/format/schema version identities and stable PR-REQ/PR-TEST IDs
+are not milestone markers and MUST NOT be indiscriminately renamed or removed.
+Development history may retain milestone names without making shipping code
+depend on them. Avoid blanket text bans that confuse product data with scheduling.
+
+Rationale: work breakdown and numbering may change or be removed, whereas tests
+should continue proving the product's behavior. Development chronology is not a
+Domain identity or an implementation boundary.
+
+## Design rationale and development history
+
+Contributors SHOULD record the rationale for each new or revised design rule,
+using a concise shared rationale for a coherent group when repetition adds no
+value. Record the problem, reason for the chosen behavior, material alternatives
+actually considered, assumptions/evidence and what would justify reconsideration.
+Keep the amount proportionate; not every small rule needs a separate long ADR.
+
+Rationale is informative, not a second normative contract. Keep active rules and
+their essential rationale in the owning Spec or a stable linked decision record,
+not solely in a removable milestone closeout. Mark assumptions and current
+inferences explicitly. If the original reason is unknown, say it was not recorded;
+never present a retrospective justification as historical fact.
+
+Strict development Freeze decisions, evolution procedures, vectors and evidence
+may remain in development history as references. This does not make experimental
+versions prior formal releases or require their shipping compatibility code.
+Current Frozen contracts remain binding until a separately approved change;
+formal contracts can also be Frozen. During final baseline consolidation, remove
+superseded development-only machinery and milestone dependencies while preserving
+needed product rules and behavioral evidence. The owning
+[formal-baseline policy](../spec/foundations/product-versioning-and-compatibility.md)
+defines data acceptance; historical origin alone is not a rejection reason.
+
+Rationale: preserve the reasoning and verification discipline that helps future
+engineering, without making a first formal release emulate its development history.
+Documentation absence must not be filled with confident but invented explanations.
+
+## Git Flow and topic naming
+
+Use [nvie Git Flow](https://nvie.com/posts/a-successful-git-branching-model/), with
+`main` corresponding to the article's production `master`. Determine the version
+line being changed and its integration targets before choosing a branch name.
+
+| Work | Prefix | Base and integration |
+| --- | --- | --- |
+| New capability | `feature/` | From `develop`, back to `develop` |
+| Development-line defect | `fix/` | From `develop`, back to `develop` |
+| Documentation | `docs/` | From `develop`, back to `develop` |
+| Release stabilization | `release/` | From `develop`, finish into `main` and `develop` with the authorized release |
+| Released production repair | `hotfix/` | From the affected released production baseline; finish into `main` and the continuing development/release line |
+
+`feature/`, `fix/` and `docs/` are project naming conventions for development
+topic branches, not three different Git Flow lifecycles. Urgency, small size or
+the informal phrase "hot fix" does not make a development-only fix a production
+hotfix. When an active release branch exists, integrate a production hotfix there
+as Git Flow prescribes; its release integration carries it into `develop`. Bring
+the fix to `develop` sooner too if that work needs it. Do not omit production or
+future-line integration merely because the branch name looks appropriate.
+
+No historical branch renaming or history rewriting is implied. Commit, merge,
+push, tagging and publication still require their applicable explicit authorization;
+choosing a branch prefix is not permission for those actions.
+
+Rationale: the branch topology protects the released version and ongoing work;
+the prefix communicates intent. Always using `feature/`, or using `hotfix/` for
+every quick fix, obscures that distinction.
+
 ## Change discipline
 
 During ordinary implementation, refactoring, bug fixing, testing, or

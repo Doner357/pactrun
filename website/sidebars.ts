@@ -78,6 +78,7 @@ const sidebars: SidebarsConfig = {
         'development/reading-paths', 'development/next-milestone',
         'development/implementation-roadmap', 'development/development-and-verification',
         'development/release-readiness',
+        'development/product-completion-milestones',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',

@@ -2,7 +2,12 @@
 
 Pactrun follows a modular-monolith architecture and a Git Flow branch model:
 `main` is releasable, `develop` is the integration branch, and work is prepared
-on focused `feature/*` branches.
+on focused topic branches. Choose the target version line before the prefix:
+`feature/*` for capabilities, `fix/*` for development-line fixes, and `docs/*`
+for documentation all start from and merge into `develop`. `release/*` is for
+release stabilization; `hotfix/*` is for an existing released production line,
+not every urgent or small change. See the
+[Git Flow rules](./docs/development/development-and-verification.md#git-flow-and-topic-naming).
 
 ## Change discipline
 
@@ -16,6 +21,15 @@ on focused `feature/*` branches.
   an invariant conflict and use a separate design-change workflow.
 - Add requirement, test, and vector identifiers only when they refer to real
   contracts. Do not create placeholder traceability.
+- New functions and tests use product concepts, behavior and invariants, not
+  milestone/slice markers in names or executable content. Existing occurrences
+  wait for baseline consolidation; do not mass-rename unrelated code now.
+  Real format/protocol versions and stable requirement/test IDs are not milestones.
+- Record design rationale with the owning rule or a stable decision reference:
+  problem, reason, material alternatives, assumptions/evidence and conditions for
+  reconsideration. Keep rationale informative and never invent an original reason
+  that was not recorded. See the
+  [detailed rules](./docs/development/development-and-verification.md#product-oriented-functions-and-tests).
 
 ## Documentation
 

@@ -12,7 +12,7 @@ website build. They do not constitute additional requirements.
 
 | Contract | Original status |
 | --- | --- |
-| [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility design; implementation and baseline reset pending. |
+| [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility design; implementation and baseline consolidation pending. |
 | [Actions, Plans, and Runs](behavior/actions-plans-and-runs.md) | Normative product behavior specification. |
 | [Command and Output Reference](behavior/command-and-output-reference.md) | Normative product behavior specification. Exact option spelling remains open specification work where explicitly noted. |
 | [Inputs, Secrets, and Readiness](behavior/inputs-secrets-and-readiness.md) | Normative product behavior specification except where linked to an owning requirement. |

@@ -4,13 +4,13 @@ title: Product Versioning and Compatibility
 
 # Product versioning and compatibility
 
-**Status: Approved formal-release compatibility design; implementation and baseline reset pending.**
+**Status: Approved formal-release compatibility design; implementation and baseline consolidation pending.**
 
 This page owns the approved versioning direction for the first formal release
 and its successors. It does not claim that release-version requirements or a
 SemVer compatibility mechanism are implemented today. Existing format
 dispatchers, codecs and storage upgrades remain governed by their current
-contracts until the separately implemented pre-release reset.
+contracts until the separately implemented first-formal-baseline consolidation.
 
 <!-- spec-navigation:start -->
 ## Reading map (informative)
@@ -36,14 +36,17 @@ obligation to preserve the meaning of managed objects.
 
 The same-Major formal promise starts with product Major 1; Major 0 builds do not
 receive it merely by sharing the label 0.1.0. The first formal product version
-is 1.0.0. Development-era means the retired pre-reset generation, not every
-artifact ever produced by a 0.1.0 executable. PR-REQ-0332 retires that old
-generation; PR-REQ-0333 governs promotion of the reorganized new baseline that
-was tested while the software still reported 0.1.0.
+is 1.0.0. Development iterations are not earlier formal product releases.
+PR-REQ-0332 consolidates the first formal baseline without development-history
+compatibility paths or a provenance-based data rejection rule. PR-REQ-0333
+governs promotion of that baseline after testing while the software still
+reported 0.1.0.
 
 This approval does not authorize ordinary feature work to reinterpret existing
-Frozen bytes or silently change current data; the reset is a distinct future
-work item.
+Frozen bytes or silently change current data; consolidation is a distinct future
+work item. The operator clarified origin-independent acceptance on 2026-09-17;
+it supersedes the former requirement to distinguish and reject a retired
+development-data generation.
 
 ### PR-REQ-0329 - Product Major compatibility boundary
 
@@ -112,40 +115,62 @@ representation and validation are pending versioning-mechanism design.
 
 **Verification: Pending automated coverage.**
 
-### PR-REQ-0332 - One-time pre-release baseline reset
+<a id="pr-req-0332---one-time-pre-release-baseline-reset" />
 
-The approved pre-release reset MUST establish a distinguishable new baseline
-without backward compatibility for development-era formats or data. The
-shipping program MUST NOT retain development-only readers, migration chains or
-compatibility paths merely to continue those experimental stores or artifacts.
-Retired designs and experimental lessons may remain in history, separate from
-the active product specification and shipping implementation.
+### PR-REQ-0332 - First formal baseline and origin-independent acceptance
 
-The new baseline MUST distinguish old development data reliably even when
-numeric format labels are reused. Unsupported old data MUST be refused rather
-than guessed, silently adopted, overwritten or automatically deleted. A minimal
-generation/format rejection check is not a legacy compatibility implementation.
-The exact marker, namespace and new format encodings are not selected here.
+Consolidation MUST establish the first formal product baseline, not a successor
+required to support development iterations as earlier formal releases. The
+shipping program MUST NOT retain readers, migration chains, version dispatch or
+special cases solely to support superseded development contracts. Implementations
+still required by the final contracts are not legacy merely because they were
+originally written during development.
 
-Removing compatibility does not grant authority to destroy service-owned live
-state. Actual disposal of experimental stores is a separate explicit operation,
-not an incidental effect of opening them with the new program.
+Data acceptance MUST depend on full conformance to the current supported formal
+contracts, not on whether the data was produced during development. Fully
+conforming data MUST NOT be rejected solely because of its development provenance,
+creation time or historical authoring-tool label. Such acceptance is ordinary
+current-contract validation, not a backward-compatibility path. Pactrun MUST NOT
+require a development-generation marker or discriminator merely to identify and
+exclude development data. This does not remove normal format identifiers or
+explicit capability/tool requirements under PR-REQ-0331.
+
+Conformance MUST include applicable identity, encoding, reference, invariant and
+semantic checks; matching field names, parseability or numeric version labels
+alone are insufficient. Nonconforming data MUST be refused without legacy
+guessing, silent repair/conversion, overwrite or automatic deletion. Reusing a
+number does not authorize reinterpreting incompatible content as valid.
+
+Development-only Freeze versions, iteration records and superseded decisions
+MUST remain historical rather than required shipping compatibility machinery.
+Their disciplined verification/evolution practices MAY be retained in development
+history as implementation references. This does not prohibit Frozen formal
+contracts, retained behavioral regression tests or accurate historical timestamps.
+Removing compatibility MUST NOT authorize destruction of service-owned state.
+Actual disposal remains a separate explicit operation.
+
+Informative rationale: the first formal product has no earlier formal release
+to emulate. Current-contract validation permits naturally conforming data while
+avoiding both experimental compatibility debt and an artificial origin barrier.
+This replaces the previous generation-rejection design; no runtime behavior is
+changed merely by recording the revised rule.
 
 **Verification: Pending automated coverage.**
 
 ### PR-REQ-0333 - Development and formal-release baseline separation
 
 Pactrun MUST remain at product version 0.1.0 during the planned pre-release
-versioning work, reset and internal testing. Completing the reset MUST NOT
-automatically publish or label the product 1.0.0. Internal test artifacts and
+versioning work, consolidation and internal testing. Completing consolidation
+MUST NOT automatically publish or label the product 1.0.0. Internal test artifacts and
 results MUST identify the exact build/source and applicable baseline; the
-shared label 0.1.0 is not a unique build or data-generation identity.
+shared label 0.1.0 is not a unique build or proof of contract conformance.
 
 The explicitly approved formal release changes the software version to 1.0.0
 and validates the actual release artifact. Changing that software version alone
 MUST NOT perform another format reset, change canonical identity meaning or
-reidentify existing objects in the validated new baseline. This is not a promise
-to accept pre-reset development data that also carried version 0.1.0.
+reidentify existing objects in the validated baseline. Preexisting data is
+accepted or refused by PR-REQ-0332's current-contract rule, not by the shared
+0.1.0 label or a development-origin classification.
 
 Version checks MUST use the actual product version; an internal build MUST NOT
 pretend that 0.1.0 satisfies a declared 1.x requirement. Compatibility logic may
@@ -160,5 +185,5 @@ defined by this testing obligation.
 The requirements above are approved design, not implemented release governance.
 Documentation checks only establish placement, scope, links and honest status.
 Existing V1/V2 dispatch and V7 upgrade tests do not certify these future release
-commitments. The versioning and reset work must add direct automated evidence
-before claiming their implementation complete.
+commitments. The versioning and consolidation work must add direct automated
+evidence before claiming their implementation complete.

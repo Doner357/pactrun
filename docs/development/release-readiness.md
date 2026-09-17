@@ -4,7 +4,7 @@ title: Release Readiness
 
 # Release readiness
 
-**Status: Approved pre-release work plan. Required before formal release; scheduling and implementation are not yet assigned.**
+**Status: Approved pre-release work plan. Required before formal release; relative work order assigned, implementation pending.**
 
 The operator confirmed this direction on 2026-09-16. This is a readiness
 checklist, not the next numbered milestone or a fixed post-milestone sequence.
@@ -12,6 +12,14 @@ checklist, not the next numbered milestone or a fixed post-milestone sequence.
 [rejection decision](./history/m8-recipes-rejected.md). Additional
 development or evaluation may occur before they are scheduled. Work items may
 start at suitable times, overlap, and return to design when testing finds gaps.
+
+On 2026-09-17 the operator selected the
+[five-milestone completion sequence](./product-completion-milestones.md).
+Versioning and Baseline Consolidation combines the first two readiness categories
+below and comes last in that sequence. Lifecycle/GC (including Artifact export),
+Snapshot capacity/restore convenience, shell loader and machine-readable output
+precede it. This establishes relative order, not calendar dates, completed designs
+or an instruction to start runtime work. Publication remains separately authorized.
 
 The [product versioning and compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 owns the observable rules. This plan organizes delivery and evidence without
@@ -25,7 +33,7 @@ List order is an organizational grouping, not a mandatory milestone-to-release c
 | Work item | Deliverable | Acceptance evidence |
 | --- | --- | --- |
 | Versioning mechanism design and implementation | Concrete version domains, same-Major compatibility enforcement, declared support/requirement checks, internal conversion and upgrade responsibilities | Approved representations and direct tests for the policy's supported/rejected version combinations, including unchanged old meaning |
-| Baseline reorganization and reset | Current product-oriented Spec, separated history, a coherent fresh schema/format baseline and removal of shipping development-only compatibility code | Rule inventory with no lost obligations, new-baseline conformance vectors, explicit old-generation rejection and no accidental data adoption |
+| Baseline reorganization and consolidation | Current product-oriented Spec, separated history, a coherent first formal schema/format baseline and removal of shipping development-only compatibility code | Rule inventory with no lost obligations, final-contract acceptance/rejection independent of provenance, and no legacy-only interpretation paths |
 | Internal testing, evaluation and correction | Real end-to-end use of the reorganized program, Packs and documentation; correctness, diagnostics, usability and operational assessment | Recorded exact builds/baselines, automated and actual-use findings, resolved blockers and reruns after relevant corrections |
 | Release mechanism design and implementation | Repeatable procedures for building supported targets, identifying/checking artifacts, version/source/tag consistency, release review and distribution | Successful rehearsal using traceable artifacts and release checks; no implied public publication |
 
@@ -38,9 +46,10 @@ pipeline implementation remain release-mechanism design work.
 
 ## Dependencies, not an automatic schedule
 
-- Versioning decisions and implementation must be sufficient to define and
-  validate the chosen reset baseline. The two work items can be coordinated;
-  this does not require a new milestone numbering scheme.
+- Versioning and baseline consolidation are one milestone placed last after the
+  four capability/interface milestones. No preliminary Versioning milestone is
+  required. Earlier work obeys current contracts without claiming that each
+  experimental interface is a prior formal release with permanent compatibility.
 - Internal evaluation must ultimately cover that final baseline. Tests of the
   old development formats are not a substitute. Contract changes discovered
   during evaluation return to the owning design and verification work.
@@ -50,10 +59,12 @@ pipeline implementation remain release-mechanism design work.
   accepted. The real versioned release candidate must be checked again after
   the product-version change; simulated compatibility tests alone are not enough.
 
-Product-version and data-generation behavior during this work is owned by
-PR-REQ-0332 and PR-REQ-0333. In particular, the reset does not itself turn 0.1.0
-into a published 1.0.0 product, and the old and reorganized 0.1.0 builds are not
-interchangeable merely because their displayed software versions match.
+Product-version and first-baseline behavior is owned by PR-REQ-0332 and
+PR-REQ-0333. Consolidation does not itself turn 0.1.0 into a published 1.0.0
+product. The shared version label is not proof of conformance: preexisting data
+that fully conforms to the final contract is usable, regardless of development
+origin. Nonconforming data is refused without developmental compatibility paths.
+No separate development-generation rejection mechanism is required.
 
 ## Documentation and code reorganization scope
 
@@ -67,23 +78,28 @@ interchangeable merely because their displayed software versions match.
 - Preserve or explicitly retire requirement/test identities under the existing
   contributor policy. Cosmetic cleanup is not permission to renumber unrelated
   IDs, reuse retired IDs or discard still-applicable regression cases.
-- Retire the development-only compatibility implementations selected by the
-  reset policy. Preserve useful design lessons and adapt still-applicable
-  invariant, negative, crash and conformance tests to the new baseline.
+- Retire development-only compatibility implementations under the consolidation
+  policy. Keep strict Freeze/evolution practices and superseded decisions in
+  development history as reference, not shipping compatibility obligations.
+  Preserve useful invariant, negative, crash and conformance tests.
+- Remove legacy milestone markers from functions/tests during consolidation.
+  New work follows the product-oriented naming and rationale rules immediately;
+  see the [contributor policy](./development-and-verification.md).
 - Do not copy Secrets, connection credentials or service-owned datasets into
   source history merely to record development experience.
 
 This section scopes future reorganization; it does not perform that reorganization
 or retire today's Frozen formats. Their current constraints continue until the
-dedicated reset design and implementation are ready.
+dedicated consolidation design and implementation are ready.
 
 ## Design details still to close
 
 - Exact product-version requirements/capability declarations and how an older
   reader identifies an unsupported contract before acting; no field name or
   version-range syntax has been approved yet.
-- The new baseline's identifiers, encoding and reliable distinction from old
-  development data; no concrete generation marker is selected here.
+- The final baseline's identifiers, encodings and full conformance checks;
+  there is no open requirement to distinguish or reject data solely by
+  development provenance, and no marker is added merely for that purpose.
 - The formal supported-format and persistence-upgrade matrices. Old-binary
   access to newer data is not implied by new-binary backward compatibility.
 - Release artifacts, target matrix, distribution/signing procedures and the

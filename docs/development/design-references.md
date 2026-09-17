@@ -9,6 +9,7 @@ not define Pactrun behavior.
 
 | Pactrun design area | Reference | Point of comparison |
 | --- | --- | --- |
+| Contributor branch workflow | nvie Git Flow | Production versus development/release repair paths; local topic prefixes communicate intent without changing that topology. |
 | Formal product compatibility boundary | Conan client stability policy and Semantic Versioning | Same-Major backward compatibility; a new Major does not promise previous-Major external-format support. Pactrun's own policy controls the exact obligation. |
 | Stable Instance identity separate from name | Kubernetes object IDs and owner references | Human name and object-lifetime identity are distinct. |
 | Candidate Instance ID encoding | RFC 9562 UUIDv7 | A globally unique, time-ordered implementation option. |
@@ -29,6 +30,8 @@ not define Pactrun behavior.
 | Session authority versus sandbox | Flatpak and Wasmtime security models | Host permissions are guarantees only with an enforcing backend. |
 
 ## Sources
+
+- [nvie: A successful Git branching model](https://nvie.com/posts/a-successful-git-branching-model/)
 
 - [Conan client stability](https://docs.conan.io/2/introduction.html#stability)
 - [Semantic Versioning](https://semver.org/)

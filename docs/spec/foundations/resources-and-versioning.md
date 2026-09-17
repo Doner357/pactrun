@@ -116,8 +116,8 @@ concerns defined by PR-REQ-0247.
 ## Independent version domains
 
 The [formal product compatibility policy](./product-versioning-and-compatibility.md)
-defines the approved same-Major promise and pre-release reset boundary. It is
-distinct from the version-domain separation below and does not silently alter
+defines the approved same-Major promise and first-formal-baseline consolidation.
+It is distinct from the version-domain separation below and does not silently alter
 current Frozen codecs or authorize a reset during ordinary implementation.
 
 ### PR-REQ-0077 - Separate version domains
