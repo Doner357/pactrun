@@ -13,6 +13,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod collection;
+
 use sha2::{Digest, Sha256};
 
 use crate::domain::{RuntimeContentClosureIdentityV1, Sha256Digest};
@@ -43,7 +45,10 @@ pub(crate) struct RuntimeContentStore {
 }
 
 #[derive(Debug)]
-struct StoreInstanceMarker(u8);
+struct StoreInstanceMarker {
+    _coordination: Option<Arc<File>>,
+    collection: bool,
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct StoredRuntimeBlob {
@@ -67,6 +72,7 @@ pub(crate) struct VerifiedRuntimeBlob {
     digest: Sha256Digest,
     byte_len: u64,
     file: File,
+    _store_instance: Arc<StoreInstanceMarker>,
 }
 
 impl VerifiedRuntimeBlob {
@@ -212,7 +218,10 @@ impl RuntimeContentStore {
             root_file,
             lock_file: Some(lock_file),
             in_process_lock: Mutex::new(()),
-            instance: Arc::new(StoreInstanceMarker(0)),
+            instance: Arc::new(StoreInstanceMarker {
+                _coordination: None,
+                collection: false,
+            }),
             #[cfg(test)]
             observer: TestObserver::default(),
         })
@@ -225,7 +234,10 @@ impl RuntimeContentStore {
             root_file,
             lock_file: None,
             in_process_lock: Mutex::new(()),
-            instance: Arc::new(StoreInstanceMarker(0)),
+            instance: Arc::new(StoreInstanceMarker {
+                _coordination: None,
+                collection: false,
+            }),
             #[cfg(test)]
             observer: TestObserver::default(),
         })
@@ -359,6 +371,7 @@ impl RuntimeContentStore {
             digest: digest.clone(),
             byte_len,
             file,
+            _store_instance: Arc::clone(&self.instance),
         })
     }
 
@@ -379,6 +392,44 @@ impl RuntimeContentStore {
 
     pub(super) fn owns_publication(&self, publication: &StoredRuntimeBlob) -> bool {
         Arc::ptr_eq(&self.instance, &publication.store_instance)
+    }
+
+    /// Ordinary openings share this process-lifetime guard; collection is exclusive.
+    /// Publication witnesses/read handles retain it even if the repository is dropped.
+    pub(super) fn with_collection_coordination(
+        mut self,
+        collection: bool,
+        create: bool,
+    ) -> Result<Self, RuntimeContentStoreError> {
+        let file = platform::open_collection_lock(&self.root, &self.root_file, create)
+            .map_err(|e| RuntimeContentStoreError::lock("open content coordination", e))?;
+        let result = if collection {
+            file.try_lock()
+        } else {
+            file.try_lock_shared()
+        };
+        result.map_err(|e| {
+            RuntimeContentStoreError::lock(
+                "content store busy; retry after current operations finish",
+                match e {
+                    std::fs::TryLockError::WouldBlock => io::Error::from(io::ErrorKind::WouldBlock),
+                    std::fs::TryLockError::Error(e) => e,
+                },
+            )
+        })?;
+        if create {
+            platform::sync_file(&file).map_err(|e| {
+                RuntimeContentStoreError::persistence("sync content coordination", e)
+            })?;
+            platform::sync_namespace(&self.root_file).map_err(|e| {
+                RuntimeContentStoreError::persistence("publish content coordination", e)
+            })?;
+        }
+        self.instance = Arc::new(StoreInstanceMarker {
+            _coordination: Some(Arc::new(file)),
+            collection,
+        });
+        Ok(self)
     }
 
     fn create_staging(&self) -> Result<(String, File), RuntimeContentStoreError> {

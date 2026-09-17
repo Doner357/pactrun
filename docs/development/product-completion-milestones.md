@@ -7,6 +7,13 @@ title: Product Completion Milestones
 **Status: Approved planning scope and work order, recorded on 2026-09-17.
 Detailed design and runtime implementation are pending.**
 
+Subsequent execution of the first scope is tracked in the
+[lifecycle implementation record](./managed-object-lifecycle-status.md). Its
+approved lifecycle contracts and feature implementation do not complete the later
+scopes or authorize publication. V9 and GC activation are tracked there separately
+from the earlier Artifact-only checkpoint. The status above records the original
+planning decision.
+
 This informative plan records the operator's decisions after the completed
 Instance-retirement milestone. Its list numbers express work order, not new
 M-series identifiers. M8 remains rejected and its number is not reused.

@@ -112,7 +112,10 @@ mod tests;
 #[cfg(test)]
 pub(super) fn empty_v7_to_v6_fixture(db: &mut Connection) {
     use super::sqlite_revision_store::SCHEMA_V6_ADDITIONS_SQL;
-    if classify_database(db).unwrap() == DatabaseState::V8 {
+    if matches!(
+        classify_database(db).unwrap(),
+        DatabaseState::V8 | DatabaseState::V9
+    ) {
         super::sqlite_v8::empty_v8_to_v7_fixture(db);
     }
     validate_schema(db, 7).unwrap();

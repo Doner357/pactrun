@@ -233,6 +233,7 @@ Upgrade is not a global Snapshot-content or Run-semantic integrity certificate.
 **Verification: PR-TEST-0294, PR-TEST-0295, PR-TEST-0296, PR-TEST-0297,
 PR-TEST-0298.**
 
-The current CLI path-ID preservation test PR-TEST-0300 now targets V6-to-V7.
+The current CLI path-ID preservation test PR-TEST-0300 now targets V8-to-V9;
+this does not replace the historical upgrade evidence for this schema.
 The historical exact V5-to-V6 contract remains enforced by the tests above;
 this does not create an implicit upgrade chain in the current binary.

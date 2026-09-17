@@ -75,7 +75,7 @@ delete operations for Snapshots. Filtering Snapshots by Instance MUST first
 resolve the live Instance to its exact identity and then filter provenance; it
 MUST NOT imply ownership.
 
-**Verification: PR-TEST-0268.**
+**Verification: PR-TEST-0268, PR-TEST-0460.**
 
 ### PR-REQ-0118 - Revision operations
 
@@ -83,7 +83,11 @@ The CLI MUST provide conceptual list, show, export, import, and delete
 operations for Revisions. Human references MUST be resolved to exact identity,
 and ambiguity MUST fail.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0465.**
+
+This evidence covers deletion, exact-reference resolution and ambiguity refusal.
+Revision list/show/export/import remain outside the lifecycle implementation;
+this partial coverage does not claim that entire command family is available.
 
 ### PR-REQ-0119 - Security-sensitive authorization spelling
 
@@ -231,6 +235,11 @@ platform-native code-unit or byte representation. This representation is a
 human projection, not a stable machine-readable envelope. No stable JSON envelope,
 raw inspection option, Artifact export/delete command, or public Rust API is
 added by this spelling.
+
+The separately approved [managed-object lifecycle contract](./managed-object-lifecycle.md)
+adds Artifact export/delete without changing the existing Run inspection spelling
+or introducing a machine-readable envelope. Its implementation status is separate
+from this historical command boundary.
 
 Success is exit code 0, syntax or option error is 2, and operation failure or
 cancellation is 1. `invoke` returns 0 only after durable `Succeeded` terminal

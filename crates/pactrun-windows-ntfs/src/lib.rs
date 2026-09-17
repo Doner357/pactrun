@@ -855,6 +855,40 @@ mod implementation {
         }
     }
 
+    pub fn runtime_content_names(root: &File) -> io::Result<Vec<OsString>> {
+        Ok(retirement_names(root)?.into_iter().collect())
+    }
+
+    /// Denies writes and namespace replacement while bytes are verified and removed.
+    pub fn open_collectible_runtime_blob(
+        root: &File,
+        name: &str,
+        execute: bool,
+    ) -> io::Result<File> {
+        validate_service_segment(name)?;
+        let file = open_relative_native_with_sharing(
+            root,
+            OsStr::new(name),
+            FILE_NON_DIRECTORY_FILE | if execute { FILE_WRITE_THROUGH } else { 0 },
+            GENERIC_READ | SYNCHRONIZE | if execute { GENERIC_WRITE | DELETE } else { 0 },
+            FILE_SHARE_READ,
+        )?;
+        validate_entry(&file, EntryKind::RegularFile)?;
+        let (hint, links) = open_service_entry(root, name)?;
+        if links != 1 || !same_opened_object(&hint, &file)? {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "shared or replaced runtime blob",
+            ));
+        }
+        Ok(file)
+    }
+
+    pub fn remove_collectible_runtime_blob(file: &File) -> io::Result<()> {
+        mark_retired(file)?;
+        flush(file)
+    }
+
     pub fn rename_no_replace(staging: &File, final_path: &Path) -> io::Result<()> {
         let name = wide(final_path.as_os_str());
         let name_bytes = name.len().checked_mul(size_of::<u16>()).ok_or_else(|| {

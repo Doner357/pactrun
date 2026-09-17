@@ -529,7 +529,7 @@ fn migration_references_retain_payloads_and_operation_kinds_are_not_inferred() {
 fn make_v5_fixture(root: &Path) {
     let mut db = Connection::open(db_path(root)).unwrap();
     configure_connection(&db).unwrap();
-    if matches!(version(root), 7 | 8) {
+    if matches!(version(root), 7..=9) {
         super::super::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
     }
     validate_schema(&db, 6).unwrap();

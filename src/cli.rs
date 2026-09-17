@@ -22,6 +22,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
+mod artifacts;
+mod lifecycle;
 mod migrations;
 mod retirements;
 mod service_storage;
@@ -75,6 +77,11 @@ Usage:\n\
   pactrun run list <instance>\n\
   pactrun run show <run-id>\n\
   pactrun run reconcile\n\
+  pactrun run delete <run-id> [--delete-artifacts]\n\
+  pactrun revision delete <revision-reference>\n\
+  pactrun snapshot delete <snapshot-id>\n\
+  pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export\n\
+  pactrun run artifact delete <run-id> <output-id>\n\
   pactrun snapshot capture <instance> [execution-options]\n\
   pactrun snapshot restore <instance> <snapshot-id> [execution-options]\n\
   pactrun snapshot list [--instance <instance>]\n\
@@ -83,6 +90,7 @@ Usage:\n\
   pactrun snapshot import <bundle-path>\n\
   pactrun snapshot export <snapshot-id> --output <bundle-path> --authorize-sensitive-export\n\
   pactrun storage upgrade\n\
+  pactrun storage gc [--plan]\n\
 \n\
 Snapshot execution options: --param, --param-file, --param-stdin, --plan, --authorize-recovery-override,\n\
   --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
@@ -95,6 +103,8 @@ Cleanup has no parameters. Abandon never launches Cleanup. Detached discard neve
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    Lifecycle(lifecycle::LifecycleCommand),
+    Artifact(artifacts::ArtifactCommand),
     Retirement(retirements::RetirementCommand),
     ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
@@ -473,6 +483,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
     };
     match first.as_str() {
         "pack" => parse_pack(&mut parser),
+        "revision" => lifecycle::parse_revision(&mut parser).map(Command::Lifecycle),
         "instance" => parse_instance(&mut parser),
         "input" => parse_input(&mut parser),
         "action" => parse_action(&mut parser),
@@ -483,6 +494,22 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         "run" => parse_run(&mut parser),
         "storage" => {
             let operation = required_value_string(&mut parser, "storage command")?;
+            if operation == "gc" {
+                let mut plan = false;
+                while let Some(arg) = parser.next().map_err(lex_error)? {
+                    match arg {
+                        Arg::Long("plan") if !plan => plan = true,
+                        _ => {
+                            return Err(CliError::usage(
+                                "unsupported or duplicate collection option",
+                            ));
+                        }
+                    }
+                }
+                return Ok(Command::Lifecycle(lifecycle::LifecycleCommand::Collect {
+                    plan,
+                }));
+            }
             if operation != "upgrade" {
                 return Err(CliError::usage("unknown storage command"));
             }
@@ -792,6 +819,8 @@ fn parse_execution_options(
 
 fn parse_run(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "run command")?.as_str() {
+        "delete" => lifecycle::parse_run_delete(parser).map(Command::Lifecycle),
+        "artifact" => artifacts::parse(parser).map(Command::Artifact),
         "list" => {
             let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
             require_end(parser)?;
@@ -839,6 +868,12 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
+    if let Command::Lifecycle(command) = command {
+        return lifecycle::execute(command, &storage_root, stdout);
+    }
+    if let Command::Artifact(command) = command {
+        return artifacts::execute(command, &storage_root, stdout);
+    }
     if let Command::Retirement(command) = command {
         return retirements::execute(command, &storage_root, stdout, stderr, cancellation);
     }
@@ -1221,6 +1256,8 @@ fn execute(
         | Command::Version
         | Command::GeneratePackageId
         | Command::UpgradeStorage
+        | Command::Artifact(_)
+        | Command::Lifecycle(_)
         | Command::Migration(_)
         | Command::Snapshot(_)
         | Command::Retirement(_)

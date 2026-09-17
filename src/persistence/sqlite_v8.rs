@@ -10,8 +10,8 @@ use super::runtime_content_store::{
     validate_existing_regular_entry, validate_supported_storage_root,
 };
 use super::sqlite_revision_store::{
-    DatabaseState, FaultPoint, SCHEMA_VERSION, classify_database, configure_connection,
-    configure_read_connection, establish_wal_mode, fault, validate_schema,
+    DatabaseState, FaultPoint, classify_database, configure_connection, configure_read_connection,
+    establish_wal_mode, fault, validate_schema,
 };
 use crate::managed_data::StagingSession;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
@@ -21,7 +21,7 @@ pub(super) const SCHEMA_V8_ADDITIONS_SQL: &str =
     include_str!("persistence_schema_v8_additions.sql");
 
 impl PactrunPersistence {
-    pub(crate) fn upgrade_storage(root: &Path) -> Result<bool, PersistenceError> {
+    pub(super) fn upgrade_legacy_v7_to_v8(root: &Path) -> Result<bool, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         let directory = validate_supported_storage_root(&root.join("database"))?;
         validate_existing_regular_entry(&directory, "pactrun.sqlite3")?;
@@ -64,13 +64,13 @@ impl PactrunPersistence {
                 PersistenceError::sqlite("remove confirmed-lost V7 writer admissions", e)
             })?;
         apply_v8(&tx)?;
-        validate_schema(&tx, SCHEMA_VERSION)?;
+        validate_schema(&tx, 8)?;
         tx.execute(
             "INSERT INTO writable_admissions VALUES(?1,8)",
             [session.owner().as_str().as_bytes()],
         )
         .map_err(|e| PersistenceError::sqlite("record V8 upgrade admission", e))?;
-        tx.pragma_update(None, "user_version", SCHEMA_VERSION)
+        tx.pragma_update(None, "user_version", 8)
             .map_err(|e| PersistenceError::sqlite("publish V8 version", e))?;
         fault(FaultPoint::BeforeSchemaMigrationCommit);
         tx.commit()
@@ -104,6 +104,7 @@ fn unsupported() -> PersistenceError {
 /// exact older table definitions. Never exposed as a production downgrade.
 #[cfg(test)]
 pub(super) fn empty_v8_to_v7_fixture(database: &mut Connection) {
+    super::sqlite_v9::current_to_v8_fixture(database);
     use super::sqlite_revision_store::{
         SCHEMA_V4_ADDITIONS_SQL, SCHEMA_V6_ADDITIONS_SQL, SCHEMA_V7_ADDITIONS_SQL,
     };

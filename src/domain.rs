@@ -14,6 +14,7 @@ mod identity;
 mod managed_input;
 mod migration;
 mod migration_paths;
+mod object_lifecycle;
 mod revision_content;
 mod revision_core_v1;
 mod revision_metadata;
@@ -41,6 +42,7 @@ pub(crate) use managed_input::*;
 pub(crate) use migration::*;
 #[allow(unused_imports)]
 pub(crate) use migration_paths::*;
+pub(crate) use object_lifecycle::*;
 #[allow(unused_imports)]
 pub(crate) use revision_content::*;
 pub(crate) use revision_core_v1::*;

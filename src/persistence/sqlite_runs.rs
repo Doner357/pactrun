@@ -38,12 +38,13 @@ use crate::domain::{
     ActionIdentity, ActionRunBoundary, ActionRunIdentity, AdmissionFacts, AdmissionRefusal,
     CompiledHookLaunch, ExecutionOwnerSession, HookCodeV1, HookCompletionRecord,
     HookCompletionStatus, InputIdentity, InstanceId, InstanceStateVersion,
-    InterpreterLauncherObservation, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputPayloadId,
-    ManagedOutputIdentity, ManagedRunIdentity, ManualRecoveryTrigger, OperationAccessV1,
-    PactrunErrorRefV1, RecoveryGuardView, RecoveryRiskState, RevisionIdentity, RunArtifactSummary,
-    RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunInspectionData,
-    RunOutcome, RunOutcomeView, RunPrimaryFailure, RunState, RunSummary, RunView, RuntimeFileV1,
-    Sha256Digest, risk_transition, terminal_consequence, validate_running_action_state,
+    InterpreterLauncherObservation, ManagedInputPayloadId, ManagedOutputIdentity,
+    ManagedRunIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1,
+    RUN_ARTIFACT_MAX_BYTES_V1, RecoveryGuardView, RecoveryRiskState, RevisionIdentity,
+    RunArtifactSummary, RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId,
+    RunInspectionData, RunOutcome, RunOutcomeView, RunPrimaryFailure, RunState, RunSummary,
+    RunView, RuntimeFileV1, Sha256Digest, risk_transition, terminal_consequence,
+    validate_running_action_state,
 };
 
 /// Re-runs the ordered interpreter launcher selection bound into a Plan. The
@@ -84,7 +85,7 @@ pub(crate) struct RunFinishReceipt {
 }
 
 const ARTIFACT_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
-    representation_maximum: MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
+    representation_maximum: RUN_ARTIFACT_MAX_BYTES_V1,
     insert_chunk_sql: "INSERT INTO run_artifact_chunks(\
         run_id, output_identity, chunk_index, chunk_bytes\
      ) VALUES (?1, ?2, ?3, ?4)",
@@ -2323,7 +2324,7 @@ fn insert_artifact(
     run: RunId,
     artifact: &mut RunArtifactWrite<'_>,
 ) -> Result<(), PersistenceError> {
-    if artifact.byte_len > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
+    if artifact.byte_len > RUN_ARTIFACT_MAX_BYTES_V1 {
         return Err(PersistenceError::InvalidRunArtifact(
             "Run Artifact exceeds the size limit".to_owned(),
         ));

@@ -852,7 +852,11 @@ existing foundations, design rationale, open decisions and acceptance criteria.
    first-formal-baseline reorganization, intentionally last.
 
 These list numbers are not M-series identifiers. The next planned scope is
-Managed Object Lifecycle and GC; detailed implementation design remains pending.
+Managed Object Lifecycle and GC; its design is now approved and all slices are
+implemented and verified in the feature branch, with final acceptance passed.
+The subsequent [lifecycle implementation record](./managed-object-lifecycle-status.md)
+records the full implementation and evidence. The feature runtime is V9; the
+integrated develop baseline remains V8 until an authorized integration.
 No runtime implementation, calendar start or publication is started by this
 documentation change. Small slices can be accepted independently within their
 milestones. M8 remains rejected and its number is not reused.

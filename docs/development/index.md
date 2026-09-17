@@ -39,8 +39,11 @@ is implemented and integrated; [M8 is rejected and archived](./history/m8-recipe
 The [product completion milestones](./product-completion-milestones.md) now
 start with managed-object lifecycle/GC and end with versioning/baseline
 consolidation; the intermediate scopes and rationale are recorded there.
-Detailed design and implementation remain pending, without reusing the retired
-number. The [format review](./design-notes/m6-5-format-activation-review.md)
+The [lifecycle implementation record](./managed-object-lifecycle-status.md) tracks
+the separately approved design and all implemented lifecycle slices on V9, with
+final acceptance passed. Later completion scopes remain pending, without
+reusing the retired number.
+The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 
 ## Release readiness is a separate planning dimension

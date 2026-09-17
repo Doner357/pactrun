@@ -15,6 +15,8 @@ website build. They do not constitute additional requirements.
 | [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility design; implementation and baseline consolidation pending. |
 | [Actions, Plans, and Runs](behavior/actions-plans-and-runs.md) | Normative product behavior specification. |
 | [Command and Output Reference](behavior/command-and-output-reference.md) | Normative product behavior specification. Exact option spelling remains open specification work where explicitly noted. |
+| [Managed Object Lifecycle and GC](behavior/managed-object-lifecycle.md) | Implemented normative contract; verification and integration are tracked separately. |
+| [Persistence Schema V9](persistence/persistence-schema-v9.md) | Implemented normative internal contract; non-Frozen. |
 | [Inputs, Secrets, and Readiness](behavior/inputs-secrets-and-readiness.md) | Normative product behavior specification except where linked to an owning requirement. |
 | [M4 Runtime Capabilities](behavior/m4-runtime-capabilities.md) | Approved normative fixed build capabilities. |
 | [M4 Snapshot Commands](behavior/m4-snapshot-command-reference.md) | Approved normative CLI, implemented and integrated into develop. Verification and milestone integration are recorded in the M4 execution record. |

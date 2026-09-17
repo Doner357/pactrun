@@ -53,6 +53,16 @@ exact-V7 upgrade. Native retirement is qualified against concurrent namespace
 changes and retains durable no-replay/retry evidence. No product network
 feature, daemon, release, remote push or documentation deployment is implied.
 
+The active [managed-object lifecycle feature](./docs/development/managed-object-lifecycle-status.md)
+adds Artifact export/deletion, Snapshot/Revision/Run deletion and explicit
+`pactrun storage gc [--plan]`. This feature writes
+[PersistenceSchemaV9](./docs/spec/persistence/persistence-schema-v9.md) and upgrades
+only exact V8 explicitly. It is not yet merged into the historical develop
+baseline described above. GC never collects service-owned data, and Artifact
+export requires `--authorize-sensitive-export` with a new file destination.
+See the [lifecycle contract](./docs/spec/behavior/managed-object-lifecycle.md) for
+guards, retention, retry and read-only preview semantics.
+
 ## Repository layout
 
 - `src/` contains the production crate and crate-private architecture modules.

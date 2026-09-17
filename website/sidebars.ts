@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
           'spec/behavior/index',
           'spec/behavior/actions-plans-and-runs',
           'spec/behavior/command-and-output-reference',
+          'spec/behavior/managed-object-lifecycle',
           'spec/behavior/inputs-secrets-and-readiness',
           'spec/behavior/m4-runtime-capabilities',
           'spec/behavior/m4-snapshot-command-reference',
@@ -59,6 +60,7 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v5',
           'spec/persistence/persistence-schema-v6',
           'spec/persistence/persistence-schema-v8',
+          'spec/persistence/persistence-schema-v9',
         ]},
         {type: 'category', label: 'M6.5 Candidate Contracts', items: [
           'spec/contracts/revision-core-format-v2',
@@ -79,6 +81,7 @@ const sidebars: SidebarsConfig = {
         'development/implementation-roadmap', 'development/development-and-verification',
         'development/release-readiness',
         'development/product-completion-milestones',
+        'development/managed-object-lifecycle-status',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',

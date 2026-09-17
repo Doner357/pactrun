@@ -231,7 +231,11 @@ upgraders observe the committed version. Failure to remove the upgrader's own
 admission after commit does not turn successful upgrade into failure; its lease
 provides the existing safe recovery mechanism.
 
-**Verification: PR-TEST-0300, PR-TEST-0393, PR-TEST-0401, PR-TEST-0402, PR-TEST-0403.**
+**Verification: PR-TEST-0393, PR-TEST-0401, PR-TEST-0402, PR-TEST-0403.**
+
+The current-binary path-ID preservation test PR-TEST-0300 follows the explicit
+successor upgrade in PR-REQ-0345. The V7-to-V8 behavior above retains its exact
+historical upgrade, preservation, refusal and crash tests.
 
 The current test proves transaction rollback and absence of inferred lifecycle
 evidence. Cross-process owner exclusion and commit fault-injection evidence

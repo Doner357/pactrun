@@ -352,7 +352,14 @@ impl PactrunApplication {
         self.persistence.observe_snapshot_compilation(intent)
     }
     pub(crate) fn open(storage_root: impl AsRef<Path>) -> Result<Self, ApplicationError> {
-        let requested = storage_root.as_ref();
+        Self::open_for(storage_root.as_ref(), false)
+    }
+
+    pub(crate) fn open_for_collection(storage_root: &Path) -> Result<Self, ApplicationError> {
+        Self::open_for(storage_root, true)
+    }
+
+    fn open_for(requested: &Path, collection: bool) -> Result<Self, ApplicationError> {
         if requested.as_os_str().is_empty() || !requested.is_absolute() {
             return Err(ApplicationError::Configuration(
                 "PACTRUN_STORAGE_ROOT must be a non-empty absolute path".to_owned(),
@@ -364,7 +371,11 @@ impl PactrunApplication {
             validate_supported_storage_root(&root.join(child))
                 .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
         }
-        let persistence = PactrunPersistence::open(&root)?;
+        let persistence = if collection {
+            PactrunPersistence::open_for_collection(&root)?
+        } else {
+            PactrunPersistence::open(&root)?
+        };
         Ok(Self {
             persistence,
             storage_root: root,
@@ -404,6 +415,20 @@ impl PactrunApplication {
                 "this operation requires a writable Pactrun opening".to_owned(),
             )
         })
+    }
+
+    pub(crate) fn delete_object(
+        &self,
+        target: &crate::domain::ObjectDeletion,
+    ) -> Result<crate::domain::ObjectDeletionResult, ApplicationError> {
+        Ok(self.persistence.delete_object(target)?)
+    }
+
+    pub(crate) fn collect_content(
+        &self,
+        execute: bool,
+    ) -> Result<crate::domain::CollectionReport, ApplicationError> {
+        Ok(self.persistence.collect_content(execute)?)
     }
 
     pub(crate) fn install_pack_source(
@@ -598,6 +623,28 @@ impl PactrunApplication {
         Ok(self
             .persistence
             .open_run_artifact(run, output, destination)?)
+    }
+
+    pub(crate) fn export_run_artifact(
+        &self,
+        run: RunId,
+        output: &ManagedOutputIdentity,
+        authorize_sensitive: bool,
+    ) -> Result<StagedFile, ApplicationError> {
+        if !authorize_sensitive {
+            return Err(ApplicationError::InvalidRequest(
+                "Artifact export requires --authorize-sensitive-export".to_owned(),
+            ));
+        }
+        let mut staged = self.staging()?.create_managed_output_stage()?;
+        self.stream_run_artifact(run, output, staged.writer())?;
+        staged
+            .finish_operation_file()
+            .map_err(|source| ApplicationError::Io {
+                operation: "finish Artifact export staging",
+                source,
+            })?;
+        Ok(staged)
     }
 
     #[allow(dead_code)]

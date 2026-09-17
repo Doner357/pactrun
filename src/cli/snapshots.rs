@@ -7,6 +7,7 @@ use crate::domain::{
 use crate::persistence::{PersistenceError, SnapshotInspection};
 
 pub(super) enum SnapshotCommand {
+    Delete(SnapshotId),
     Execute {
         name: InstanceName,
         operation: SnapshotOperation,
@@ -66,6 +67,11 @@ fn parse_inner(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
                 }
             }
             Ok(SnapshotCommand::List(name))
+        }
+        "delete" => {
+            let id = id(parser)?;
+            require_end(parser)?;
+            Ok(SnapshotCommand::Delete(id))
         }
         operation @ ("show" | "verify") => {
             let id = id(parser)?;
@@ -149,6 +155,11 @@ pub(super) fn execute(
     }
     .map_err(safe_error)?;
     match command {
+        SnapshotCommand::Delete(id) => lifecycle::write_deletion(
+            stdout,
+            app.delete_object(&crate::domain::ObjectDeletion::Snapshot(id))
+                .map_err(app_error)?,
+        ),
         SnapshotCommand::Execute {
             name,
             operation,
