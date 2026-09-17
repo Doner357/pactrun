@@ -23,7 +23,7 @@ product semantics. A design summary may help locate a rule but cannot override
 it. The [M4 closeout](./m4-implementation-status.md) records integrated work, not
 a release or a fresh claim that every test has just run.
 
-The next design entry is the [ServiceStorage staged alignment](./design-notes/service-storage-staged-design-alignment.md).
+The historical work-order entry is the [ServiceStorage staged alignment](./design-notes/service-storage-staged-design-alignment.md).
 The [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md)
 records the scope of the now-integrated recovery milestone.
 The approved work order places ServiceStorage in M6.5 between M6 recovery and
@@ -36,13 +36,18 @@ approved design direction. M6.5 S1-S7 is implemented and integrated into develop
 the [implementation record](./m6-5-implementation-status.md) separates runtime
 support, final-source verification and Git integration. [M7](./m7-implementation-status.md)
 is implemented and integrated; [M8 is rejected and archived](./history/m8-recipes-rejected.md).
-No replacement milestone is selected. The [format review](./design-notes/m6-5-format-activation-review.md)
+The [product completion milestones](./product-completion-milestones.md) now
+start with managed-object lifecycle/GC and end with versioning/baseline
+consolidation; the intermediate scopes and rationale are recorded there.
+Detailed design and implementation remain pending, without reusing the retired
+number. The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 
 ## Release readiness is a separate planning dimension
 
 The [release-readiness checklist](./release-readiness.md) records approved work
-that must be accepted before formal publication, with timing left unassigned.
+that must be accepted before formal publication, with relative work order now
+recorded in the completion plan and calendar timing left unassigned.
 It does not start automatically after M7 or the retirement of M8.
 The [owning compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 separates this future product commitment from today's implemented format checks.

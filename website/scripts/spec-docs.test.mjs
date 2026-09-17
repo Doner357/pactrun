@@ -194,7 +194,7 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
   assert.match(closeout, /without push/);
 });
 
-test('release readiness is approved but unscheduled and does not implement future versioning', async () => {
+test('release readiness separates work order from publication and implementation', async () => {
   const document = name => docs.find(([file]) => file === name)?.[1];
   const plan = document('development/release-readiness.md');
   const policy = document('spec/foundations/product-versioning-and-compatibility.md');
@@ -202,32 +202,38 @@ test('release readiness is approved but unscheduled and does not implement futur
   assert.ok(policy);
   const normalizedPlan = plan.replace(/\s+/g, ' ');
   const normalizedPolicy = policy.replace(/\s+/g, ' ');
-  assert.match(normalizedPlan, /Required before formal release; scheduling and implementation are not yet assigned/);
+  assert.match(normalizedPlan, /Required before formal release; relative work order assigned, implementation pending/);
   assert.match(normalizedPlan, /Retirement of M8 does not trigger these tasks or a release/);
   assert.match(normalizedPlan, /not a mandatory milestone-to-release chain/);
   for (const work of [
     'Versioning mechanism design and implementation',
-    'Baseline reorganization and reset',
+    'Baseline reorganization and consolidation',
     'Internal testing, evaluation and correction',
     'Release mechanism design and implementation',
   ]) assert.ok(plan.includes('| ' + work + ' |'), work);
   assert.match(normalizedPlan, /Formal publication is a separate controlled action/);
   assert.match(normalizedPlan, /does not implement versioning, change Cargo's product version, reset data/);
   assert.match(normalizedPlan, /no field name or version-range syntax has been approved yet/);
-  assert.match(normalizedPolicy, /Approved formal-release compatibility design; implementation and baseline reset pending/);
+  assert.match(normalizedPolicy, /Approved formal-release compatibility design; implementation and baseline consolidation pending/);
   assert.deepEqual([...policy.matchAll(/^### (PR-REQ-\d+)/gm)].map(match => match[1]), [
     'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333',
   ]);
   assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 5);
   assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
   assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
-  assert.match(normalizedPolicy, /without backward compatibility for development-era formats or data/);
-  assert.match(normalizedPolicy, /Development-era means the retired pre-reset generation/);
+  assert.match(normalizedPolicy, /Development iterations are not earlier formal product releases/);
+  assert.match(normalizedPolicy, /Data acceptance MUST depend on full conformance to the current supported formal contracts/);
+  assert.match(normalizedPolicy, /conforming data MUST NOT be rejected solely because of its development provenance/);
+  assert.match(normalizedPolicy, /MUST NOT require a development-generation marker or discriminator merely to identify and exclude development data/);
+  assert.match(normalizedPolicy, /Conformance MUST include applicable identity, encoding, reference, invariant and semantic checks/);
+  assert.match(normalizedPolicy, /shipping program MUST NOT retain readers, migration chains, version dispatch or special cases solely to support superseded development contracts/);
+  assert.doesNotMatch(normalizedPolicy, /MUST distinguish old development data reliably/);
+  assert.doesNotMatch(normalizedPlan, /explicit old-generation rejection/);
   assert.match(normalizedPolicy, /MUST remain at product version 0\.1\.0/);
   assert.match(normalizedPolicy, /MUST NOT automatically publish or label the product 1\.0\.0/);
   assert.match(normalizedPolicy, /MUST NOT perform another format reset/);
   const roadmap = document('development/implementation-roadmap.md').replace(/\s+/g, ' ');
-  assert.match(roadmap, /Release-readiness prerequisites \(timing unassigned\)/);
+  assert.match(roadmap, /Release-readiness prerequisites \(publication gates\)/);
   assert.match(roadmap, /not tasks automatically scheduled by milestone completion or retirement/);
   assert.match(roadmap, /### M7 - Cleanup and deletion \*\*State: Implemented, verified and integrated into local develop\./);
   assert.match(roadmap, /M8 was rejected and removed from the active roadmap/);
@@ -266,6 +272,63 @@ test('M8 rejection retires Recipe obligations but preserves identity and interna
   assert.match(handoff, /No next numbered milestone is selected/);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/history\/m8-recipes-rejected/);
+});
+
+test('completion plan preserves agreed order, bounded slices and pending implementation', async () => {
+  const document = name => docs.find(([file]) => file === name)[1];
+  const plan = document('development/product-completion-milestones.md');
+  const normalized = plan.replace(/\s+/g, ' ');
+  assert.match(normalized, /Approved planning scope and work order, recorded on 2026-09-17/);
+  assert.match(normalized, /Detailed design and runtime implementation are pending/);
+  assert.deepEqual([...plan.matchAll(/^## \d\. (.+)$/gm)].map(match => match[1]), [
+    'Managed Object Lifecycle and GC',
+    'Snapshot Capacity and Restore Workflow',
+    'Shell Adapter / Loader',
+    'Machine-readable CLI Output',
+    'Versioning and Baseline Consolidation',
+  ]);
+  assert.match(normalized, /Versioning is last, not a required preliminary design milestone/);
+  const lifecycle = plan.split('## 1. ')[1].split('## 2. ')[0];
+  assert.match(lifecycle, /### Artifact export slice/);
+  for (const object of ['Snapshot', 'Revision', 'Run record', 'Run Artifact']) {
+    assert.ok(lifecycle.includes('| ' + object + ' |'), object);
+  }
+  const snapshot = plan.split('## 2. ')[1].split('## 3. ')[0];
+  assert.match(snapshot, /### Create-and-restore convenience slice/);
+  assert.match(normalized, /Current PR-REQ-0293 remains binding until its owning contract is revised/);
+  assert.match(normalized, /Do not automatically delete the new Instance on Restore failure/);
+  assert.match(normalized, /Normal zero-status script exit defaults to a request for successful completion/);
+  assert.match(normalized, /Never auto-clear Open risk/);
+  assert.match(normalized, /Command semantics and permissions remain identical to human use/);
+  assert.match(normalized, /Accept fully conforming data irrespective of development provenance/);
+  assert.match(normalized, /This planning record changes no executable, stored data or current runtime limit/);
+  for (const entry of ['development/index.md', 'development/implementation-roadmap.md',
+    'development/next-milestone.md', 'development/release-readiness.md',
+    'agents/index.md', 'agents/develop-pactrun.md']) {
+    assert.ok(document(entry).includes('product-completion-milestones.md'), entry);
+  }
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.match(sidebar, /development\/product-completion-milestones/);
+});
+
+test('contributor rules preserve product naming, rationale and branch target discipline', async () => {
+  const policy = docs.find(([name]) => name === 'development/development-and-verification.md')[1];
+  const normalized = policy.replace(/\s+/g, ' ');
+  assert.match(normalized, /New functions and tests MUST use product concepts, behavior or invariants/);
+  assert.match(normalized, /Existing occurrences are deferred to Versioning and Baseline Consolidation/);
+  assert.match(normalized, /Actual protocol\/format\/schema version identities and stable PR-REQ\/PR-TEST IDs/);
+  assert.match(normalized, /Contributors SHOULD record the rationale for each new or revised design rule/);
+  assert.match(normalized, /If the original reason is unknown, say it was not recorded/);
+  assert.match(normalized, /Rationale is informative, not a second normative contract/);
+  assert.match(normalized, /Determine the version line being changed and its integration targets before choosing a branch name/);
+  for (const prefix of ['feature/', 'fix/', 'docs/', 'release/', 'hotfix/']) {
+    assert.ok(policy.includes('`' + prefix + '`'), prefix);
+  }
+  assert.match(normalized, /integrate a production hotfix there as Git Flow prescribes/);
+  assert.match(normalized, /No historical branch renaming or history rewriting is implied/);
+  const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8');
+  assert.match(contributing, /git-flow-and-topic-naming/);
+  assert.match(contributing, /product-oriented-functions-and-tests/);
 });
 
 test('validation policy selects by impact while preserving full-suite gates and honest evidence', async () => {

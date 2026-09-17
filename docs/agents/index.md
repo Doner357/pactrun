@@ -14,6 +14,12 @@ placeholders; do not interpret them as completed tutorials.
   numbered milestone is selected. Release-readiness work has no assigned start,
   and integration does not authorize publication. Consult the linked closeout
   records for implementation and verification evidence.
+- Follow the [product completion work order](../development/product-completion-milestones.md):
+  lifecycle/GC, Snapshot capacity/restore convenience, shell loader, machine-readable
+  CLI output, then versioning/baseline consolidation. New functions/tests use
+  product behavior names and no milestone markers. Record design rationale and
+  choose Git Flow topic prefixes by intent; see the
+  [contributor policy](../development/development-and-verification.md).
 - In a checkout, read applicable repository instructions and CONTRIBUTING.md.
   Use the checkout revision and working-tree state to identify the source.
 - In the published text edition, [publication metadata](../publication.json)

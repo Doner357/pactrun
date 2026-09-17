@@ -836,7 +836,34 @@ M8 was rejected and removed from the active roadmap on 2026-09-16, not deferred.
 The [historical proposal and rejection rationale](./history/m8-recipes-rejected.md)
 preserve its scope and explain Revision variation and Migration maintenance costs.
 Its number is not reused. YAML remains the built-in frontend; a public Candidate
-API is deferred until concrete demand. No replacement milestone is selected.
+API is deferred until concrete demand. No replacement M8 is selected.
+
+## Product completion work order
+
+The operator agreed the following order on 2026-09-17. The
+[detailed milestone plan](./product-completion-milestones.md) records scope,
+existing foundations, design rationale, open decisions and acceptance criteria.
+
+1. **Managed Object Lifecycle and GC**, including Run Artifact export.
+2. **Snapshot Capacity and Restore Workflow**, including create-and-restore.
+3. **Shell Adapter / Loader**.
+4. **Machine-readable CLI Output**.
+5. **Versioning and Baseline Consolidation**, combining version evolution and
+   first-formal-baseline reorganization, intentionally last.
+
+These list numbers are not M-series identifiers. The next planned scope is
+Managed Object Lifecycle and GC; detailed implementation design remains pending.
+No runtime implementation, calendar start or publication is started by this
+documentation change. Small slices can be accepted independently within their
+milestones. M8 remains rejected and its number is not reused.
+
+Final consolidation removes development-only compatibility machinery, not all
+previously created data: final-contract conformance decides acceptance, independent
+of development provenance. The owning PR-REQ-0332 records the revised policy.
+Current Frozen contracts and capacity rules remain effective until their approved
+changes are implemented. New work immediately follows product-oriented function/
+test naming, rationale recording and topic-branch rules in the
+[contributor policy](./development-and-verification.md).
 
 ## Deferred ServiceStorage representation and runtime gates
 
@@ -871,13 +898,13 @@ Managed Inputs or M1-D metadata as a live-file or operational-state mirror.
 Hook-produced Managed Input or explicit ownership adoption may be designed
 separately and is not expanded here.
 
-## Release-readiness prerequisites (timing unassigned)
+## Release-readiness prerequisites (publication gates)
 
-The approved [release-readiness plan](./release-readiness.md) is independent of
-the numbered milestone sequence. It covers versioning-mechanism design and
-implementation, baseline reorganization/reset, internal testing/correction, and
-release-mechanism design and implementation. These are required before formal
-release, not tasks automatically scheduled by milestone completion or retirement.
+The approved [release-readiness plan](./release-readiness.md) covers versioning
+and baseline consolidation as the last milestone above, plus internal
+testing/correction and release-mechanism design and implementation. These are
+required before formal release, not tasks automatically scheduled by milestone
+completion or retirement. Relative order is assigned; calendar timing is not.
 Removing M8 does not start them, change the software version or authorize publication.
 
 Their owning observable rules are in the
