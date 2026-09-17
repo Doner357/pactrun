@@ -5,6 +5,8 @@
 #![allow(dead_code)]
 
 mod chunked_blob;
+#[cfg(test)]
+mod object_lifecycle_tests;
 mod runtime_content_store;
 #[cfg(test)]
 mod schema_v5_contract_tests;
@@ -12,6 +14,7 @@ mod sqlite_deletions;
 mod sqlite_instances;
 mod sqlite_migration_runs;
 mod sqlite_migrations;
+mod sqlite_object_lifecycle;
 mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
@@ -27,7 +30,9 @@ mod sqlite_v5;
 mod sqlite_v6;
 #[cfg(test)]
 mod sqlite_v7;
+#[cfg(test)]
 mod sqlite_v8;
+mod sqlite_v9;
 pub(crate) use sqlite_revision_store::SCHEMA_VERSION;
 pub(crate) use sqlite_snapshots::{
     SnapshotImportReceipt, SnapshotInspection, SnapshotVerification,

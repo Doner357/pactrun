@@ -258,9 +258,9 @@ fn operator_acquisition_and_invalid_target_fail_without_acceptance() {
 }
 
 // Test-ID: PR-TEST-0300
-// Verifies: PR-REQ-0309, PR-REQ-0339
+// Verifies: PR-REQ-0309, PR-REQ-0345
 #[test]
-fn real_cli_requires_explicit_v7_upgrade_preserving_inputs_and_path_ids() {
+fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids() {
     let f = setup(false);
     let input = f.source.join("upgrade-secret");
     fs::write(&input, b"preserved secret bytes").unwrap();
@@ -281,79 +281,24 @@ fn real_cli_requires_explicit_v7_upgrade_preserving_inputs_and_path_ids() {
         &["instance", "migration-paths", "demo", "--to", &f.c],
     ));
     {
-        // Construct a historical source fixture only. No production downgrade
-        // command exists, and no Run or writer ticket may be discarded here.
+        // Build the exact predecessor without discarding any product object.
         let mut db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
-        for table in ["runs", "writable_admissions"] {
-            assert_eq!(
-                db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
-                    .get::<_, i64>(0))
-                    .unwrap(),
-                0
-            );
-        }
-        db.pragma_update(None, "foreign_keys", false).unwrap();
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM writable_admissions", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
         let tx = db.transaction().unwrap();
-        for table in [
-            "allocation_discard_receipts",
-            "detached_service_allocations",
-            "instance_retirement_receipts",
-            "deletion_finalization_allocations",
-            "deletion_finalization_authorizations",
-            "instance_deletion_obligations",
-            "run_deletion_invocations",
-            "run_operation_kinds",
-            "runs",
-            "writable_admissions",
-        ] {
-            assert_eq!(
-                tx.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
-                    .get::<_, i64>(0))
-                    .unwrap(),
-                0
-            );
-            tx.execute_batch(&format!("DROP TABLE {table};")).unwrap();
-        }
-        assert_eq!(tx.query_row("SELECT count(*) FROM instance_history_identities h WHERE NOT EXISTS(SELECT 1 FROM instances i WHERE i.instance_id=h.instance_id)", [], |r| r.get::<_,i64>(0)).unwrap(), 0, "fixture cannot discard retired identity evidence");
-        tx.execute_batch("DROP TABLE instance_history_identities")
-            .unwrap();
-        let v4 = include_str!("../src/persistence/persistence_schema_v4_additions.sql");
         tx.execute_batch(
-            v4.split("CREATE TABLE run_action_invocations")
+            include_str!("../src/persistence/persistence_schema_v8_additions.sql")
+                .split("CREATE TABLE instance_history_identities")
                 .next()
                 .unwrap(),
         )
         .unwrap();
-        let v6 = include_str!("../src/persistence/persistence_schema_v6_additions.sql");
-        let kinds = v6
-            .split("CREATE TABLE v6_run_operation_kinds")
-            .nth(1)
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap();
-        tx.execute_batch(&format!("CREATE TABLE v6_run_operation_kinds{kinds}; ALTER TABLE v6_run_operation_kinds RENAME TO run_operation_kinds;")).unwrap();
-        let v7 = include_str!("../src/persistence/persistence_schema_v7_additions.sql")
-            .replace("\r\n", "\n");
-        let admission_ddl = v7
-            .split("CREATE TABLE service_storage_allocations")
-            .next()
-            .unwrap()
-            .strip_prefix("DROP TABLE writable_admissions;\n")
-            .unwrap();
-        tx.execute_batch(admission_ddl).unwrap();
-        tx.pragma_update(None, "user_version", 7).unwrap();
+        tx.pragma_update(None, "user_version", 8).unwrap();
         tx.commit().unwrap();
-        db.pragma_update(None, "foreign_keys", true).unwrap();
-        assert!(
-            db.prepare("PRAGMA foreign_key_check")
-                .unwrap()
-                .query([])
-                .unwrap()
-                .next()
-                .unwrap()
-                .is_none()
-        );
     }
     let rejected = command(
         &f.root,
@@ -372,8 +317,8 @@ fn real_cli_requires_explicit_v7_upgrade_preserving_inputs_and_path_ids() {
         Some(2)
     );
     let first = successful(&f.root, &["storage", "upgrade"]);
-    assert!(first.contains("V8 (upgraded)"));
-    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V8 (already current)"));
+    assert!(first.contains("V9 (upgraded)"));
+    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V9 (already current)"));
     assert_eq!(
         paths,
         ids(&successful(
@@ -416,7 +361,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 8);
+    assert_eq!(version, 9);
 }
 
 // Test-ID: PR-TEST-0290

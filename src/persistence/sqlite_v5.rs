@@ -29,8 +29,8 @@ use crate::{
 
 fn unsupported_source(state: DatabaseState) -> PersistenceError {
     match state {
-        DatabaseState::V7 => PersistenceError::UpgradeRequired,
-        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V8 storage; use a compatible build to reach exact V7 before explicit upgrade".to_owned()),
+        DatabaseState::V8 => PersistenceError::UpgradeRequired,
+        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V9 storage; use a compatible build to reach exact V8 before explicit upgrade".to_owned()),
     }
 }
 
@@ -42,7 +42,7 @@ pub(super) fn open_writer_database(
         Connection::open(path).map_err(|e| PersistenceError::sqlite("open writer database", e))?;
     configure_connection(&database)?;
     let advisory = classify_database(&database)?;
-    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V8) {
+    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V9) {
         return Err(unsupported_source(advisory));
     }
     establish_wal_mode(&database)?;
@@ -69,7 +69,7 @@ pub(super) fn open_writer_database(
                 .map_err(|e| PersistenceError::sqlite("initialize current version", e))?;
             fault(FaultPoint::BeforeBootstrapCommit);
         }
-        DatabaseState::V8 => {}
+        DatabaseState::V9 => {}
         other => return Err(unsupported_source(other)),
     }
     transaction.execute(
@@ -283,6 +283,7 @@ pub(super) fn require_quiescent_admissions_at_version(
             | (DatabaseState::V6, 6)
             | (DatabaseState::V7, 7)
             | (DatabaseState::V8, 8)
+            | (DatabaseState::V9, 9)
     ) {
         return Err(PersistenceError::SchemaMismatch(
             "unexpected writer-admission source version".to_owned(),
@@ -357,7 +358,7 @@ pub(super) fn validate_run_operation(
         [run.as_bytes().as_slice()], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?)),
     ).optional().map_err(|e| PersistenceError::sqlite("validate Run operation kind", e))?;
     // Historical fixtures have no V8 table. Production readers already enforce
-    // exact V8, while historical readers retain their original contract.
+    // exact V9, while historical readers retain their original contract.
     let has_deletions: bool = database.query_row(
         "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='run_deletion_invocations')", [], |r| r.get(0),
     ).map_err(|e| PersistenceError::sqlite("inspect deletion invocation schema", e))?;

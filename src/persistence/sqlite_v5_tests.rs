@@ -667,6 +667,7 @@ fn migration_preserves_legacy_rows_orphan_pins_risk_and_guard_without_reconcilia
     drop(db);
     assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
     assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).unwrap());
     assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     let app = crate::application::PactrunApplication::open(&root).unwrap();
     assert_eq!(app.reconcile_lost_action_owners().unwrap(), vec![orphan]);
@@ -807,15 +808,17 @@ fn explicit_storage_upgrade_cli_does_not_reconcile_or_accept_extra_options() {
     assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
     assert_eq!(version(&root), 5);
     // Historical V4/V5 implementations are fixture helpers only. The current
-    // CLI must not implicitly chain them before its exact V7-to-V8 upgrade.
+    // CLI must not implicitly chain them before its exact V8-to-V9 upgrade.
     assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
     assert_eq!(version(&root), 6);
     assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
     assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
+    assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
+    assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).unwrap());
     let first = invoke(&["storage", "upgrade"]);
     assert_eq!(first.0, 0, "{}", first.2);
     assert!(first.1.contains("upgraded"));
-    assert_eq!(version(&root), 8);
+    assert_eq!(version(&root), 9);
     let second = invoke(&["storage", "upgrade"]);
     assert_eq!(second.0, 0);
     assert!(second.1.contains("already current"));

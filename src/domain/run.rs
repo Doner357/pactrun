@@ -353,6 +353,9 @@ pub(crate) struct RunArtifactSummary {
     pub(crate) byte_length: u64,
 }
 
+/// Exact Artifact representation limit; independent of Managed Input policy.
+pub(crate) const RUN_ARTIFACT_MAX_BYTES_V1: u64 = 536_870_912;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RunOutcomeView {
     pub(crate) outcome: RunOutcome,

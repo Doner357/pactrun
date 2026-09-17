@@ -86,7 +86,7 @@ fn v8_worker() {
     let root = PathBuf::from(root);
     match std::env::var("PACTRUN_V8_MODE").unwrap().as_str() {
         "upgrade" => {
-            assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+            assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).unwrap());
         }
         "held" | "late" => {
             let session = StagingSession::prepare(&root).unwrap();
@@ -195,12 +195,12 @@ fn v8_exact_ddl_preserves_legacy_tables_and_protects_allocation_custody() {
 #[test]
 fn only_exact_v7_upgrades_without_allocating_or_replaying_any_service() {
     let (_temp, root) = root();
-    assert!(PactrunPersistence::upgrade_storage(&root).is_err());
+    assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).is_err());
     assert!(!db_path(&root).exists());
     for old in 1..=8 {
         let (_temp, root) = self::root();
         source(&root, old);
-        let result = PactrunPersistence::upgrade_storage(&root);
+        let result = PactrunPersistence::upgrade_legacy_v7_to_v8(&root);
         match old {
             7 => assert!(result.unwrap()),
             8 => assert!(!result.unwrap()),
@@ -243,7 +243,7 @@ fn only_exact_v7_upgrades_without_allocating_or_replaying_any_service() {
                 .unwrap();
         }
         drop(db);
-        assert!(PactrunPersistence::upgrade_storage(&root).is_err());
+        assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).is_err());
         assert_eq!(version(&root), v);
     }
 }
@@ -257,7 +257,7 @@ fn upgrade_rechecks_live_unknown_and_late_v7_writer_admissions() {
     let mut held = worker(&root, "held", &[]);
     wait(&root.join("writer-ready"));
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_legacy_v7_to_v8(&root),
         Err(PersistenceError::ActiveWriters)
     ));
     assert_eq!(version(&root), 7);
@@ -272,12 +272,12 @@ fn upgrade_rechecks_live_unknown_and_late_v7_writer_admissions() {
     )
     .unwrap();
     assert!(matches!(
-        PactrunPersistence::upgrade_storage(&root),
+        PactrunPersistence::upgrade_legacy_v7_to_v8(&root),
         Err(PersistenceError::ActiveWriters)
     ));
     db.execute("DELETE FROM writable_admissions", []).unwrap();
     drop(db);
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).unwrap());
     let (_temp, root) = self::root();
     source(&root, 7);
     let barrier = root.join("upgrade-barrier");

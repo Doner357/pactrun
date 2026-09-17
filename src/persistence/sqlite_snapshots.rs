@@ -153,6 +153,7 @@ pub(super) fn snapshot_producer(
 fn load_snapshot(db: &Connection, id: SnapshotId) -> Result<StoredSnapshot, PersistenceError> {
     let header:Option<(i64,Vec<u8>,i64)>=db.query_row("SELECT integrity_format,integrity_digest,length(canonical_manifest) FROM snapshots WHERE snapshot_id=?1",[id.as_bytes().as_slice()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(|e|PersistenceError::sqlite("load Snapshot header",e))?;
     let (version, digest, length) = header.ok_or(PersistenceError::MissingSnapshot(id))?;
+    fault(FaultPoint::AfterSnapshotReadEstablished);
     let length = u64::try_from(length)
         .map_err(|_| PersistenceError::CorruptSnapshot("invalid manifest length"))?;
     SnapshotCapability::CanonicalManifest.check(length)?;

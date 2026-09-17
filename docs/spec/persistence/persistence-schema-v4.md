@@ -296,7 +296,7 @@ This is a schema fact only. Runtime redaction of Hook-authored and
 Pactrun-authored diagnostic text remains the obligation of the slices that
 produce Run text.
 
-**Verification: PR-TEST-0082, PR-TEST-0084, PR-TEST-0087, PR-TEST-0104, PR-TEST-0105, PR-TEST-0112.**
+**Verification: PR-TEST-0082, PR-TEST-0084, PR-TEST-0087, PR-TEST-0104, PR-TEST-0105, PR-TEST-0112, PR-TEST-0452.**
 
 ### PR-REQ-0276 - Persistence migration to V4
 

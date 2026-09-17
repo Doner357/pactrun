@@ -47,7 +47,8 @@ pub(super) const SCHEMA_V4_VERSION: i64 = 4;
 pub(super) const SCHEMA_V5_VERSION: i64 = 5;
 pub(super) const SCHEMA_V6_VERSION: i64 = 6;
 pub(super) const SCHEMA_V7_VERSION: i64 = 7;
-pub(crate) const SCHEMA_VERSION: i64 = 8;
+pub(super) const SCHEMA_V8_VERSION: i64 = 8;
+pub(crate) const SCHEMA_VERSION: i64 = 9;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -120,7 +121,7 @@ pub(super) const SCHEMA_V7_ADDITIONS_SQL: &str =
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 8] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 9] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
@@ -129,8 +130,12 @@ pub(super) const SCHEMA_LADDER: [(&str, &str); 8] = [
     (SCHEMA_V6_ADDITIONS_SQL, "PersistenceSchemaV6 changes"),
     (SCHEMA_V7_ADDITIONS_SQL, "PersistenceSchemaV7 additions"),
     (
-        super::sqlite_v8::SCHEMA_V8_ADDITIONS_SQL,
+        include_str!("persistence_schema_v8_additions.sql"),
         "PersistenceSchemaV8 lifecycle changes",
+    ),
+    (
+        include_str!("persistence_schema_v9_additions.sql"),
+        "PersistenceSchemaV9 coordination",
     ),
 ];
 
@@ -265,7 +270,7 @@ impl fmt::Display for PersistenceError {
             Self::SnapshotCodec(error) => error.fmt(formatter),
             Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
             Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V7 requires explicit pactrun storage upgrade to V8"),
+            Self::UpgradeRequired => formatter.write_str("exact V8 requires explicit pactrun storage upgrade to V9"),
             Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
             Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
             Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
@@ -304,6 +309,22 @@ impl PactrunPersistence {
         root: &Path,
         session: crate::managed_data::StagingSession,
     ) -> Result<Self, PersistenceError> {
+        Self::open_prepared_for(root, session, false)
+    }
+
+    pub(crate) fn open_for_collection(root: &Path) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
+        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
+            PersistenceError::DatabaseOwnership("could not prepare collection session".to_owned())
+        })?;
+        Self::open_prepared_for(&root, session, true)
+    }
+
+    fn open_prepared_for(
+        root: &Path,
+        session: crate::managed_data::StagingSession,
+        collection: bool,
+    ) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         if !session.belongs_to_storage(&root) {
             return Err(PersistenceError::DatabaseOwnership(
@@ -315,11 +336,39 @@ impl PactrunPersistence {
 
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
         let database_path = database_root.join(DATABASE_NAME);
+        // Reject unsupported existing stores before creating coordination state.
+        // This advisory read grants no write authority; admission rechecks below.
+        if database_path.exists() {
+            let reader =
+                Connection::open_with_flags(&database_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                    .map_err(|e| PersistenceError::sqlite("inspect writable store", e))?;
+            configure_read_connection(&reader)?;
+            match classify_database(&reader)? {
+                DatabaseState::V9 => {}
+                DatabaseState::Pristine if !collection => {}
+                DatabaseState::Pristine => {
+                    return Err(PersistenceError::DatabaseOwnership(
+                        "collection requires an existing exact V9 reference catalog".to_owned(),
+                    ));
+                }
+                DatabaseState::V8 => return Err(PersistenceError::UpgradeRequired),
+                _ => {
+                    return Err(PersistenceError::DatabaseOwnership(
+                        "writer requires pristine or exact V9 storage".to_owned(),
+                    ));
+                }
+            }
+        } else if collection {
+            return Err(PersistenceError::DatabaseOwnership(
+                "collection requires an existing exact V9 reference catalog".to_owned(),
+            ));
+        }
+        let runtime_content = RuntimeContentStore::open(&runtime_root)?
+            .with_collection_coordination(collection, true)?;
         let database = super::sqlite_v5::open_writer_database(&database_path, &session)?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
         // Cross-session cleanup and publisher maintenance require a supported,
         // durably admitted schema; pre-admission preparation cannot authorize them.
-        let runtime_content = RuntimeContentStore::open(&runtime_root)?;
         let _ = session.cleanup_abandoned();
 
         Ok(Self {
@@ -345,16 +394,17 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V8 {
-            if state == DatabaseState::V7 {
+        if state != DatabaseState::V9 {
+            if state == DatabaseState::V8 {
                 return Err(PersistenceError::UpgradeRequired);
             }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires exact V8; use a compatible build to reach V7 before explicit upgrade".to_owned(),
+                "read-only opening requires exact V9; use a compatible build to reach V8 before explicit upgrade".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
-        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?;
+        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?
+            .with_collection_coordination(false, false)?;
         Ok(Self {
             database: Mutex::new(database),
             database_path,
@@ -647,7 +697,11 @@ pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, Persist
             fault(FaultPoint::BeforeSchemaMigrationCommit);
             true
         }
-        DatabaseState::V5 | DatabaseState::V6 | DatabaseState::V7 | DatabaseState::V8 => {
+        DatabaseState::V5
+        | DatabaseState::V6
+        | DatabaseState::V7
+        | DatabaseState::V8
+        | DatabaseState::V9 => {
             return Err(PersistenceError::DatabaseOwnership(
                 "legacy V4 binary rejects newer schema".to_owned(),
             ));
@@ -787,6 +841,7 @@ pub(super) enum DatabaseState {
     V6,
     V7,
     V8,
+    V9,
 }
 
 impl DatabaseState {
@@ -800,7 +855,8 @@ impl DatabaseState {
             Self::V5 => Some(SCHEMA_V5_VERSION),
             Self::V6 => Some(SCHEMA_V6_VERSION),
             Self::V7 => Some(SCHEMA_V7_VERSION),
-            Self::V8 => Some(SCHEMA_VERSION),
+            Self::V8 => Some(SCHEMA_V8_VERSION),
+            Self::V9 => Some(SCHEMA_VERSION),
         }
     }
 }
@@ -844,9 +900,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
             validate_schema(database, SCHEMA_V7_VERSION)?;
             Ok(DatabaseState::V7)
         }
+        (APPLICATION_ID, SCHEMA_V8_VERSION, true) => {
+            validate_schema(database, SCHEMA_V8_VERSION)?;
+            Ok(DatabaseState::V8)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V8)
+            Ok(DatabaseState::V9)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(
@@ -1222,6 +1282,13 @@ fn validate_publications(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FaultPoint {
+    BeforeObjectDeletionCommit,
+    AfterObjectDeletionCommit,
+    BeforeCollectionRemoval,
+    AfterCollectionRemoval,
+    AfterCollectionClaim,
+    AfterSnapshotReadEstablished,
+    AfterCoordinationAdmissionInspection,
     BeforeSnapshotImportCommit,
     AfterSnapshotImportCommit,
     BeforeWritableAdmission,
@@ -1272,6 +1339,13 @@ impl FaultPoint {
     #[cfg(test)]
     pub(crate) fn name(self) -> &'static str {
         match self {
+            Self::BeforeObjectDeletionCommit => "before_object_deletion_commit",
+            Self::AfterObjectDeletionCommit => "after_object_deletion_commit",
+            Self::BeforeCollectionRemoval => "before_collection_removal",
+            Self::AfterCollectionRemoval => "after_collection_removal",
+            Self::AfterCollectionClaim => "after_collection_claim",
+            Self::AfterSnapshotReadEstablished => "after_snapshot_read_established",
+            Self::AfterCoordinationAdmissionInspection => "after_coordination_admission_inspection",
             Self::BeforeSnapshotImportCommit => "before_snapshot_import_commit",
             Self::AfterSnapshotImportCommit => "after_snapshot_import_commit",
             Self::BeforeWritableAdmission => "before_writable_admission",
@@ -1325,6 +1399,21 @@ pub(crate) fn fault(_point: FaultPoint) {}
 
 #[cfg(test)]
 pub(crate) fn fault(point: FaultPoint) {
+    if std::env::var_os("PACTRUN_LIFECYCLE_SYNC").is_some_and(|value| value == point.name()) {
+        let root = PathBuf::from(
+            std::env::var_os("PACTRUN_LIFECYCLE_SYNC_DIR")
+                .expect("lifecycle synchronization directory"),
+        );
+        std::fs::write(root.join("ready"), point.name()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !root.join("release").exists() {
+            assert!(
+                Instant::now() < deadline,
+                "lifecycle synchronization timed out"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
     if std::env::var_os("PACTRUN_M4_SYNC").is_some_and(|value| value == point.name()) {
         let root = PathBuf::from(
             std::env::var_os("PACTRUN_M4_SYNC_DIR").expect("test synchronization directory"),
@@ -1337,6 +1426,7 @@ pub(crate) fn fault(point: FaultPoint) {
         }
     }
     if [
+        "PACTRUN_LIFECYCLE_FAULT",
         "PACTRUN_M1C_FAULT",
         "PACTRUN_M1D_FAULT",
         "PACTRUN_M3_FAULT",

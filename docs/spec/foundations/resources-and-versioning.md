@@ -20,6 +20,11 @@ The original status, rules, exceptions, and verification declarations below reta
 
 ## Resource lifecycle
 
+The approved [managed-object lifecycle contract](../behavior/managed-object-lifecycle.md)
+defines explicit deletion, Artifact delivery and foreground collection. Its
+[implementation record](../../development/managed-object-lifecycle-status.md)
+distinguishes approval from verified runtime availability.
+
 ### PR-REQ-0072 - Snapshot lifetime
 
 A committed Snapshot MUST be a durable first-class object with no default
@@ -98,7 +103,7 @@ PersistenceSchemaV3 represents the active-Instance guard as an exact
 `ON DELETE RESTRICT` foreign key. This relational guard does not define the
 future M7 Instance deletion workflow.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0459, PR-TEST-0465, PR-TEST-0470.**
 
 ### PR-REQ-0076 - Physical content reachability
 
@@ -111,7 +116,7 @@ not make ServiceStorage-backed state collectible as unreferenced storage. The
 non-destruction policy and its future durable representation are separate design
 concerns defined by PR-REQ-0247.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0461, PR-TEST-0463, PR-TEST-0464, PR-TEST-0467, PR-TEST-0469, PR-TEST-0471, PR-TEST-0474.**
 
 ## Independent version domains
 

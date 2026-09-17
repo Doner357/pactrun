@@ -8,6 +8,8 @@ title: Observable behavior
 
 These are behavior contracts, not usage tutorials. Consult implementation status before treating future operations as available.
 
+- [Managed Object Lifecycle and GC](./managed-object-lifecycle.md): Approved deletion, Artifact delivery and foreground GC contracts; availability is tracked per slice.
+
 - [Actions, Plans, and Runs](./actions-plans-and-runs.md): Understand observable Action, Plan, and Run behavior before choosing internal execution mechanisms.
 - [Command and Output Reference](./command-and-output-reference.md): Look up command behavior and approved spelling. Sections explicitly marked as open work do not authorize inventing new flags or output formats.
 - [Inputs, Secrets, and Readiness](./inputs-secrets-and-readiness.md): Distinguish a legal Instance from one that is ready for an operation, and preserve configuration and Secret disclosure boundaries.

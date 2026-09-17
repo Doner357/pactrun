@@ -142,7 +142,10 @@ The [product completion milestones](./product-completion-milestones.md) record
 the agreed order: managed-object lifecycle/GC with Artifact export; Snapshot
 capacity with create-and-restore; shell loader; machine-readable CLI output;
 then Versioning and Baseline Consolidation. Start detailed design with lifecycle
-ownership and references; this handoff does not claim implementation has begun.
+ownership and references. The [lifecycle implementation record](./managed-object-lifecycle-status.md)
+now tracks all lifecycle slices, including V9 activation, object deletion and GC,
+implemented and verified in the feature branch with final acceptance passed. This is not
+an integration, release or approval to begin the next completion scope.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from
