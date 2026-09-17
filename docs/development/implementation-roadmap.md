@@ -70,9 +70,10 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV8](../spec/persistence/persistence-schema-v8.md) is the integrated
-  `develop` persistence baseline, with explicit exact-V7 upgrade only and writable
+- [PersistenceSchemaV9](../spec/persistence/persistence-schema-v9.md) is the integrated
+  `develop` persistence baseline, with explicit exact-V8 upgrade only and writable
   admission. It preserves the earlier contracts, including
+  [V8](../spec/persistence/persistence-schema-v8.md) from M7,
   [V7](../spec/persistence/persistence-schema-v7.md) from M6.5,
   [V6](../spec/persistence/persistence-schema-v6.md) from M5/M6,
   [V5](../spec/persistence/persistence-schema-v5.md) from M4 and
@@ -851,12 +852,13 @@ existing foundations, design rationale, open decisions and acceptance criteria.
 5. **Versioning and Baseline Consolidation**, combining version evolution and
    first-formal-baseline reorganization, intentionally last.
 
-These list numbers are not M-series identifiers. The next planned scope is
-Managed Object Lifecycle and GC; its design is now approved and all slices are
-implemented and verified in the feature branch, with final acceptance passed.
+These list numbers are not M-series identifiers. Managed Object Lifecycle and GC
+is complete: all S0-S5 slices are implemented, verified and integrated into local
+develop after separately authorized commit and merge. The next planned scope is
+Snapshot Capacity and Restore Workflow; detailed design remains pending.
 The subsequent [lifecycle implementation record](./managed-object-lifecycle-status.md)
-records the full implementation and evidence. The feature runtime is V9; the
-integrated develop baseline remains V8 until an authorized integration.
+records the full implementation, evidence and local integration. The integrated
+develop runtime is V9, with explicit exact-V8 upgrade only.
 No runtime implementation, calendar start or publication is started by this
 documentation change. Small slices can be accepted independently within their
 milestones. M8 remains rejected and its number is not reused.

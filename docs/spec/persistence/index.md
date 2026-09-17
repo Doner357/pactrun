@@ -6,7 +6,7 @@ title: Internal persistence
 
 **Status: Informative navigation.**
 
-V8 is the integrated develop baseline, with explicit exact-V7 upgrade only.
+V9 is the integrated develop baseline, with explicit exact-V8 upgrade only.
 V6 is the historical M5/M6 baseline. Older schemas retain their historical and compatibility
 obligations; their presence is not permission for an implicit upgrade chain.
 
@@ -17,8 +17,8 @@ obligations; their presence is not permission for an implicit upgrade chain.
 
 - [Persistence Schema V6](./persistence-schema-v6.md): Historical exact DDL and V5 upgrade; the integrated M5/M6 Migration/recovery baseline.
 - [Persistence Schema V7](./persistence-schema-v7.md): Historical exact DDL, explicit V6 upgrade and implemented ServiceStorage custody/association representation.
-- [Persistence Schema V8](./persistence-schema-v8.md): Integrated retirement baseline with explicit exact-V7 upgrade.
-- [Persistence Schema V9](./persistence-schema-v9.md): Active lifecycle feature runtime, with explicit exact-V8 upgrade only; not yet integrated or published.
+- [Persistence Schema V8](./persistence-schema-v8.md): Historical retirement baseline with explicit exact-V7 upgrade.
+- [Persistence Schema V9](./persistence-schema-v9.md): Integrated lifecycle runtime, with explicit exact-V8 upgrade only; not published.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).
