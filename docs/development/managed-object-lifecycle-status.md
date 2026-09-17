@@ -4,8 +4,8 @@ title: Managed Object Lifecycle Implementation
 
 # Managed object lifecycle implementation
 
-Approved scope: 2026-09-17. **All S0-S5 slices are implemented and verified in the
-feature branch.** No commit, integration or release is claimed.
+Approved scope: 2026-09-17. **All S0-S5 slices are implemented, verified and
+integrated into local `develop`.** No remote push, release or deployment is claimed.
 
 ## Ownership and reference inventory
 
@@ -55,8 +55,8 @@ content must not introduce the reverse content-lock acquisition order.
 - S0: approved contracts and exact-V8 reference inventory recorded and self-reviewed.
   Concrete coordination, reference guards and native deletion paths are self-reviewed.
 - S1: V9 activation, exact predecessor upgrade, writer fencing and content coordination implemented and verified.
-- S2: Artifact delivery/deletion implemented and verified in the feature branch;
-  not committed, merged or published.
+- S2: Artifact delivery/deletion implemented, verified and integrated into local develop;
+  not published.
 - S3: transactional Snapshot/Revision deletion and independent provenance implemented and verified.
 - S4: Run deletion, explicit Artifact cascade intent and evidence guards implemented and verified.
 - S5: explicit GC, read-only preview, native safe removal and cross-object tests implemented;
@@ -67,8 +67,8 @@ Owning requirements: PR-REQ-0072 through PR-REQ-0076,
 [PR-REQ-0345](../spec/persistence/persistence-schema-v9.md).
 
 Earlier Artifact acceptance is recorded below. Historical acceptance is not
-evidence for the subsequent whole-lifecycle changes. No commit,
-merge, publication or deployment is implied.
+evidence for the subsequent whole-lifecycle changes. The separately authorized
+local integration is recorded below; it does not authorize remote publication.
 
 ## Design review findings
 
@@ -187,3 +187,27 @@ the affected documentation checks/typecheck/build are rerun for closeout. This i
 not another fresh Rust-suite claim after those editorial updates. Self-review
 remains distinct from independent review. The persistent test workspace and caches
 are retained; no new preview service or product daemon is running.
+
+## Local integration
+
+The operator authorized closeout, commit and merge after acceptance. Implementation
+commit `96750aa89ad5a023ebc2451ba076aaf782c51959` was merged without conflicts into
+`develop` as `596476ffbd4e38b60f33a2b273fab6aa57e921e9`. The merge tree exactly
+matches the verified feature tree. The implementation branch is retained.
+
+Integration closeout updates informative baseline/navigation pages and their
+documentation assertions only. Runtime, Rust tests, normative behavior, DDL,
+vectors, dependencies and toolchain inputs are unchanged. The earlier full-CI
+and Windows evidence is reused; the affected traceability, documentation tests,
+typecheck and production documentation build are rerun. This is not a second
+fresh full product-suite result. Documentation generation is rechecked rather
+than inferred from merge success.
+
+**Passed:** integration-closeout traceability, all 22 documentation/link checks,
+documentation typecheck and the Docusaurus production build. The unchanged
+runtime retains the full-CI and Windows evidence recorded above.
+
+The local integrated persistence baseline is V9 with explicit exact-V8 upgrade
+only. The next planned completion scope is Snapshot Capacity and Restore Workflow;
+its detailed design/implementation remains a separately scoped task. No push,
+release, Pages workflow change or deployment occurred.

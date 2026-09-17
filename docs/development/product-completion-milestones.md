@@ -9,7 +9,7 @@ Detailed design and runtime implementation are pending.**
 
 Subsequent execution of the first scope is tracked in the
 [lifecycle implementation record](./managed-object-lifecycle-status.md). Its
-approved lifecycle contracts and feature implementation do not complete the later
+approved lifecycle contracts and verified local develop integration do not complete the later
 scopes or authorize publication. V9 and GC activation are tracked there separately
 from the earlier Artifact-only checkpoint. The status above records the original
 planning decision.

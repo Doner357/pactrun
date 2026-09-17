@@ -83,7 +83,9 @@ runtime work, not just the historical status on a format page.
 
 M7 is implemented, verified and integrated into local develop, but not published.
 See the [acceptance record](../development/m7-implementation-status.md).
-The integrated baseline writes V8; the historical M6.5 integration record is unchanged.
+That historical integration writes V8; the current integrated baseline is V9,
+as recorded in the [managed-object lifecycle closeout](../development/managed-object-lifecycle-status.md).
+The historical M6.5 and M7 integration records are unchanged.
 
 | Contract | Status |
 | --- | --- |

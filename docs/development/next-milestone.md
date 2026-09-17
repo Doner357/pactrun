@@ -1,5 +1,5 @@
 ---
-title: Baseline and M7 Lifecycle Handoff
+title: Baseline and Managed Object Lifecycle Handoff
 ---
 
 # Current baseline and next milestone
@@ -30,7 +30,7 @@ integrated into local develop, including V7, V2 installation and service
 execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
 and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V8](../spec/persistence/persistence-schema-v8.md), internal and non-Frozen, with explicit exact-V7 upgrade only.
+- Current integrated persistence: [V9](../spec/persistence/persistence-schema-v9.md), internal and non-Frozen, with explicit exact-V8 upgrade only.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
@@ -124,15 +124,16 @@ The [M7 closeout](./m7-implementation-status.md) now records V8, real Cleanup,
 identity-bound physical finalization, explicit operator assertion, Abandon and
 detached handoff/discard, together with the fresh remote full gate and Windows
 evidence. The operator separately authorized the completed local commit and
-merge. This does not grant permission to push or publish. The integrated
-develop baseline is now M7/V8; it initializes V8 and explicitly upgrades exact V7.
+merge. This does not grant permission to push or publish. That historical
+integration initialized V8 and explicitly upgraded exact V7. The subsequent
+managed-object lifecycle integration now initializes V9 and upgrades exact V8.
 
 [Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
 remain authoritative. Inputs, metadata and Workspace are not live-service
 mirrors, and a Pactrun commit is not atomic with service bytes. The
 [remaining design gates](./implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)
 are assigned stages, not implied design approval. Snapshot deletion was outside
-the completed runtime scope and is now included in the completion plan below.
+the M7 runtime scope and is now implemented in the managed-object lifecycle closeout.
 The broader non-ServiceStorage resource taxonomy remains outside that scope;
 it does not block bounded M6.5.
 
@@ -141,11 +142,12 @@ it does not block bounded M6.5.
 The [product completion milestones](./product-completion-milestones.md) record
 the agreed order: managed-object lifecycle/GC with Artifact export; Snapshot
 capacity with create-and-restore; shell loader; machine-readable CLI output;
-then Versioning and Baseline Consolidation. Start detailed design with lifecycle
-ownership and references. The [lifecycle implementation record](./managed-object-lifecycle-status.md)
+then Versioning and Baseline Consolidation. The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
-implemented and verified in the feature branch with final acceptance passed. This is not
-an integration, release or approval to begin the next completion scope.
+implemented, verified and integrated into local develop after authorized commit
+and merge. The next planned scope is Snapshot Capacity and Restore Workflow,
+including create-and-restore. Its detailed design/implementation and any release
+or publication remain separate tasks; this closeout starts none of them.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from
