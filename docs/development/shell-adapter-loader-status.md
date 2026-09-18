@@ -4,15 +4,32 @@ title: Shell Adapter and Loader Status
 
 # Shell Adapter and Loader implementation record
 
-**Status: S0-S6 implemented and verified in the working tree.
-Not committed, merged, released or published.**
+**Status: S0-S6 implemented, verified and integrated into local `develop`.
+Local commit/merge authorized on 2026-09-18; not pushed, released or published.**
 
 The operator approved the [baseline](./design-notes/shell-adapter-loader-baseline.md)
-and continuous S0-S6 execution on 2026-09-18. Work is on
+and continuous S0-S6 execution on 2026-09-18. Work was prepared on
 `feature/shell-adapter-loader`, starting from local `develop`. Existing unrelated
 untracked files are excluded. On 2026-09-18 the operator separately authorized
 milestone closeout, local commit and merge into develop. Push, release, deployment
 and changes to the unrelated Pages workflow remain outside that authorization.
+
+## Authorized local integration
+
+Implementation commit `4c294e0bfc3f6cb023d5a837764f898f1b0509d2` was merged into
+local develop by no-fast-forward merge `5d90472d99a57e33b49d9da712eee891b1861066`.
+The feature and merge trees are identical
+(`3724f68cfeb690bb993dc2e484b07295daaabd85`); there were no conflicts or runtime
+edits during integration. Existing untracked Pages and ZIP files were not staged.
+
+The validated closeout manifest matched every file before the authorized
+integration task. Its only pre-commit additions were documentation of that
+authorization and the diagnostic presentation gap below. This subsequent
+documentation-only closeout updates current navigation and records actual Git
+integration; it changes no runtime, DDL, dependency, toolchain or identity vector.
+Previously scoped full-CI and platform evidence is reused, not represented as a
+fresh whole-suite run. Documentation/link, traceability and configured-remote
+site checks cover these closeout changes. No push, tag or deployment is included.
 
 | Slice | Status |
 | --- | --- |
@@ -26,8 +43,9 @@ and changes to the unrelated Pages workflow remain outside that authorization.
 
 The [format review](./design-notes/shell-loader-format-activation-review.md) records
 the exact full-CI and later adapter-validation inputs and the bounded evidence
-reuse. Core V3 is Frozen; YAML V3 remains Candidate. This working-tree completion
-does not imply integration into develop, release or a formal product version bump.
+reuse. Core V3 is Frozen; YAML V3 remains Candidate. Local develop integration
+does not imply release, publication, a formal product version bump, or completion
+of the diagnostic presentation follow-up.
 
 ## Environment blocker, 2026-09-18
 
@@ -151,7 +169,7 @@ milestone first; this closeout does not change diagnostic behavior or those rule
 | Passed | Independent Node/Rust comparison of four V3 canonical components, full frames and checked-in digests; old Frozen vectors unchanged |
 | Passed | Formatting, all-target Clippy and bidirectional requirement/test traceability |
 | Passed | Status-only closeout: Core V3 metadata/conformance, documentation/link checks and configured-remote site typecheck/build |
-| Separately authorized | Local milestone commit and merge; recorded below after execution |
+| Completed after separate authorization | Local milestone commit and no-fast-forward develop merge, with identical feature/merge trees |
 | Not run or authorized | Push, release, Pages/workflow changes, deployment and implementation of the next product capability or diagnostic follow-up |
 
 The full-CI candidate and delivered-runtime manifest hashes are in the format

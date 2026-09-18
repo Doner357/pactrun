@@ -20,8 +20,10 @@ placeholders; do not interpret them as completed tutorials.
   lifecycle/GC, Snapshot capacity/restore convenience, shell loader, machine-readable
   CLI output, then versioning/baseline consolidation. Lifecycle/GC is already
   integrated, as is Snapshot Capacity and Restore Workflow. Shell Adapter / Loader
-  is implemented and verified on its feature branch, not yet committed or merged;
+  is implemented, verified and integrated into local develop;
   see its [implementation record](../development/shell-adapter-loader-status.md).
+  Hook diagnostic presentation remains an unresolved follow-up; protocol delivery
+  does not establish a usable diagnostic display or history feature.
   Machine-readable CLI Output is next and requires its own plan. New
   functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the

@@ -102,7 +102,14 @@ test('current entries reflect V10 integration while preserving M7 and bounded M6
   assert.match(capacity.replace(/\s+/g, ' '), /S0-S5 implemented, verified and integrated into local `develop`/);
   assert.match(capacity, /ead810f1a81e5a52e351e96b11987a8b3d766d36/);
   assert.match(capacity, /b99ffbd748f5417c0aa8537fe9c5e2234142a31c/);
-  assert.match(agentEntry, /Shell Adapter \/ Loader is implemented and verified on its feature branch, not yet committed or merged/);
+  assert.match(agentEntry, /Shell Adapter \/ Loader is implemented, verified and integrated into local develop/);
+  assert.match(agentEntry, /Hook diagnostic presentation remains an unresolved follow-up/);
+  const shell = document('shell-adapter-loader-status.md');
+  assert.match(shell.replace(/\s+/g, ' '), /S0-S6 implemented, verified and integrated into local `develop`/);
+  assert.match(shell, /4c294e0bfc3f6cb023d5a837764f898f1b0509d2/);
+  assert.match(shell, /5d90472d99a57e33b49d9da712eee891b1861066/);
+  assert.match(shell, /Known follow-up: usable Hook diagnostics/);
+  assert.match(shell, /no live diagnostic presentation or diagnostic history consumer/);
   assert.match(agentEntry, /Machine-readable CLI Output is next and requires its own plan/);
   assert.match(capacity, /reused evidence/);
   for (const entry of [current, agentEntry]) {
