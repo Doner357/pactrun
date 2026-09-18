@@ -55,13 +55,22 @@ feature, daemon, release, remote push or documentation deployment is implied.
 
 The integrated [managed-object lifecycle implementation](./docs/development/managed-object-lifecycle-status.md)
 adds Artifact export/deletion, Snapshot/Revision/Run deletion and explicit
-`pactrun storage gc [--plan]`. The current `develop` runtime writes
-[PersistenceSchemaV9](./docs/spec/persistence/persistence-schema-v9.md) and upgrades
-only exact V8 explicitly. This supersedes the historical persistence baselines
-described above. GC never collects service-owned data, and Artifact
+`pactrun storage gc [--plan]`. That lifecycle integration introduced
+[PersistenceSchemaV9](./docs/spec/persistence/persistence-schema-v9.md), with exact
+V8 upgrade. GC never collects service-owned data, and Artifact
 export requires `--authorize-sensitive-export` with a new file destination.
 See the [lifecycle contract](./docs/spec/behavior/managed-object-lifecycle.md) for
 guards, retention, retry and read-only preview semantics.
+
+The integrated [Snapshot Capacity and Restore workflow](./docs/development/snapshot-capacity-and-restore-status.md)
+removes fixed service-data byte ceilings, retains structural/resource safeguards,
+and adds `instance create <name> --revision <reference> --restore-from <snapshot-id>`.
+The current `develop` baseline is [PersistenceSchemaV10](./docs/spec/persistence/persistence-schema-v10.md),
+with explicit upgrade from exact V8 or V9 and preserved legacy inline readers.
+Immutable data references keep new service bytes out of SQLite WAL while
+preserving atomic Snapshot publication and guarded Restore. Full CI and real
+beyond-ceiling round trips passed; local integration does not authorize publication.
+Shell Adapter / Loader is the next separately planned scope.
 
 ## Repository layout
 

@@ -132,8 +132,8 @@ conflicts and failures without a misleading completed output.
 
 ## 2. Snapshot Capacity and Restore Workflow
 
-The detailed design was subsequently approved. See the
-[implementation and acceptance record](./snapshot-capacity-and-restore-status.md).
+This scope is now implemented, verified and integrated into local develop. See
+the [implementation and acceptance record](./snapshot-capacity-and-restore-status.md).
 The foundation and pending-choice text below records the original planning
 checkpoint; the linked normative contracts now own the approved changes.
 

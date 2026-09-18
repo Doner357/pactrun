@@ -10,17 +10,18 @@ placeholders; do not interpret them as completed tutorials.
 - Read [current baseline and milestone handoff](../development/next-milestone.md).
   M5, bounded M6, M6.5 ServiceStorage and M7 Cleanup/deletion are implemented
   and integrated into local `develop`. Managed Object Lifecycle and GC is also
-  implemented, verified and integrated; the current persistence baseline is V9,
-  with explicit exact-V8 upgrade only. M8 is rejected and archived; no next
+  implemented, verified and integrated. Snapshot Capacity and Restore Workflow is
+  integrated as well; the current persistence baseline is V10, with explicit
+  exact-V8/V9 upgrade. M8 is rejected and archived; no next
   numbered milestone is selected. Release-readiness work has no assigned start,
   and integration does not authorize publication. Consult the linked closeout
   records for implementation and verification evidence.
 - Follow the [product completion work order](../development/product-completion-milestones.md):
   lifecycle/GC, Snapshot capacity/restore convenience, shell loader, machine-readable
   CLI output, then versioning/baseline consolidation. Lifecycle/GC is already
-  integrated; Snapshot Capacity and Restore Workflow is next, with detailed design
-  still a separate task. New functions/tests use
-  product behavior names and no milestone markers. Record design rationale and
+  integrated, as is Snapshot Capacity and Restore Workflow. Shell Adapter / Loader
+  is next; its detailed design and implementation remain separate tasks. New
+  functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the
   [contributor policy](../development/development-and-verification.md).
 - In a checkout, read applicable repository instructions and CONTRIBUTING.md.
