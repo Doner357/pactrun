@@ -30,7 +30,7 @@ integrated into local develop, including V7, V2 installation and service
 execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
 and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V9](../spec/persistence/persistence-schema-v9.md), internal and non-Frozen, with explicit exact-V8 upgrade only.
+- Current integrated persistence: [V10](../spec/persistence/persistence-schema-v10.md), internal and non-Frozen, with explicit exact-V8/V9 upgrade.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
@@ -126,7 +126,8 @@ detached handoff/discard, together with the fresh remote full gate and Windows
 evidence. The operator separately authorized the completed local commit and
 merge. This does not grant permission to push or publish. That historical
 integration initialized V8 and explicitly upgraded exact V7. The subsequent
-managed-object lifecycle integration now initializes V9 and upgrades exact V8.
+managed-object lifecycle integration introduced V9 with exact-V8 upgrade. The
+Snapshot capacity integration now initializes V10 and explicitly upgrades V8/V9.
 
 [Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
 remain authoritative. Inputs, metadata and Workspace are not live-service
@@ -145,14 +146,13 @@ capacity with create-and-restore; shell loader; machine-readable CLI output;
 then Versioning and Baseline Consolidation. The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
 implemented, verified and integrated into local develop after authorized commit
-and merge. The next planned scope is Snapshot Capacity and Restore Workflow,
-including create-and-restore. The operator subsequently approved its design and
-continuous implementation; see the [current implementation record](./snapshot-capacity-and-restore-status.md).
-The operator subsequently authorized necessary persistence/schema adjustments.
-V10 S0-S5 implementation and acceptance are complete on the feature branch,
-including full CI and real beyond-ceiling round trips. Git integration remains
-unauthorized; the next separately planned capability is Shell Adapter / Loader.
-Integration, release and publication remain separately authorized.
+and merge. Snapshot Capacity and Restore Workflow is also implemented, verified
+and integrated into local develop after authorization on 2026-09-18; see the
+[implementation record](./snapshot-capacity-and-restore-status.md). Its V10
+adjustment, full CI and real beyond-ceiling round trips are complete.
+Shell Adapter / Loader is the next separately planned capability; its detailed
+design/implementation is not started by this closeout. Push, release and
+publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from

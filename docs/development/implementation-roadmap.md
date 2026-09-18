@@ -70,9 +70,10 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV9](../spec/persistence/persistence-schema-v9.md) is the integrated
-  `develop` persistence baseline, with explicit exact-V8 upgrade only and writable
-  admission. It preserves the earlier contracts, including
+- [PersistenceSchemaV10](../spec/persistence/persistence-schema-v10.md) is the integrated
+  `develop` persistence baseline, with explicit exact-V8/V9 upgrade and writable
+  admission. Snapshot and restored Input data use immutable file references. It preserves the earlier contracts, including
+  [V9](../spec/persistence/persistence-schema-v9.md) from managed-object lifecycle,
   [V8](../spec/persistence/persistence-schema-v8.md) from M7,
   [V7](../spec/persistence/persistence-schema-v7.md) from M6.5,
   [V6](../spec/persistence/persistence-schema-v6.md) from M5/M6,
@@ -854,15 +855,13 @@ existing foundations, design rationale, open decisions and acceptance criteria.
 
 These list numbers are not M-series identifiers. Managed Object Lifecycle and GC
 is complete: all S0-S5 slices are implemented, verified and integrated into local
-develop after separately authorized commit and merge. The next planned scope is
-Snapshot Capacity and Restore Workflow. Its design is now approved and
-[feature-branch implementation and acceptance](./snapshot-capacity-and-restore-status.md)
-are complete on the feature branch after authorization of V10 immutable data
-references addressing measured WAL-index growth. Full CI and real beyond-ceiling
-round trips passed; integration and publication are not implied.
-The subsequent [lifecycle implementation record](./managed-object-lifecycle-status.md)
-records the full implementation, evidence and local integration. The integrated
-develop runtime is V9, with explicit exact-V8 upgrade only.
+develop after separately authorized commit and merge. Snapshot Capacity and
+Restore Workflow is also [implemented, verified and integrated](./snapshot-capacity-and-restore-status.md),
+including the authorized V10 immutable-data-reference adjustment, full CI and
+real beyond-ceiling round trips. The current develop runtime is V10, with explicit
+exact-V8/V9 upgrade; the [lifecycle record](./managed-object-lifecycle-status.md)
+retains its historical V9 evidence. Shell Adapter / Loader is the next separately
+planned scope. Local integration does not authorize push, release or publication.
 No runtime implementation, calendar start or publication is started by this
 documentation change. Small slices can be accepted independently within their
 milestones. M8 remains rejected and its number is not reused.

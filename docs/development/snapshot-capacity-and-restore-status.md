@@ -4,13 +4,29 @@ title: Snapshot Capacity and Restore Status
 
 # Snapshot capacity and Restore workflow implementation record
 
-**Status: S0-S5 implemented and verified on `feature/snapshot-capacity-and-restore`.
-Not committed, integrated into develop, released or published.**
+**Status: S0-S5 implemented, verified and integrated into local `develop`.
+Local commit/merge authorized on 2026-09-18; not pushed, released or published.**
 
 The operator approved the [baseline](./design-notes/snapshot-capacity-and-restore-baseline.md)
 and continuous S0-S5 execution. The original 64 GiB remote filesystem was too
 small for required acceptance; the operator expanded it to 200 GiB. No scope or
 acceptance threshold was weakened to work around the resource blocker.
+
+## Authorized Git integration
+
+On 2026-09-18 the operator authorized local commit, merge and closeout.
+Implementation commit `ead810f1a81e5a52e351e96b11987a8b3d766d36` was merged into
+`develop` by no-fast-forward merge `b99ffbd748f5417c0aa8537fe9c5e2234142a31c`.
+The merge tree exactly matches the feature tree; there were no conflicts or
+runtime edits during integration. The subsequent documentation-only closeout
+updates current entry points to V10 and records Shell Adapter / Loader as the
+next separately planned scope, not an instruction to implement it.
+
+The accepted source manifest still matches runtime, DDL, fixtures, dependencies
+and build inputs. Full CI and all three capacity journeys are reused evidence,
+not newly rerun gates. Closeout runs documentation/link and traceability checks
+plus the remote website typecheck/build. No push, release or deployment was
+requested. Existing unrelated untracked files are excluded from these commits.
 
 ## Historical finding: SQLite WAL-index growth
 
@@ -128,7 +144,7 @@ not product byte quotas or a promise of arbitrary-scale performance/resources.
 | S2 | Cancellation, resource failure, corruption, crash publication, upgrade, reference lifetime and GC checks passed |
 | S3 | Exact-ID create-and-restore, read-only preflight and partial-completion behavior passed |
 | S4 | All three actual-byte capacity journeys passed, including two distinct 17 GiB + 1 byte service blobs |
-| S5 | Full remote CI, Windows regression checks and documentation verification passed; no Git integration/publication |
+| S5 | Full remote CI, Windows regression checks and documentation verification passed; authorized local develop integration; no push/publication |
 
 ### Current V10 evidence
 

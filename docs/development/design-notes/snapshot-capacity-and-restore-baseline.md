@@ -4,12 +4,14 @@ title: Snapshot Capacity and Restore Baseline
 
 # Snapshot capacity and Restore workflow baseline
 
-**Approved: 2026-09-17. Implementation and verification complete on the feature branch; no integration or publication.**
+**Approved: 2026-09-17. Implementation and verification complete; local develop integration subsequently authorized on 2026-09-18. No publication.**
 
 The operator approved continuous S0-S5 delivery without slice-by-slice stops.
 Stop only for a new semantic decision, required authorization, or an external
 blocker. This is the second scope in the product-completion work order, not a
-new M-series milestone. No commit, merge, push or publication is authorized.
+new M-series milestone. The original approval did not authorize Git integration.
+The operator subsequently authorized local commit/merge and closeout on
+2026-09-18; push and publication remain separate. See the implementation record.
 
 ## Originally approved behavior (storage restriction superseded below)
 

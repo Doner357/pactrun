@@ -82,7 +82,7 @@ test('roadmap distinguishes historical V4 introduction from the current schema',
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /PersistenceSchemaV4 as the current canonical implemented internal schema/);
 });
 
-test('current entries reflect M7 integration while preserving bounded M6 history', async () => {
+test('current entries reflect V10 integration while preserving M7 and bounded M6 history', async () => {
   const document = name => docs.find(([file]) => file === 'development/' + name)[1];
   const roadmap = document('implementation-roadmap.md');
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
@@ -91,13 +91,19 @@ test('current entries reflect M7 integration while preserving bounded M6 history
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
   assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented, verified and integrated into local develop\./);
   const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
-  assert.match(current, /PersistenceSchemaV9\]\([^)]*\) is the integrated `develop` persistence baseline, with explicit exact-V8 upgrade only/);
+  assert.match(current, /PersistenceSchemaV10\]\([^)]*\) is the integrated `develop` persistence baseline, with explicit exact-V8\/V9 upgrade/);
   assert.match(current, /M7 Cleanup execution is implemented, verified and integrated into local `develop`/);
   assert.match(current, /M8 is rejected and archived; no next numbered milestone is selected/);
   assert.doesNotMatch(current, /Cleanup execution remains Proposed/);
   const agentEntry = docs.find(([file]) => file === 'agents/index.md')[1].replace(/\s+/g, ' ');
   assert.match(agentEntry, /M5, bounded M6, M6\.5 ServiceStorage and M7 Cleanup\/deletion are implemented and integrated into local `develop`/);
-  assert.match(agentEntry, /current persistence baseline is V9, with explicit exact-V8 upgrade only/);
+  assert.match(agentEntry, /current persistence baseline is V10, with explicit exact-V8\/V9 upgrade/);
+  const capacity = document('snapshot-capacity-and-restore-status.md');
+  assert.match(capacity.replace(/\s+/g, ' '), /S0-S5 implemented, verified and integrated into local `develop`/);
+  assert.match(capacity, /ead810f1a81e5a52e351e96b11987a8b3d766d36/);
+  assert.match(capacity, /b99ffbd748f5417c0aa8537fe9c5e2234142a31c/);
+  assert.match(agentEntry, /Shell Adapter \/ Loader is next/);
+  assert.match(capacity, /reused evidence/);
   for (const entry of [current, agentEntry]) {
     assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
     assert.match(entry, /Release-readiness work has no assigned start/);
