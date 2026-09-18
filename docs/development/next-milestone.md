@@ -150,9 +150,10 @@ and merge. Snapshot Capacity and Restore Workflow is also implemented, verified
 and integrated into local develop after authorization on 2026-09-18; see the
 [implementation record](./snapshot-capacity-and-restore-status.md). Its V10
 adjustment, full CI and real beyond-ceiling round trips are complete.
-Shell Adapter / Loader is now [implemented and verified](./shell-adapter-loader-status.md)
-in the `feature/shell-adapter-loader` working tree, including the scoped full-CI
-and platform evidence, but is not committed or merged. Machine-readable CLI
+Shell Adapter / Loader is now [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md)
+after separately authorized commit/merge, with scoped full-CI and platform
+evidence. Hook diagnostic presentation is an explicitly recorded unresolved
+follow-up, not silently completed or assigned by this closeout. Machine-readable CLI
 Output is the next separately planned capability; no implementation is started
 by this closeout. Push, release and publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.

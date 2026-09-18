@@ -861,9 +861,10 @@ including the authorized V10 immutable-data-reference adjustment, full CI and
 real beyond-ceiling round trips. The current develop runtime is V10, with explicit
 exact-V8/V9 upgrade; the [lifecycle record](./managed-object-lifecycle-status.md)
 retains its historical V9 evidence. Shell Adapter / Loader is now
-[implemented and verified on its feature branch](./shell-adapter-loader-status.md),
-including Core V3, YAML V3 and the four-shell runtime/helper matrix. It is not yet
-committed or integrated into develop. Machine-readable CLI Output is the next
+[implemented, verified and integrated into local develop](./shell-adapter-loader-status.md),
+including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagnostic
+presentation remains an explicitly recorded follow-up; integration does not claim
+that observability goal is complete. Machine-readable CLI Output is the next
 separately planned capability; it has not started. Local integration does not
 authorize push, release or publication.
 No runtime implementation, calendar start or publication is started by this

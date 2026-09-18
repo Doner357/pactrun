@@ -38,7 +38,8 @@ shell-loader launch without modifying Core V1/V2 or Hook Protocol V1/V2.
 [Shell Loader](./shell-loader.md) owns script lifecycle, helper commands and data
 interfaces. See the [format review](../../development/design-notes/shell-loader-format-activation-review.md)
 and [implementation record](../../development/shell-adapter-loader-status.md) for
-verification scope and the distinction between working-tree completion and integration.
+verification scope, authorized local integration and the unresolved diagnostic
+presentation follow-up. Protocol delivery alone is not a diagnostic display/history feature.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

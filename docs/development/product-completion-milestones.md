@@ -16,8 +16,9 @@ planning decision.
 
 Subsequent Snapshot capacity/restore completion is recorded in its
 [integrated closeout](./snapshot-capacity-and-restore-status.md). Shell Adapter /
-Loader is [implemented and verified in its feature working tree](./shell-adapter-loader-status.md),
-not yet committed or integrated. These execution records do not change the
+Loader is [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md).
+Its diagnostic presentation gap is recorded as a separate unresolved follow-up,
+not silently completed by integration. These execution records do not change the
 historical planning status above or start machine-readable CLI output.
 
 This informative plan records the operator's decisions after the completed
