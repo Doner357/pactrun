@@ -61,6 +61,7 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v6',
           'spec/persistence/persistence-schema-v8',
           'spec/persistence/persistence-schema-v9',
+          'spec/persistence/persistence-schema-v10',
         ]},
         {type: 'category', label: 'M6.5 Candidate Contracts', items: [
           'spec/contracts/revision-core-format-v2',
@@ -82,6 +83,7 @@ const sidebars: SidebarsConfig = {
         'development/release-readiness',
         'development/product-completion-milestones',
         'development/managed-object-lifecycle-status',
+        'development/snapshot-capacity-and-restore-status',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',
@@ -89,6 +91,7 @@ const sidebars: SidebarsConfig = {
         'development/design-notes/m7-cleanup-deletion-implementation-baseline',
         'development/spec-migration-review',
         {type: 'category', label: 'Design syntheses and history', items: [
+          'development/design-notes/snapshot-capacity-and-restore-baseline',
           'development/design-notes/non-identity-metadata-semantic-baseline',
           'development/design-notes/pre-m2-installation-instance-binding-baseline',
           'development/design-notes/service-storage-semantic-baseline',

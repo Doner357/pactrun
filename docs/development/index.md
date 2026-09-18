@@ -42,7 +42,8 @@ consolidation; the intermediate scopes and rationale are recorded there.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md) tracks
 the separately approved design and all lifecycle slices on V9, with final
 acceptance passed and local develop integration completed. Snapshot Capacity and
-Restore Workflow is next in the agreed work order; later scopes remain pending, without
+Restore Workflow is now [implemented and verified on its feature branch](./snapshot-capacity-and-restore-status.md);
+later scopes remain pending, without
 reusing the retired number.
 The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.

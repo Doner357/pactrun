@@ -663,6 +663,14 @@ fn wait_for_file(path: &Path) {
 }
 
 struct ManagedWorker(std::process::Child);
+
+fn publish_worker_marker(path: &Path, value: &str) {
+    // Existence is the reader's barrier. Publish the complete payload rather
+    // than letting a faster reader observe fs::write's empty newly-created file.
+    let pending = path.with_extension("publishing");
+    fs::write(&pending, value).unwrap();
+    fs::rename(pending, path).unwrap();
+}
 impl Drop for ManagedWorker {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -701,21 +709,20 @@ fn managed_admission_worker() {
             &crate::persistence::UnconditionalAcceptance,
         )
         .unwrap();
-    fs::write(path.join(format!("{label}.accepted")), run.to_string()).unwrap();
+    publish_worker_marker(&path.join(format!("{label}.accepted")), &run.to_string());
     wait_for_file(&path.join("go"));
     let result = capture_admit(&p, &view, run, &owner).unwrap();
     if result.is_ok() {
         p.open_recovery_risk(run).unwrap();
     }
-    fs::write(
-        path.join(format!("{label}.result")),
+    publish_worker_marker(
+        &path.join(format!("{label}.result")),
         if result.is_ok() {
             "admitted"
         } else {
             "refused"
         },
-    )
-    .unwrap();
+    );
     wait_for_file(&path.join("release"));
 }
 

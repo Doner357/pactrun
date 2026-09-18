@@ -142,6 +142,10 @@ record from this internal parameter.
 
 The closed M2 minimal human CLI has exactly this fixed spelling:
 
+The later create-and-restore option is specified separately by
+[PR-REQ-0346](./m4-snapshot-command-reference.md#pr-req-0346---create-an-instance-and-restore-its-snapshot);
+it composes Create with Restore rather than changing ordinary Create semantics.
+
 ```text
 pactrun pack generate-id
 pactrun pack install <source-root>

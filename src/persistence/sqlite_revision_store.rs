@@ -48,7 +48,8 @@ pub(super) const SCHEMA_V5_VERSION: i64 = 5;
 pub(super) const SCHEMA_V6_VERSION: i64 = 6;
 pub(super) const SCHEMA_V7_VERSION: i64 = 7;
 pub(super) const SCHEMA_V8_VERSION: i64 = 8;
-pub(crate) const SCHEMA_VERSION: i64 = 9;
+pub(super) const SCHEMA_V9_VERSION: i64 = 9;
+pub(crate) const SCHEMA_VERSION: i64 = 10;
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) const SCHEMA_V1_SQL: &str = r#"
@@ -121,7 +122,7 @@ pub(super) const SCHEMA_V7_ADDITIONS_SQL: &str =
 
 /// The ordered schema ladder: every version applies the SQL of all lower
 /// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 9] = [
+pub(super) const SCHEMA_LADDER: [(&str, &str); 10] = [
     (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
     (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
     (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
@@ -136,6 +137,10 @@ pub(super) const SCHEMA_LADDER: [(&str, &str); 9] = [
     (
         include_str!("persistence_schema_v9_additions.sql"),
         "PersistenceSchemaV9 coordination",
+    ),
+    (
+        include_str!("persistence_schema_v10_additions.sql"),
+        "PersistenceSchemaV10 immutable data references",
     ),
 ];
 
@@ -270,7 +275,7 @@ impl fmt::Display for PersistenceError {
             Self::SnapshotCodec(error) => error.fmt(formatter),
             Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
             Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V8 requires explicit pactrun storage upgrade to V9"),
+            Self::UpgradeRequired => formatter.write_str("exact V8 or V9 requires explicit pactrun storage upgrade to V10"),
             Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
             Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
             Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
@@ -344,23 +349,25 @@ impl PactrunPersistence {
                     .map_err(|e| PersistenceError::sqlite("inspect writable store", e))?;
             configure_read_connection(&reader)?;
             match classify_database(&reader)? {
-                DatabaseState::V9 => {}
+                DatabaseState::V10 => {}
                 DatabaseState::Pristine if !collection => {}
                 DatabaseState::Pristine => {
                     return Err(PersistenceError::DatabaseOwnership(
-                        "collection requires an existing exact V9 reference catalog".to_owned(),
+                        "collection requires an existing exact V10 reference catalog".to_owned(),
                     ));
                 }
-                DatabaseState::V8 => return Err(PersistenceError::UpgradeRequired),
+                DatabaseState::V8 | DatabaseState::V9 => {
+                    return Err(PersistenceError::UpgradeRequired);
+                }
                 _ => {
                     return Err(PersistenceError::DatabaseOwnership(
-                        "writer requires pristine or exact V9 storage".to_owned(),
+                        "writer requires pristine or exact V10 storage".to_owned(),
                     ));
                 }
             }
         } else if collection {
             return Err(PersistenceError::DatabaseOwnership(
-                "collection requires an existing exact V9 reference catalog".to_owned(),
+                "collection requires an existing exact V10 reference catalog".to_owned(),
             ));
         }
         let runtime_content = RuntimeContentStore::open(&runtime_root)?
@@ -394,12 +401,12 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V9 {
-            if state == DatabaseState::V8 {
+        if state != DatabaseState::V10 {
+            if matches!(state, DatabaseState::V8 | DatabaseState::V9) {
                 return Err(PersistenceError::UpgradeRequired);
             }
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires exact V9; use a compatible build to reach V8 before explicit upgrade".to_owned(),
+                "read-only opening requires exact V10; use a compatible build to reach V8 or V9 before explicit upgrade".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -701,7 +708,8 @@ pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, Persist
         | DatabaseState::V6
         | DatabaseState::V7
         | DatabaseState::V8
-        | DatabaseState::V9 => {
+        | DatabaseState::V9
+        | DatabaseState::V10 => {
             return Err(PersistenceError::DatabaseOwnership(
                 "legacy V4 binary rejects newer schema".to_owned(),
             ));
@@ -842,6 +850,7 @@ pub(super) enum DatabaseState {
     V7,
     V8,
     V9,
+    V10,
 }
 
 impl DatabaseState {
@@ -856,7 +865,8 @@ impl DatabaseState {
             Self::V6 => Some(SCHEMA_V6_VERSION),
             Self::V7 => Some(SCHEMA_V7_VERSION),
             Self::V8 => Some(SCHEMA_V8_VERSION),
-            Self::V9 => Some(SCHEMA_VERSION),
+            Self::V9 => Some(SCHEMA_V9_VERSION),
+            Self::V10 => Some(SCHEMA_VERSION),
         }
     }
 }
@@ -904,9 +914,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
             validate_schema(database, SCHEMA_V8_VERSION)?;
             Ok(DatabaseState::V8)
         }
+        (APPLICATION_ID, SCHEMA_V9_VERSION, true) => {
+            validate_schema(database, SCHEMA_V9_VERSION)?;
+            Ok(DatabaseState::V9)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V9)
+            Ok(DatabaseState::V10)
         }
         (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
             Err(PersistenceError::DatabaseOwnership(format!(

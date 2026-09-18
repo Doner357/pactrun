@@ -290,6 +290,25 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
             0
         );
         let tx = db.transaction().unwrap();
+        assert_eq!(
+            tx.query_row::<i64, _, _>(
+                "SELECT count(*) FROM snapshot_blobs WHERE storage_kind=1",
+                [],
+                |r| r.get(0)
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            tx.query_row::<i64, _, _>(
+                "SELECT count(*) FROM managed_input_payloads WHERE content_digest IS NOT NULL",
+                [],
+                |r| r.get(0)
+            )
+            .unwrap(),
+            0
+        );
+        tx.execute_batch("ALTER TABLE snapshot_blobs DROP COLUMN storage_kind; ALTER TABLE managed_input_payloads DROP COLUMN content_digest;").unwrap();
         tx.execute_batch(
             include_str!("../src/persistence/persistence_schema_v8_additions.sql")
                 .split("CREATE TABLE instance_history_identities")
@@ -317,8 +336,8 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
         Some(2)
     );
     let first = successful(&f.root, &["storage", "upgrade"]);
-    assert!(first.contains("V9 (upgraded)"));
-    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V9 (already current)"));
+    assert!(first.contains("V10 (upgraded)"));
+    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V10 (already current)"));
     assert_eq!(
         paths,
         ids(&successful(
@@ -361,7 +380,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 9);
+    assert_eq!(version, 10);
 }
 
 // Test-ID: PR-TEST-0290

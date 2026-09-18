@@ -995,7 +995,7 @@ fn corrupt_selected_content_fails_before_hook_launch_and_never_changes_the_targe
         ActionCancellation::default(),
         true,
     );
-    db(&f).execute("UPDATE snapshot_blob_chunks SET chunk_bytes=zeroblob(length(chunk_bytes)) WHERE snapshot_id=?1",[snapshot.as_bytes().as_slice()]).unwrap();
+    crate::persistence::corrupt_snapshot_for_test(&f.storage, snapshot);
     run_restore(&f, run);
     assert_eq!(finish(&f, run).outcome, RunOutcome::Failed);
     assert!(!marker_variant(&marker, "launched").exists());
@@ -1057,6 +1057,142 @@ fn restore_materializes_real_service_content_above_the_managed_input_limit() {
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert!(marker_variant(&marker, "content-checked").exists());
     assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
+}
+
+/// Explicit capacity acceptance runs, not part of the routine suite. Each case
+/// uses the same two service descriptors and hashes actual persisted bytes.
+fn capacity_round_trip(mib: u64) {
+    let f = fixture();
+    let mode = format!("capacity-{mib}");
+    let marker = f.marker("capacity-capture");
+    let plan = compile(&f, f.instance.id, SnapshotOperation::Capture, &mode, &marker);
+    let run = f.application.accept_snapshot_plan(plan, AdmissionOptions::default(), ActionCancellation::default()).unwrap();
+    assert!(!f.application.advance_owner_continuation(run).unwrap());
+    f.application.execute_admitted_capture(run, policy(None, None, Some(100))).unwrap();
+    assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
+    let snapshot = f.application.list_snapshots(None).unwrap()[0].id;
+    assert_eq!(db(&f).query_row::<i64,_,_>("SELECT count(*) FROM snapshot_blob_chunks", [], |r| r.get(0)).unwrap(), 0);
+    for name in ["pactrun.sqlite3", "pactrun.sqlite3-wal"] {
+        let path = f.storage.join("database").join(name);
+        if path.exists() {
+            let length = fs::metadata(path).unwrap().len();
+            assert!(length < 64 * 1024 * 1024, "service bytes must not grow the control database/WAL");
+            eprintln!("control file {name}: {length} bytes");
+        }
+    }
+    f.application.verify_snapshot(snapshot).unwrap();
+    let expected = mib * 1024 * 1024 + 1;
+    assert_eq!(db(&f).query_row(
+        "SELECT count(*) FROM snapshot_blobs WHERE snapshot_id=?1 AND byte_length=?2",
+        rusqlite::params![snapshot.as_bytes().as_slice(), expected as i64],
+        |r| r.get::<_, i64>(0)).unwrap(), 2);
+    let marker = f.marker("capacity-restore");
+    let restore = admit(&f, f.instance.id, snapshot, &mode, &marker, ActionCancellation::default(), false);
+    f.application.execute_admitted_restore(restore, policy(None, None, Some(100))).unwrap();
+    assert_eq!(finish(&f, restore).outcome, RunOutcome::Succeeded);
+    assert!(marker_variant(&marker, "content-checked").exists());
+    assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
+
+    let bundle = f.storage.parent().unwrap().join("capacity.zip");
+    f.application.export_snapshot_file(snapshot, &bundle, true, &mut std::io::sink()).unwrap();
+    assert!(fs::metadata(&bundle).unwrap().len() > 2 * expected);
+    if mib > 16 * 1024 {
+        assert!(fs::metadata(&bundle).unwrap().len() > 32 * 1024_u64.pow(3) + 128 * 1024 * 1024);
+    }
+    let imported_root = f.storage.parent().unwrap().join("capacity-import");
+    fs::create_dir(&imported_root).unwrap();
+    for child in ["database", "runtime-content", "staging"] {
+        fs::create_dir(imported_root.join(child)).unwrap();
+    }
+    let imported = crate::application::PactrunApplication::open(&imported_root).unwrap();
+    assert_eq!(imported.import_snapshot_file(&bundle).unwrap().id, snapshot);
+    imported.verify_snapshot(snapshot).unwrap();
+    // Compare exact persisted canonical bytes and integrity digest without
+    // allocating any service payload. Both stores performed complete hashing.
+    let target_db = rusqlite::Connection::open(imported_root.join("database/pactrun.sqlite3")).unwrap();
+    let projection = |conn: &rusqlite::Connection| {
+        conn.query_row("SELECT canonical_manifest,integrity_digest FROM snapshots WHERE snapshot_id=?1",
+            [snapshot.as_bytes().as_slice()], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))).unwrap()
+    };
+    assert_eq!(projection(&db(&f)), projection(&target_db));
+    eprintln!("capacity evidence: two service blobs of {expected} bytes; Capture, verify, Restore, export, import verified");
+}
+
+#[test]
+#[ignore = "explicit capacity/RSS comparison on persistent remote workspace"]
+fn snapshot_capacity_small() { capacity_round_trip(1); }
+
+#[test]
+#[ignore = "explicit capacity/RSS comparison on persistent remote workspace"]
+fn snapshot_capacity_medium() { capacity_round_trip(1024); }
+
+// Test-ID: PR-TEST-0479
+// Verifies: PR-REQ-0293, PR-REQ-0294, PR-REQ-0292, PR-REQ-0291, PR-REQ-0347
+#[test]
+#[ignore = "requires at least 160 GiB free; run sequentially on persistent remote workspace"]
+fn snapshot_capacity_beyond_former_ceilings() { capacity_round_trip(17 * 1024); }
+
+// Test-ID: PR-TEST-0482
+// Verifies: PR-REQ-0293, PR-REQ-0291, PR-REQ-0341
+#[test]
+fn snapshot_chunk_cancellation_preserves_target_and_releases_restore_pin() {
+    struct CancelAfterWrite { cancellation: ActionCancellation, written: usize }
+    impl Write for CancelAfterWrite {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.written += bytes.len();
+            self.cancellation.request();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+    }
+    let f = fixture();
+    let plan = compile(&f, f.instance.id, SnapshotOperation::Capture, "capacity-1", &f.marker("cancel-source"));
+    let capture = f.application.accept_snapshot_plan(plan, AdmissionOptions::default(), ActionCancellation::default()).unwrap();
+    assert!(!f.application.advance_owner_continuation(capture).unwrap());
+    f.application.execute_admitted_capture(capture, policy(None, None, Some(100))).unwrap();
+    assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+    let snapshot = f.application.list_snapshots(None).unwrap()[0].id;
+    let before = view(&f);
+    let cancellation = ActionCancellation::default();
+    let marker = f.marker("cancel-materialization");
+    let run = admit(&f, f.instance.id, snapshot, "capacity-1", &marker, cancellation.clone(), false);
+    assert_eq!(f.application.delete_object(&ObjectDeletion::Snapshot(snapshot)).unwrap(), ObjectDeletionResult::Blocked(DeletionBlock::SnapshotInUse));
+    let p = persistence(&f.storage);
+    let manifest = p.admitted_restore_manifest(run).unwrap();
+    let mut destination = CancelAfterWrite { cancellation: cancellation.clone(), written: 0 };
+    let error = p.copy_admitted_restore_blob(run, &manifest.service_content()[0].blob_digest,
+        &mut super::super::materialize::CancellableWriter { destination: &mut destination, cancellation: &cancellation }).unwrap_err();
+    assert!(matches!(error, crate::persistence::PersistenceError::Io { .. }));
+    assert!((1..=MANAGED_INPUT_CHUNK_BYTES_V1).contains(&destination.written));
+    run_restore(&f, run);
+    assert_eq!(finish(&f, run).outcome, RunOutcome::Cancelled);
+    assert_eq!(view(&f).state_version, before.state_version);
+    assert!(!marker_variant(&marker, "launched").exists());
+    assert_eq!(count(&f, "run_restore_admissions"), 0);
+    f.application.verify_snapshot(snapshot).unwrap();
+    assert_eq!(f.application.delete_object(&ObjectDeletion::Snapshot(snapshot)).unwrap(), ObjectDeletionResult::Deleted);
+}
+
+// Test-ID: PR-TEST-0485
+// Verifies: PR-REQ-0347, PR-REQ-0291
+#[test]
+fn upgraded_inline_snapshot_restores_through_the_real_hook_into_fresh_immutable_bindings() {
+    let f = fixture();
+    let snapshot = capture(&f);
+    let RuntimeFixture { temporary, storage, launcher, application, instance } = f;
+    drop(application);
+    let mut database = rusqlite::Connection::open(storage.join("database/pactrun.sqlite3")).unwrap();
+    crate::persistence::current_to_v9_fixture(&mut database);
+    assert!(crate::persistence::PactrunPersistence::upgrade_storage(&storage).unwrap());
+    let application = PactrunApplication::open(&storage).unwrap();
+    let f = RuntimeFixture { temporary, storage, launcher, application, instance };
+    let marker = f.marker("legacy-value-restore");
+    let run = admit(&f, f.instance.id, snapshot, "success", &marker, ActionCancellation::default(), false);
+    run_restore(&f, run);
+    assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
+    assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
+    assert_eq!(database.query_row::<i64,_,_>("SELECT count(*) FROM snapshot_blobs WHERE storage_kind<>0", [], |r| r.get(0)).unwrap(), 0);
+    assert!(database.query_row::<i64,_,_>("SELECT count(*) FROM managed_input_payloads WHERE content_digest IS NOT NULL", [], |r| r.get(0)).unwrap() > 0);
 }
 
 // Test-ID: PR-TEST-0267
@@ -1179,7 +1315,7 @@ fn restore_hook_worker() {
         RuntimePath::parse(relative).unwrap();
         assert_ne!(relative, descriptor["path"].as_str().unwrap());
         let path = root.join(relative);
-        let digest = if mode == "large" {
+        let digest = if mode == "large" || mode.starts_with("capacity-") {
             let mut file = fs::File::open(&path).unwrap();
             let mut hash = Sha256::new();
             let mut buffer = [0; 65536];
@@ -1192,7 +1328,8 @@ fn restore_hook_worker() {
                 hash.update(&buffer[..n]);
                 length += n as u64;
             }
-            assert_eq!(length, 512 * 1024 * 1024 + 1);
+            let expected_mib = mode.strip_prefix("capacity-").map(|m| m.parse::<u64>().unwrap()).unwrap_or(512);
+            assert_eq!(length, expected_mib * 1024 * 1024 + 1);
             Sha256Digest::from_bytes(hash.finalize().into())
         } else {
             let bytes = fs::read(&path).unwrap();

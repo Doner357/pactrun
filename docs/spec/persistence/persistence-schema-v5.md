@@ -161,7 +161,7 @@ CREATE TABLE run_capture_results (
   All chunk reads specify ORDER BY chunk_index. Snapshot enumeration orders by
   SnapshotId BLOB bytes. Cross-Snapshot/Instance/Artifact CAS is not introduced.
 - Capability limits are checked independently of these storage invariants.
-  Do not add the current 8 GiB ceiling to the schema or call an otherwise-valid
+  Do not add the former 8 GiB product ceiling to the schema or call an otherwise-valid
   over-capability object corrupt. Managed Input and Artifact V4 limits remain.
 - Canonical manifests and digests may contain sensitive authoritative material.
   Run records MUST NOT copy this content. Inspection projects safe structural
@@ -171,7 +171,7 @@ CREATE TABLE run_capture_results (
   Orphan recovery depends on operation, boundary, risk, and references, not a
   persisted Plan. Corrupt states are not normalized into valid ones.
 
-**Verification: PR-TEST-0182, PR-TEST-0183, PR-TEST-0195, PR-TEST-0202, PR-TEST-0203, PR-TEST-0204, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0212, PR-TEST-0213, PR-TEST-0215, PR-TEST-0222, PR-TEST-0223, PR-TEST-0224, PR-TEST-0226, PR-TEST-0228, PR-TEST-0229, PR-TEST-0230, PR-TEST-0232, PR-TEST-0233, PR-TEST-0234, PR-TEST-0236, PR-TEST-0239, PR-TEST-0240, PR-TEST-0246, PR-TEST-0247, PR-TEST-0252, PR-TEST-0255, PR-TEST-0258, PR-TEST-0259, PR-TEST-0260, PR-TEST-0263, PR-TEST-0264, PR-TEST-0267, PR-TEST-0275.**
+**Verification: PR-TEST-0182, PR-TEST-0183, PR-TEST-0195, PR-TEST-0202, PR-TEST-0203, PR-TEST-0204, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0212, PR-TEST-0213, PR-TEST-0215, PR-TEST-0222, PR-TEST-0223, PR-TEST-0224, PR-TEST-0226, PR-TEST-0228, PR-TEST-0229, PR-TEST-0230, PR-TEST-0232, PR-TEST-0233, PR-TEST-0234, PR-TEST-0236, PR-TEST-0239, PR-TEST-0240, PR-TEST-0246, PR-TEST-0247, PR-TEST-0252, PR-TEST-0255, PR-TEST-0258, PR-TEST-0259, PR-TEST-0260, PR-TEST-0263, PR-TEST-0264, PR-TEST-0267, PR-TEST-0275, PR-TEST-0480.**
 
 Coverage includes exact DDL, initialization, operation discriminators,
 consequence counters, legacy preservation, and Snapshot-owned byte loading,

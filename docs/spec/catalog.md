@@ -18,7 +18,7 @@ website build. They do not constitute additional requirements.
 | [Managed Object Lifecycle and GC](behavior/managed-object-lifecycle.md) | Implemented normative contract; verification and integration are tracked separately. |
 | [Persistence Schema V9](persistence/persistence-schema-v9.md) | Implemented normative internal contract; non-Frozen. |
 | [Inputs, Secrets, and Readiness](behavior/inputs-secrets-and-readiness.md) | Normative product behavior specification except where linked to an owning requirement. |
-| [M4 Runtime Capabilities](behavior/m4-runtime-capabilities.md) | Approved normative fixed build capabilities. |
+| [M4 Runtime Capabilities](behavior/m4-runtime-capabilities.md) | Approved normative structural capabilities and checked byte accounting; revised on 2026-09-17. |
 | [M4 Snapshot Commands](behavior/m4-snapshot-command-reference.md) | Approved normative CLI, implemented and integrated into develop. Verification and milestone integration are recorded in the M4 execution record. |
 | [Packages, Revisions, and Instances](behavior/packages-revisions-and-instances.md) | Normative product behavior specification except where marked informative. |
 | [Snapshots, Migration, and Recovery](behavior/snapshots-migrations-and-recovery.md) | Normative product behavior specification. |
@@ -91,3 +91,4 @@ The historical M6.5 and M7 integration records are unchanged.
 | --- | --- |
 | [M7 Instance retirement](execution/m7-instance-retirement.md) | Approved M7 contract; runtime activation and verification are separate. |
 | [Persistence V8](persistence/persistence-schema-v8.md) | Approved M7 internal contract; non-Frozen. |
+| [Persistence V10](persistence/persistence-schema-v10.md) | Implemented and verified normative internal contract; non-Frozen. |

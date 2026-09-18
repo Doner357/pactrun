@@ -693,8 +693,13 @@ pub(crate) fn references(manifest: &crate::domain::SnapshotManifest) -> BTreeSet
 fn decode_envelope(raw: &[u8]) -> Result<(SnapshotIntegrityVersion, String), BundleError> {
     SnapshotCapability::BundleEnvelope.check(raw.len() as u64)?;
     snapshot_integrity::check_json_depth(raw)?;
-    let value = strict_json::parse_json(raw, SnapshotCapability::BundleEnvelope.maximum() as usize)
-        .map_err(|_| BundleError::Profile("invalid closed bundle envelope"))?;
+    let value = strict_json::parse_json(
+        raw,
+        SnapshotCapability::BundleEnvelope
+            .maximum()
+            .expect("metadata bound") as usize,
+    )
+    .map_err(|_| BundleError::Profile("invalid closed bundle envelope"))?;
     let RawJsonValue::Object(fields) = value else {
         return invalid("envelope must be an object");
     };

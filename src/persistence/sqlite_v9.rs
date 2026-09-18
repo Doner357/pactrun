@@ -21,8 +21,8 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("inspect coordination upgrade", e))?;
         configure_read_connection(&reader)?;
         match classify_database(&reader)? {
-            DatabaseState::V9 => return Ok(false),
-            DatabaseState::V8 => {}
+            DatabaseState::V10 => return Ok(false),
+            DatabaseState::V8 | DatabaseState::V9 => {}
             _ => return Err(unsupported()),
         }
         drop(reader);
@@ -40,14 +40,21 @@ impl PactrunPersistence {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|e| PersistenceError::sqlite("serialize coordination upgrade", e))?;
         match classify_database(&tx)? {
-            DatabaseState::V9 => return Ok(false),
-            DatabaseState::V8 => {}
+            DatabaseState::V10 => return Ok(false),
+            DatabaseState::V8 | DatabaseState::V9 => {}
             _ => return Err(unsupported()),
         }
-        super::sqlite_v5::require_quiescent_admissions_at_version(&tx, &root, 8)?;
+        let source: i64 = tx
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .map_err(|e| PersistenceError::sqlite("read upgrade source", e))?;
+        super::sqlite_v5::require_quiescent_admissions_at_version(&tx, &root, source)?;
         fault(FaultPoint::AfterCoordinationAdmissionInspection);
-        tx.execute_batch(include_str!("persistence_schema_v9_additions.sql"))
-            .map_err(|e| PersistenceError::sqlite("replace coordination admission", e))?;
+        if source == 8 {
+            tx.execute_batch(include_str!("persistence_schema_v9_additions.sql"))
+                .map_err(|e| PersistenceError::sqlite("activate coordination", e))?;
+        }
+        tx.execute_batch(include_str!("persistence_schema_v10_additions.sql"))
+            .map_err(|e| PersistenceError::sqlite("activate immutable data references", e))?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)
             .map_err(|e| PersistenceError::sqlite("publish coordination version", e))?;
         validate_schema(&tx, SCHEMA_VERSION)?;
@@ -62,12 +69,13 @@ impl PactrunPersistence {
 
 fn unsupported() -> PersistenceError {
     PersistenceError::DatabaseOwnership(
-        "V9 upgrade accepts exact V8 only; no implicit upgrade chain".to_owned(),
+        "V10 upgrade accepts exact V8 or V9 only; no implicit older upgrade chain".to_owned(),
     )
 }
 
 #[cfg(test)]
 pub(super) fn current_to_v8_fixture(db: &mut Connection) {
+    current_to_v9_fixture(db);
     if db
         .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
         .unwrap()
@@ -85,4 +93,66 @@ pub(super) fn current_to_v8_fixture(db: &mut Connection) {
     .unwrap();
     db.pragma_update(None, "user_version", 8).unwrap();
     validate_schema(db, 8).unwrap();
+}
+
+#[cfg(test)]
+pub(crate) fn current_to_v9_fixture(db: &mut Connection) {
+    if db
+        .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
+        .unwrap()
+        != 10
+    {
+        return;
+    }
+    // Construct real old-format bytes, not a marker-only fake downgrade. This
+    // helper is test-only and never part of production upgrade/recovery.
+    let root = Path::new(db.path().unwrap())
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let store = RuntimeContentStore::open_read_only(root.join("runtime-content")).unwrap();
+    let tx = db.transaction().unwrap();
+    for (sql, table) in [
+        (
+            "SELECT snapshot_id,blob_digest,blob_digest,byte_length FROM snapshot_blobs WHERE storage_kind=1",
+            &super::sqlite_snapshots::CHUNKS,
+        ),
+        (
+            "SELECT instance_id,payload_id,content_digest,byte_length FROM managed_input_payloads WHERE content_digest IS NOT NULL",
+            &super::sqlite_instances::PAYLOAD_CHUNKS,
+        ),
+    ] {
+        let mut q = tx.prepare(sql).unwrap();
+        let rows = q
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, Vec<u8>>(0)?,
+                    r.get::<_, Vec<u8>>(1)?,
+                    r.get::<_, Vec<u8>>(2)?,
+                    r.get::<_, i64>(3)?,
+                ))
+            })
+            .unwrap();
+        for row in rows {
+            let (key0, key1, digest, length) = row.unwrap();
+            let digest = crate::domain::Sha256Digest::from_bytes(digest.try_into().unwrap());
+            let mut reader = store.open_verified(&digest).unwrap();
+            super::chunked_blob::insert_chunks(
+                &tx,
+                table,
+                [&key0, &key1],
+                &mut reader,
+                length as u64,
+            )
+            .unwrap();
+        }
+    }
+    tx.execute_batch("UPDATE snapshot_blobs SET storage_kind=0; UPDATE managed_input_payloads SET content_digest=NULL;").unwrap();
+    tx.commit().unwrap();
+    db.execute_batch("ALTER TABLE snapshot_blobs DROP COLUMN storage_kind; ALTER TABLE managed_input_payloads DROP COLUMN content_digest;").unwrap();
+    db.execute_batch(include_str!("persistence_schema_v9_additions.sql"))
+        .unwrap();
+    db.pragma_update(None, "user_version", 9).unwrap();
+    validate_schema(db, 9).unwrap();
 }

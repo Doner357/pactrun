@@ -588,6 +588,17 @@ fn capture_hook_worker() {
         );
         #[cfg(not(target_os = "linux"))]
         panic!("FIFO fixture is Linux-only");
+    } else if let Some(mib) = mode.strip_prefix("capacity-") {
+        let mib: u64 = mib.parse().unwrap();
+        for (name, byte) in [("one", 0x5a), ("two", 0xa5)] {
+            let mut file = fs::File::create(root.join(format!("files/{name}"))).unwrap();
+            let chunk = [byte; 64 * 1024];
+            for _ in 0..mib * 16 {
+                file.write_all(&chunk).unwrap();
+            }
+            file.write_all(&[0x7f]).unwrap();
+            file.sync_all().unwrap();
+        }
     } else if mode == "large" {
         let mut file = fs::File::create(root.join("files/one")).unwrap();
         let chunk = vec![0x5a; 1024 * 1024];
@@ -629,7 +640,9 @@ fn capture_hook_worker() {
         }
     }
     fs::write(root.join("unsubmitted"), b"must-not-be-captured").unwrap();
-    let second = if mode == "aliases" {
+    let second = if mode.starts_with("capacity-") {
+        "files/two"
+    } else if mode == "aliases" {
         fs::hard_link(root.join("files/one"), root.join("files/two")).unwrap();
         "files/two"
     } else {
@@ -1084,11 +1097,14 @@ fn capture_risk_ack_waits_for_durable_retry_and_does_not_restart_the_hook() {
         )
         .unwrap();
     assert!(!marker_variant(&marker, "risk").exists());
-    let RunState::Running(view) = persistence(&f.storage)
-        .load_managed_run(run)
+    // Inspect persisted state through the existing reader. Opening another
+    // writer here creates a durable session/admission while the deliberately
+    // paused Hook's original deadline is still ticking.
+    let RunState::Running(view) = f.application
+        .managed_run_inspection(run)
         .unwrap()
         .unwrap()
-        .state
+        .run.state
     else {
         panic!("retry must remain running")
     };

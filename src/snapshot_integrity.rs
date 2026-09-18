@@ -188,18 +188,19 @@ pub(crate) fn decode_snapshot_manifest(
 ) -> Result<VerifiedSnapshotManifest, SnapshotCodecError> {
     SnapshotCapability::RawManifest.check(bytes.len() as u64)?;
     check_json_depth(bytes)?;
-    let value =
-        parse_json(bytes, SnapshotCapability::RawManifest.maximum() as usize).map_err(|error| {
-            match error.kind() {
-                StrictJsonErrorKind::InvalidUtf8 | StrictJsonErrorKind::InvalidUnicodeScalar => {
-                    SnapshotValidationError::InvalidUnicodeScalar
-                }
-                StrictJsonErrorKind::DuplicateProperty => {
-                    SnapshotValidationError::DuplicateProperty
-                }
-                StrictJsonErrorKind::InvalidJson => SnapshotValidationError::InvalidJson,
-            }
-        })?;
+    let value = parse_json(
+        bytes,
+        SnapshotCapability::RawManifest
+            .maximum()
+            .expect("metadata bound") as usize,
+    )
+    .map_err(|error| match error.kind() {
+        StrictJsonErrorKind::InvalidUtf8 | StrictJsonErrorKind::InvalidUnicodeScalar => {
+            SnapshotValidationError::InvalidUnicodeScalar
+        }
+        StrictJsonErrorKind::DuplicateProperty => SnapshotValidationError::DuplicateProperty,
+        StrictJsonErrorKind::InvalidJson => SnapshotValidationError::InvalidJson,
+    })?;
     let mut object = take_object(value)?;
     check_fields(
         &object,

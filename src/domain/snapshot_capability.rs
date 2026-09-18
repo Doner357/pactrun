@@ -1,4 +1,4 @@
-//! Fixed M4 build capabilities, not Snapshot format-validity predicates.
+//! Structural build capabilities and checked byte accounting, not validity.
 //!
 //! Keep acquisition, stored closure, parser, and Restore budgets independent.
 //! These counters own no I/O and do not establish cryptographic verification.
@@ -9,6 +9,7 @@ use super::{InstanceId, ManagedInputPayloadId, Sha256Digest};
 
 const KIB: u64 = 1024;
 const MIB: u64 = 1024 * KIB;
+#[cfg(test)]
 const GIB: u64 = 1024 * MIB;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,28 +32,34 @@ pub(crate) enum SnapshotCapability {
 }
 
 impl SnapshotCapability {
-    pub(crate) const fn maximum(self) -> u64 {
-        match self {
-            Self::StoredBlob => 8 * GIB,
-            Self::StoredClosure => 32 * GIB,
+    /// Product limits apply only to metadata and Managed Inputs. Service bytes
+    /// have no fixed product ceiling; arithmetic and backend ranges still apply.
+    pub(crate) const fn maximum(self) -> Option<u64> {
+        Some(match self {
+            Self::StoredBlob
+            | Self::StoredClosure
+            | Self::CaptureServiceBlob
+            | Self::CaptureServiceClosure
+            | Self::CaptureAcquisition
+            | Self::RestoreExpansion
+            | Self::BundleBytes => return None,
             Self::Descriptors => 65_536,
             Self::RawManifest => 16 * MIB,
             Self::CanonicalManifest => 16 * MIB,
-            Self::CaptureServiceBlob => 8 * GIB,
-            Self::CaptureServiceClosure => 16 * GIB,
-            Self::CaptureAcquisition => 32 * GIB,
             Self::RestoreInput => super::MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
-            Self::RestoreExpansion => 32 * GIB,
             Self::BundleEnvelope => 64 * KIB,
             Self::BundleEntries => 65_538,
             Self::BundleMetadata => 64 * MIB,
-            Self::BundleBytes => 32 * GIB + 128 * MIB,
             Self::JsonDepth => 16,
-        }
+        })
     }
 
     pub(crate) fn check(self, measured: u64) -> Result<(), CapabilityRefusal> {
-        if measured > self.maximum() {
+        // SQLite stores individual blob lengths in signed 64-bit columns. This
+        // is a backend representation prerequisite, not a quota or format rule.
+        let unrepresentable = matches!(self, Self::StoredBlob | Self::CaptureServiceBlob)
+            && i64::try_from(measured).is_err();
+        if unrepresentable || self.maximum().is_some_and(|maximum| measured > maximum) {
             Err(CapabilityRefusal { capability: self })
         } else {
             Ok(())
@@ -76,7 +83,7 @@ pub(crate) struct CapabilityRefusal {
 
 impl fmt::Display for CapabilityRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("operation exceeds a fixed Snapshot build capability")
+        f.write_str("operation exceeds a Snapshot structural or representation capability")
     }
 }
 
@@ -255,24 +262,17 @@ mod tests {
     fn all_capability_limits_are_exact_and_inclusive() {
         use SnapshotCapability::*;
         let limits = [
-            (StoredBlob, 8 * GIB),
-            (StoredClosure, 32 * GIB),
             (Descriptors, 65_536),
             (RawManifest, 16 * MIB),
             (CanonicalManifest, 16 * MIB),
-            (CaptureServiceBlob, 8 * GIB),
-            (CaptureServiceClosure, 16 * GIB),
-            (CaptureAcquisition, 32 * GIB),
             (RestoreInput, 512 * MIB),
-            (RestoreExpansion, 32 * GIB),
             (BundleEnvelope, 64 * KIB),
             (BundleEntries, 65_538),
             (BundleMetadata, 64 * MIB),
-            (BundleBytes, 32 * GIB + 128 * MIB),
             (JsonDepth, 16),
         ];
         for (kind, expected) in limits {
-            assert_eq!(kind.maximum(), expected);
+            assert_eq!(kind.maximum(), Some(expected));
             assert!(kind.check(0).is_ok());
             assert!(kind.check(expected - 1).is_ok());
             assert!(kind.check(expected).is_ok());
@@ -282,6 +282,21 @@ mod tests {
             );
             assert!(kind.check(u64::MAX).is_err());
         }
+        for kind in [
+            StoredBlob,
+            StoredClosure,
+            CaptureServiceBlob,
+            CaptureServiceClosure,
+            CaptureAcquisition,
+            RestoreExpansion,
+            BundleBytes,
+        ] {
+            assert_eq!(kind.maximum(), None);
+            assert!(kind.check(64 * GIB).is_ok());
+        }
+        assert!(StoredBlob.check(i64::MAX as u64).is_ok());
+        assert!(StoredBlob.check(i64::MAX as u64 + 1).is_err());
+        assert!(StoredClosure.add(u64::MAX, 1).is_err());
     }
 
     // Test-ID: PR-TEST-0179
@@ -304,13 +319,15 @@ mod tests {
         }
         assert_eq!(budget.total(), 32 * GIB);
         let another = CaptureAcquisitionSource::Candidate(CaptureSourceId::from_operation_index(3));
+        budget.record(another, 1).unwrap();
+        assert_eq!(budget.total(), 32 * GIB + 1);
+        let overflow =
+            CaptureAcquisitionSource::Candidate(CaptureSourceId::from_operation_index(4));
         assert!(matches!(
-            budget.record(another, 1),
+            budget.record(overflow, u64::MAX),
             Err(AccountingError::Capability(_))
         ));
-        assert_eq!(budget.total(), 32 * GIB);
-        assert!(budget.record(another, u64::MAX).is_err());
-        assert_eq!(budget.total(), 32 * GIB);
+        assert_eq!(budget.total(), 32 * GIB + 1);
         assert_eq!(
             budget.record(managed, 1),
             Err(AccountingError::InconsistentSourceLength)
@@ -326,14 +343,10 @@ mod tests {
         for index in 0..5 {
             let blob = digest(index);
             stored.record(blob.clone(), 4 * GIB).unwrap();
-            if index < 4 {
-                capture.record(blob, 4 * GIB).unwrap();
-            } else {
-                assert!(capture.record(blob, 4 * GIB).is_err());
-            }
+            capture.record(blob, 4 * GIB).unwrap();
         }
         assert_eq!(stored.total(), 20 * GIB);
-        assert_eq!(capture.total(), 16 * GIB);
+        assert_eq!(capture.total(), 20 * GIB);
         let oversized_input = digest(8);
         stored.record(oversized_input.clone(), 600 * MIB).unwrap();
         let before = stored.total();
@@ -346,8 +359,8 @@ mod tests {
         for _ in 0..32 {
             restore.record_service_descriptor(GIB).unwrap();
         }
-        assert!(restore.record_service_descriptor(1).is_err());
-        assert_eq!(restore.total(), 32 * GIB);
+        restore.record_service_descriptor(1).unwrap();
+        assert_eq!(restore.total(), 32 * GIB + 1);
         assert!(restore.record_service_descriptor(u64::MAX).is_err());
     }
 
@@ -366,13 +379,17 @@ mod tests {
         let error = SnapshotCapability::StoredBlob.check(u64::MAX).unwrap_err();
         assert_eq!(
             error.to_string(),
-            "operation exceeds a fixed Snapshot build capability"
+            "operation exceeds a Snapshot structural or representation capability"
         );
         assert!(!format!("{error:?}").contains(&u64::MAX.to_string()));
         for index in 0..4 {
             stored.record(digest(index), 8 * GIB).unwrap();
         }
-        assert!(stored.record(digest(5), 1).is_err());
-        assert_eq!(stored.total(), 32 * GIB);
+        stored.record(digest(5), 1).unwrap();
+        assert_eq!(stored.total(), 32 * GIB + 1);
+        stored.record(digest(6), i64::MAX as u64).unwrap();
+        let before = stored.total();
+        assert!(stored.record(digest(7), i64::MAX as u64).is_err());
+        assert_eq!(stored.total(), before);
     }
 }

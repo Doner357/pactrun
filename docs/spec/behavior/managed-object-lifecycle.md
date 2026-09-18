@@ -35,7 +35,7 @@ permitting internal space reuse, not guaranteed file shrinkage or secure erasure
 No deletion cascades to an independent Snapshot or service-owned data.
 
 **Verification: PR-TEST-0450, PR-TEST-0451, PR-TEST-0458, PR-TEST-0459,
-PR-TEST-0460, PR-TEST-0462, PR-TEST-0465, PR-TEST-0466, PR-TEST-0469, PR-TEST-0470, PR-TEST-0472.**
+PR-TEST-0460, PR-TEST-0462, PR-TEST-0465, PR-TEST-0466, PR-TEST-0469, PR-TEST-0470, PR-TEST-0472, PR-TEST-0482, PR-TEST-0484.**
 
 ### PR-REQ-0342 - Sensitive Artifact delivery
 
@@ -68,7 +68,7 @@ read snapshot when another process commits deletion.
 
 GC is explicit and separate from logical deletion. It MUST NOT expire objects or
 remove service-owned state, including abandoned allocations. Only verified
-Pactrun-owned runtime blobs unreachable from managed objects, accepted Runs,
+Pactrun-owned immutable runtime, Snapshot and restored Input blobs unreachable from managed objects, accepted Runs,
 checkpoints and recovery obligations are eligible. Shared references protect bytes.
 Both execution and preview require an existing exact current reference catalog;
 GC MUST NOT bootstrap a missing or pristine database and then treat its empty
@@ -114,7 +114,7 @@ unsupported entries and failed qualifications/removals. Failed removals may
 already be absent when a durability barrier failed; retry freshly observes them.
 No count claims guaranteed filesystem free-space growth.
 
-**Verification: PR-TEST-0457, PR-TEST-0461, PR-TEST-0463, PR-TEST-0464, PR-TEST-0467, PR-TEST-0469, PR-TEST-0471, PR-TEST-0474, PR-TEST-0475.**
+**Verification: PR-TEST-0457, PR-TEST-0461, PR-TEST-0463, PR-TEST-0464, PR-TEST-0467, PR-TEST-0469, PR-TEST-0471, PR-TEST-0474, PR-TEST-0475, PR-TEST-0484.**
 
 ### PR-REQ-0344 - Lifecycle command boundary
 

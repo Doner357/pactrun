@@ -50,6 +50,7 @@ Usage:\n\
   pactrun pack generate-id\n\
   pactrun pack install <source-root>\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
+  pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]\n\
   pactrun instance list\n\
   pactrun instance show <instance>\n\
   pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]\n\
@@ -95,6 +96,7 @@ Usage:\n\
 Snapshot execution options: --param, --param-file, --param-stdin, --plan, --authorize-recovery-override,\n\
   --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
 Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
+Create-and-restore accepts Snapshot execution options except --plan; initial Input options are mutually exclusive.\n\
 Snapshot bundles use filesystem paths only, never stdin/stdout.\n\
 Migration supports declared paths, Hook edges and explicit per-target Input files.\n\
 Retirement execution options: --authorize-recovery-override, --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
@@ -109,6 +111,7 @@ enum Command {
     ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
     Snapshot(snapshots::SnapshotCommand),
+    CreateAndRestore(snapshots::CreateRestoreCommand),
     Help,
     Version,
     GeneratePackageId,
@@ -198,6 +201,7 @@ enum ParameterSourceSpec {
     Stdin(ParameterIdentity),
 }
 
+#[derive(Default)]
 struct ExecutionOptions {
     parameters: Vec<ParameterSourceSpec>,
     plan: bool,
@@ -545,6 +549,9 @@ fn parse_instance(parser: &mut Parser) -> Result<Command, CliError> {
         "create" => {
             let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
             let mut revision = None;
+            let mut snapshot = None;
+            let mut restore_options = ExecutionOptions::default();
+            let mut restore_option_seen = false;
             let mut inputs = Vec::new();
             let mut stdin_seen = false;
             while let Some(argument) = parser.next().map_err(lex_error)? {
@@ -572,8 +579,44 @@ fn parse_instance(parser: &mut Parser) -> Result<Command, CliError> {
                         let value = value_string(parser, "stdin Input identity")?;
                         inputs.push(InitialInputSpec::Stdin(parse_input_id(&value)?));
                     }
+                    Arg::Long("restore-from") => set_once(
+                        &mut snapshot,
+                        value_string(parser, "SnapshotId")?
+                            .parse()
+                            .map_err(CliError::usage)?,
+                        "--restore-from",
+                    )?,
+                    Arg::Long(option) => {
+                        let option = option.to_owned();
+                        parse_execution_option(
+                            &option,
+                            parser,
+                            "execution-timeout-ms",
+                            &mut restore_options,
+                        )?;
+                        restore_option_seen = true;
+                    }
                     argument => return Err(CliError::usage(argument.unexpected().to_string())),
                 }
+            }
+            if let Some(snapshot) = snapshot {
+                if !inputs.is_empty() || restore_options.plan {
+                    return Err(CliError::usage(
+                        "--restore-from cannot be combined with initial Input options or --plan",
+                    ));
+                }
+                validate_parameter_source_shape(&restore_options.parameters)?;
+                return Ok(Command::CreateAndRestore(snapshots::CreateRestoreCommand {
+                    name,
+                    revision: revision.ok_or_else(|| CliError::usage("missing --revision"))?,
+                    snapshot,
+                    options: restore_options,
+                }));
+            }
+            if restore_option_seen {
+                return Err(CliError::usage(
+                    "Restore execution options require --restore-from",
+                ));
             }
             let mut input_ids = BTreeSet::new();
             for input in &inputs {
@@ -745,76 +788,84 @@ fn parse_execution_options(
     parser: &mut Parser,
     timeout_option: &'static str,
 ) -> Result<ExecutionOptions, CliError> {
-    let mut parameters = Vec::new();
-    let mut plan = false;
-    let mut recovery_override = false;
-    let mut startup_timeout_ms = None;
-    let mut action_timeout_ms = None;
-    let mut termination_grace_ms = None;
+    let mut options = ExecutionOptions::default();
     while let Some(argument) = parser.next().map_err(lex_error)? {
-        match argument {
-            Arg::Long("param") => {
-                let value = required_parser_value(parser, "parameter assignment")?;
-                let (id, text) = split_parameter_assignment(value, "--param", true)?;
-                parameters.push(ParameterSourceSpec::Text(
-                    parse_parameter_id(&id)?,
-                    os_string(text, "parameter text")?,
-                ));
-            }
-            Arg::Long("param-file") => {
-                let value = required_parser_value(parser, "parameter file assignment")?;
-                let (id, path) = split_parameter_assignment(value, "--param-file", false)?;
-                parameters.push(ParameterSourceSpec::File(
-                    parse_parameter_id(&id)?,
-                    PathBuf::from(path),
-                ));
-            }
-            Arg::Long("param-stdin") => {
-                parameters.push(ParameterSourceSpec::Stdin(parse_parameter_id(
+        let option = match argument {
+            Arg::Long(option) => option.to_owned(),
+            argument => return Err(CliError::usage(argument.unexpected().to_string())),
+        };
+        parse_execution_option(&option, parser, timeout_option, &mut options)?;
+    }
+    validate_parameter_source_shape(&options.parameters)?;
+    Ok(options)
+}
+
+fn parse_execution_option(
+    argument: &str,
+    parser: &mut Parser,
+    timeout_option: &'static str,
+    options: &mut ExecutionOptions,
+) -> Result<(), CliError> {
+    match argument {
+        "param" => {
+            let value = required_parser_value(parser, "parameter assignment")?;
+            let (id, text) = split_parameter_assignment(value, "--param", true)?;
+            options.parameters.push(ParameterSourceSpec::Text(
+                parse_parameter_id(&id)?,
+                os_string(text, "parameter text")?,
+            ));
+        }
+        "param-file" => {
+            let value = required_parser_value(parser, "parameter file assignment")?;
+            let (id, path) = split_parameter_assignment(value, "--param-file", false)?;
+            options.parameters.push(ParameterSourceSpec::File(
+                parse_parameter_id(&id)?,
+                PathBuf::from(path),
+            ));
+        }
+        "param-stdin" => {
+            options
+                .parameters
+                .push(ParameterSourceSpec::Stdin(parse_parameter_id(
                     &value_string(parser, "stdin parameter identity")?,
                 )?));
-            }
-            Arg::Long("plan") if !plan => plan = true,
-            Arg::Long("plan") => return Err(CliError::usage("duplicate --plan")),
-            Arg::Long("authorize-recovery-override") if !recovery_override => {
-                recovery_override = true;
-            }
-            Arg::Long("authorize-recovery-override") => {
-                return Err(CliError::usage("duplicate --authorize-recovery-override"));
-            }
-            Arg::Long("startup-timeout-ms") => {
-                set_once(
-                    &mut startup_timeout_ms,
-                    parse_timeout_ms(value_string(parser, "startup timeout")?)?,
-                    "--startup-timeout-ms",
-                )?;
-            }
-            Arg::Long(option) if option == timeout_option => {
-                set_once(
-                    &mut action_timeout_ms,
-                    parse_timeout_ms(value_string(parser, "Action timeout")?)?,
-                    timeout_option,
-                )?;
-            }
-            Arg::Long("termination-grace-ms") => {
-                set_once(
-                    &mut termination_grace_ms,
-                    parse_timeout_ms(value_string(parser, "termination grace")?)?,
-                    "--termination-grace-ms",
-                )?;
-            }
-            argument => return Err(CliError::usage(argument.unexpected().to_string())),
+        }
+        "plan" if !options.plan => options.plan = true,
+        "plan" => return Err(CliError::usage("duplicate --plan")),
+        "authorize-recovery-override" if !options.recovery_override => {
+            options.recovery_override = true;
+        }
+        "authorize-recovery-override" => {
+            return Err(CliError::usage("duplicate --authorize-recovery-override"));
+        }
+        "startup-timeout-ms" => {
+            set_once(
+                &mut options.startup_timeout_ms,
+                parse_timeout_ms(value_string(parser, "startup timeout")?)?,
+                "--startup-timeout-ms",
+            )?;
+        }
+        option if option == timeout_option => {
+            set_once(
+                &mut options.action_timeout_ms,
+                parse_timeout_ms(value_string(parser, "Action timeout")?)?,
+                timeout_option,
+            )?;
+        }
+        "termination-grace-ms" => {
+            set_once(
+                &mut options.termination_grace_ms,
+                parse_timeout_ms(value_string(parser, "termination grace")?)?,
+                "--termination-grace-ms",
+            )?;
+        }
+        argument => {
+            return Err(CliError::usage(format!(
+                "unsupported execution option --{argument}"
+            )));
         }
     }
-    validate_parameter_source_shape(&parameters)?;
-    Ok(ExecutionOptions {
-        parameters,
-        plan,
-        recovery_override,
-        startup_timeout_ms,
-        action_timeout_ms,
-        termination_grace_ms,
-    })
+    Ok(())
 }
 
 fn parse_run(parser: &mut Parser) -> Result<Command, CliError> {
@@ -882,6 +933,16 @@ fn execute(
     }
     if let Command::Snapshot(command) = command {
         return snapshots::execute(command, &storage_root, stdin, stdout, stderr, cancellation);
+    }
+    if let Command::CreateAndRestore(command) = command {
+        return snapshots::create_and_restore(
+            command,
+            &storage_root,
+            stdin,
+            stdout,
+            stderr,
+            cancellation,
+        );
     }
     if let Command::ServiceStorage(command) = command {
         return service_storage::execute(command, &storage_root, stdout);
@@ -1260,6 +1321,7 @@ fn execute(
         | Command::Lifecycle(_)
         | Command::Migration(_)
         | Command::Snapshot(_)
+        | Command::CreateAndRestore(_)
         | Command::Retirement(_)
         | Command::ServiceStorage(_) => {
             unreachable!()
@@ -2259,6 +2321,8 @@ fn publish_output_file_with_fault(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    include!("cli/create_restore_tests.rs");
 
     struct FailingCancellationHandler;
 

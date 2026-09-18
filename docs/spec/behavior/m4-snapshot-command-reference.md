@@ -4,6 +4,9 @@ title: M4 Snapshot Commands
 
 # M4 Snapshot Commands
 
+The create-and-restore addition below was approved on 2026-09-17. Its delivery
+is tracked separately from the completed M4 command surfaces.
+
 **Status: Approved normative CLI, implemented and integrated into develop.
 Verification and milestone integration are recorded in the M4 execution record.**
 
@@ -34,7 +37,7 @@ pactrun snapshot export <snapshot-id> --output <bundle-path> --authorize-sensiti
 pactrun storage upgrade
 ```
 
-Only capture/restore accept execution-options:
+Among Snapshot subcommands, only capture/restore accept execution-options:
 
 ```text
 [--param <id>=<text>]...
@@ -110,3 +113,31 @@ and content verification from current verification. Historical producer-relative
 verification was not persisted by V5 and is explicitly shown as not_recorded,
 not inferred from the producer's current availability. Restore plan eligibility
 is advisory Compiler qualification, not Admission or a writable reservation.
+
+### PR-REQ-0346 - Create an Instance and Restore its Snapshot
+
+The CLI MUST accept `instance create <name> --revision <reference>
+--restore-from <snapshot-id>` with the existing Restore execution options except
+`--plan`. Revision is required and MUST exactly match the Snapshot producer.
+Initial `--input-file` and `--input-stdin` options MUST NOT be combined with this
+form. Restore-only options without `--restore-from` MUST be rejected. Existing
+parameter typing, source protection, redaction, timeouts, cancellation and
+interactive-stdin restrictions apply without new defaults.
+
+Before Create, read-only preflight MUST check the Snapshot, exact installed
+Revision, Restore declaration and supplied parameters. It creates no Instance,
+Run, pin or reservation and cannot substitute for formal Restore Admission.
+Parameter sources are acquired once; stdin MUST NOT be reread after Create.
+Restore MUST target the exact InstanceId returned by Create, never a later
+name resolution. Snapshot staged bindings determine Restore readiness.
+
+Create failure MUST NOT start Restore. After Create succeeds, Restore refusal,
+failure or cancellation MUST preserve the created Instance and report partial
+completion, its identity, current state when available, and any accepted RunId.
+Only durable Restore success returns 0; syntax failure returns 2 and operation
+failure or partial completion returns 1. Diagnostic output MUST remain safe.
+The operations are not one transaction: process loss between them can leave an
+Instance without a Restore Run. There is no automatic deletion, resume,
+compensation, installation, import, Migration or compatibility relaxation.
+
+**Verification: PR-TEST-0476, PR-TEST-0477, PR-TEST-0478.**

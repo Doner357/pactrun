@@ -16,6 +16,45 @@ fn session() -> (TempDir, StagingSession) {
     let session = StagingSession::prepare(temp.path()).unwrap();
     (temp, session)
 }
+
+// Test-ID: PR-TEST-0481
+// Verifies: PR-REQ-0292, PR-REQ-0293
+#[test]
+fn snapshot_staging_and_copy_preserve_resource_errors_and_do_not_publish() {
+    struct FailingReader(bool);
+    impl Read for FailingReader {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            if self.0 {
+                return Err(io::ErrorKind::PermissionDenied.into());
+            }
+            self.0 = true;
+            bytes[..16].fill(7);
+            Ok(16)
+        }
+    }
+    struct Full;
+    impl Write for Full {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::ErrorKind::StorageFull.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let (_temp, staging) = session();
+    assert!(matches!(
+        stage_bundle(&staging, &mut FailingReader(false)),
+        Err(BundleError::Io(io::ErrorKind::PermissionDenied))
+    ));
+    assert!(matches!(
+        copy_bounded(
+            &mut Cursor::new([1; 1024]),
+            &mut Full,
+            SnapshotCapability::BundleBytes
+        ),
+        Err(BundleError::Io(io::ErrorKind::StorageFull))
+    ));
+}
 fn fixture(version: u32, name: &str) -> serde_json::Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
         "tests/vectors/snapshot_integrity_format_v{version}/vectors.json"
@@ -325,7 +364,7 @@ fn parser_limits_and_data_descriptors_do_not_require_canonical_archive_bytes() {
     for extra in [0, 1] {
         let mut envelope = base.clone();
         envelope.resize(
-            SnapshotCapability::BundleEnvelope.maximum() as usize + extra,
+            SnapshotCapability::BundleEnvelope.maximum().unwrap() as usize + extra,
             b' ',
         );
         let mut writer = ZipWriter::new_stream(Vec::new());

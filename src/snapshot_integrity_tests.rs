@@ -362,7 +362,7 @@ impl Read for FailingRead {
 // Verifies: PR-REQ-0293, PR-REQ-0295
 #[test]
 fn parser_limits_are_capabilities_while_exact_numbers_and_unicode_remain_format_rules() {
-    let over = vec![b' '; SnapshotCapability::RawManifest.maximum() as usize + 1];
+    let over = vec![b' '; SnapshotCapability::RawManifest.maximum().unwrap() as usize + 1];
     assert_eq!(
         decode_snapshot_manifest(SnapshotIntegrityVersion::V2, &over, None).unwrap_err(),
         SnapshotCodecError::Capability(CapabilityRefusal {

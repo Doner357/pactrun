@@ -294,9 +294,9 @@ pub(super) fn execute_snapshot_with_risk(
         return run;
     }
     let materialized = match if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
-        MaterializedAction::create_restore(persistence, staging, run, claim.plan())
+        MaterializedAction::create_restore(persistence, staging, run, claim.plan(), &cancellation)
     } else {
-        MaterializedAction::create_capture(persistence, staging, run, claim.plan())
+        MaterializedAction::create_capture(persistence, staging, run, claim.plan(), &cancellation)
     } {
         Ok(value) => value,
         Err(error) => {

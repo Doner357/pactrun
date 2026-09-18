@@ -179,7 +179,11 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
     }
   }
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
-  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 9;/);
+  assert.match(current, /pub\(super\) const SCHEMA_V9_VERSION: i64 = 9;/);
+  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 10;/);
+  const capacity = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v10.md')[1];
+  assert.match(capacity.replace(/\s+/g, ' '), /Only explicit upgrade from exact V9 or the previously supported exact V8/);
+  assert.match(capacity, /Legacy rows and bytes remain inline without a bulk/);
   const lifecycle = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v9.md')[1];
   assert.match(lifecycle, /Only explicit exact-V8 to V9 upgrade is supported/);
   const m7 = docs.find(([name]) => name === 'development/m7-implementation-status.md')[1];

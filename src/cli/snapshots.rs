@@ -24,6 +24,94 @@ pub(super) enum SnapshotCommand {
     },
 }
 
+pub(super) struct CreateRestoreCommand {
+    pub(super) name: InstanceName,
+    pub(super) revision: RevisionReference,
+    pub(super) snapshot: SnapshotId,
+    pub(super) options: ExecutionOptions,
+}
+
+pub(super) fn create_and_restore(
+    command: CreateRestoreCommand,
+    root: &Path,
+    stdin: &mut dyn Read,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    cancellation: &ActionCancellation,
+) -> Result<(), CliError> {
+    let CreateRestoreCommand {
+        name,
+        revision,
+        snapshot,
+        options,
+    } = command;
+    policy(&options)?;
+    // Read parameter sources once, before Create; stdin cannot be replayed.
+    let (revision, parameters) = {
+        let app = PactrunApplication::open_read_only(root).map_err(safe_error)?;
+        let revision = resolve_revision(&app, revision)?;
+        let (declarations, hook) = app
+            .create_restore_definition(&revision, snapshot)
+            .map_err(safe_error)?;
+        let parameters =
+            read_snapshot_parameters(&declarations, &hook, &options, stdin, cancellation)?;
+        crate::domain::bind_operation_parameters(&declarations, parameters.clone()).map_err(
+            |_| CliError::operation("Restore parameters do not satisfy the authored declarations"),
+        )?;
+        (revision, parameters)
+    };
+    if cancellation.is_requested() {
+        return Err(CliError::operation(
+            "create-and-restore cancelled before Instance creation",
+        ));
+    }
+    let app = PactrunApplication::open(root).map_err(safe_error)?;
+    let created = app
+        .create_instance(name, revision, Vec::new())
+        .map_err(safe_error)?;
+    let mut run = None;
+    let result = (|| {
+        // A reporting failure must also preserve and identify the created object.
+        write_instance(stdout, &created)?;
+        execute_intent(
+            &app,
+            SnapshotIntent {
+                instance: created.id,
+                operation: SnapshotOperation::Restore(snapshot),
+                parameters,
+            },
+            options,
+            ExecutionIo {
+                stdin,
+                stdout,
+                stderr,
+            },
+            cancellation,
+            &mut run,
+        )
+    })();
+    if let Err(error) = result {
+        let _ = writeln!(
+            stderr,
+            "partial_completion: Instance created; Restore did not report durable success\ninstance_id: {}",
+            created.id
+        );
+        if let Some(run) = run {
+            let _ = writeln!(stderr, "restore_run: {run}");
+        }
+        if let Ok(Some(current)) = app.load_instance(created.id) {
+            let _ = write_instance(stderr, &current);
+        }
+        return Err(CliError::operation(format!(
+            "Instance {} was created; Restore incomplete{}: {}",
+            created.id,
+            run.map(|id| format!(" (Run {id})")).unwrap_or_default(),
+            error.message,
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn parse(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
     parse_inner(parser).map_err(|_|CliError::usage("invalid Snapshot command or arguments; use the documented snapshot forms and --execution-timeout-ms"))
 }
@@ -246,15 +334,33 @@ fn execute_managed(
     io: ExecutionIo<'_>,
     cancellation: &ActionCancellation,
 ) -> Result<(), CliError> {
-    let ExecutionIo {
-        stdin,
-        stdout,
-        stderr,
-    } = io;
-    let policy = policy(&options)?;
+    policy(&options)?;
     let (instance, declarations, hook) = app
         .snapshot_definition(name, operation)
         .map_err(safe_error)?;
+    let parameters =
+        read_snapshot_parameters(&declarations, &hook, &options, io.stdin, cancellation)?;
+    execute_intent(
+        app,
+        SnapshotIntent {
+            instance,
+            operation,
+            parameters,
+        },
+        options,
+        io,
+        cancellation,
+        &mut None,
+    )
+}
+
+fn read_snapshot_parameters(
+    declarations: &[crate::domain::ParameterV1],
+    hook: &crate::domain::HookV1,
+    options: &ExecutionOptions,
+    stdin: &mut dyn Read,
+    cancellation: &ActionCancellation,
+) -> Result<Vec<RawParameterInput>, CliError> {
     for source in &options.parameters {
         let id = match source {
             ParameterSourceSpec::Text(id, _)
@@ -276,20 +382,32 @@ fn execute_managed(
             "interactive Snapshot Hooks do not accept --param-stdin",
         ));
     }
-    let parameters =
-        read_parameter_sources(&options.parameters, stdin, cancellation).map_err(|_| {
-            CliError::operation(
-                "Snapshot parameter source could not be read as UTF-8 or acquisition was cancelled",
-            )
-        })?;
+    read_parameter_sources(&options.parameters, stdin, cancellation).map_err(|_| {
+        CliError::operation(
+            "Snapshot parameter source could not be read as UTF-8 or acquisition was cancelled",
+        )
+    })
+}
+
+fn execute_intent(
+    app: &PactrunApplication,
+    intent: SnapshotIntent,
+    options: ExecutionOptions,
+    io: ExecutionIo<'_>,
+    cancellation: &ActionCancellation,
+    accepted_run: &mut Option<RunId>,
+) -> Result<(), CliError> {
+    let ExecutionIo { stdout, stderr, .. } = io;
+    let policy = policy(&options)?;
+    let operation = intent.operation;
+    let parameter_stdin = options
+        .parameters
+        .iter()
+        .any(|p| matches!(p, ParameterSourceSpec::Stdin(_)));
     let plan = crate::workflow::compile_snapshot(
         app,
         &crate::workflow::PlatformHostLauncherLookup,
-        &SnapshotIntent {
-            instance,
-            operation,
-            parameters,
-        },
+        &intent,
         &launcher_search_directories(),
     )
     .map_err(safe_error)?;
@@ -318,7 +436,13 @@ fn execute_managed(
             },
             cancellation.clone(),
         )
-        .map_err(safe_error)?;
+        .map_err(|error| {
+            if let ApplicationError::Execution(ExecutorError::Persistence { run, .. }) = &error {
+                *accepted_run = *run;
+            }
+            safe_error(error)
+        })?;
+    *accepted_run = Some(run);
     loop {
         if let Err(error) = app.execute_snapshot_if_ready(run, policy) {
             retry_or_fail(error, run, stderr)?;
@@ -547,7 +671,7 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
             "stored Snapshot content or representation is corrupt; no repair was performed"
         }
         ApplicationError::Persistence(PersistenceError::UpgradeRequired) => {
-            "storage upgrade required; run pactrun storage upgrade with a supported exact V7 store"
+            "storage upgrade required; run pactrun storage upgrade with a supported exact V8 or V9 store"
         }
         ApplicationError::Persistence(
             PersistenceError::SchemaMismatch(_) | PersistenceError::DatabaseOwnership(_),

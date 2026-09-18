@@ -77,9 +77,9 @@ M4 accepts explicit filesystem paths only, not '-', stdin/stdout, force,
 overwrite, or pipe retry/resume. Failed pre-publication work leaves no partial
 authoritative Snapshot or final output name. Cleanup is best-effort and makes
 no secure-erasure claim. Actual host resource failures remain distinct from
-the [fixed parser/capability limits](../behavior/m4-runtime-capabilities.md).
+the [structural and representation limits](../behavior/m4-runtime-capabilities.md).
 
-**Verification: PR-TEST-0206, PR-TEST-0207, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0211, PR-TEST-0212, PR-TEST-0213, PR-TEST-0214, PR-TEST-0215, PR-TEST-0216, PR-TEST-0217, PR-TEST-0218, PR-TEST-0219, PR-TEST-0276.**
+**Verification: PR-TEST-0206, PR-TEST-0207, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0211, PR-TEST-0212, PR-TEST-0213, PR-TEST-0214, PR-TEST-0215, PR-TEST-0216, PR-TEST-0217, PR-TEST-0218, PR-TEST-0219, PR-TEST-0276, PR-TEST-0479, PR-TEST-0480, PR-TEST-0481.**
 
 Implementation note: bounded preflight checks the original local/central
 records and exact archive extents before the ZIP adapter allocates metadata.

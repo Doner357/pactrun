@@ -118,6 +118,6 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     assert_eq!(
         db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        9
+        10
     );
 }

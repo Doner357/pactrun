@@ -59,7 +59,9 @@ impl From<AccountingError> for CaptureError {
 impl CaptureError {
     pub(super) fn message(&self) -> &'static str {
         match self {
-            Self::Capability(_) => "Snapshot Capture exceeds a fixed build capability",
+            Self::Capability(_) => {
+                "Snapshot Capture exceeds a structural or representation capability"
+            }
             Self::Host(_) => "Snapshot Capture acquisition encountered a host I/O failure",
             Self::Persistence(_) => "Snapshot Capture could not read its authoritative pinned data",
             Self::Invalid(reason) => reason,
@@ -160,6 +162,7 @@ impl CapturePreparation {
         run: RunId,
         plan: &SnapshotExecutionPlan,
         candidate: &std::path::Path,
+        cancellation: &ActionCancellation,
     ) -> Result<Self, CaptureError> {
         let ManagedRunIdentity::Capture { revision } = plan.operation() else {
             return Err(CaptureError::Invalid("Run is not Snapshot Capture"));
@@ -202,7 +205,14 @@ impl CapturePreparation {
                 length,
             )?;
             let (digest, bytes) = stage_with(staging, length, |out| {
-                p.stream_admitted_payload(run, &binding.input, out)?;
+                p.stream_admitted_payload(
+                    run,
+                    &binding.input,
+                    &mut super::materialize::CancellableWriter {
+                        destination: out,
+                        cancellation,
+                    },
+                )?;
                 Ok(())
             })?;
             prepared.storage.record(digest.clone(), length)?;
@@ -220,10 +230,17 @@ impl CapturePreparation {
         &self,
         binding: &PinnedInputBinding,
         destination: &mut File,
+        cancellation: &ActionCancellation,
     ) -> Result<(), CaptureError> {
         let mut reader = self.blobs[&self.managed[&binding.payload.expect("bound active pin")]]
             .try_clone_reader()?;
-        io::copy(&mut reader, destination)?;
+        io::copy(
+            &mut reader,
+            &mut super::materialize::CancellableWriter {
+                destination,
+                cancellation,
+            },
+        )?;
         Ok(())
     }
     fn complete(
@@ -561,7 +578,8 @@ pub(super) fn advance(
         Err(PersistenceError::SnapshotCodec(
             crate::snapshot_integrity::SnapshotCodecError::Capability(_),
         )) => {
-            state.failure = Some("Snapshot Capture exceeds a fixed build capability");
+            state.failure =
+                Some("Snapshot Capture exceeds a structural or representation capability");
             state.prepared = None;
             Ok(false)
         }
