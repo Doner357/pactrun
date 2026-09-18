@@ -584,7 +584,10 @@ impl PactrunPersistence {
                 }
                 if index > 0 {
                     let compiled = &plan.edges()[index - 1];
-                    if let Some(CompiledHookLaunch::Interpreter { launcher, .. }) = &compiled.launch
+                    if let Some(launcher) = compiled
+                        .launch
+                        .as_ref()
+                        .and_then(CompiledHookLaunch::launcher)
                         && launcher_check(launcher).is_err()
                     {
                         return Ok(Some(AdmissionRefusal::PlanInvalidated(

@@ -142,6 +142,7 @@ pub(crate) fn parse_pack_source_yaml(
     match capture_numeric_token(text, &version)?.as_str() {
         "1" => parse_pack_source_yaml_v1(source).map(Into::into),
         "2" => parse_pack_source_yaml_v2(source).map(Into::into),
+        "3" => v2::parse_service_source(source, 3),
         _ => Err(AuthoringError::new("unsupported source_format")),
     }
 }

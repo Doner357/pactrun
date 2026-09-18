@@ -13,6 +13,22 @@ pub(crate) struct NormalizedPackSourceCandidateV2 {
 pub(crate) fn parse_pack_source_yaml_v2(
     bytes: &[u8],
 ) -> Result<NormalizedPackSourceCandidateV2, AuthoringError> {
+    let source = parse_service_source(bytes, 2)?;
+    let crate::domain::RevisionCore::V2(revision) = source.revision else {
+        unreachable!("explicit V2 source selection")
+    };
+    Ok(NormalizedPackSourceCandidateV2 {
+        package_id: source.package_id,
+        revision: *revision,
+        runtime_sources: source.runtime_sources,
+        portable_metadata: source.portable_metadata,
+    })
+}
+
+pub(super) fn parse_service_source(
+    bytes: &[u8],
+    source_version: u8,
+) -> Result<VersionedPackSourceCandidate, AuthoringError> {
     let text = std::str::from_utf8(bytes)
         .map_err(|_| AuthoringError::new("pactrun.yaml must be valid UTF-8"))?;
     reject_forbidden_tokens(text)?;
@@ -23,15 +39,24 @@ pub(crate) fn parse_pack_source_yaml_v2(
         "PackSourceYamlV2",
     )?;
     let version = take_scalar(&mut root, "source_format")?;
-    if version.style != TScalarStyle::Plain || capture_numeric_token(text, &version)? != "2" {
-        return Err(AuthoringError::new("source_format must use raw token 2"));
+    if version.style != TScalarStyle::Plain
+        || capture_numeric_token(text, &version)? != source_version.to_string()
+    {
+        return Err(AuthoringError::new(
+            "source_format must use the selected raw integer token",
+        ));
     }
     let package_id = PackageId::from_str(&string_scalar(take(&mut root, "package_id")?)?)
         .map_err(AuthoringError::new)?;
-    let json = revision_v2_json(text, take(&mut root, "revision")?)?;
+    let mut json = revision_v2_json(text, take(&mut root, "revision")?)?;
+    json["format_version"] = source_version.into();
     let bytes = serde_json::to_vec(&json).map_err(|e| AuthoringError::new(e.to_string()))?;
-    let revision = project_revision_core_source_v2(&bytes)
-        .map_err(|e| AuthoringError::new(format!("project Core V2: {e}")))?;
+    let revision: crate::domain::RevisionCore = match source_version {
+        2 => project_revision_core_source_v2(&bytes).map(Into::into),
+        3 => crate::revision_core_v3::project(&bytes).map(Into::into),
+        _ => unreachable!("closed source dispatch"),
+    }
+    .map_err(|e| AuthoringError::new(format!("project Core: {e}")))?;
     let runtime_sources = runtime_sources(take(&mut root, "runtime_content")?)?;
     let portable_metadata = root
         .remove("portable_metadata")
@@ -45,7 +70,7 @@ pub(crate) fn parse_pack_source_yaml_v2(
             ));
         }
     }
-    Ok(NormalizedPackSourceCandidateV2 {
+    Ok(VersionedPackSourceCandidate {
         package_id,
         revision,
         runtime_sources,
@@ -146,6 +171,40 @@ fn revision_v2_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
 mod tests {
     use super::*;
     use crate::{domain::*, revision_core_v2::encode_canonical_revision_core_v2};
+
+    // Test-ID: PR-TEST-0494
+    // Verifies: PR-REQ-0350
+    #[test]
+    fn explicit_yaml_v3_preserves_closed_projection_and_rejects_implicit_fallback() {
+        let text = "source_format: 3\npackage_id: 00000000000000000000000000000065\nrevision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: script}\n        args: []\n        io: {terminal: none}\nruntime_content:\n  files: [{id: script, source: script.sh, path: script.sh, executable: false}]\n";
+        let candidate = super::super::parse_pack_source_yaml(text.as_bytes()).unwrap();
+        assert_eq!(candidate.revision.version(), 3);
+        assert!(matches!(
+            candidate.revision.actions()[0].hook.launch,
+            HookLaunchV1::ShellLoader {
+                shell: ShellKind::Sh,
+                ..
+            }
+        ));
+        for token in ["1", "2", "3.0", "'3'", "4"] {
+            assert!(
+                super::super::parse_pack_source_yaml(
+                    text.replace("source_format: 3", &format!("source_format: {token}"))
+                        .as_bytes()
+                )
+                .is_err(),
+                "{token}"
+            );
+        }
+        for changed in [
+            text.replace("shell: sh", "shell: unknown"),
+            text.replace("shell: sh", "shell: sh, shell: bash"),
+            text.replace("script: script", "script: script, interpreter_args: []"),
+            text.replace("shell: sh", "shell: null"),
+        ] {
+            assert!(super::super::parse_pack_source_yaml(changed.as_bytes()).is_err());
+        }
+    }
     const BASIC: &str = "source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
 
     // Test-ID: PR-TEST-0336

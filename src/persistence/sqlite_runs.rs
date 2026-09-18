@@ -1491,7 +1491,7 @@ fn admission_decision(
             Err(error) => return Err(PersistenceError::RuntimeContent(error)),
         }
     }
-    if let CompiledHookLaunch::Interpreter { launcher, .. } = facts.launch
+    if let Some(launcher) = facts.launch.launcher()
         && let Err(reason) = launcher_check(launcher)
     {
         return Ok(Err(AdmissionRefusal::PlanInvalidated(format!(
@@ -1566,30 +1566,32 @@ fn validate_snapshot_plan_declaration(
             "Snapshot runtime closure changed or is incomplete".to_owned(),
         ));
     }
-    let matches = match (&hook.launch, plan.launch()) {
-        (HookLaunchV1::Direct { executable: id }, CompiledHookLaunch::Direct { executable }) => {
-            files
+    let matches = plan.launch().matches_shell(&hook.launch, files)
+        || match (&hook.launch, plan.launch()) {
+            (
+                HookLaunchV1::Direct { executable: id },
+                CompiledHookLaunch::Direct { executable },
+            ) => files
                 .iter()
-                .any(|file| &file.id == id && file == executable)
-        }
-        (
-            HookLaunchV1::Interpreter {
-                command,
-                interpreter_args,
-                script: id,
-            },
-            CompiledHookLaunch::Interpreter {
-                launcher,
-                interpreter_args: args,
-                script,
-            },
-        ) => {
-            command == &launcher.command
-                && interpreter_args == args
-                && files.iter().any(|file| &file.id == id && file == script)
-        }
-        _ => false,
-    };
+                .any(|file| &file.id == id && file == executable),
+            (
+                HookLaunchV1::Interpreter {
+                    command,
+                    interpreter_args,
+                    script: id,
+                },
+                CompiledHookLaunch::Interpreter {
+                    launcher,
+                    interpreter_args: args,
+                    script,
+                },
+            ) => {
+                command == &launcher.command
+                    && interpreter_args == args
+                    && files.iter().any(|file| &file.id == id && file == script)
+            }
+            _ => false,
+        };
     Ok((!matches).then(|| "Snapshot launch does not match its declared runtime".to_owned()))
 }
 
@@ -1621,30 +1623,32 @@ fn validate_capture_facts(
             "Capture runtime closure changed or is incomplete".to_owned(),
         ));
     }
-    let launch_matches = match (&capture.hook.launch, facts.launch) {
-        (HookLaunchV1::Direct { executable: id }, CompiledHookLaunch::Direct { executable }) => {
-            files
+    let launch_matches = facts.launch.matches_shell(&capture.hook.launch, files)
+        || match (&capture.hook.launch, facts.launch) {
+            (
+                HookLaunchV1::Direct { executable: id },
+                CompiledHookLaunch::Direct { executable },
+            ) => files
                 .iter()
-                .any(|file| &file.id == id && file == executable)
-        }
-        (
-            HookLaunchV1::Interpreter {
-                command,
-                interpreter_args,
-                script: id,
-            },
-            CompiledHookLaunch::Interpreter {
-                launcher,
-                interpreter_args: actual_args,
-                script,
-            },
-        ) => {
-            command == &launcher.command
-                && interpreter_args == actual_args
-                && files.iter().any(|file| &file.id == id && file == script)
-        }
-        _ => false,
-    };
+                .any(|file| &file.id == id && file == executable),
+            (
+                HookLaunchV1::Interpreter {
+                    command,
+                    interpreter_args,
+                    script: id,
+                },
+                CompiledHookLaunch::Interpreter {
+                    launcher,
+                    interpreter_args: actual_args,
+                    script,
+                },
+            ) => {
+                command == &launcher.command
+                    && interpreter_args == actual_args
+                    && files.iter().any(|file| &file.id == id && file == script)
+            }
+            _ => false,
+        };
     if !launch_matches || !matches!(capture.hook.protocol_version.get(), 1 | 2) {
         return Ok(Some(
             "Capture Hook launch or protocol is not supported by the exact compiled facts"

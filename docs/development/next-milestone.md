@@ -150,9 +150,11 @@ and merge. Snapshot Capacity and Restore Workflow is also implemented, verified
 and integrated into local develop after authorization on 2026-09-18; see the
 [implementation record](./snapshot-capacity-and-restore-status.md). Its V10
 adjustment, full CI and real beyond-ceiling round trips are complete.
-Shell Adapter / Loader is the next separately planned capability; its detailed
-design/implementation is not started by this closeout. Push, release and
-publication remain separately authorized.
+Shell Adapter / Loader is now [implemented and verified](./shell-adapter-loader-status.md)
+in the `feature/shell-adapter-loader` working tree, including the scoped full-CI
+and platform evidence, but is not committed or merged. Machine-readable CLI
+Output is the next separately planned capability; no implementation is started
+by this closeout. Push, release and publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from

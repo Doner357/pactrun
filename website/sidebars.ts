@@ -63,7 +63,12 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v9',
           'spec/persistence/persistence-schema-v10',
         ]},
-        {type: 'category', label: 'M6.5 Candidate Contracts', items: [
+          {type: 'category', label: 'Shell Adapter / Loader', items: [
+            'spec/contracts/revision-core-format-v3',
+            'spec/contracts/pack-source-yaml-v3',
+            'spec/contracts/shell-loader',
+          ]},
+          {type: 'category', label: 'M6.5 Candidate Contracts', items: [
           'spec/contracts/revision-core-format-v2',
           'spec/contracts/pack-source-yaml-v2',
           'spec/contracts/hook-protocol-v2',
@@ -83,7 +88,8 @@ const sidebars: SidebarsConfig = {
         'development/release-readiness',
         'development/product-completion-milestones',
         'development/managed-object-lifecycle-status',
-        'development/snapshot-capacity-and-restore-status',
+          'development/snapshot-capacity-and-restore-status',
+          'development/shell-adapter-loader-status',
         'development/implementation-guidance', 'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',
@@ -91,7 +97,9 @@ const sidebars: SidebarsConfig = {
         'development/design-notes/m7-cleanup-deletion-implementation-baseline',
         'development/spec-migration-review',
         {type: 'category', label: 'Design syntheses and history', items: [
-          'development/design-notes/snapshot-capacity-and-restore-baseline',
+            'development/design-notes/snapshot-capacity-and-restore-baseline',
+            'development/design-notes/shell-adapter-loader-baseline',
+            'development/design-notes/shell-loader-format-activation-review',
           'development/design-notes/non-identity-metadata-semantic-baseline',
           'development/design-notes/pre-m2-installation-instance-binding-baseline',
           'development/design-notes/service-storage-semantic-baseline',

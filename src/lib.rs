@@ -17,6 +17,7 @@ mod retirement_fs;
 mod revision_content;
 mod revision_core_v1;
 mod revision_core_v2;
+mod revision_core_v3;
 mod service_storage;
 mod snapshot_bundle;
 mod snapshot_integrity;

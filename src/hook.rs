@@ -11,6 +11,7 @@ mod protocol;
 mod restore;
 mod runtime;
 pub(crate) mod service_storage;
+pub(crate) mod shell_loader;
 mod snapshots;
 mod versioned_protocol;
 pub(crate) use deletions::{accept_deletion, execute_ready as execute_ready_deletion};

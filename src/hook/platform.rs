@@ -49,9 +49,46 @@ impl fmt::Debug for ProtocolListener {
 }
 
 impl ProtocolListener {
+    #[cfg(unix)]
+    pub(super) fn bind_helpers_in(directory: &Path) -> io::Result<Self> {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let metadata = fs::symlink_metadata(directory)?;
+        if !directory.is_absolute()
+            || !metadata.is_dir()
+            || metadata.permissions().mode() & 0o077 != 0
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+        {
+            return Err(io::Error::other("invalid shell IPC directory"));
+        }
+        let path = directory.join("helper.sock");
+        let endpoint = path
+            .to_str()
+            .ok_or_else(|| io::Error::other("invalid IPC path"))?
+            .to_owned();
+        let inner = std::os::unix::net::UnixListener::bind(&path)?;
+        let listener = Self { endpoint, inner };
+        listener.inner.set_nonblocking(true)?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+        Ok(listener)
+    }
     /// Creates the one-connection owner-private listener before launch.
     pub(super) fn bind() -> io::Result<Self> {
         platform_listener()
+    }
+
+    pub(super) fn bind_helpers() -> io::Result<Self> {
+        #[cfg(unix)]
+        {
+            platform_listener()
+        }
+        #[cfg(windows)]
+        {
+            let mut random = [0_u8; 16];
+            getrandom::fill(&mut random).map_err(io::Error::other)?;
+            let endpoint = format!(r"\\.\pipe\pactrun-helper-{}", hex::encode(random));
+            let inner = pactrun_windows_ntfs::NamedPipeListener::bind_reusable(&endpoint)?;
+            Ok(Self { endpoint, inner })
+        }
     }
 
     /// PR-REQ-0280: both discovery variables are replaced in the exact child
@@ -72,7 +109,6 @@ impl ProtocolListener {
         platform_try_accept(&mut self.inner)
     }
 
-    #[cfg(test)]
     pub(super) fn endpoint(&self) -> &str {
         &self.endpoint
     }
@@ -91,6 +127,8 @@ impl Drop for ProtocolListener {
 
 #[derive(Debug)]
 pub(super) struct ProcessSupervisor {
+    #[cfg(unix)]
+    _helper_directory: Option<HelperIpcDirectory>,
     #[cfg(unix)]
     child: Child,
     #[cfg(unix)]
@@ -113,15 +151,18 @@ impl ProcessSupervisor {
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
+            let helper_directory = HelperIpcDirectory::for_launch(program, arguments)?;
             if terminal == TerminalContractV1::Interactive {
-                return spawn_interactive_adapter(program, arguments, listener);
+                return spawn_interactive_adapter(program, arguments, listener, helper_directory);
             }
             let mut command = Command::new(program);
             command.args(arguments);
             listener.inject_environment(&mut command);
+            HelperIpcDirectory::inject(&helper_directory, &mut command);
             configure_terminal(&mut command, terminal);
             command.process_group(0);
             Ok(Self {
+                _helper_directory: helper_directory,
                 child: command.spawn()?,
                 terminal,
                 output_relay: None,
@@ -260,6 +301,52 @@ impl ProcessSupervisor {
     }
 }
 
+/// Core keeps this guard until process-tree supervision ends, so Loader loss
+/// cannot orphan its helper socket. The directory contains no authority data.
+#[cfg(unix)]
+struct HelperIpcDirectory(std::path::PathBuf);
+
+#[cfg(unix)]
+impl fmt::Debug for HelperIpcDirectory {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("HelperIpcDirectory(<owner-private>)")
+    }
+}
+
+#[cfg(unix)]
+impl HelperIpcDirectory {
+    fn for_launch(program: &Path, arguments: &[String]) -> io::Result<Option<Self>> {
+        use std::os::unix::fs::DirBuilderExt;
+        if arguments
+            .first()
+            .is_none_or(|a| a != "--pactrun-internal-shell-loader")
+            || program != std::env::current_exe()?
+        {
+            return Ok(None);
+        }
+        let mut bytes = [0; 16];
+        getrandom::fill(&mut bytes).map_err(io::Error::other)?;
+        let path = std::env::temp_dir().join(format!("pactrun-shell-{}", hex::encode(bytes)));
+        fs::DirBuilder::new().mode(0o700).create(&path)?;
+        Ok(Some(Self(path)))
+    }
+
+    fn inject(directory: &Option<Self>, command: &mut Command) {
+        command.env_remove("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY");
+        if let Some(directory) = directory {
+            command.env("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY", &directory.0);
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for HelperIpcDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(self.0.join("helper.sock"));
+        let _ = fs::remove_dir(&self.0);
+    }
+}
+
 #[cfg(any(
     target_os = "linux",
     target_os = "android",
@@ -273,6 +360,7 @@ fn spawn_interactive_adapter(
     program: &Path,
     arguments: &[String],
     listener: &ProtocolListener,
+    helper_directory: Option<HelperIpcDirectory>,
 ) -> io::Result<ProcessSupervisor> {
     let mut command = Command::new(std::env::current_exe()?);
     #[cfg(test)]
@@ -289,6 +377,7 @@ fn spawn_interactive_adapter(
     command.arg(program);
     command.args(arguments);
     listener.inject_environment(&mut command);
+    HelperIpcDirectory::inject(&helper_directory, &mut command);
     #[cfg(test)]
     let readiness_path = format!("{}.interactive-ready", listener.endpoint);
     #[cfg(test)]
@@ -356,6 +445,7 @@ fn spawn_interactive_adapter(
     let input_relay = std::thread::spawn(move || relay_terminal_input(adapter_stdin));
     let output_relay = std::thread::spawn(move || relay_terminal_output(adapter_stdout));
     Ok(ProcessSupervisor {
+        _helper_directory: helper_directory,
         child,
         terminal: TerminalContractV1::Interactive,
         output_relay: Some(output_relay),
@@ -571,6 +661,7 @@ fn spawn_interactive_adapter(
     _program: &Path,
     _arguments: &[String],
     _listener: &ProtocolListener,
+    _helper_directory: Option<HelperIpcDirectory>,
 ) -> io::Result<ProcessSupervisor> {
     Err(unsupported_interactive_adapter())
 }

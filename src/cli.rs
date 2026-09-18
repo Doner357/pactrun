@@ -49,6 +49,7 @@ const HELP: &str = "Pactrun 0.1.0\n\
 Usage:\n\
   pactrun pack generate-id\n\
   pactrun pack install <source-root>\n\
+  pactrun hook <command> [options] (Shell Loader helpers; see pactrun hook --help)\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
   pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]\n\
   pactrun instance list\n\
@@ -256,6 +257,15 @@ impl fmt::Display for CliError {
 
 pub(crate) fn run_from_env() -> i32 {
     let args = env::args_os().skip(1).collect::<Vec<_>>();
+    if args
+        .first()
+        .is_some_and(|arg| arg == "--pactrun-internal-shell-loader")
+    {
+        return crate::hook::shell_loader::run(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "hook") {
+        return crate::hook::shell_loader::helper(&args[1..]);
+    }
     #[cfg(any(unix, windows))]
     if args
         .first()
@@ -1595,6 +1605,20 @@ fn write_action_detail(output: &mut dyn Write, action: &ActionV1) -> Result<(), 
     .map_err(io_operation)?;
     writeln!(output, "hook_args_count: {}", action.hook.args.len()).map_err(io_operation)?;
     match &action.hook.launch {
+        HookLaunchV1::ShellLoader {
+            shell,
+            command,
+            script,
+        } => {
+            writeln!(
+                output,
+                "launch: shell_loader\tshell: {}\tcommand: {}\tscript: {}",
+                shell.as_str(),
+                command.as_str(),
+                script.as_str()
+            )
+            .map_err(io_operation)?;
+        }
         HookLaunchV1::Direct { executable } => {
             writeln!(
                 output,
@@ -1686,6 +1710,20 @@ fn write_plan(
         .map_err(io_operation)?;
     }
     match plan.launch() {
+        CompiledHookLaunch::ShellLoader {
+            shell,
+            launcher,
+            script,
+        } => {
+            writeln!(
+                output,
+                "launch: shell_loader\tshell: {}\tcommand: {}\truntime_path: {}",
+                shell.as_str(),
+                launcher.command.as_str(),
+                script.path.as_str()
+            )
+            .map_err(io_operation)?;
+        }
         CompiledHookLaunch::Direct { executable } => {
             writeln!(
                 output,

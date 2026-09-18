@@ -43,8 +43,9 @@ The [lifecycle implementation record](./managed-object-lifecycle-status.md) trac
 the separately approved design and all lifecycle slices on V9, with final
 acceptance passed and local develop integration completed. Snapshot Capacity and
 Restore Workflow is now [implemented, verified and integrated into local develop](./snapshot-capacity-and-restore-status.md);
-Shell Adapter / Loader is next in the agreed work order; later scopes remain
-pending, without reusing the retired number.
+Shell Adapter / Loader is [implemented and verified on its feature branch](./shell-adapter-loader-status.md),
+not yet committed or integrated. Machine-readable CLI Output is next in the agreed
+work order; later scopes remain pending, without reusing the retired number.
 The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 

@@ -20,6 +20,12 @@ const RUNTIME_CONTENT_LABEL: &[u8] = b"runtime-content-closure\0";
 pub(crate) fn encode_canonical_revision_core_v1(
     core: &RevisionCoreV1,
 ) -> Result<Vec<u8>, RevisionCoreV1Error> {
+    if core.contains_shell_loader() {
+        return Err(RevisionCoreV1Error::internal(
+            "invalid_hook_launch",
+            "shell loader requires Core V3",
+        ));
+    }
     jcs_bytes(core)
 }
 
@@ -104,6 +110,13 @@ fn decode_semantic_revision_core_internal_v1(
 pub(crate) fn project_core_value_v1(
     value: RawJsonValue,
 ) -> Result<RevisionCoreV1, RevisionCoreV1Error> {
+    project_common_core(value, false)
+}
+
+pub(crate) fn project_common_core(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<RevisionCoreV1, RevisionCoreV1Error> {
     let mut object = closed_object(
         value,
         "RevisionCoreV1",
@@ -118,10 +131,20 @@ pub(crate) fn project_core_value_v1(
         ));
     }
     let inputs = parse_array(take_required(&mut object, "inputs")?, parse_input)?;
-    let actions = parse_array(take_required(&mut object, "actions")?, parse_action)?;
-    let snapshot = object.remove("snapshot").map(parse_snapshot).transpose()?;
-    let migrations = parse_array(take_required(&mut object, "migrations")?, parse_migration)?;
-    let cleanup = object.remove("cleanup").map(parse_cleanup).transpose()?;
+    let actions = parse_array(take_required(&mut object, "actions")?, |v| {
+        parse_action(v, shell_loader)
+    })?;
+    let snapshot = object
+        .remove("snapshot")
+        .map(|v| parse_snapshot(v, shell_loader))
+        .transpose()?;
+    let migrations = parse_array(take_required(&mut object, "migrations")?, |v| {
+        parse_migration(v, shell_loader)
+    })?;
+    let cleanup = object
+        .remove("cleanup")
+        .map(|v| parse_cleanup(v, shell_loader))
+        .transpose()?;
     project_revision_core_v1(RevisionCoreProjectionInputV1 {
         inputs,
         actions,
@@ -162,7 +185,7 @@ fn parse_input(value: RawJsonValue) -> Result<InputDeclarationV1, RevisionCoreV1
     })
 }
 
-fn parse_action(value: RawJsonValue) -> Result<ActionV1, RevisionCoreV1Error> {
+fn parse_action(value: RawJsonValue, shell_loader: bool) -> Result<ActionV1, RevisionCoreV1Error> {
     let mut object = closed_object(
         value,
         "ActionV1",
@@ -173,7 +196,7 @@ fn parse_action(value: RawJsonValue) -> Result<ActionV1, RevisionCoreV1Error> {
         id: ActionIdentity::parse(take_string(&mut object, "id")?)?,
         access: take_access(&mut object)?,
         parameters: parse_array(take_required(&mut object, "parameters")?, parse_parameter)?,
-        hook: parse_hook(take_required(&mut object, "hook")?)?,
+        hook: parse_hook(take_required(&mut object, "hook")?, shell_loader)?,
         outputs: parse_array(take_required(&mut object, "outputs")?, parse_output)?,
     })
 }
@@ -238,7 +261,7 @@ fn parse_parameter_default(
     }
 }
 
-fn parse_hook(value: RawJsonValue) -> Result<HookV1, RevisionCoreV1Error> {
+fn parse_hook(value: RawJsonValue, shell_loader: bool) -> Result<HookV1, RevisionCoreV1Error> {
     let mut object = closed_object(
         value,
         "HookV1",
@@ -250,16 +273,35 @@ fn parse_hook(value: RawJsonValue) -> Result<HookV1, RevisionCoreV1Error> {
             &mut object,
             "protocol_version",
         )?)?)?,
-        launch: parse_launch(take_required(&mut object, "launch")?)?,
+        launch: parse_launch(take_required(&mut object, "launch")?, shell_loader)?,
         args: parse_string_array(take_required(&mut object, "args")?)?,
         io: parse_io(take_required(&mut object, "io")?)?,
     })
 }
 
-fn parse_launch(value: RawJsonValue) -> Result<HookLaunchV1, RevisionCoreV1Error> {
+fn parse_launch(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<HookLaunchV1, RevisionCoreV1Error> {
     let mut object = into_object(value, "HookLaunchV1")?;
     let kind = take_string(&mut object, "kind")?;
     match kind.as_str() {
+        "shell_loader" if shell_loader => {
+            validate_remaining_fields(
+                &object,
+                "ShellLoader",
+                &["shell", "command", "script"],
+                &[],
+            )?;
+            let shell = ShellKind::parse(&take_string(&mut object, "shell")?).ok_or_else(|| {
+                RevisionCoreV1Error::internal("invalid_hook_launch", "unsupported shell kind")
+            })?;
+            Ok(HookLaunchV1::ShellLoader {
+                shell,
+                command: HostExecutableName::parse(take_string(&mut object, "command")?)?,
+                script: ContentId::parse(take_string(&mut object, "script")?)?,
+            })
+        }
         "direct" => {
             validate_remaining_fields(&object, "HookLaunchV1", &["executable"], &[])?;
             Ok(HookLaunchV1::Direct {
@@ -300,32 +342,50 @@ fn parse_io(value: RawJsonValue) -> Result<IOContractV1, RevisionCoreV1Error> {
     Ok(IOContractV1 { terminal })
 }
 
-fn parse_snapshot(value: RawJsonValue) -> Result<SnapshotCapabilityV1, RevisionCoreV1Error> {
+fn parse_snapshot(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<SnapshotCapabilityV1, RevisionCoreV1Error> {
     let mut object = closed_object(value, "SnapshotCapabilityV1", &[], &["capture", "restore"])?;
     Ok(SnapshotCapabilityV1 {
-        capture: object.remove("capture").map(parse_capture).transpose()?,
-        restore: object.remove("restore").map(parse_restore).transpose()?,
+        capture: object
+            .remove("capture")
+            .map(|v| parse_capture(v, shell_loader))
+            .transpose()?,
+        restore: object
+            .remove("restore")
+            .map(|v| parse_restore(v, shell_loader))
+            .transpose()?,
     })
 }
 
-fn parse_capture(value: RawJsonValue) -> Result<CaptureV1, RevisionCoreV1Error> {
+fn parse_capture(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<CaptureV1, RevisionCoreV1Error> {
     let mut object = closed_object(value, "CaptureV1", &["parameters", "access", "hook"], &[])?;
     Ok(CaptureV1 {
         parameters: parse_array(take_required(&mut object, "parameters")?, parse_parameter)?,
         access: take_access(&mut object)?,
-        hook: parse_hook(take_required(&mut object, "hook")?)?,
+        hook: parse_hook(take_required(&mut object, "hook")?, shell_loader)?,
     })
 }
 
-fn parse_restore(value: RawJsonValue) -> Result<RestoreV1, RevisionCoreV1Error> {
+fn parse_restore(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<RestoreV1, RevisionCoreV1Error> {
     let mut object = closed_object(value, "RestoreV1", &["parameters", "hook"], &[])?;
     Ok(RestoreV1 {
         parameters: parse_array(take_required(&mut object, "parameters")?, parse_parameter)?,
-        hook: parse_hook(take_required(&mut object, "hook")?)?,
+        hook: parse_hook(take_required(&mut object, "hook")?, shell_loader)?,
     })
 }
 
-fn parse_migration(value: RawJsonValue) -> Result<MigrationV1, RevisionCoreV1Error> {
+fn parse_migration(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<MigrationV1, RevisionCoreV1Error> {
     let mut object = closed_object(
         value,
         "MigrationV1",
@@ -350,7 +410,10 @@ fn parse_migration(value: RawJsonValue) -> Result<MigrationV1, RevisionCoreV1Err
         )?,
         requires_target: parse_id_array(take_required(&mut object, "requires_target")?)?,
         produces_target: parse_id_array(take_required(&mut object, "produces_target")?)?,
-        hook: object.remove("hook").map(parse_hook).transpose()?,
+        hook: object
+            .remove("hook")
+            .map(|v| parse_hook(v, shell_loader))
+            .transpose()?,
     })
 }
 
@@ -409,11 +472,14 @@ fn parse_transition(value: RawJsonValue) -> Result<MigrationTransitionV1, Revisi
     }
 }
 
-fn parse_cleanup(value: RawJsonValue) -> Result<CleanupV1, RevisionCoreV1Error> {
+fn parse_cleanup(
+    value: RawJsonValue,
+    shell_loader: bool,
+) -> Result<CleanupV1, RevisionCoreV1Error> {
     let mut object = closed_object(value, "CleanupV1", &["requires", "hook"], &[])?;
     Ok(CleanupV1 {
         requires: parse_array(take_required(&mut object, "requires")?, parse_binding_ref)?,
-        hook: parse_hook(take_required(&mut object, "hook")?)?,
+        hook: parse_hook(take_required(&mut object, "hook")?, shell_loader)?,
     })
 }
 

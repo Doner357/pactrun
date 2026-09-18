@@ -10,6 +10,8 @@ mod common;
 mod linux;
 #[path = "system/matrix.rs"]
 mod matrix;
+#[path = "system/shell_loader.rs"]
+mod shell_loader;
 #[path = "system/snapshots.rs"]
 mod snapshots;
 #[path = "system/support/mod.rs"]

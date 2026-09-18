@@ -385,7 +385,7 @@ pub(super) fn parse_capture_message(payload: &[u8]) -> Result<HookMessage, Proto
     parse_hook_message_for(payload, SessionOperation::Capture)
 }
 
-fn parse_hook_message_for(
+pub(super) fn parse_hook_message_for(
     payload: &[u8],
     operation: SessionOperation,
 ) -> Result<HookMessage, ProtocolFailure> {

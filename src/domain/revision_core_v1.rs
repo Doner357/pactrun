@@ -225,6 +225,16 @@ pub(crate) struct RevisionCoreV1 {
 }
 
 impl RevisionCoreV1 {
+    pub(crate) fn contains_shell_loader(&self) -> bool {
+        let mut found = false;
+        visit_hooks(self, &mut |hook| {
+            found |= matches!(hook.launch, HookLaunchV1::ShellLoader { .. });
+            Ok(())
+        })
+        .expect("infallible Hook visit");
+        found
+    }
+
     pub(crate) fn inputs(&self) -> &[InputDeclarationV1] {
         &self.inputs
     }
@@ -403,6 +413,51 @@ pub(crate) enum HookLaunchV1 {
         interpreter_args: Vec<String>,
         script: ContentId,
     },
+    // Shared runtime representation; only the Core V3 codec admits this variant.
+    ShellLoader {
+        shell: ShellKind,
+        command: HostExecutableName,
+        script: ContentId,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ShellKind {
+    Sh,
+    Bash,
+    #[serde(rename = "powershell_7")]
+    Powershell7,
+    #[serde(rename = "windows_powershell_5_1")]
+    WindowsPowershell51,
+}
+
+impl ShellKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Sh => "sh",
+            Self::Bash => "bash",
+            Self::Powershell7 => "powershell_7",
+            Self::WindowsPowershell51 => "windows_powershell_5_1",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Option<Self> {
+        match value {
+            "sh" => Some(Self::Sh),
+            "bash" => Some(Self::Bash),
+            "powershell_7" => Some(Self::Powershell7),
+            "windows_powershell_5_1" => Some(Self::WindowsPowershell51),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn supported_on_host(self) -> bool {
+        match self {
+            Self::Sh | Self::Bash => cfg!(unix),
+            Self::Powershell7 | Self::WindowsPowershell51 => cfg!(windows),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -737,7 +792,7 @@ pub(crate) fn validate_revision_content_v1(
             }
             Ok(())
         }
-        HookLaunchV1::Interpreter { script, .. } => {
+        HookLaunchV1::Interpreter { script, .. } | HookLaunchV1::ShellLoader { script, .. } => {
             if !files.contains_key(script) {
                 return Err(RevisionCoreV1Error::internal(
                     "invalid_reference",

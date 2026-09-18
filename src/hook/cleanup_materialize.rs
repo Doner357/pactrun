@@ -42,7 +42,8 @@ impl MaterializedExecution {
                     "role":match binding.role { ManagedInputRole::Active { .. }=>"active",ManagedInputRole::Retained=>"retained" },
                     "readonly_path":host_path(&path)?}));
             }
-            let (program, mut arguments) = launch_command(&plan.launch, &runtime);
+            let (program, mut arguments) =
+                launch_command(&plan.launch, &runtime, plan.hook.protocol_version.get())?;
             arguments.extend(plan.hook.args.iter().cloned());
             let session_id = random_handle()?;
             let session = json!({"type":"session_start","protocol_version":plan.hook.protocol_version.get(),
