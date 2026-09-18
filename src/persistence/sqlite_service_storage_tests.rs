@@ -2557,7 +2557,8 @@ fn public_source_version_dispatch_rejects_invalid_v2_before_durable_blob_or_revi
         valid.replace("source_format: 2", "source_format: 1"),
         valid.replace("source_format: 2", "source_format: 2.0"),
         valid.replace("source_format: 2", "source_format: '2'"),
-        valid.replace("source_format: 2", "source_format: 3"),
+        // V3 is explicitly supported; V4 must still fail before publication.
+        valid.replace("source_format: 2", "source_format: 4"),
         valid.replace("source_format: 2", "source_format: 2\nsource_format: 1"),
         valid.replace(
             "  service_storages:",

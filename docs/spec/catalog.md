@@ -12,6 +12,9 @@ website build. They do not constitute additional requirements.
 
 | Contract | Original status |
 | --- | --- |
+| [Pack Source YAML V3](contracts/pack-source-yaml-v3.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and implemented. |
+| [Shell Loader](contracts/shell-loader.md) | Implemented normative adapter contract; non-Frozen. |
+| [Revision Core V3](contracts/revision-core-format-v3.md) | Frozen normative Package contract specification. |
 | [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility design; implementation and baseline consolidation pending. |
 | [Actions, Plans, and Runs](behavior/actions-plans-and-runs.md) | Normative product behavior specification. |
 | [Command and Output Reference](behavior/command-and-output-reference.md) | Normative product behavior specification. Exact option spelling remains open specification work where explicitly noted. |

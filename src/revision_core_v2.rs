@@ -294,6 +294,10 @@ fn split_hook(
 }
 
 pub(crate) fn project_revision_core_source_v2(bytes: &[u8]) -> Result<RevisionCoreV2, Error> {
+    project_service_core(bytes, 2)
+}
+
+pub(crate) fn project_service_core(bytes: &[u8], version: u8) -> Result<RevisionCoreV2, Error> {
     let mut o = object(
         raw(bytes)?,
         &[
@@ -306,10 +310,10 @@ pub(crate) fn project_revision_core_source_v2(bytes: &[u8]) -> Result<RevisionCo
         ],
         &["snapshot", "cleanup"],
     )?;
-    if revision_core_v1::exact_integer(value(&mut o, "format_version")?)? != 2 {
-        return Err(error(
+    if revision_core_v1::exact_integer(value(&mut o, "format_version")?)? != i64::from(version) {
+        return Err(Error::new(
             "unsupported_format_version",
-            "Core V2 requires format version 2",
+            format!("Core V{version} requires format version {version}"),
         ));
     }
     let storages = array(value(&mut o, "service_storages")?, parse_storage)?;
@@ -395,15 +399,25 @@ pub(crate) fn project_revision_core_source_v2(bytes: &[u8]) -> Result<RevisionCo
     })?;
     o.insert("migrations".into(), Raw::Array(migrations));
     o.insert("format_version".into(), Raw::Number("1".into()));
-    let common = revision_core_v1::project_core_value_v1(raw_object(o))?;
+    let common = revision_core_v1::project_common_core(raw_object(o), version == 3)?;
     project_revision_core_v2(common, storages, resources, hooks, mappings)
 }
 
 pub(crate) fn encode_canonical_revision_core_v2(core: &RevisionCoreV2) -> Result<Vec<u8>, Error> {
+    encode_service_core(core, 2)
+}
+
+pub(crate) fn encode_service_core(core: &RevisionCoreV2, version: u8) -> Result<Vec<u8>, Error> {
+    if version != 3 && core.common().contains_shell_loader() {
+        return Err(error(
+            "invalid_hook_launch",
+            "shell loader requires Core V3",
+        ));
+    }
     let mut value = serde_json::to_value(core.common())
         .map_err(|e| Error::new("canonicalization_failed", e.to_string()))?;
     let root = value.as_object_mut().expect("typed Core object");
-    root.insert("format_version".into(), 2.into());
+    root.insert("format_version".into(), version.into());
     root.insert("service_storages".into(), json(core.storages())?);
     root.insert("service_resources".into(), json(core.resources())?);
     for action in root["actions"].as_array_mut().expect("typed actions") {

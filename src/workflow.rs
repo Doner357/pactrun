@@ -169,6 +169,25 @@ fn compile_hook_launch<L: HostLauncherLookup>(
         ));
     }
     Ok(match &hook.launch {
+        HookLaunchV1::ShellLoader {
+            shell,
+            command,
+            script,
+        } => {
+            if !shell.supported_on_host() {
+                return Err(PlanCompilationError::UnsupportedShell);
+            }
+            CompiledHookLaunch::ShellLoader {
+                shell: *shell,
+                launcher: crate::domain::InterpreterLauncherObservation {
+                    command: command.clone(),
+                    search_directories: launcher_search_directories.to_vec(),
+                    resolved_absolute_path: launcher_lookup
+                        .resolve(launcher_search_directories, command)?,
+                },
+                script: runtime_file(runtime_content, script)?,
+            }
+        }
         HookLaunchV1::Direct { executable } => {
             let executable = runtime_file(runtime_content, executable)?;
             CompiledHookLaunch::Direct { executable }

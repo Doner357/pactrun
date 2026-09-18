@@ -30,5 +30,15 @@ explicitly versioned Candidate authoring contract, not a Frozen source promise.
 See the [format review](../../development/design-notes/m6-5-format-activation-review.md)
 and [approved baseline](../../development/design-notes/m6-5-servicestorage-baseline.md).
 
+## Shell Loader formats
+
+[Core V3](./revision-core-format-v3.md) is Frozen and adds explicit built-in
+shell-loader launch without modifying Core V1/V2 or Hook Protocol V1/V2.
+[YAML V3](./pack-source-yaml-v3.md) remains a versioned Candidate source format.
+[Shell Loader](./shell-loader.md) owns script lifecycle, helper commands and data
+interfaces. See the [format review](../../development/design-notes/shell-loader-format-activation-review.md)
+and [implementation record](../../development/shell-adapter-loader-status.md) for
+verification scope and the distinction between working-tree completion and integration.
+
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

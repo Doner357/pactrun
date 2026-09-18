@@ -41,9 +41,9 @@ mod implementation {
         },
         Win32::{
             Foundation::{
-                ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GENERIC_READ,
-                GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree, RtlNtStatusToDosError,
-                UNICODE_STRING,
+                ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
+                GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
+                RtlNtStatusToDosError, UNICODE_STRING,
             },
             Security::{
                 Authorization::{
@@ -90,6 +90,7 @@ mod implementation {
         endpoint: String,
         pipe: Option<OwnedHandle>,
         pending: Option<PendingConnect>,
+        reusable: bool,
     }
 
     struct PendingConnect {
@@ -110,6 +111,15 @@ mod implementation {
 
     impl NamedPipeListener {
         pub fn bind(endpoint: &str) -> io::Result<Self> {
+            Self::bind_instance(endpoint, true, false)
+        }
+
+        /// Repeated owner-private helper connections, separate from Hook transport.
+        pub fn bind_reusable(endpoint: &str) -> io::Result<Self> {
+            Self::bind_instance(endpoint, true, true)
+        }
+
+        fn bind_instance(endpoint: &str, first: bool, reusable: bool) -> io::Result<Self> {
             let wide_endpoint = wide_nul(OsStr::new(endpoint));
             let descriptor_text = owner_pipe_descriptor()?;
             let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
@@ -133,9 +143,15 @@ mod implementation {
             let handle = unsafe {
                 CreateNamedPipeW(
                     wide_endpoint.as_ptr(),
-                    PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
+                    PIPE_ACCESS_DUPLEX
+                        | if first {
+                            FILE_FLAG_FIRST_PIPE_INSTANCE
+                        } else {
+                            0
+                        }
+                        | FILE_FLAG_OVERLAPPED,
                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                    1,
+                    if reusable { 255 } else { 1 },
                     64 * 1024,
                     64 * 1024,
                     0,
@@ -152,6 +168,7 @@ mod implementation {
                 endpoint: endpoint.to_owned(),
                 pipe: Some(unsafe { OwnedHandle::from_raw_handle(handle.cast()) }),
                 pending: None,
+                reusable,
             })
         }
 
@@ -214,6 +231,14 @@ mod implementation {
                 return Ok(None);
             }
             self.pending = None;
+            if self.reusable {
+                // Create the successor before relinquishing the current server
+                // handle, so the name never becomes available for squatting.
+                let next = Self::bind_instance(&self.endpoint, false, true)?;
+                let stream = self.pipe.take().map(|handle| NamedPipeStream { handle });
+                *self = next;
+                return Ok(stream);
+            }
             Ok(self.pipe.take().map(|handle| NamedPipeStream { handle }))
         }
     }
@@ -330,6 +355,38 @@ mod implementation {
     }
 
     impl NamedPipeStream {
+        /// Overlapped client I/O supports an independent reader and writer.
+        pub fn connect(endpoint: &str) -> io::Result<Self> {
+            use std::os::windows::fs::OpenOptionsExt;
+            // Discovery selects a local pipe, never a file/device/network path.
+            // Validate before opening: helpers write their first request before
+            // receiving a reply, so a file-shaped ambient locator is unsafe.
+            if endpoint
+                .strip_prefix(r"\\.\pipe\")
+                .is_none_or(|name| name.is_empty() || name.contains(['\\', '/', '\0']))
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "expected a local named-pipe endpoint",
+                ));
+            }
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(FILE_FLAG_OVERLAPPED)
+                .open(endpoint)
+                .map_err(|error| {
+                    if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) {
+                        io::Error::new(io::ErrorKind::WouldBlock, error)
+                    } else {
+                        error
+                    }
+                })?;
+            Ok(Self {
+                handle: file.into(),
+            })
+        }
+
         pub fn try_clone(&self) -> io::Result<Self> {
             Ok(Self {
                 handle: self.handle.try_clone()?,

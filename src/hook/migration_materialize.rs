@@ -87,7 +87,8 @@ impl MaterializedExecution {
                     path,
                 });
             }
-            let (program, mut arguments) = launch_command(launch, &runtime);
+            let (program, mut arguments) =
+                launch_command(launch, &runtime, hook.protocol_version.get())?;
             arguments.extend(hook.args.iter().cloned());
             let session_id = random_handle()?;
             let revision = |r: &crate::domain::RevisionIdentity| json!({"package_id":r.package_id.to_string(),"revision_content_digest":r.content_digest.to_string()});

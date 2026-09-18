@@ -121,6 +121,11 @@ pub(crate) struct InterpreterLauncherObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum CompiledHookLaunch {
+    ShellLoader {
+        shell: super::ShellKind,
+        launcher: InterpreterLauncherObservation,
+        script: RuntimeFileV1,
+    },
     Direct {
         executable: RuntimeFileV1,
     },
@@ -129,6 +134,45 @@ pub(crate) enum CompiledHookLaunch {
         interpreter_args: Vec<String>,
         script: RuntimeFileV1,
     },
+}
+
+impl CompiledHookLaunch {
+    pub(crate) fn launcher(&self) -> Option<&InterpreterLauncherObservation> {
+        match self {
+            Self::Direct { .. } => None,
+            Self::Interpreter { launcher, .. } | Self::ShellLoader { launcher, .. } => {
+                Some(launcher)
+            }
+        }
+    }
+
+    pub(crate) fn matches_shell(
+        &self,
+        hook: &super::HookLaunchV1,
+        files: &[RuntimeFileV1],
+    ) -> bool {
+        match (hook, self) {
+            (
+                super::HookLaunchV1::ShellLoader {
+                    shell,
+                    command,
+                    script: id,
+                },
+                Self::ShellLoader {
+                    shell: actual,
+                    launcher,
+                    script,
+                },
+            ) => {
+                shell == actual
+                    && shell.supported_on_host()
+                    && command == &launcher.command
+                    && id == &script.id
+                    && files.contains(script)
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -306,6 +350,7 @@ impl std::error::Error for ActionResolutionError {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlanCompilationError {
+    UnsupportedShell,
     InconsistentFacts,
     UnsupportedHookProtocol(PositiveVersion),
     InvalidLauncherSearchDirectory,
@@ -316,6 +361,7 @@ pub(crate) enum PlanCompilationError {
 impl fmt::Display for PlanCompilationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedShell => formatter.write_str("shell kind is unsupported on this host"),
             Self::InconsistentFacts => {
                 formatter.write_str("compilation facts do not match the resolved intent")
             }

@@ -14,6 +14,12 @@ scopes or authorize publication. V9 and GC activation are tracked there separate
 from the earlier Artifact-only checkpoint. The status above records the original
 planning decision.
 
+Subsequent Snapshot capacity/restore completion is recorded in its
+[integrated closeout](./snapshot-capacity-and-restore-status.md). Shell Adapter /
+Loader is [implemented and verified in its feature working tree](./shell-adapter-loader-status.md),
+not yet committed or integrated. These execution records do not change the
+historical planning status above or start machine-readable CLI output.
+
 This informative plan records the operator's decisions after the completed
 Instance-retirement milestone. Its list numbers express work order, not new
 M-series identifiers. M8 remains rejected and its number is not reused.
@@ -211,6 +217,14 @@ incomplete targets, partial success and concurrent changes. No backup scheduler,
 automatic rollback or Revision-inclusive bundle is included.
 
 ## 3. Shell Adapter / Loader
+
+The design gates below are now closed by the approved
+[baseline](./design-notes/shell-adapter-loader-baseline.md), the owning
+[Core V3](../spec/contracts/revision-core-format-v3.md),
+[YAML V3](../spec/contracts/pack-source-yaml-v3.md) and
+[Loader](../spec/contracts/shell-loader.md) contracts. The
+[implementation record](./shell-adapter-loader-status.md) supplies actual evidence;
+the original purpose, rationale and acceptance criteria below are retained.
 
 ### Purpose and existing foundation
 

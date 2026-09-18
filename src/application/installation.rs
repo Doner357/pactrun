@@ -414,7 +414,8 @@ mod tests {
             "Config.json"
         );
         assert!(!storage.join("service-storage").exists()); // installation is not allocation
-        for token in ["2.0", "'2'", "3"] {
+        // V3 is explicitly supported; V4 remains the unknown-version case.
+        for token in ["2.0", "'2'", "4"] {
             let invalid = String::from_utf8(yaml.to_vec())
                 .unwrap()
                 .replace("source_format: 2", &format!("source_format: {token}"));

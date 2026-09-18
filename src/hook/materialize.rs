@@ -139,7 +139,8 @@ impl MaterializedAction {
                 )?;
                 descriptors.push(json!({"role":descriptor.role.as_str(),"path":descriptor.path.as_str(),"blob_digest":descriptor.blob_digest.as_str(),"materialized_path":relative}));
             }
-            let (program, mut arguments) = launch_command(plan.launch(), &runtime);
+            let (program, mut arguments) =
+                launch_command(plan.launch(), &runtime, plan.hook().protocol_version.get())?;
             arguments.extend(plan.hook().args.iter().cloned());
             let session_id = random_handle()?;
             let parameters = plan
@@ -243,7 +244,11 @@ impl MaterializedAction {
             });
         }
 
-        let (program, mut arguments) = launch_command(admitted.plan().launch(), &runtime);
+        let (program, mut arguments) = launch_command(
+            admitted.plan().launch(),
+            &runtime,
+            admitted.plan().protocol_version().get(),
+        )?;
         arguments.extend(admitted.plan().hook_args().iter().cloned());
         let session_id = random_handle()?;
         let mut parameters = admitted
@@ -350,7 +355,8 @@ impl MaterializedAction {
                 fs::set_permissions(&path, permissions)?;
                 bindings.push(json!({"handle":random_handle()?,"input_id":binding.input.as_str(),"role":"active","readonly_path":host_path(&path)?}));
             }
-            let (program, mut arguments) = launch_command(plan.launch(), &runtime);
+            let (program, mut arguments) =
+                launch_command(plan.launch(), &runtime, plan.hook().protocol_version.get())?;
             arguments.extend(plan.hook().args.iter().cloned());
             let session_id = random_handle()?;
             let parameters = plan
@@ -633,8 +639,26 @@ fn runtime_relative_path(file: &RuntimeFileV1) -> PathBuf {
     file.path.as_str().split('/').collect()
 }
 
-fn launch_command(launch: &CompiledHookLaunch, runtime: &Path) -> (PathBuf, Vec<String>) {
-    match launch {
+fn launch_command(
+    launch: &CompiledHookLaunch,
+    runtime: &Path,
+    protocol_version: i64,
+) -> Result<(PathBuf, Vec<String>), MaterializationError> {
+    Ok(match launch {
+        CompiledHookLaunch::ShellLoader {
+            shell,
+            launcher,
+            script,
+        } => (
+            std::env::current_exe()?,
+            vec![
+                "--pactrun-internal-shell-loader".to_owned(),
+                shell.as_str().to_owned(),
+                host_path(&launcher.resolved_absolute_path)?.to_owned(),
+                host_path(&runtime.join(runtime_relative_path(script)))?.to_owned(),
+                protocol_version.to_string(),
+            ],
+        ),
         CompiledHookLaunch::Direct { executable } => {
             (runtime.join(runtime_relative_path(executable)), Vec::new())
         }
@@ -652,7 +676,7 @@ fn launch_command(launch: &CompiledHookLaunch, runtime: &Path) -> (PathBuf, Vec<
             );
             (launcher.resolved_absolute_path.clone(), arguments)
         }
-    }
+    })
 }
 
 fn parameter_value(value: &InvocationParameterValue) -> Result<Value, MaterializationError> {

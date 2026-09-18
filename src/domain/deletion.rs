@@ -155,7 +155,7 @@ pub(crate) fn build_deletion_plan(
                     && script == &file.id
                     && runtime.contains(file)
             }
-            _ => false,
+            _ => launch.matches_shell(&cleanup.hook.launch, runtime),
         };
         if !launch_matches {
             return Err(DeletionPlanError::InvalidLaunch);

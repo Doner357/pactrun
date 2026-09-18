@@ -4,7 +4,7 @@
 
 use crate::{
     domain::*,
-    revision_core_v1 as v1, revision_core_v2 as v2,
+    revision_core_v1 as v1, revision_core_v2 as v2, revision_core_v3 as v3,
     strict_json::{self, RawJsonValue},
 };
 use std::fmt;
@@ -47,6 +47,7 @@ pub(crate) fn validate_revision_content(
         RevisionCore::V2(core) => {
             Ok(crate::domain::project_revision_content_v2(*core, runtime)?.into())
         }
+        RevisionCore::V3(core) => Ok(v3::validate(*core, runtime)?),
     }
 }
 
@@ -66,6 +67,7 @@ pub(crate) fn core_format_version(bytes: &[u8]) -> Result<u8, RevisionContentErr
     match v1::exact_integer(version)? {
         1 => Ok(1),
         2 => Ok(2),
+        3 => Ok(3),
         _ => Err(RevisionContentError::Envelope(
             "unsupported Core format version",
         )),
@@ -78,6 +80,10 @@ pub(crate) fn decode_canonical_revision_content(
     match core_format_version(core)? {
         1 => Ok(v1::decode_canonical_revision_content_v1(core, runtime)?.into()),
         2 => Ok(v2::decode_canonical_revision_content_v2(core, runtime)?.into()),
+        3 => Ok(v3::validate(
+            v3::decode(core)?,
+            v1::decode_canonical_runtime_content_v1(runtime)?,
+        )?),
         _ => unreachable!("closed dispatcher"),
     }
 }
@@ -88,6 +94,7 @@ pub(crate) fn decode_canonical_revision_core(
     match core_format_version(bytes)? {
         1 => Ok(v1::decode_canonical_revision_core_v1(bytes)?.into()),
         2 => Ok(v2::decode_canonical_revision_core_v2(bytes)?.into()),
+        3 => Ok(v3::decode(bytes)?.into()),
         _ => unreachable!("closed dispatcher"),
     }
 }
@@ -97,12 +104,14 @@ pub(crate) fn encode_canonical_revision_core(
     match core {
         RevisionCore::V1(c) => Ok(v1::encode_canonical_revision_core_v1(c)?),
         RevisionCore::V2(c) => Ok(v2::encode_canonical_revision_core_v2(c)?),
+        RevisionCore::V3(c) => Ok(v3::encode(c)?),
     }
 }
 pub(crate) fn calculate_revision_content_digest(
     content: &ValidatedRevisionContent,
 ) -> Result<RevisionContentDigest, RevisionContentError> {
     match &content.core {
+        RevisionCore::V3(c) => Ok(v3::digest(c, &content.runtime_content)?),
         RevisionCore::V1(c) => Ok(v1::calculate_revision_content_digest_v1(
             &ValidatedRevisionContentV1 {
                 core: c.as_ref().clone(),
@@ -146,7 +155,7 @@ mod tests {
         );
         assert!(core_format_version(br#"{"format_version":2,"format_version":1}"#).is_err());
         assert!(core_format_version(br#"{"format_version":2.000000000000001}"#).is_err());
-        assert!(core_format_version(br#"{"format_version":3}"#).is_err());
+        assert!(core_format_version(br#"{"format_version":4}"#).is_err());
         assert!(decode_canonical_revision_content(v2_bytes, br#"{"files":[],"extra":0}"#).is_err());
     }
 }

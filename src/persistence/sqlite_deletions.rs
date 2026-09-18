@@ -787,7 +787,7 @@ impl PactrunPersistence {
                 )));
             }
             if let DeletionWork::Cleanup(cleanup) = &plan.work {
-                if let CompiledHookLaunch::Interpreter { launcher, .. } = &cleanup.launch
+                if let Some(launcher) = cleanup.launch.launcher()
                     && launcher_check(launcher).is_err()
                 {
                     return Ok(Some(AdmissionRefusal::PlanInvalidated(

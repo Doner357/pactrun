@@ -102,7 +102,8 @@ test('current entries reflect V10 integration while preserving M7 and bounded M6
   assert.match(capacity.replace(/\s+/g, ' '), /S0-S5 implemented, verified and integrated into local `develop`/);
   assert.match(capacity, /ead810f1a81e5a52e351e96b11987a8b3d766d36/);
   assert.match(capacity, /b99ffbd748f5417c0aa8537fe9c5e2234142a31c/);
-  assert.match(agentEntry, /Shell Adapter \/ Loader is next/);
+  assert.match(agentEntry, /Shell Adapter \/ Loader is implemented and verified on its feature branch, not yet committed or merged/);
+  assert.match(agentEntry, /Machine-readable CLI Output is next and requires its own plan/);
   assert.match(capacity, /reused evidence/);
   for (const entry of [current, agentEntry]) {
     assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
