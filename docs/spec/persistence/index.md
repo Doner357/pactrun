@@ -19,6 +19,7 @@ obligations; their presence is not permission for an implicit upgrade chain.
 - [Persistence Schema V7](./persistence-schema-v7.md): Historical exact DDL, explicit V6 upgrade and implemented ServiceStorage custody/association representation.
 - [Persistence Schema V8](./persistence-schema-v8.md): Historical retirement baseline with explicit exact-V7 upgrade.
 - [Persistence Schema V9](./persistence-schema-v9.md): Integrated lifecycle runtime, with explicit exact-V8 upgrade only; not published.
+- [Persistence Schema V10](./persistence-schema-v10.md): Verified Snapshot capacity feature branch; explicit V8/V9 upgrade and immutable data references; not integrated or published.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

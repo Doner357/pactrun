@@ -11,6 +11,33 @@ use crate::{
 use std::{io::Write, path::Path};
 
 impl PactrunApplication {
+    /// Structural, read-only preflight; no pin or launch eligibility is promised.
+    pub(crate) fn create_restore_definition(
+        &self,
+        revision: &crate::domain::RevisionIdentity,
+        snapshot: SnapshotId,
+    ) -> Result<(Vec<crate::domain::ParameterV1>, crate::domain::HookV1), ApplicationError> {
+        let inspection = self.inspect_snapshot(snapshot)?;
+        if &inspection.producer != revision {
+            return Err(crate::domain::SnapshotPlanError::Invalid(
+                "Restore requires the exact Snapshot producer RevisionIdentity",
+            )
+            .into());
+        }
+        inspection
+            .restore_capability
+            .map_err(PersistenceError::from)?;
+        let stored = self
+            .persistence
+            .load_revision(revision)?
+            .ok_or(PersistenceError::MissingRevision(revision.clone()))?;
+        let (parameters, hook) = crate::domain::snapshot_hook(
+            stored.content.core.common(),
+            crate::domain::SnapshotOperation::Restore(snapshot),
+        )?;
+        Ok((parameters.to_vec(), hook.clone()))
+    }
+
     pub(crate) fn snapshot_definition(
         &self,
         name: &InstanceName,

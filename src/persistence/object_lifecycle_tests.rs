@@ -548,7 +548,14 @@ fn coordination_upgrade_fences_live_writers_and_crash_boundaries() {
         let v = db
             .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap();
-        assert_eq!(v, if point.starts_with("before") { 8 } else { 9 });
+        assert_eq!(
+            v,
+            if point.starts_with("before") {
+                8
+            } else {
+                super::SCHEMA_VERSION
+            }
+        );
         validate_schema(&db, v).unwrap();
         drop(db);
         assert_eq!(PactrunPersistence::upgrade_storage(&root).unwrap(), v == 8);
@@ -585,7 +592,7 @@ fn coordination_upgrade_accepts_only_exact_predecessor_and_preserves_data() {
             .trim(),
         include_str!("persistence_schema_v9_additions.sql").trim()
     );
-    for version in 1..=9 {
+    for version in 1..=SCHEMA_VERSION as usize {
         let (_temp, root) = root();
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
         for (sql, _) in &SCHEMA_LADDER[..version] {
@@ -608,14 +615,18 @@ fn coordination_upgrade_accepts_only_exact_predecessor_and_preserves_data() {
         }
         let result = PactrunPersistence::upgrade_storage(&root);
         match version {
-            8 => assert!(result.unwrap()),
-            9 => assert!(!result.unwrap()),
+            8 | 9 => assert!(result.unwrap()),
+            10 => assert!(!result.unwrap()),
             _ => assert!(result.is_err()),
         }
         assert_eq!(
             db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
                 .unwrap(),
-            if version == 8 { 9 } else { version as i64 }
+            if matches!(version, 8 | 9) {
+                SCHEMA_VERSION
+            } else {
+                version as i64
+            }
         );
         assert_eq!(
             db.query_row("SELECT count(*) FROM packages", [], |r| r.get::<_, i64>(0))

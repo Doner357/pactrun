@@ -68,6 +68,8 @@ pub(crate) struct SnapshotBlobWrite<'a> {
 struct CapturePublication<'a> {
     manifest: &'a crate::snapshot_integrity::VerifiedSnapshotManifest,
     blobs: &'a mut [SnapshotBlobWrite<'a>],
+    files: Vec<super::StoredRuntimeBlob>,
+    content: &'a RuntimeContentStore,
 }
 
 struct FinishAuthority<'a> {
@@ -182,6 +184,7 @@ impl PactrunPersistence {
         run: RunId,
         finish: &RunFinish,
     ) -> Result<RunFinishReceipt, PersistenceError> {
+        self.prepare_restore_payloads(run)?;
         let mut db = self
             .database
             .lock()
@@ -215,6 +218,7 @@ impl PactrunPersistence {
             None
         } else {
             Some(super::sqlite_snapshots::replace_from_restore_snapshot(
+                &self.runtime_content,
                 &tx,
                 run,
                 header.instance,
@@ -273,13 +277,25 @@ impl PactrunPersistence {
     }
 
     pub(crate) fn publish_capture<'a>(
-        &self,
+        &'a self,
         owner: &'a ExecutionOwnerSession,
         run: RunId,
         finish: &RunFinish,
         manifest: &'a crate::snapshot_integrity::VerifiedSnapshotManifest,
         blobs: &'a mut [SnapshotBlobWrite<'a>],
     ) -> Result<RunFinishReceipt, PersistenceError> {
+        if self.session.is_none() {
+            return Err(PersistenceError::WriterAdmissionRequired);
+        }
+        let mut files = Vec::new();
+        for blob in blobs.iter_mut() {
+            files.push(super::immutable_data::publish(
+                &self.runtime_content,
+                &blob.digest,
+                blob.byte_len,
+                blob.reader,
+            )?);
+        }
         let mut database = self
             .database
             .lock()
@@ -298,7 +314,12 @@ impl PactrunPersistence {
             FinishAuthority {
                 owner: Some(owner),
                 outputs: Some(&[]),
-                capture: Some(CapturePublication { manifest, blobs }),
+                capture: Some(CapturePublication {
+                    manifest,
+                    blobs,
+                    files,
+                    content: &self.runtime_content,
+                }),
                 restore: false,
                 migration: false,
                 deletion: false,
@@ -663,6 +684,7 @@ impl PactrunPersistence {
             })?;
         stream_payload(
             &transaction,
+            &self.runtime_content,
             instance_id(row.0)?,
             payload_id(row.1)?,
             destination,
@@ -1383,7 +1405,12 @@ fn admission_decision(
         let target =
             super::sqlite_instances::load_instance_view_from(transaction, header.instance)?
                 .ok_or_else(|| PersistenceError::MissingInstance(header.instance.to_string()))?;
-        match super::sqlite_snapshots::qualify_restore_snapshot(transaction, &target, *snapshot) {
+        match super::sqlite_snapshots::qualify_restore_snapshot(
+            transaction,
+            runtime_content,
+            &target,
+            *snapshot,
+        ) {
             Ok(_) => {}
             Err(PersistenceError::MissingSnapshot(_)) => {
                 return Ok(Err(AdmissionRefusal::PlanInvalidated(
@@ -1832,7 +1859,13 @@ fn validate_capture_publication(
                 }
                 if !digests.contains_key(payload) {
                     let mut sink = HashSink(Sha256::new());
-                    stream_payload(tx, header.instance, *payload, &mut sink)?;
+                    stream_payload(
+                        tx,
+                        publication.content,
+                        header.instance,
+                        *payload,
+                        &mut sink,
+                    )?;
                     digests.insert(*payload, Sha256Digest::from_bytes(sink.0.finalize().into()));
                 }
                 if binding.state != SnapshotBindingState::Bound(digests[payload].clone()) {
@@ -2131,13 +2164,16 @@ fn finish_run_authorized(
     if let Some(publication) = authority.capture.as_mut() {
         validate_capture_publication(transaction, run, header, operation.revision(), publication)?;
         super::sqlite_snapshots::insert_snapshot_manifest(transaction, publication.manifest)?;
-        for blob in publication.blobs.iter_mut() {
-            super::sqlite_snapshots::insert_snapshot_blob(
+        for file in &publication.files {
+            if !publication.content.owns_publication(file) {
+                return Err(PersistenceError::CorruptSnapshot(
+                    "foreign data publication",
+                ));
+            }
+            super::sqlite_snapshots::insert_snapshot_file(
                 transaction,
                 publication.manifest.manifest().snapshot_id(),
-                &blob.digest,
-                blob.byte_len,
-                blob.reader,
+                file,
             )?;
         }
     }

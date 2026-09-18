@@ -375,6 +375,47 @@ impl RuntimeContentStore {
         })
     }
 
+    /// Verify exactly the bytes delivered, with no payload-sized allocation and
+    /// without hashing once to open and then again to copy a large value.
+    pub(crate) fn stream_verified(
+        &self,
+        digest: &Sha256Digest,
+        target: &mut dyn Write,
+    ) -> Result<u64, RuntimeContentStoreError> {
+        let name = digest_basename(digest);
+        let mut file = platform::open_existing_read(&self.root, &name, &self.root_file)
+            .map_err(|e| self.classify_open_error(digest, "open immutable data", e))?;
+        let mut buffer = [0; STREAM_BUFFER_BYTES];
+        let mut hash = Sha256::new();
+        let mut length = 0_u64;
+        loop {
+            let count = match file.read(&mut buffer) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                other => {
+                    other.map_err(|e| RuntimeContentStoreError::io("read immutable data", e))?
+                }
+            };
+            if count == 0 {
+                break;
+            }
+            length = length
+                .checked_add(count as u64)
+                .ok_or(RuntimeContentStoreError::LengthOverflow)?;
+            target
+                .write_all(&buffer[..count])
+                .map_err(|e| RuntimeContentStoreError::io("write immutable data", e))?;
+            hash.update(&buffer[..count]);
+        }
+        let actual = Sha256Digest::from_bytes(hash.finalize().into());
+        if actual != *digest {
+            return Err(RuntimeContentStoreError::CorruptBlob {
+                expected: digest.clone(),
+                actual,
+            });
+        }
+        Ok(length)
+    }
+
     pub(crate) fn verify_runtime_content_available(
         &self,
         closure: &RuntimeContentClosureIdentityV1,

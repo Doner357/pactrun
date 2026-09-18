@@ -6,6 +6,11 @@ use std::{
 };
 use tempfile::TempDir;
 
+mod file_backed {
+    use super::*;
+    include!("snapshot_file_tests.rs");
+}
+
 fn root() -> (TempDir, PathBuf) {
     let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m4-s3-store-tests");
     fs::create_dir_all(&parent).unwrap();
@@ -131,14 +136,7 @@ fn corrupted_stored_bytes_are_not_repaired_by_idempotent_import_or_export() {
     let mut bundle = prepared(&p, 2);
     let id = bundle.manifest().manifest().snapshot_id();
     p.import_snapshot_bundle(&mut bundle).unwrap();
-    p.database
-        .lock()
-        .unwrap()
-        .execute(
-            "UPDATE snapshot_blob_chunks SET chunk_bytes=zeroblob(length(chunk_bytes))",
-            [],
-        )
-        .unwrap();
+    super::corrupt_snapshot_for_test(&path, id);
     p.inspect_snapshot(id).unwrap(); // Structural inspection does not claim payload verification.
     assert!(matches!(
         p.verify_snapshot(id),
@@ -400,8 +398,57 @@ fn snapshot_import_worker() {
     p.import_snapshot_bundle(&mut bundle).unwrap();
 }
 
+// Test-ID: PR-TEST-0480
+// Verifies: PR-REQ-0292, PR-REQ-0293, PR-REQ-0298, PR-REQ-0347
+#[test]
+fn snapshot_database_full_rolls_back_without_misclassifying_content() {
+    let (_tmp, path) = root();
+    let p = PactrunPersistence::open(&path).unwrap();
+    let bytes = vec![0x31; 2 * 1024 * 1024];
+    let digest = Sha256Digest::from_bytes(Sha256::digest(&bytes).into());
+    let mut f = fixture(2);
+    let mut raw: serde_json::Value =
+        serde_json::from_str(f["raw_manifest"].as_str().unwrap()).unwrap();
+    raw["managed_bindings"] = serde_json::json!([]);
+    raw["service_content"] = serde_json::Value::Array((0..4096).map(|i| serde_json::json!({"role":"database","path":format!("data/item-{i}"),"blob_digest":digest.as_str()})).collect());
+    f["raw_manifest"] = serde_json::json!(raw.to_string());
+    f["blob_contents"] = serde_json::json!({digest.as_str():hex::encode(bytes)});
+    let (mut bundle, _) = prepared_fixture(&p, &f);
+    let id = bundle.manifest().manifest().snapshot_id();
+    {
+        let db = p.database.lock().unwrap();
+        let pages: i64 = db.query_row("PRAGMA page_count", [], |r| r.get(0)).unwrap();
+        db.pragma_update(None, "max_page_count", pages).unwrap();
+    }
+    let error = p.import_snapshot_bundle(&mut bundle).unwrap_err();
+    assert!(matches!(error, PersistenceError::Sqlite { ref source, .. }
+        if source.sqlite_error_code() == Some(rusqlite::ErrorCode::DiskFull)));
+    assert!(p.list_snapshots(None).unwrap().is_empty());
+    {
+        let db = p.database.lock().unwrap();
+        for table in ["snapshot_blobs", "snapshot_blob_chunks", "runs"] {
+            assert_eq!(
+                db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+        db.pragma_update(None, "max_page_count", 2147483646_i64)
+            .unwrap();
+    }
+    // The identical validated content is usable after the resource is restored.
+    assert!(p.import_snapshot_bundle(&mut bundle).unwrap().inserted);
+    p.verify_snapshot(id).unwrap();
+    drop(p);
+    PactrunPersistence::open(&path)
+        .unwrap()
+        .verify_snapshot(id)
+        .unwrap();
+}
+
 // Test-ID: PR-TEST-0212
-// Verifies: PR-REQ-0292, PR-REQ-0298
+// Verifies: PR-REQ-0292, PR-REQ-0298, PR-REQ-0347
 #[test]
 fn process_loss_before_and_after_import_commit_has_one_authoritative_boundary() {
     for (fault, count) in [
@@ -423,6 +470,17 @@ fn process_loss_before_and_after_import_commit_has_one_authoritative_boundary() 
         assert_eq!(status.code(), Some(87));
         let p = PactrunPersistence::open(&path).unwrap();
         assert_eq!(p.list_snapshots(None).unwrap().len(), count);
+        drop(p);
+        let collector = PactrunPersistence::open_for_collection(&path).unwrap();
+        let report = collector.collect_content(true).unwrap();
+        if count == 0 {
+            assert!(report.removed > 0);
+        } else {
+            assert_eq!(report.removed, 0);
+            assert!(report.retained > 0);
+        }
+        drop(collector);
+        let p = PactrunPersistence::open(&path).unwrap();
         let mut bundle = prepared(&p, 2);
         p.import_snapshot_bundle(&mut bundle).unwrap();
         assert_eq!(p.list_snapshots(None).unwrap().len(), 1);

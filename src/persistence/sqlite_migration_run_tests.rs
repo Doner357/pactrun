@@ -298,89 +298,113 @@ fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
 }
 
 // Test-ID: PR-TEST-0301
-// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0158, PR-REQ-0165
+// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0158, PR-REQ-0165, PR-REQ-0347
 #[test]
 fn declarative_chain_commits_incomplete_middle_then_atomic_success_and_copies_protection() {
-    let (_tmp, root) = root();
-    let p = PactrunPersistence::open(&root).unwrap();
-    let (instance, path, file) = fixture(&p);
-    let plan = plan(&p, instance.id, &path);
-    let reader = observe(&p, instance.id, &file, 30);
-    let original = binding_payload(
-        &p.database.lock().unwrap(),
-        instance.id,
-        &InputIdentity::parse("old").unwrap(),
-    )
-    .unwrap()
-    .unwrap()
-    .0;
-    let run = accepted(&p, &plan, 31);
-    let owner = p.staging_session().unwrap().owner();
-    p.admit_declarative_migration(run, &owner, &plan, false)
+    for external in [false, true] {
+        let (_tmp, root) = root();
+        let p = PactrunPersistence::open(&root).unwrap();
+        let (instance, path, file) = fixture(&p);
+        if external {
+            let digest = Sha256Digest::from_bytes(Sha256::digest(b"secret bytes").into());
+            p.put_runtime_content(&digest, &mut Cursor::new(b"secret bytes"))
+                .unwrap();
+            let mut db = p.database.lock().unwrap();
+            let payload = binding_payload(&db, instance.id, &InputIdentity::parse("old").unwrap())
+                .unwrap()
+                .unwrap()
+                .0;
+            let tx = db.transaction().unwrap();
+            tx.execute("UPDATE managed_input_payloads SET content_digest=?3 WHERE instance_id=?1 AND payload_id=?2", params![instance.id.as_bytes().as_slice(),payload.as_bytes().as_slice(),digest.to_bytes().as_slice()]).unwrap();
+            tx.execute(
+                "DELETE FROM managed_input_payload_chunks WHERE instance_id=?1 AND payload_id=?2",
+                params![
+                    instance.id.as_bytes().as_slice(),
+                    payload.as_bytes().as_slice()
+                ],
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        let plan = plan(&p, instance.id, &path);
+        let reader = observe(&p, instance.id, &file, 30);
+        let original = binding_payload(
+            &p.database.lock().unwrap(),
+            instance.id,
+            &InputIdentity::parse("old").unwrap(),
+        )
+        .unwrap()
+        .unwrap()
+        .0;
+        let run = accepted(&p, &plan, 31);
+        let owner = p.staging_session().unwrap().owner();
+        p.admit_declarative_migration(run, &owner, &plan, false)
+            .unwrap()
+            .unwrap();
+        assert!(
+            p.finish_run_owned(&owner, run, &failed(RunOutcome::Succeeded), &[], &mut [])
+                .is_err()
+        );
+        let first = p
+            .publish_declarative_migration_edge(run, &owner, 0)
+            .unwrap();
+        assert_eq!(first.committed_edges, 1);
+        let middle = p.load_instance_by_id(instance.id).unwrap().unwrap();
+        assert_eq!(middle.active_revision, path[1]);
+        assert!(!middle.required_inputs_satisfied);
+        assert!(matches!(
+            p.load_managed_run(run).unwrap().unwrap().state,
+            RunState::Running(_)
+        ));
+        assert_eq!(
+            p.publish_declarative_migration_edge(run, &owner, 0)
+                .unwrap(),
+            first
+        );
+        let last = p
+            .publish_declarative_migration_edge(run, &owner, 1)
+            .unwrap();
+        assert_eq!(last.committed_edges, 2);
+        assert_ne!(last.boundary_state_version, first.boundary_state_version);
+        let current = p.load_instance_by_id(instance.id).unwrap().unwrap();
+        assert_eq!(current.active_revision, path[2]);
+        assert!(current.required_inputs_satisfied);
+        assert!(
+            matches!(p.load_managed_run(run).unwrap().unwrap().state,RunState::Finished(o) if o.outcome==RunOutcome::Succeeded)
+        );
+        let new = binding_payload(
+            &p.database.lock().unwrap(),
+            instance.id,
+            &InputIdentity::parse("new").unwrap(),
+        )
         .unwrap()
         .unwrap();
-    assert!(
-        p.finish_run_owned(&owner, run, &failed(RunOutcome::Succeeded), &[], &mut [])
-            .is_err()
-    );
-    let first = p
-        .publish_declarative_migration_edge(run, &owner, 0)
+        assert_ne!(new.0, original);
+        assert_eq!(new.1, ManagedInputProtection::Normal);
+        let old_rank:i64=p.database.lock().unwrap().query_row("SELECT protection_rank FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![instance.id.as_bytes().as_slice(),original.as_bytes().as_slice()],|r|r.get(0)).unwrap();
+        assert_eq!(old_rank, 1);
+        let mut bytes = Vec::new();
+        p.export_input(
+            instance.id,
+            &InputIdentity::parse("new").unwrap(),
+            false,
+            &mut bytes,
+        )
         .unwrap();
-    assert_eq!(first.committed_edges, 1);
-    let middle = p.load_instance_by_id(instance.id).unwrap().unwrap();
-    assert_eq!(middle.active_revision, path[1]);
-    assert!(!middle.required_inputs_satisfied);
-    assert!(matches!(
-        p.load_managed_run(run).unwrap().unwrap().state,
-        RunState::Running(_)
-    ));
-    assert_eq!(
-        p.publish_declarative_migration_edge(run, &owner, 0)
-            .unwrap(),
-        first
-    );
-    let last = p
-        .publish_declarative_migration_edge(run, &owner, 1)
-        .unwrap();
-    assert_eq!(last.committed_edges, 2);
-    assert_ne!(last.boundary_state_version, first.boundary_state_version);
-    let current = p.load_instance_by_id(instance.id).unwrap().unwrap();
-    assert_eq!(current.active_revision, path[2]);
-    assert!(current.required_inputs_satisfied);
-    assert!(
-        matches!(p.load_managed_run(run).unwrap().unwrap().state,RunState::Finished(o) if o.outcome==RunOutcome::Succeeded)
-    );
-    let new = binding_payload(
-        &p.database.lock().unwrap(),
-        instance.id,
-        &InputIdentity::parse("new").unwrap(),
-    )
-    .unwrap()
-    .unwrap();
-    assert_ne!(new.0, original);
-    assert_eq!(new.1, ManagedInputProtection::Normal);
-    let old_rank:i64=p.database.lock().unwrap().query_row("SELECT protection_rank FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![instance.id.as_bytes().as_slice(),original.as_bytes().as_slice()],|r|r.get(0)).unwrap();
-    assert_eq!(old_rank, 1);
-    let mut bytes = Vec::new();
-    p.export_input(
-        instance.id,
-        &InputIdentity::parse("new").unwrap(),
-        false,
-        &mut bytes,
-    )
-    .unwrap();
-    assert_eq!(bytes, b"secret bytes");
-    assert!(
-        current
-            .bindings
-            .iter()
-            .any(|b| b.input_id.as_str() == "inert"
-                && b.role == ManagedInputRole::Retained
-                && b.protection == ManagedInputProtection::Secret)
-    );
-    assert_released(&p, run);
-    p.finish_run(reader, &failed(RunOutcome::Cancelled), &mut [])
-        .unwrap();
+        assert_eq!(bytes, b"secret bytes");
+        assert!(
+            current
+                .bindings
+                .iter()
+                .any(|b| b.input_id.as_str() == "inert"
+                    && b.role == ManagedInputRole::Retained
+                    && b.protection == ManagedInputProtection::Secret)
+        );
+        assert_released(&p, run);
+        p.finish_run(reader, &failed(RunOutcome::Cancelled), &mut [])
+            .unwrap();
+    }
 }
 
 // Test-ID: PR-TEST-0302

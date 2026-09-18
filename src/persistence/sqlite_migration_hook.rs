@@ -118,7 +118,9 @@ impl PactrunPersistence {
         if !pinned {
             return Err(rejected("Migration payload is not pinned"));
         }
-        stream_payload(&db, view.instance, payload, &mut { output })
+        stream_payload(&db, &self.runtime_content, view.instance, payload, &mut {
+            output
+        })
     }
 
     pub(crate) fn copy_migration_runtime(

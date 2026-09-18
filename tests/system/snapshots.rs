@@ -94,11 +94,239 @@ fn capture(s: &Scenario) -> String {
     safe(&output);
     field(&output, "snapshot")
 }
+
+// Test-ID: PR-TEST-0476
+// Verifies: PR-REQ-0346
+#[test]
+fn create_and_restore_matches_two_operations_and_preserves_partial_completion() {
+    let s = Scenario::new(0x91, &source("observe"));
+    let revision = initialize(&s);
+    let id = capture(&s);
+    let combined = s.run_with_stdin(
+        [
+            "instance",
+            "create",
+            "combined",
+            "--revision",
+            &revision,
+            "--restore-from",
+            &id,
+            "--param-stdin",
+            "enabled",
+        ],
+        b"true".to_vec(),
+    );
+    assert_success(&combined);
+    safe(&combined);
+    assert_success(&s.create_instance("separate", &revision));
+    assert_success(&s.run(["snapshot", "restore", "separate", &id]));
+    for name in ["combined", "separate"] {
+        assert_eq!(
+            s.run([
+                "input",
+                "export",
+                name,
+                "secret",
+                "--output",
+                "-",
+                "--authorize-secret-export"
+            ])
+            .stdout,
+            SECRET
+        );
+        assert_eq!(run_count(&s.run(["run", "list", name])), 1);
+    }
+    let before = s.hook_launches();
+    let duplicate = s.run([
+        "instance",
+        "create",
+        "combined",
+        "--revision",
+        &revision,
+        "--restore-from",
+        &id,
+    ]);
+    assert_exit(&duplicate, 1);
+    assert_eq!(s.hook_launches(), before);
+    assert_eq!(run_count(&s.run(["run", "list", "combined"])), 1);
+    let failed = s.run([
+        "instance",
+        "create",
+        "partial",
+        "--revision",
+        &revision,
+        "--restore-from",
+        &id,
+        "--param",
+        "mode=failure",
+    ]);
+    assert_exit(&failed, 1);
+    safe(&failed);
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("restore_run:"));
+    assert_success(&s.run(["instance", "show", "partial"]));
+    assert_eq!(run_count(&s.run(["run", "list", "partial"])), 1);
+    assert_exit(
+        &s.run([
+            "input",
+            "export",
+            "partial",
+            "secret",
+            "--output",
+            "-",
+            "--authorize-secret-export",
+        ]),
+        1,
+    );
+}
+
+// Test-ID: PR-TEST-0477
+// Verifies: PR-REQ-0346
+#[test]
+fn create_and_restore_rejects_invalid_preflight_and_options_without_creating() {
+    let s = Scenario::new(0x92, &source("observe"));
+    let revision = initialize(&s);
+    let id = capture(&s);
+    let original = s.run(["instance", "list"]).stdout;
+    let before = s.hook_launches();
+    for (tail, code) in [
+        (
+            vec!["--restore-from", "ffffffffffffffffffffffffffffffff"],
+            1,
+        ),
+        (vec!["--restore-from", &id, "--param", "enabled=invalid"], 1),
+        (vec!["--restore-from", &id, "--param", "unknown=value"], 2),
+        (vec!["--restore-from", &id, "--plan"], 2),
+        (
+            vec!["--restore-from", &id, "--input-file", "secret=not-opened"],
+            2,
+        ),
+        (vec!["--restore-from", &id, "--input-stdin", "secret"], 2),
+        (vec!["--restore-from", &id, "--restore-from", &id], 2),
+        (vec!["--param", "mode=success"], 2),
+        (vec!["--execution-timeout-ms", "1"], 2),
+    ] {
+        let mut args = vec!["instance", "create", "rejected", "--revision", &revision];
+        args.extend(tail);
+        let result = s.run(args);
+        assert_exit(&result, code);
+        safe(&result);
+        assert_eq!(s.run(["instance", "list"]).stdout, original);
+    }
+    assert_exit(
+        &s.run(["instance", "create", "rejected", "--restore-from", &id]),
+        2,
+    );
+    let other = Scenario::new(0x93, &source("observe"));
+    let other_revision = other.install();
+    let bundle = s.path("preflight.zip");
+    assert_success(&export(&s, &id, &bundle));
+    assert_success(&other.run(["snapshot", "import", bundle.to_str().unwrap()]));
+    assert_exit(
+        &other.run([
+            "instance",
+            "create",
+            "rejected",
+            "--revision",
+            &other_revision,
+            "--restore-from",
+            &id,
+        ]),
+        1,
+    );
+    assert!(other.run(["instance", "list"]).stdout.is_empty());
+    assert_eq!(s.hook_launches(), before);
+}
+
+// Supporting preflight and cancellation coverage for PR-TEST-0476/0477.
+#[test]
+fn create_restore_missing_capability_and_timeout_keep_the_documented_boundaries() {
+    let mut text = source("observe");
+    let start = text.find("    restore:\n").unwrap();
+    let end = text[start..].find("  migrations:").unwrap() + start;
+    text.replace_range(start..end, "");
+    let s = Scenario::new(0x95, &text);
+    let revision = s.install();
+    let bundle = s.path("no-restore.zip");
+    let id = v1_bundle(&bundle, &revision);
+    assert_success(&s.run(["snapshot", "import", bundle.to_str().unwrap()]));
+    assert_exit(
+        &s.run([
+            "instance",
+            "create",
+            "rejected",
+            "--revision",
+            &revision,
+            "--restore-from",
+            &id,
+        ]),
+        1,
+    );
+    assert!(s.run(["instance", "list"]).stdout.is_empty());
+    assert_eq!(s.hook_launches(), 0);
+
+    let s = Scenario::new(0x96, &source("observe"));
+    let revision = initialize(&s);
+    let id = capture(&s);
+    let failed = s.run([
+        "instance",
+        "create",
+        "timed-out",
+        "--revision",
+        &revision,
+        "--restore-from",
+        &id,
+        "--execution-timeout-ms",
+        "0",
+    ]);
+    assert_exit(&failed, 1);
+    safe(&failed);
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
+    assert_success(&s.run(["instance", "show", "timed-out"]));
+    assert_eq!(run_count(&s.run(["run", "list", "timed-out"])), 1);
+}
 fn bind(s: &Scenario, bytes: &[u8]) {
     assert_success(&s.run_with_stdin(
         ["input", "set", "service", "secret", "--stdin"],
         bytes.to_vec(),
     ));
+}
+
+// Test-ID: PR-TEST-0484
+// Verifies: PR-REQ-0347, PR-REQ-0341, PR-REQ-0343
+#[test]
+fn snapshot_deletion_and_gc_preserve_restored_input_value_until_its_owner_retires() {
+    let s = Scenario::new(0x97, &source("observe"));
+    let revision = initialize(&s);
+    let id = capture(&s);
+    assert_success(&s.run([
+        "instance",
+        "create",
+        "restored",
+        "--revision",
+        &revision,
+        "--restore-from",
+        &id,
+    ]));
+    assert_success(&s.run(["snapshot", "delete", &id]));
+    assert_success(&s.run(["storage", "gc"]));
+    let value = s.run([
+        "input",
+        "export",
+        "restored",
+        "secret",
+        "--output",
+        "-",
+        "--authorize-secret-export",
+    ]);
+    assert_success(&value);
+    assert_eq!(value.stdout, SECRET);
+    for name in ["restored", "service"] {
+        assert_success(&s.run(["instance", "abandon", name]));
+    }
+    let collected = s.run(["storage", "gc"]);
+    assert_success(&collected);
+    assert!(String::from_utf8_lossy(&collected.stdout).contains("removed=1"));
 }
 fn run_count(output: &Output) -> usize {
     assert_success(output);

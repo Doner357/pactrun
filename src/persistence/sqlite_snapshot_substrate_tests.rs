@@ -335,7 +335,7 @@ fn restore_revalidates_transitions_stale_state_and_deleted_source_without_launch
     let damaged = store(&p, &target, Vec::new(), true, BTreeMap::new());
     let plan = compile(&app, &target, SnapshotOperation::Restore(damaged));
     let run = accept(&app, plan);
-    p.database.lock().unwrap().execute("UPDATE snapshot_blob_chunks SET chunk_bytes=zeroblob(length(chunk_bytes)) WHERE snapshot_id=?1",[damaged.as_bytes().as_slice()]).unwrap();
+    crate::persistence::sqlite_snapshots::corrupt_snapshot_for_test(&path, damaged);
     assert!(app.advance_owner_continuation(run).unwrap());
     assert!(app.claim_snapshot_execution(run).unwrap().is_none());
     assert!(
@@ -701,7 +701,7 @@ fn restore_admission_captures_nonzero_consequence_without_clearing_or_refreshing
 // Test-ID: PR-TEST-0237
 // Verifies: PR-REQ-0289, PR-REQ-0293
 #[test]
-fn valid_import_can_exceed_restore_expansion_and_cannot_reach_the_launch_boundary() {
+fn valid_import_beyond_former_restore_expansion_can_be_admitted() {
     let (_tmp, path) = root();
     let p = PactrunPersistence::open(&path).unwrap();
     let revision = managed_revision(&p, Operation::ObserveCapture);
@@ -733,52 +733,14 @@ fn valid_import_can_exceed_restore_expansion_and_cannot_reach_the_launch_boundar
         operation: SnapshotOperation::Restore(source),
         parameters: Vec::new(),
     };
-    assert!(matches!(
-        compile_snapshot(&app, &PlatformHostLauncherLookup, &intent, &[]),
-        Err(ApplicationError::Persistence(
-            PersistenceError::SnapshotCodec(
-                crate::snapshot_integrity::SnapshotCodecError::Capability(_)
-            )
-        ))
-    ));
+    let plan = compile_snapshot(&app, &PlatformHostLauncherLookup, &intent, &[]).unwrap();
     assert_eq!(count(&p, "SELECT count(*) FROM runs"), 0);
-    // A forged observation claims runtime support; Admission still owns the
-    // capability decision. This is not the production Compiler's observation.
-    let mut observed = p
-        .observe_snapshot_compilation(&SnapshotIntent {
-            operation: SnapshotOperation::Capture,
-            ..intent.clone()
-        })
-        .unwrap();
-    observed.snapshot = Some(
-        SnapshotManifest::new(SnapshotManifestParts {
-            version: SnapshotIntegrityVersion::V2,
-            snapshot_id: source,
-            producer: revision,
-            origin_instance_id: view.id,
-            captured_at: SnapshotTimestamp::new(0, 0).unwrap(),
-            managed_bindings: bindings,
-            service_content: Vec::new(),
-        })
-        .unwrap(),
-    );
-    let launch = CompiledHookLaunch::Direct {
-        executable: observed.revision.runtime_content.files()[0].clone(),
-    };
-    let run = accept(
-        &app,
-        build_snapshot_plan(&intent, observed, launch).unwrap(),
-    );
+    let run = accept(&app, plan);
+    assert!(!app.advance_owner_continuation(run).unwrap());
+    let claim = app.claim_snapshot_execution(run).unwrap().expect("former byte ceiling no longer refuses Admission");
+    claim.stop_before_launch(plain_finish(RunOutcome::Cancelled)).unwrap();
     assert!(app.advance_owner_continuation(run).unwrap());
-    assert!(app.claim_snapshot_execution(run).unwrap().is_none());
-    assert!(
-        managed_finished(&p, run)
-            .primary_failure
-            .unwrap()
-            .failure
-            .message
-            .contains("capability")
-    );
+    assert_eq!(managed_finished(&p, run).outcome, RunOutcome::Cancelled);
     assert_eq!(count(&p, "SELECT count(*) FROM run_restore_admissions"), 0);
 }
 

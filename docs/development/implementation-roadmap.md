@@ -855,7 +855,11 @@ existing foundations, design rationale, open decisions and acceptance criteria.
 These list numbers are not M-series identifiers. Managed Object Lifecycle and GC
 is complete: all S0-S5 slices are implemented, verified and integrated into local
 develop after separately authorized commit and merge. The next planned scope is
-Snapshot Capacity and Restore Workflow; detailed design remains pending.
+Snapshot Capacity and Restore Workflow. Its design is now approved and
+[feature-branch implementation and acceptance](./snapshot-capacity-and-restore-status.md)
+are complete on the feature branch after authorization of V10 immutable data
+references addressing measured WAL-index growth. Full CI and real beyond-ceiling
+round trips passed; integration and publication are not implied.
 The subsequent [lifecycle implementation record](./managed-object-lifecycle-status.md)
 records the full implementation, evidence and local integration. The integrated
 develop runtime is V9, with explicit exact-V8 upgrade only.

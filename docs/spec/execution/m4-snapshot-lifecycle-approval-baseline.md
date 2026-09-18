@@ -150,7 +150,7 @@ a fresh InstanceStateVersion, recovery boundary/disposition, Succeeded, and
 clear any existing ManualRecoveryRequired guard. Failed, cancelled, timed-out,
 or interrupted Restore MUST NOT clear a pre-existing guard.
 
-**Verification: PR-TEST-0203, PR-TEST-0232, PR-TEST-0233, PR-TEST-0239, PR-TEST-0241, PR-TEST-0257, PR-TEST-0258, PR-TEST-0259, PR-TEST-0260, PR-TEST-0261, PR-TEST-0262, PR-TEST-0263, PR-TEST-0264, PR-TEST-0265, PR-TEST-0266, PR-TEST-0267, PR-TEST-0268, PR-TEST-0269, PR-TEST-0271.**
+**Verification: PR-TEST-0203, PR-TEST-0232, PR-TEST-0233, PR-TEST-0239, PR-TEST-0241, PR-TEST-0257, PR-TEST-0258, PR-TEST-0259, PR-TEST-0260, PR-TEST-0261, PR-TEST-0262, PR-TEST-0263, PR-TEST-0264, PR-TEST-0265, PR-TEST-0266, PR-TEST-0267, PR-TEST-0268, PR-TEST-0269, PR-TEST-0271, PR-TEST-0479, PR-TEST-0482, PR-TEST-0485.**
 
 Coverage includes atomic consequence-counter advancement, existing guards and
 terminal retries, staged Restore eligibility/protection checks, and admission

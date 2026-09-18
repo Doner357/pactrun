@@ -808,7 +808,7 @@ fn explicit_storage_upgrade_cli_does_not_reconcile_or_accept_extra_options() {
     assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
     assert_eq!(version(&root), 5);
     // Historical V4/V5 implementations are fixture helpers only. The current
-    // CLI must not implicitly chain them before its exact V8-to-V9 upgrade.
+    // CLI must not implicitly chain older schemas before its explicit V8/V9 upgrade.
     assert!(PactrunPersistence::upgrade_v5_to_v6_fixture(&root).unwrap());
     assert_eq!(version(&root), 6);
     assert_eq!(invoke(&["storage", "upgrade"]).0, 1);
@@ -818,7 +818,7 @@ fn explicit_storage_upgrade_cli_does_not_reconcile_or_accept_extra_options() {
     let first = invoke(&["storage", "upgrade"]);
     assert_eq!(first.0, 0, "{}", first.2);
     assert!(first.1.contains("upgraded"));
-    assert_eq!(version(&root), 9);
+    assert_eq!(version(&root), SCHEMA_VERSION);
     let second = invoke(&["storage", "upgrade"]);
     assert_eq!(second.0, 0);
     assert!(second.1.contains("already current"));

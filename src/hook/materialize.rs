@@ -19,6 +19,26 @@ use crate::{
 
 use super::LiveOutputSlot;
 
+/// Check cancellation between bounded writes, including database chunk streams.
+/// Do not use Interrupted: generic copy loops retry that error indefinitely.
+pub(super) struct CancellableWriter<'a> {
+    pub(super) destination: &'a mut dyn Write,
+    pub(super) cancellation: &'a super::ActionCancellation,
+}
+
+impl Write for CancellableWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.cancellation.is_requested() {
+            return Err(io::Error::other("Snapshot materialization cancelled"));
+        }
+        self.destination.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.destination.flush()
+    }
+}
+
 #[path = "migration_materialize.rs"]
 mod migration;
 
@@ -67,6 +87,7 @@ impl MaterializedAction {
         staging: &StagingSession,
         run: crate::domain::RunId,
         plan: &crate::domain::SnapshotExecutionPlan,
+        cancellation: &super::ActionCancellation,
     ) -> Result<Self, MaterializationError> {
         use crate::domain::{ManagedRunIdentity, SnapshotBindingRole, SnapshotBindingState};
         let directory = staging.create_execution_directory(run)?;
@@ -101,6 +122,7 @@ impl MaterializedAction {
                     &directory,
                     &Path::new("bindings").join(binding.input_id.as_str()),
                     digest,
+                    cancellation,
                 )?;
                 bindings.push(json!({"handle":random_handle()?,"input_id":binding.input_id.as_str(),"role":"active","readonly_path":host_path(&path)?}));
             }
@@ -113,6 +135,7 @@ impl MaterializedAction {
                     &directory,
                     &Path::new("snapshot-content").join(&relative),
                     &descriptor.blob_digest,
+                    cancellation,
                 )?;
                 descriptors.push(json!({"role":descriptor.role.as_str(),"path":descriptor.path.as_str(),"blob_digest":descriptor.blob_digest.as_str(),"materialized_path":relative}));
             }
@@ -293,6 +316,7 @@ impl MaterializedAction {
         staging: &StagingSession,
         run: crate::domain::RunId,
         plan: &crate::domain::SnapshotExecutionPlan,
+        cancellation: &super::ActionCancellation,
     ) -> Result<Self, MaterializationError> {
         let directory = staging.create_execution_directory(run)?;
         let result = (|| {
@@ -300,9 +324,15 @@ impl MaterializedAction {
             let workspace = directory.create_directory(Path::new("workspace"))?;
             directory.create_directory(Path::new("bindings"))?;
             let candidate = directory.create_directory(Path::new("candidate"))?;
-            let preparation =
-                super::capture::CapturePreparation::new(p, staging, run, plan, &candidate)
-                    .map_err(MaterializationError::Capture)?;
+            let preparation = super::capture::CapturePreparation::new(
+                p,
+                staging,
+                run,
+                plan,
+                &candidate,
+                cancellation,
+            )
+            .map_err(MaterializationError::Capture)?;
             for file in plan.runtime_content() {
                 materialize_runtime_file(p, run, &directory, file)?;
             }
@@ -311,7 +341,7 @@ impl MaterializedAction {
                 let (path, mut file) =
                     directory.create_file(&Path::new("bindings").join(binding.input.as_str()))?;
                 preparation
-                    .copy_binding(binding, &mut file)
+                    .copy_binding(binding, &mut file, cancellation)
                     .map_err(MaterializationError::Capture)?;
                 file.flush()?;
                 drop(file);
@@ -527,9 +557,17 @@ fn materialize_restore_blob(
     directory: &ExecutionDirectory,
     relative: &Path,
     digest: &crate::domain::Sha256Digest,
+    cancellation: &super::ActionCancellation,
 ) -> Result<PathBuf, MaterializationError> {
     let (path, mut file) = directory.create_file(relative)?;
-    p.copy_admitted_restore_blob(run, digest, &mut file)?;
+    p.copy_admitted_restore_blob(
+        run,
+        digest,
+        &mut CancellableWriter {
+            destination: &mut file,
+            cancellation,
+        },
+    )?;
     file.flush()?;
     drop(file);
     let mut permissions = fs::metadata(&path)?.permissions();

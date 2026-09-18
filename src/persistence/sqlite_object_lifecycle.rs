@@ -61,10 +61,50 @@ impl PactrunPersistence {
             }
         }
         drop(query);
+        super::sqlite_snapshots::validate_collection_catalog(&tx)?;
+        let mut lengths = std::collections::BTreeMap::new();
+        // Physical bytes may have independent Revision, Snapshot and Input
+        // owners. Never mistake origin provenance for the complete root set.
+        let mut data = tx.prepare("SELECT blob_digest,byte_length FROM snapshot_blobs WHERE storage_kind=1 UNION SELECT content_digest,byte_length FROM managed_input_payloads WHERE content_digest IS NOT NULL")
+            .map_err(|e| PersistenceError::sqlite("read immutable data roots", e))?;
+        let rows = data
+            .query_map([], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?)))
+            .map_err(|e| PersistenceError::sqlite("read immutable data roots", e))?;
+        for row in rows {
+            let (raw, length) =
+                row.map_err(|e| PersistenceError::sqlite("read immutable data root", e))?;
+            let digest =
+                crate::domain::Sha256Digest::from_bytes(raw.try_into().map_err(|_| {
+                    PersistenceError::CorruptSnapshot("invalid immutable data root")
+                })?);
+            let length = u64::try_from(length)
+                .map_err(|_| PersistenceError::CorruptSnapshot("invalid immutable data length"))?;
+            if lengths
+                .insert(digest.clone(), length)
+                .is_some_and(|old| old != length)
+            {
+                return Err(PersistenceError::CorruptSnapshot(
+                    "inconsistent immutable data lengths",
+                ));
+            }
+            roots.insert(digest);
+        }
+        drop(data);
         // Validate referenced files before deleting anything. SQL references alone
         // cannot bless a mismatched canonical closure or missing/corrupt root.
         for digest in &roots {
-            self.runtime_content.open_verified(digest)?;
+            let length = self
+                .runtime_content
+                .stream_verified(digest, &mut std::io::sink())
+                .map_err(super::immutable_data::error)?;
+            if lengths
+                .get(digest)
+                .is_some_and(|expected| *expected != length)
+            {
+                return Err(PersistenceError::CorruptSnapshot(
+                    "immutable data length mismatch",
+                ));
+            }
         }
         let result = self.runtime_content.collect_unreferenced(&roots, execute)?;
         // Collection changes only files. Releasing a read-only SQL observation is

@@ -555,7 +555,13 @@ impl PactrunPersistence {
             }
             for b in &bindings {
                 if let MigrationValueOrigin::Existing(id) = b.origin {
-                    stream_payload(&tx, view.instance, id, &mut std::io::sink())?;
+                    stream_payload(
+                        &tx,
+                        &self.runtime_content,
+                        view.instance,
+                        id,
+                        &mut std::io::sink(),
+                    )?;
                 }
             }
             let mut service_state =
@@ -904,13 +910,19 @@ impl PactrunPersistence {
             let MigrationValueOrigin::Existing(payload) = binding.origin else {
                 return Err(rejected("unsupported declarative output"));
             };
-            stream_payload(&tx, view.instance, payload, &mut std::io::sink())?;
+            stream_payload(
+                &tx,
+                &self.runtime_content,
+                view.instance,
+                payload,
+                &mut std::io::sink(),
+            )?;
             let stored:i64=tx.query_row("SELECT protection_rank FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![view.instance.as_bytes().as_slice(),payload.as_bytes().as_slice()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("read Migration protection floor",e))?;
             let payload = if stored == i64::from(binding.protection.rank()) {
                 payload
             } else {
                 let copy = ManagedInputPayloadId::generate().map_err(|_| corrupt())?;
-                tx.execute("INSERT INTO managed_input_payloads SELECT instance_id,?3,?4,byte_length FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![view.instance.as_bytes().as_slice(),payload.as_bytes().as_slice(),copy.as_bytes().as_slice(),i64::from(binding.protection.rank())]).map_err(|e|PersistenceError::sqlite("materialize changed protection",e))?;
+                tx.execute("INSERT INTO managed_input_payloads SELECT instance_id,?3,?4,byte_length,content_digest FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2",params![view.instance.as_bytes().as_slice(),payload.as_bytes().as_slice(),copy.as_bytes().as_slice(),i64::from(binding.protection.rank())]).map_err(|e|PersistenceError::sqlite("materialize changed protection",e))?;
                 tx.execute("INSERT INTO managed_input_payload_chunks SELECT instance_id,?3,chunk_index,chunk_bytes FROM managed_input_payload_chunks WHERE instance_id=?1 AND payload_id=?2",params![view.instance.as_bytes().as_slice(),payload.as_bytes().as_slice(),copy.as_bytes().as_slice()]).map_err(|e|PersistenceError::sqlite("copy immutable Migration payload",e))?;
                 copy
             };

@@ -132,6 +132,11 @@ conflicts and failures without a misleading completed output.
 
 ## 2. Snapshot Capacity and Restore Workflow
 
+The detailed design was subsequently approved. See the
+[implementation and acceptance record](./snapshot-capacity-and-restore-status.md).
+The foundation and pending-choice text below records the original planning
+checkpoint; the linked normative contracts now own the approved changes.
+
 ### Purpose and existing foundation
 
 Remove arbitrary fixed service-data byte ceilings and provide a convenient
@@ -139,8 +144,8 @@ composition of Instance creation and Restore. Snapshot is state recovery, not
 Revision installation or whole-machine recovery. The availability of a compatible
 Revision and its execution prerequisites is not a defect in that boundary.
 
-The current [capacity contract](../spec/behavior/m4-runtime-capabilities.md)
-enforces separate profiles, including an 8 GiB service blob and 16 GiB Capture
+At this planning checkpoint the [capacity contract](../spec/behavior/m4-runtime-capabilities.md)
+enforced separate profiles, including an 8 GiB service blob and 16 GiB Capture
 service closure. These are current build capabilities, not permanent identity
 constraints. Chunked storage and streaming already exist, but real large-payload
 tests are not proof of arbitrary-scale operation.

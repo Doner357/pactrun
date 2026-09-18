@@ -95,7 +95,8 @@ pub(super) fn advance(
         Err(PersistenceError::SnapshotCodec(
             crate::snapshot_integrity::SnapshotCodecError::Capability(_),
         )) => {
-            state.publication_failure = Some("Restore exceeds a fixed build capability");
+            state.publication_failure =
+                Some("Restore exceeds a structural or representation capability");
             Ok(false)
         }
         Err(error) => Err(error),

@@ -22,7 +22,7 @@ use crate::{
     revision_content::decode_canonical_revision_core,
 };
 
-const PAYLOAD_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
+pub(super) const PAYLOAD_CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
     representation_maximum: crate::domain::MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1,
     insert_chunk_sql: "INSERT INTO managed_input_payload_chunks(        instance_id, payload_id, chunk_index, chunk_bytes     ) VALUES (?1, ?2, ?3, ?4)",
     select_chunks_sql: "SELECT chunk_index, chunk_bytes FROM managed_input_payload_chunks          WHERE instance_id=?1 AND payload_id=?2 ORDER BY chunk_index",
@@ -416,7 +416,13 @@ impl PactrunPersistence {
         if effective == ManagedInputProtection::Secret && !authorize_secret {
             return Err(PersistenceError::UnauthorizedSecretExport);
         }
-        stream_payload(&transaction, instance, payload, destination)?;
+        stream_payload(
+            &transaction,
+            &self.runtime_content,
+            instance,
+            payload,
+            destination,
+        )?;
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("close ExportInput snapshot", error))?;
@@ -492,6 +498,7 @@ pub(super) fn insert_payload(
 
 pub(super) fn stream_payload(
     database: &Connection,
+    content: &super::RuntimeContentStore,
     instance: InstanceId,
     payload: ManagedInputPayloadId,
     destination: &mut impl Write,
@@ -509,6 +516,28 @@ pub(super) fn stream_payload(
         return Err(PersistenceError::CorruptManagedInput(
             "oversize payload header".to_owned(),
         ));
+    }
+    let external: Option<Vec<u8>> = database.query_row("SELECT content_digest FROM managed_input_payloads WHERE instance_id=?1 AND payload_id=?2", params![instance.as_bytes().as_slice(),payload.as_bytes().as_slice()], |r| r.get(0)).map_err(|e| PersistenceError::sqlite("read immutable Input reference", e))?;
+    if let Some(external) = external {
+        let ambiguous: bool = database.query_row("SELECT EXISTS(SELECT 1 FROM managed_input_payload_chunks WHERE instance_id=?1 AND payload_id=?2)", params![instance.as_bytes().as_slice(),payload.as_bytes().as_slice()], |r| r.get(0)).map_err(|e| PersistenceError::sqlite("check Input representation", e))?;
+        if ambiguous {
+            return Err(PersistenceError::CorruptManagedInput(
+                "ambiguous Input representation".to_owned(),
+            ));
+        }
+        let digest =
+            crate::domain::Sha256Digest::from_bytes(external.try_into().map_err(|_| {
+                PersistenceError::CorruptManagedInput(
+                    "invalid immutable Input reference".to_owned(),
+                )
+            })?);
+        return super::immutable_data::stream(content, &digest, declared_length, destination)
+            .map_err(|e| match e {
+                PersistenceError::CorruptSnapshot(message) => {
+                    PersistenceError::CorruptManagedInput(message.to_owned())
+                }
+                other => other,
+            });
     }
     stream_chunks(
         database,

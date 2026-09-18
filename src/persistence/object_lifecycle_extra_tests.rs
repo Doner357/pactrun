@@ -59,7 +59,14 @@ fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() 
             .query_map([],|r|r.get::<_,String>(0)).unwrap().collect::<Result<Vec<_>,_>>().unwrap();
         let mut result = std::collections::BTreeMap::new();
         for name in names {
-            let mut query = db.prepare(&format!("SELECT * FROM {name}")).unwrap();
+            let projection = match name.as_str() {
+                "snapshot_blobs" => "snapshot_id,blob_digest,byte_length",
+                "managed_input_payloads" => "instance_id,payload_id,protection_rank,byte_length",
+                _ => "*",
+            };
+            let mut query = db
+                .prepare(&format!("SELECT {projection} FROM {name}"))
+                .unwrap();
             let columns = query.column_count();
             let mut data = query
                 .query_map([], |r| {

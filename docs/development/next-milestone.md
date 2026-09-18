@@ -146,8 +146,13 @@ then Versioning and Baseline Consolidation. The [lifecycle implementation record
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
 implemented, verified and integrated into local develop after authorized commit
 and merge. The next planned scope is Snapshot Capacity and Restore Workflow,
-including create-and-restore. Its detailed design/implementation and any release
-or publication remain separate tasks; this closeout starts none of them.
+including create-and-restore. The operator subsequently approved its design and
+continuous implementation; see the [current implementation record](./snapshot-capacity-and-restore-status.md).
+The operator subsequently authorized necessary persistence/schema adjustments.
+V10 S0-S5 implementation and acceptance are complete on the feature branch,
+including full CI and real beyond-ceiling round trips. Git integration remains
+unauthorized; the next separately planned capability is Shell Adapter / Loader.
+Integration, release and publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from
