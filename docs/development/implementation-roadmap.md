@@ -842,18 +842,27 @@ API is deferred until concrete demand. No replacement M8 is selected.
 
 ## Product completion work order
 
-The operator agreed the following order on 2026-09-17. The
-[detailed milestone plan](./product-completion-milestones.md) records scope,
-existing foundations, design rationale, open decisions and acceptance criteria.
+The [2026-09-17 plan](./product-completion-milestones.md) retains the original
+scope and rationale. Lifecycle/GC, Snapshot Capacity/Restore and Shell Loader are
+implemented and integrated. On 2026-09-19 the operator approved this
+[remaining capability sequence](./remaining-capability-milestones.md):
 
-1. **Managed Object Lifecycle and GC**, including Run Artifact export.
-2. **Snapshot Capacity and Restore Workflow**, including create-and-restore.
-3. **Shell Adapter / Loader**.
-4. **Machine-readable CLI Output**.
-5. **Versioning and Baseline Consolidation**, combining version evolution and
-   first-formal-baseline reorganization, intentionally last.
+| Order | Remaining milestone | State |
+| --- | --- | --- |
+| A | Execution Diagnostics and Instance State Observability | Approved planning scope; next, starting with S0 |
+| B | Object Catalog, Historical Discovery and Metadata Operations | Approved planning scope; after A |
+| C | Revision Bundle Export and Import | Approved planning scope; after B |
+| D | Machine-readable CLI Output | Existing scope, now after A-C |
+| E | Versioning and Baseline Consolidation | Existing final milestone, after D |
 
-These list numbers are not M-series identifiers. Managed Object Lifecycle and GC
+A-E are sequence labels, not M-series identifiers. The approval records the plan,
+not completed detailed contracts or authorization to begin runtime work. Full
+usage-guide writing is excluded; necessary Spec/help/acceptance material is not.
+A's S0 establishes the obligation inventory, and every milestone closes its own
+user-entry-point, observable-result and test evidence. Unowned gaps cannot wait
+silently for E. No calendar date or effort estimate is assigned.
+
+Managed Object Lifecycle and GC
 is complete: all S0-S5 slices are implemented, verified and integrated into local
 develop after separately authorized commit and merge. Snapshot Capacity and
 Restore Workflow is also [implemented, verified and integrated](./snapshot-capacity-and-restore-status.md),
@@ -864,8 +873,9 @@ retains its historical V9 evidence. Shell Adapter / Loader is now
 [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md),
 including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagnostic
 presentation remains an explicitly recorded follow-up; integration does not claim
-that observability goal is complete. Machine-readable CLI Output is the next
-separately planned capability; it has not started. Local integration does not
+that observability goal is complete. It is explicitly assigned to A by the new
+approval. Execution Diagnostics and Instance State Observability is next;
+machine-readable output follows the new capability work in D. Local integration does not
 authorize push, release or publication.
 No runtime implementation, calendar start or publication is started by this
 documentation change. Small slices can be accepted independently within their

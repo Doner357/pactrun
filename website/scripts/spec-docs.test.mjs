@@ -110,7 +110,7 @@ test('current entries reflect V10 integration while preserving M7 and bounded M6
   assert.match(shell, /5d90472d99a57e33b49d9da712eee891b1861066/);
   assert.match(shell, /Known follow-up: usable Hook diagnostics/);
   assert.match(shell, /no live diagnostic presentation or diagnostic history consumer/);
-  assert.match(agentEntry, /Machine-readable CLI Output is next and requires its own plan/);
+  assert.match(agentEntry, /Execution Diagnostics and Instance State Observability is next, starting with S0/);
   assert.match(capacity, /reused evidence/);
   for (const entry of [current, agentEntry]) {
     assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
@@ -294,12 +294,14 @@ test('M8 rejection retires Recipe obligations but preserves identity and interna
   assert.match(sidebar, /development\/history\/m8-recipes-rejected/);
 });
 
-test('completion plan preserves agreed order, bounded slices and pending implementation', async () => {
+test('historical completion plan preserves original scope without overriding the revised remaining order', async () => {
   const document = name => docs.find(([file]) => file === name)[1];
   const plan = document('development/product-completion-milestones.md');
   const normalized = plan.replace(/\s+/g, ' ');
   assert.match(normalized, /Approved planning scope and work order, recorded on 2026-09-17/);
   assert.match(normalized, /Detailed design and runtime implementation are pending/);
+  assert.match(normalized, /Current remaining order, approved 2026-09-19/);
+  assert.ok(plan.includes('remaining-capability-milestones.md'));
   assert.deepEqual([...plan.matchAll(/^## \d\. (.+)$/gm)].map(match => match[1]), [
     'Managed Object Lifecycle and GC',
     'Snapshot Capacity and Restore Workflow',
@@ -329,6 +331,41 @@ test('completion plan preserves agreed order, bounded slices and pending impleme
   }
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/product-completion-milestones/);
+});
+
+test('approved remaining milestones assign gaps without silently implementing contracts or usage guides', async () => {
+  const document = name => docs.find(([file]) => file === name)[1];
+  const plan = document('development/remaining-capability-milestones.md');
+  const text = plan.replace(/\s+/g, ' ');
+  assert.match(text, /Approved remaining scope and work order on 2026-09-19/);
+  assert.match(text, /authorized recording the plan only/);
+  assert.deepEqual([...plan.matchAll(/^## ([A-E])\. (.+)$/gm)].map(match => [match[1], match[2]]), [
+    ['A', 'Execution Diagnostics and Instance State Observability'],
+    ['B', 'Object Catalog, Historical Discovery and Metadata Operations'],
+    ['C', 'Revision Bundle Export and Import'],
+    ['D', 'Machine-readable CLI Output'],
+    ['E', 'Versioning and Baseline Consolidation'],
+  ]);
+  assert.match(text, /D is no longer the immediately next capability/);
+  assert.match(text, /not new M-series identifiers or versions/);
+  assert.match(text, /both live presentation and post-run inspection/);
+  assert.match(text, /Local trust remains descriptive assessment/);
+  assert.match(text, /Import must not rerun authoring or regenerate runtime content/);
+  assert.match(text, /85 `Pending automated coverage` markers; this is a dated observation/);
+  assert.match(text, /Do not bulk-change Pending to Passed/);
+  assert.match(text, /Full user, Pack Author and Hook usage guides\/placeholders are excluded/);
+  assert.match(text, /Necessary Spec, CLI help, implementation records and acceptance material still accompany/);
+  assert.match(text, /Externally meaningful retention\/disclosure, CLI and bundle decisions remain S0 work/);
+  for (const name of ['development/product-completion-milestones.md', 'development/implementation-roadmap.md',
+    'development/next-milestone.md', 'development/index.md', 'development/release-readiness.md',
+    'development/shell-adapter-loader-status.md', 'agents/index.md', 'agents/develop-pactrun.md']) {
+    assert.ok(document(name).includes('remaining-capability-milestones.md'), name);
+  }
+  const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
+  assert.match(handoff, /A's S0 is next/);
+  assert.doesNotMatch(handoff, /Machine-readable CLI Output is the next separately planned capability/);
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.match(sidebar, /development\/remaining-capability-milestones/);
 });
 
 test('contributor rules preserve product naming, rationale and branch target discipline', async () => {

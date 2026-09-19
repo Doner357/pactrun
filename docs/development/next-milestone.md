@@ -140,10 +140,14 @@ it does not block bounded M6.5.
 
 ## Next planned scope and completion sequence
 
-The [product completion milestones](./product-completion-milestones.md) record
-the agreed order: managed-object lifecycle/GC with Artifact export; Snapshot
-capacity with create-and-restore; shell loader; machine-readable CLI output;
-then Versioning and Baseline Consolidation. The [lifecycle implementation record](./managed-object-lifecycle-status.md)
+The [original product completion plan](./product-completion-milestones.md) retains
+the earlier scope/rationale. The operator approved the
+[remaining A-E sequence](./remaining-capability-milestones.md) on 2026-09-19:
+execution diagnostics/Instance observability; object catalog/history/metadata;
+Revision bundles; machine-readable CLI output; then Versioning and Baseline
+Consolidation. A's S0 is next. This authorizes recording the plan only, not runtime
+implementation or unresolved contract choices. Full usage-guide work is excluded.
+The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
 implemented, verified and integrated into local develop after authorized commit
 and merge. Snapshot Capacity and Restore Workflow is also implemented, verified
@@ -152,10 +156,10 @@ and integrated into local develop after authorization on 2026-09-18; see the
 adjustment, full CI and real beyond-ceiling round trips are complete.
 Shell Adapter / Loader is now [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md)
 after separately authorized commit/merge, with scoped full-CI and platform
-evidence. Hook diagnostic presentation is an explicitly recorded unresolved
-follow-up, not silently completed or assigned by this closeout. Machine-readable CLI
-Output is the next separately planned capability; no implementation is started
-by this closeout. Push, release and publication remain separately authorized.
+evidence. Hook diagnostic presentation remains unimplemented but is now explicitly
+assigned to A; the prior Loader closeout did not complete it. D's machine-readable
+models follow A-C rather than wrapping incomplete user workflows. No implementation
+is started by recording this plan. Push, release and publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.
 
 The final milestone removes development-only compatibility and chronology from

@@ -21,6 +21,15 @@ Snapshot capacity/restore convenience, shell loader and machine-readable output
 precede it. This establishes relative order, not calendar dates, completed designs
 or an instruction to start runtime work. Publication remains separately authorized.
 
+On 2026-09-19 the operator approved the
+[remaining capability sequence](./remaining-capability-milestones.md): A diagnostics
+and Instance observability, B object/history/metadata discovery and operations,
+C Revision bundles, D machine-readable output and E final versioning/consolidation.
+The first three capabilities in the earlier plan remain integrated. This revision
+closes delivery ownership for the newly identified gaps without starting runtime
+work or assigning calendar dates. Full usage-guide writing is outside this planning
+task; necessary specifications, CLI help and acceptance records still accompany work.
+
 The [product versioning and compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 owns the observable rules. This plan organizes delivery and evidence without
 creating a second specification. M7 is integrated and M8 is rejected; their
@@ -46,8 +55,8 @@ pipeline implementation remain release-mechanism design work.
 
 ## Dependencies, not an automatic schedule
 
-- Versioning and baseline consolidation are one milestone placed last after the
-  four capability/interface milestones. No preliminary Versioning milestone is
+- Versioning and baseline consolidation remain one final milestone, now E after
+  the already integrated capabilities and approved A-D. No preliminary Versioning milestone is
   required. Earlier work obeys current contracts without claiming that each
   experimental interface is a prior formal release with permanent compatibility.
 - Internal evaluation must ultimately cover that final baseline. Tests of the

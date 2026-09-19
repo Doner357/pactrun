@@ -159,6 +159,13 @@ and sensitive-text policy need a separately agreed follow-up with positive
 end-to-end acceptance. The operator requested integrating this completed Loader
 milestone first; this closeout does not change diagnostic behavior or those rules.
 
+On 2026-09-19 the operator explicitly assigned this gap to A, Execution Diagnostics
+and Instance State Observability, in the approved
+[remaining capability plan](./remaining-capability-milestones.md). Live and post-run
+usability and their retention/disclosure policy are A's responsibility. The task
+records planning only; it does not change the historical Loader acceptance or
+claim that diagnostics are now displayed or retained.
+
 ## Verification and retained resources
 
 | Status | Scope |
