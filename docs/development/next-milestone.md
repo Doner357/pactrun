@@ -9,7 +9,7 @@ Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
 approval. Implementation evidence is recorded separately from design approval.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) has completed S0-S4 implementation and verification on its feature branch, not integrated; see its [implementation record](./object-catalog-history-metadata-status.md). Integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is implemented, verified and integrated into local develop; see its [implementation record](./object-catalog-history-metadata-status.md). C (Revision Bundle Export and Import) is next, beginning with its own S0. Integration does not authorize publication.
 
 ## What is already recorded as implemented
 
@@ -150,10 +150,11 @@ execution diagnostics/Instance observability; object catalog/history/metadata;
 Revision bundles; machine-readable CLI output; then Versioning and Baseline
 Consolidation. A implementation and verification are complete and integrated
 into local develop; its [delivery record](./execution-diagnostics-observability-status.md)
-records the verified source and exact Git integration. B is active under its
+records the verified source and exact Git integration. B is implemented, verified
+and integrated into local develop under its
 [separately approved S0-S4 baseline](./design-notes/object-catalog-history-metadata-baseline.md).
-The original grouping authorized planning only; B now has its own implementation
-authorization, while C-E runtime work remains unapproved. Full
+C is next, beginning with its own S0. The original grouping authorized planning
+only; C-E runtime work remains unapproved. Full
 usage-guide work remains excluded.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,

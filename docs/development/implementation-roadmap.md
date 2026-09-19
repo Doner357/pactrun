@@ -16,7 +16,7 @@ Milestone state on this page is planning metadata. It must not be treated as
 evidence that a requirement has automated coverage or that a format or protocol
 is Frozen.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is active under separately approved S0-S4 implementation; integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is implemented, verified and integrated into local develop. C (Revision Bundle Export and Import) is next, beginning with its own S0; integration does not authorize publication.
 
 ## Development entry after Spec migration
 
@@ -854,7 +854,7 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | Order | Remaining milestone | State |
 | --- | --- | --- |
 | A | Execution Diagnostics and Instance State Observability | Implemented, verified and integrated into local develop |
-| B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented and verified on feature branch; not integrated |
+| B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented, verified and integrated into local develop |
 | C | Revision Bundle Export and Import | Approved planning scope; after B |
 | D | Machine-readable CLI Output | Existing scope, now after A-C |
 | E | Versioning and Baseline Consolidation | Existing final milestone, after D |
@@ -881,7 +881,8 @@ retains its historical V9 evidence. Shell Adapter / Loader is now
 including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagnostic
 presentation was assigned to A and is now implemented and verified in its
 [integrated delivery](./execution-diagnostics-observability-status.md). A is
-complete in local develop; B is the active capability under its separate approval.
+complete in local develop; B is also implemented, verified and integrated under
+its separate approval. C is next, beginning with its own S0.
 See the [B implementation record](./object-catalog-history-metadata-status.md).
 Machine-readable output remains D. No push, release or publication is implied.
 M8 remains rejected and its number
