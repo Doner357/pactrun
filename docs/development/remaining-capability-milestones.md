@@ -6,7 +6,9 @@ title: Remaining Capability Milestones
 
 **Status: Approved remaining scope and work order on 2026-09-19.
 A is implemented, verified and integrated into local develop; detailed contracts and
-runtime implementation remain pending for B-E.**
+runtime implementation remain pending for C-E. B S0-S4 implementation is separately
+authorized, implemented and verified on its feature branch, not integrated; see
+its [record](./object-catalog-history-metadata-status.md).**
 
 The operator approved the following grouping after the diagnostic and capability
 gap review, and authorized recording the plan only. This record does not start
@@ -35,7 +37,9 @@ calendar dates and effort estimates are not assigned.
 | E | Versioning and Baseline Consolidation | Close the formal baseline, support/evolution mechanisms and remaining obligation inventory |
 
 **Delivery update:** A is implemented, verified and integrated into local develop.
-B is the next capability, starting with its own S0. The original work-order decision was **Next: A.**
+B is now active under the separately approved
+[implementation baseline](./design-notes/object-catalog-history-metadata-baseline.md).
+The original work-order decision was **Next: A.**
 D is no longer the immediately next capability. A and B establish
 the observable data and public operations; C adds transport results and failures.
 Only then should D close machine-output models and command coverage. E stays last.

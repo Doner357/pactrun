@@ -86,7 +86,7 @@ fn installed_runtime_survives_source_removal_and_run_is_visible_to_a_new_process
         assert_eq!(run.outcome, "succeeded");
         run_ids.push(id);
     }
-    let listed_runs = scenario.run(["run", "list", "node"]);
+    let listed_runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&listed_runs);
     let listed_runs = run_projections(&listed_runs);
     assert!(
@@ -260,7 +260,7 @@ fn action_inspection_and_plan_are_read_only_and_do_not_launch_a_hook() {
     assert_success(&action);
     let planned = scenario.run(["invoke", "node", "observe", "--plan"]);
     assert_success(&planned);
-    let listed = scenario.run(["run", "list", "node"]);
+    let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&listed);
     assert_eq!(run_count(&listed), 0);
     assert_eq!(scenario.hook_launches(), 0);
@@ -293,7 +293,7 @@ fn pre_acceptance_errors_create_no_run_and_never_launch_the_hook() {
     ] {
         let output = scenario.run(arguments);
         assert!(matches!(output.status.code(), Some(1 | 2)));
-        let listed = scenario.run(["run", "list", "node"]);
+        let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
         assert_success(&listed);
         assert_eq!(run_count(&listed), 0);
         assert_eq!(scenario.hook_launches(), 0);

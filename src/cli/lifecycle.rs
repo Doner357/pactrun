@@ -7,15 +7,6 @@ pub(super) enum LifecycleCommand {
     Run { run: RunId, delete_artifacts: bool },
 }
 
-pub(super) fn parse_revision(parser: &mut Parser) -> Result<LifecycleCommand, CliError> {
-    if required_value_string(parser, "Revision command")? != "delete" {
-        return Err(CliError::usage("unknown Revision command"));
-    }
-    let reference = parse_revision_reference(required_value_string(parser, "Revision reference")?)?;
-    require_end(parser)?;
-    Ok(LifecycleCommand::Revision(reference))
-}
-
 pub(super) fn parse_run_delete(parser: &mut Parser) -> Result<LifecycleCommand, CliError> {
     let run = parse_run_id(&value_string(parser, "RunId")?)?;
     let mut delete_artifacts = false;

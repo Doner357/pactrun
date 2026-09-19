@@ -46,9 +46,10 @@ Restore Workflow is now [implemented, verified and integrated into local develop
 Shell Adapter / Loader is [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md).
 Its Hook diagnostic presentation gap is now assigned to A in the
 [remaining capability plan approved on 2026-09-19](./remaining-capability-milestones.md).
-Execution diagnostics/Instance observability is next, followed by object
-catalog/history/metadata, Revision bundles, machine-readable output and final
-consolidation. This records planning, not runtime implementation, and excludes
+Execution diagnostics/Instance observability is integrated into local develop.
+[Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
+active under separate implementation approval, followed by Revision bundles,
+machine-readable output and final consolidation. This excludes
 full usage-guide writing. No retired milestone number is reused.
 The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.

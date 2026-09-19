@@ -79,7 +79,7 @@ fn action_inspection_and_plan_keep_parameterized_execution_read_only() {
     let text = String::from_utf8_lossy(&planned.stdout);
     assert!(text.contains("action: parameters"));
     assert!(text.contains("preview: not_admitted"));
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert_eq!(run_count(&runs), 0);
     assert_eq!(scenario.hook_launches(), 0);
@@ -163,7 +163,7 @@ fn parameter_shape_and_acquisition_failures_do_not_accept_or_launch() {
     ] {
         let output = scenario.run(arguments);
         assert!(matches!(output.status.code(), Some(1 | 2)));
-        let runs = scenario.run(["run", "list", "node"]);
+        let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
         assert_success(&runs);
         assert_eq!(run_count(&runs), 0);
         assert_eq!(scenario.hook_launches(), initial_launches);
@@ -217,7 +217,7 @@ fn pre_acceptance_ordering_rejects_interactive_stdin_and_shape_errors_before_sou
             !missing.exists(),
             "pre-acceptance validation opened a source"
         );
-        let runs = scenario.run(["run", "list", "node"]);
+        let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
         assert_success(&runs);
         assert_eq!(run_count(&runs), 0);
         assert_eq!(scenario.hook_launches(), initial_launches);
@@ -273,7 +273,7 @@ fn parameter_sources_preserve_empty_unicode_and_protected_values_exactly() {
 #[test]
 fn successful_observe_and_mutate_each_create_one_durable_terminal_run() {
     let scenario = ready_matrix_scenario(0x168);
-    let before = scenario.run(["run", "list", "node"]);
+    let before = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&before);
     assert_eq!(run_count(&before), 0);
 
@@ -281,7 +281,7 @@ fn successful_observe_and_mutate_each_create_one_durable_terminal_run() {
         let invoked = scenario.invoke("node", action);
         assert_success(&invoked);
         let id = run_id(&invoked);
-        let listed = scenario.run(["run", "list", "node"]);
+        let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
         assert_success(&listed);
         assert_eq!(run_count(&listed), expected_count);
         let shown = scenario.run(["run", "show", &id]);
@@ -600,7 +600,7 @@ fn secret_inputs_and_protected_sources_remain_redacted_from_all_action_and_run_p
             "invoke stderr leaked {canary}"
         );
     }
-    let listed = scenario.run(["run", "list", "node"]);
+    let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&listed);
     let shown = scenario.run(["run", "show", &run_id(&invoked)]);
     assert_success(&shown);
@@ -689,7 +689,7 @@ fn recovery_risk_blocks_ordinary_invocation_until_explicit_resolution() {
     let invalid_success = String::from_utf8_lossy(&invalid_success.stdout);
     assert!(!invalid_success.contains("outcome: succeeded"));
     assert!(invalid_success.contains("terminal_risk: open"));
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert!(run_projections(&runs).iter().any(|run| run.id == opened_id));
 }
@@ -732,7 +732,7 @@ fn mutate_conflict_creates_a_failed_run_without_launching_a_second_hook() {
     assert_success(&observe);
     scenario.release_hook();
     assert_success(&first.wait());
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert!(
         run_projections(&runs)
@@ -764,7 +764,7 @@ fn mutation_conflict_is_exact_instance_scoped_and_cannot_be_bypassed_by_recovery
             "{}",
             String::from_utf8_lossy(&conflict.stderr)
         );
-        let runs = scenario.run(["run", "list", "node"]);
+        let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
         assert_success(&runs);
         let failed = run_projections(&runs)
             .into_iter()
@@ -796,7 +796,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
     let stale = scenario.run(["instance", "show", "node"]);
     assert_success(&stale);
     let stale = instance_projection(&stale).state_version;
-    let initial_runs = scenario.run(["run", "list", "node"]);
+    let initial_runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&initial_runs);
     let launches = scenario.hook_launches();
 
@@ -812,7 +812,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
     assert!(!String::from_utf8_lossy(&guarded.stdout).contains("current_recovery_guard: none"));
     set_config(&scenario, b"state-version-after-guard");
 
-    let before_stale_resolution = scenario.run(["run", "list", "node"]);
+    let before_stale_resolution = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&before_stale_resolution);
     let stale_resolution = scenario.run([
         "instance",
@@ -822,7 +822,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
         &stale,
     ]);
     assert_exit(&stale_resolution, 1);
-    let after_stale_resolution = scenario.run(["run", "list", "node"]);
+    let after_stale_resolution = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&after_stale_resolution);
     assert_eq!(
         run_count(&before_stale_resolution),
@@ -831,7 +831,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
     let fresh = scenario.run(["instance", "show", "node"]);
     assert_success(&fresh);
     let fresh = instance_projection(&fresh).state_version;
-    let before_resolutions = scenario.run(["run", "list", "node"]);
+    let before_resolutions = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&before_resolutions);
     let resolved = scenario.run([
         "instance",
@@ -841,7 +841,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
         &fresh,
     ]);
     assert_success(&resolved);
-    let after_resolutions = scenario.run(["run", "list", "node"]);
+    let after_resolutions = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&after_resolutions);
     assert_eq!(
         run_count(&before_resolutions),

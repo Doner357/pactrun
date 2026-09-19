@@ -634,7 +634,7 @@ fn real_cli_executes_selected_direct_and_chained_paths_and_shows_durable_runs() 
                 .contains(&format!("last_committed_revision: {}", f.c))
         );
         assert!(successful(&f.root, &["instance", "show", "demo"]).contains(&f.c));
-        assert!(successful(&f.root, &["run", "list", "demo"]).contains("migration"));
+        assert!(successful(&f.root, &["run", "list", "demo"]).contains("Migration"));
         let db = rusqlite::Connection::open_with_flags(
             f.root.join("database/pactrun.sqlite3"),
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,

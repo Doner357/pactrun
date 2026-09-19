@@ -39,48 +39,59 @@ pub(super) fn parse_instance(
 ) -> Result<RetirementCommand, CliError> {
     if operation == "deletion" {
         let operation = required_value_string(parser, "deletion command")?;
-        let instance = identifier(parser, "InstanceId")?;
-        if operation == "show" {
-            require_end(parser)?;
-            return Ok(RetirementCommand::Show(instance));
-        }
-        if operation != "confirm-complete" {
-            return Err(CliError::usage("unknown deletion command"));
-        }
-        let mut attempt = None;
-        let mut expected = None;
-        let mut asserted = false;
-        while let Some(arg) = parser.next().map_err(lex_error)? {
-            match arg {
-                Arg::Long("attempt") => set_once(
-                    &mut attempt,
-                    parse_run_id(&value_string(parser, "RunId")?)?,
-                    "--attempt",
-                )?,
-                Arg::Long("if-version") => set_once(
-                    &mut expected,
-                    parse_state_version(value_string(parser, "state version")?)?,
-                    "--if-version",
-                )?,
-                Arg::Long("assert-cleanup-complete") if !asserted => asserted = true,
-                _ => {
-                    return Err(CliError::usage(
-                        "unsupported or duplicate Cleanup assertion argument",
-                    ));
-                }
+        return parse_deletion_operation(parser, &operation);
+    }
+    parse_execution(parser, operation)
+}
+
+pub(super) fn parse_deletion_operation(
+    parser: &mut Parser,
+    operation: &str,
+) -> Result<RetirementCommand, CliError> {
+    let instance = identifier(parser, "InstanceId")?;
+    if operation == "show" {
+        require_end(parser)?;
+        return Ok(RetirementCommand::Show(instance));
+    }
+    if operation != "confirm-complete" {
+        return Err(CliError::usage("unknown deletion command"));
+    }
+    let mut attempt = None;
+    let mut expected = None;
+    let mut asserted = false;
+    while let Some(arg) = parser.next().map_err(lex_error)? {
+        match arg {
+            Arg::Long("attempt") => set_once(
+                &mut attempt,
+                parse_run_id(&value_string(parser, "RunId")?)?,
+                "--attempt",
+            )?,
+            Arg::Long("if-version") => set_once(
+                &mut expected,
+                parse_state_version(value_string(parser, "state version")?)?,
+                "--if-version",
+            )?,
+            Arg::Long("assert-cleanup-complete") if !asserted => asserted = true,
+            _ => {
+                return Err(CliError::usage(
+                    "unsupported or duplicate Cleanup assertion argument",
+                ));
             }
         }
-        if !asserted {
-            return Err(CliError::usage(
-                "requires --assert-cleanup-complete after external verification/repair",
-            ));
-        }
-        return Ok(RetirementCommand::Confirm(CleanupConfirmation {
-            instance,
-            attempt: attempt.ok_or_else(|| CliError::usage("missing --attempt"))?,
-            expected: expected.ok_or_else(|| CliError::usage("missing --if-version"))?,
-        }));
     }
+    if !asserted {
+        return Err(CliError::usage(
+            "requires --assert-cleanup-complete after external verification/repair",
+        ));
+    }
+    Ok(RetirementCommand::Confirm(CleanupConfirmation {
+        instance,
+        attempt: attempt.ok_or_else(|| CliError::usage("missing --attempt"))?,
+        expected: expected.ok_or_else(|| CliError::usage("missing --if-version"))?,
+    }))
+}
+
+fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCommand, CliError> {
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let mut expected = None;
     let mut options = ExecutionOptions {

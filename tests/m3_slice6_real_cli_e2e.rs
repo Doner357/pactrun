@@ -390,7 +390,15 @@ fn real_cli_interpreter_launch_preserves_non_utf8_launcher_directory() {
         String::from_utf8_lossy(&listed.stderr)
     );
     let listing = String::from_utf8_lossy(&listed.stdout);
-    assert_eq!(listing.matches("run: ").count(), 1, "{listing}");
+    assert_eq!(
+        listing
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .count(),
+        1,
+        "{listing}"
+    );
     assert!(listing.contains("succeeded"), "{listing}");
 }
 
@@ -456,7 +464,7 @@ fn real_cli_interpreter_plan_renders_non_utf8_launcher_directory_losslessly() {
         "{}",
         String::from_utf8_lossy(&listed.stderr)
     );
-    assert!(!String::from_utf8_lossy(&listed.stdout).contains("run: "));
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("0 records shown."));
 }
 
 #[cfg(target_os = "linux")]
@@ -522,7 +530,7 @@ fn real_cli_interpreter_plan_renders_invalid_utf8_launcher_directory_losslessly(
         "{}",
         String::from_utf8_lossy(&listed.stderr)
     );
-    assert!(!String::from_utf8_lossy(&listed.stdout).contains("run: "));
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("0 records shown."));
 }
 
 fn install_instance(cli: &std::path::Path, storage: &std::path::Path, source: &std::path::Path) {
@@ -721,7 +729,15 @@ if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 1:
         String::from_utf8_lossy(&listed.stderr)
     );
     let listing = String::from_utf8_lossy(&listed.stdout);
-    assert_eq!(listing.matches("run: ").count(), 1, "{listing}");
+    assert_eq!(
+        listing
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .count(),
+        1,
+        "{listing}"
+    );
     assert!(listing.contains("cancelled"), "{listing}");
     drop(temporary);
 }
@@ -781,7 +797,15 @@ fn real_cli_invoke_reopens_a_durable_run() {
         String::from_utf8_lossy(&listed.stderr)
     );
     let listing = String::from_utf8_lossy(&listed.stdout);
-    assert_eq!(listing.matches("run: ").count(), 1, "{listing}");
+    assert_eq!(
+        listing
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .count(),
+        1,
+        "{listing}"
+    );
     assert!(listing.contains("cancelled"), "{listing}");
 }
 

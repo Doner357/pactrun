@@ -108,7 +108,7 @@ fn console_ctrl_c_during_parameter_stdin_acquisition_exits_without_creating_a_ru
         .spawn()
         .unwrap();
     assert!(driver.wait().unwrap().success());
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert_eq!(run_count(&runs), 0);
     assert_eq!(scenario.hook_launches(), 0);
@@ -144,7 +144,7 @@ fn accepted_late_completion_after_console_cancellation_stays_cancelled_and_publi
         .spawn()
         .unwrap();
     assert!(driver.wait().unwrap().success());
-    let listed = scenario.run(["run", "list", "node"]);
+    let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&listed);
     let run = run_projections(&listed)
         .into_iter()
@@ -214,7 +214,7 @@ fn native_images_and_batch_suffixes_use_exact_paths_without_shell_or_sibling_fal
     let accepted = scenario.run_with_environment(["invoke", "node", "interpreter"], &environment);
     assert_success(&accepted);
     assert_eq!(scenario.hook_launches(), 2);
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     let runs = run_projections(&runs);
     assert!(runs.iter().any(|run| run.outcome == "failed"));

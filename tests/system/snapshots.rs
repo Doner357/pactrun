@@ -134,7 +134,7 @@ fn create_and_restore_matches_two_operations_and_preserves_partial_completion() 
             .stdout,
             SECRET
         );
-        assert_eq!(run_count(&s.run(["run", "list", name])), 1);
+        assert_eq!(run_count(&s.run(["run", "list", name, "--no-trunc"])), 1);
     }
     let before = s.hook_launches();
     let duplicate = s.run([
@@ -148,7 +148,10 @@ fn create_and_restore_matches_two_operations_and_preserves_partial_completion() 
     ]);
     assert_exit(&duplicate, 1);
     assert_eq!(s.hook_launches(), before);
-    assert_eq!(run_count(&s.run(["run", "list", "combined"])), 1);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "combined", "--no-trunc"])),
+        1
+    );
     let failed = s.run([
         "instance",
         "create",
@@ -165,7 +168,10 @@ fn create_and_restore_matches_two_operations_and_preserves_partial_completion() 
     assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
     assert!(String::from_utf8_lossy(&failed.stderr).contains("restore_run:"));
     assert_success(&s.run(["instance", "show", "partial"]));
-    assert_eq!(run_count(&s.run(["run", "list", "partial"])), 1);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "partial", "--no-trunc"])),
+        1
+    );
     assert_exit(
         &s.run([
             "input",
@@ -283,7 +289,10 @@ fn create_restore_missing_capability_and_timeout_keep_the_documented_boundaries(
     safe(&failed);
     assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
     assert_success(&s.run(["instance", "show", "timed-out"]));
-    assert_eq!(run_count(&s.run(["run", "list", "timed-out"])), 1);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "timed-out", "--no-trunc"])),
+        1
+    );
 }
 fn bind(s: &Scenario, bytes: &[u8]) {
     assert_success(&s.run_with_stdin(
@@ -332,7 +341,8 @@ fn run_count(output: &Output) -> usize {
     assert_success(output);
     String::from_utf8_lossy(&output.stdout)
         .lines()
-        .filter(|line| line.starts_with("run: "))
+        .skip(1)
+        .take_while(|line| !line.is_empty())
         .count()
 }
 fn manifest(path: &Path) -> Vec<u8> {
@@ -442,7 +452,10 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
         .stdout,
         SECRET
     );
-    assert_eq!(run_count(&b.run(["run", "list", "service"])), 1);
+    assert_eq!(
+        run_count(&b.run(["run", "list", "service", "--no-trunc"])),
+        1
+    );
     assert!(
         b.run(["snapshot", "list", "--instance", "service"])
             .stdout
@@ -542,7 +555,10 @@ fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only(
         assert_exit(&incomplete, 1);
         safe(&incomplete);
         assert_eq!(s.hook_launches(), 0);
-        assert_eq!(run_count(&s.run(["run", "list", "service"])), 0);
+        assert_eq!(
+            run_count(&s.run(["run", "list", "service", "--no-trunc"])),
+            0
+        );
         assert_eq!(
             fs::read_dir(s.storage.join("staging")).unwrap().count(),
             before
@@ -618,7 +634,10 @@ fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only(
             String::from_utf8_lossy(&output.stdout)
                 .contains("parameter: secret_text\teffective_redaction: true")
         );
-        assert_eq!(run_count(&s.run(["run", "list", "service"])), 0);
+        assert_eq!(
+            run_count(&s.run(["run", "list", "service", "--no-trunc"])),
+            0
+        );
         assert_eq!(s.hook_launches(), 0);
         bind(&s, SECRET);
         let secret = s.path("secret-parameter");
@@ -696,10 +715,14 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     assert_eq!(field(&restored, "current_recovery_guard"), "none");
     let actor = s.spawn(["snapshot", "capture", "service", "--param", "mode=hold"]);
     s.wait_for_marker("ready:hold");
-    let live = s.run(["run", "list", "service"]);
+    let live = s.run(["run", "list", "service", "--no-trunc"]);
     assert_success(&live);
     safe(&live);
-    assert!(String::from_utf8_lossy(&live.stdout).contains("phase: running"));
+    assert!(
+        String::from_utf8_lossy(&live.stdout)
+            .lines()
+            .any(|line| line.ends_with("  running  -"))
+    );
     assert!(s.run(["run", "reconcile"]).stdout.is_empty());
     let _ = actor.terminate();
     let reconciled = s.run(["run", "reconcile"]);
@@ -734,7 +757,10 @@ fn snapshot_cli_keeps_interactive_stdin_and_hostile_input_errors_out_of_executio
     assert_exit(&output, 2);
     safe(&output);
     assert_eq!(s.hook_launches(), 0);
-    assert_eq!(run_count(&s.run(["run", "list", "service"])), 0);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "service", "--no-trunc"])),
+        0
+    );
     let path = s.path(PRIVATE);
     let error = s.run(["snapshot", "import", path.to_str().unwrap()]);
     assert_exit(&error, 1);
@@ -745,7 +771,10 @@ fn snapshot_cli_keeps_interactive_stdin_and_hostile_input_errors_out_of_executio
     assert_exit(&error, 1);
     safe(&error);
     assert!(String::from_utf8_lossy(&error.stderr).contains("bundle profile"));
-    assert_eq!(run_count(&s.run(["run", "list", "service"])), 0);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "service", "--no-trunc"])),
+        0
+    );
 }
 
 // Test-ID: PR-TEST-0274
@@ -757,7 +786,10 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
     let failed = s.run(["snapshot", "capture", "service"]);
     assert_exit(&failed, 1);
     safe(&failed);
-    assert_eq!(run_count(&s.run(["run", "list", "service"])), 0);
+    assert_eq!(
+        run_count(&s.run(["run", "list", "service", "--no-trunc"])),
+        0
+    );
     assert_eq!(s.hook_launches(), 0);
     bind(&s, SECRET);
     let plan = s.run_with_stdin(
@@ -812,7 +844,10 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
     safe(&failed);
     assert!(String::from_utf8_lossy(&failed.stderr).contains("exact producer Revision"));
     assert_eq!(other.hook_launches(), 0);
-    assert_eq!(run_count(&other.run(["run", "list", "service"])), 0);
+    assert_eq!(
+        run_count(&other.run(["run", "list", "service", "--no-trunc"])),
+        0
+    );
     #[cfg(target_os = "linux")]
     {
         let fifo = s.path("bundle-fifo");

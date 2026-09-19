@@ -7,6 +7,8 @@
 // contract gains a production caller.
 #![allow(dead_code)]
 
+mod catalog;
+pub(crate) use catalog::*;
 mod deletion;
 mod diagnostics;
 pub(crate) use diagnostics::*;

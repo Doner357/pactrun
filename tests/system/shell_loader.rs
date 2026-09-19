@@ -197,12 +197,12 @@ fn blocked_diagnostic_stderr_does_not_hold_timeout_or_execution_ownership() {
         }
         thread::sleep(Duration::from_millis(20));
     }
-    let listed = scenario.run(["run", "list", "sample"]);
+    let listed = scenario.run(["run", "list", "sample", "--no-trunc"]);
     assert_success(&listed);
     let list = String::from_utf8_lossy(&listed.stdout);
     let run = list
         .lines()
-        .find_map(|line| line.strip_prefix("run: "))
+        .nth(1)
         .unwrap()
         .split_whitespace()
         .next()
@@ -1123,7 +1123,7 @@ fn hook_diagnostics_survive_process_exit_with_explicit_retention_and_safe_displa
                     history.contains("outcome: succeeded"),
                     "diagnostic error must not change outcome: {history}"
                 );
-                let list = scenario.run(["run", "list", "sample"]);
+                let list = scenario.run(["run", "list", "sample", "--no-trunc"]);
                 assert_success(&list);
                 assert!(!String::from_utf8_lossy(&list.stdout).contains("debug-visible-marker"));
             }
