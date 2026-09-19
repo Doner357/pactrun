@@ -522,25 +522,24 @@ pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProj
 }
 
 pub(crate) fn run_projections(output: &Output) -> Vec<RunProjection> {
-    std::str::from_utf8(&output.stdout)
-        .unwrap()
-        .lines()
-        .filter(|line| line.starts_with("run: "))
+    let text = std::str::from_utf8(&output.stdout).unwrap();
+    assert!(text.starts_with("RUN ID  INSTANCE ID  OPERATION  PHASE  OUTCOME\n"));
+    text.lines()
+        .skip(1)
+        .take_while(|line| !line.is_empty())
         .map(|line| {
-            let mut fields = std::collections::BTreeMap::new();
-            for column in line.split('\t') {
-                let (key, value) = column
-                    .split_once(": ")
-                    .unwrap_or_else(|| panic!("malformed run-list column: {column}"));
-                assert!(
-                    fields.insert(key, value).is_none(),
-                    "duplicate run-list field {key}"
-                );
-            }
+            let columns = line.split_whitespace().collect::<Vec<_>>();
+            assert_eq!(columns.len(), 5, "malformed Run table row: {line}");
+            assert_eq!(
+                columns[0].len(),
+                32,
+                "tests needing exact IDs request --no-trunc"
+            );
+            assert_eq!(columns[1].len(), 32);
             RunProjection {
-                id: required(&fields, "run").to_owned(),
-                action: required(&fields, "action").to_owned(),
-                outcome: required(&fields, "outcome").to_owned(),
+                id: columns[0].to_owned(),
+                action: columns[2].to_owned(),
+                outcome: columns[4].to_owned(),
             }
         })
         .collect()

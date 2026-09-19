@@ -77,7 +77,7 @@ MUST NOT make old history appear to belong to the new Instance. Rename is not
 required in the initial product scope; if added later, it MUST preserve
 `InstanceId`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0531, PR-TEST-0535.**
 
 ### PR-REQ-0089 - Revision labels remain references
 
@@ -88,7 +88,7 @@ more than one claim exists. Inspection MAY offer non-authoritative normalized
 or fuzzy discovery, but exact resolution, equality, and ambiguity MUST remain
 based on the preserved exact label.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0532.**
 
 ## Incomplete Instances
 

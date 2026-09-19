@@ -11,6 +11,7 @@ mod object_lifecycle_tests;
 mod runtime_content_store;
 #[cfg(test)]
 mod schema_v5_contract_tests;
+mod sqlite_catalog;
 mod sqlite_deletions;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;

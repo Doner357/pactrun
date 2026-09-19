@@ -91,6 +91,7 @@ const sidebars: SidebarsConfig = {
         'development/product-completion-milestones',
         'development/remaining-capability-milestones',
         'development/execution-diagnostics-observability-status',
+        'development/object-catalog-history-metadata-status',
         'development/shared-obligation-inventory',
         'development/managed-object-lifecycle-status',
           'development/snapshot-capacity-and-restore-status',
@@ -104,6 +105,7 @@ const sidebars: SidebarsConfig = {
         {type: 'category', label: 'Design syntheses and history', items: [
             'development/design-notes/snapshot-capacity-and-restore-baseline',
             'development/design-notes/shell-adapter-loader-baseline',
+            'development/design-notes/object-catalog-history-metadata-baseline',
             'development/design-notes/shell-loader-format-activation-review',
           'development/design-notes/non-identity-metadata-semantic-baseline',
           'development/design-notes/pre-m2-installation-instance-binding-baseline',

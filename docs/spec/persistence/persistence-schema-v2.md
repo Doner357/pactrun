@@ -111,7 +111,7 @@ Revision or require a separate purge. Cascading one target's label bindings
 MUST NOT remove bindings that target another Revision.
 
 **Verification: PR-TEST-0062, PR-TEST-0063, PR-TEST-0064, PR-TEST-0065,
-PR-TEST-0066, PR-TEST-0067.**
+PR-TEST-0066, PR-TEST-0067, PR-TEST-0530, PR-TEST-0536.**
 
 ### PR-REQ-0256 - Exact PersistenceSchemaV2
 

@@ -21,6 +21,69 @@ The original status, rules, exceptions, and verification declarations below reta
 
 ## Resource areas
 
+### PR-REQ-0353 - Human catalog, retained history and local metadata commands
+
+Revision list/show and metadata show MUST expose installed exact identities and
+complete typed metadata sources without depending on source directories.
+Human summaries MAY truncate values explicitly; `--no-trunc` and detailed show
+MUST expose full values. Truncated identifiers MUST NOT become resolvable input.
+Text MUST be rendered without terminal-control injection. Machine envelopes are
+outside this command increment.
+
+`revision list`, `run list`, `instance history list` and `instance deletion list`
+MUST use exclusive identity keyset pagination, default 50 and `--limit` 1-500.
+`--after` need not identify a still-present row. Revision ordering uses exact
+identity; Run and Instance lists use their respective IDs, not chronology.
+Queries MUST fetch at most limit plus one base objects, report additional rows,
+and provide a continuation preserving selectors and presentation options.
+Each command MUST observe one read snapshot; separate pages are not frozen.
+This supersedes the unbounded `run list <name>` behavior.
+
+`run list` without a selector MUST enumerate retained Runs globally. A positional
+name resolves only a live Instance; mutually exclusive `--instance-id` selects
+retained history. Unknown identities fail; known identities without Runs return
+an empty result. Instance history MUST distinguish recorded and current names;
+deletion lists MUST discover obligations and receipts without duplicating IDs.
+Queries MUST NOT initialize or upgrade storage, reconcile, create Runs, invoke
+Hooks, expose native storage paths or read Input/Secret payloads.
+
+`revision alias`, `revision note` and `revision trust` show/set/clear MUST use
+typed values. Writes require exact Revision identities and explicit expected
+states (`--expect` or `--expect-absent`), never an implicitly read expectation.
+Alias clearing requires its exact expected target. PR-REQ-0253/0255 govern
+validation, atomic semantic CAS, idempotency and absence. Conflicts MUST NOT
+overwrite current state and MUST provide a reinspection instruction. Local trust
+remains descriptive. No generic force, metadata history or version token is added.
+
+**Verification: PR-TEST-0529, PR-TEST-0530, PR-TEST-0531, PR-TEST-0532, PR-TEST-0533, PR-TEST-0534, PR-TEST-0535, PR-TEST-0536, PR-TEST-0537.**
+
+Closed command spelling (each listed catalog takes `--limit`, `--after` and
+`--no-trunc`; show and write commands do not):
+
+```text
+pactrun revision list
+pactrun revision show <revision-ref>
+pactrun revision metadata show <revision-ref>
+pactrun run list [<name> | --instance-id <id>]
+pactrun instance history list
+pactrun instance history show <instance-id>
+pactrun instance deletion list
+pactrun revision alias show <alias>
+pactrun revision alias set <alias> <exact-ref> (--expect-absent | --expect <exact-ref>)
+pactrun revision alias clear <alias> --expect <exact-ref>
+pactrun revision note show <revision-ref>
+pactrun revision note set <exact-ref> --value <text> (--expect-absent | --expect <text>)
+pactrun revision note clear <exact-ref> (--expect-absent | --expect <text>)
+pactrun revision trust show <revision-ref>
+pactrun revision trust set <exact-ref> <trusted|distrusted> (--expect-absent | --expect <trusted|distrusted>)
+pactrun revision trust clear <exact-ref> (--expect-absent | --expect <trusted|distrusted>)
+```
+
+Name-selected Run continuations MUST retain the resolved InstanceId rather than
+resolving a potentially reused name on the next page. Human escaped text MUST
+distinguish literal backslashes from escape sequences and present strings from
+absence markers. Revision references retain their exact/label/alias grammar.
+
 ```text
 pactrun
 |- pack
@@ -83,11 +146,11 @@ The CLI MUST provide conceptual list, show, export, import, and delete
 operations for Revisions. Human references MUST be resolved to exact identity,
 and ambiguity MUST fail.
 
-**Verification: PR-TEST-0465.**
+**Verification: PR-TEST-0465, PR-TEST-0529, PR-TEST-0535.**
 
-This evidence covers deletion, exact-reference resolution and ambiguity refusal.
-Revision list/show/export/import remain outside the lifecycle implementation;
-this partial coverage does not claim that entire command family is available.
+Lifecycle evidence covers deletion, exact-reference resolution and ambiguity
+refusal. Catalog evidence adds list/show; export/import remain assigned to C.
+This partial coverage does not claim that the entire command family is available.
 
 ### PR-REQ-0119 - Security-sensitive authorization spelling
 
@@ -217,7 +280,7 @@ pactrun invoke <instance> <action>
     [--startup-timeout-ms <milliseconds>]
     [--action-timeout-ms <milliseconds>]
     [--termination-grace-ms <milliseconds>]
-pactrun run list <instance>
+pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]
 pactrun run show <run-id>
 pactrun run reconcile
 pactrun instance resolve-manual-recovery <instance> [--if-version <token>]

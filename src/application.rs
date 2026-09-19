@@ -1,5 +1,6 @@
 //! Application orchestration and dependency-resolution ownership.
 
+mod catalog;
 mod deletions;
 mod installation;
 mod migrations;

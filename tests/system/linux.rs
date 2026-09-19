@@ -152,7 +152,7 @@ if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 1:
         .output()
         .unwrap();
     assert_success(&driven);
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert_eq!(run_count(&runs), 0);
     assert_eq!(scenario.hook_launches(), 0);
@@ -213,7 +213,7 @@ if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 1:
         .output()
         .unwrap();
     assert_success(&driven);
-    let listed = scenario.run(["run", "list", "node"]);
+    let listed = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&listed);
     let run = run_projections(&listed)
         .into_iter()
@@ -269,7 +269,7 @@ fn interpreter_lookup_uses_the_first_eligible_path_candidate_and_never_falls_bac
     let markers = marker_lines(&scenario);
     assert!(markers.contains("launcher:first-failed"), "{markers}");
     assert!(!markers.contains("launcher:second"), "{markers}");
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     let runs = run_projections(&runs);
     assert!(runs.iter().any(|run| run.outcome == "succeeded"));
@@ -290,7 +290,7 @@ fn interpreter_lookup_requires_an_executable_candidate_and_preserves_invalid_utf
         &ineligible_environment,
     );
     assert_exit(&rejected, 1);
-    let runs = scenario.run(["run", "list", "node"]);
+    let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert_eq!(run_count(&runs), 0);
 

@@ -24,6 +24,7 @@ use std::os::windows::ffi::OsStrExt;
 use lexopt::{Arg, Parser};
 mod artifacts;
 mod async_stderr;
+mod catalog;
 mod lifecycle;
 mod migrations;
 mod retirements;
@@ -77,10 +78,25 @@ Usage:\n\
   pactrun action list <instance>\n\
   pactrun action show <instance> <action>\n\
   pactrun invoke <instance> <action> [options]\n\
-  pactrun run list <instance>\n\
+  pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]\n\
   pactrun run show <run-id>\n\
   pactrun run reconcile\n\
   pactrun run delete <run-id> [--delete-artifacts]\n\
+  pactrun revision list [--limit <1..500>] [--after <exact-reference>] [--no-trunc]\n\
+  pactrun revision show <revision-reference>\n\
+  pactrun revision metadata show <revision-reference>\n\
+  pactrun revision alias show <alias>\n\
+  pactrun revision alias set <alias> <exact-reference> (--expect-absent | --expect <exact-reference>)\n\
+  pactrun revision alias clear <alias> --expect <exact-reference>\n\
+  pactrun revision note show <revision-reference>\n\
+  pactrun revision note set <exact-reference> --value <text> (--expect-absent | --expect <text>)\n\
+  pactrun revision note clear <exact-reference> (--expect-absent | --expect <text>)\n\
+  pactrun revision trust show <revision-reference>\n\
+  pactrun revision trust set <exact-reference> <trusted|distrusted> (--expect-absent | --expect <trusted|distrusted>)\n\
+  pactrun revision trust clear <exact-reference> (--expect-absent | --expect <trusted|distrusted>)\n\
+  pactrun instance history list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
+  pactrun instance history show <instance-id>\n\
+  pactrun instance deletion list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
   pactrun revision delete <revision-reference>\n\
   pactrun snapshot delete <snapshot-id>\n\
   pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export\n\
@@ -108,6 +124,7 @@ Cleanup has no parameters. Abandon never launches Cleanup. Detached discard neve
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n";
 
 enum Command {
+    Catalog(catalog::CatalogCommand),
     Lifecycle(lifecycle::LifecycleCommand),
     Artifact(artifacts::ArtifactCommand),
     Retirement(retirements::RetirementCommand),
@@ -171,9 +188,6 @@ enum Command {
         startup_timeout_ms: Option<u64>,
         action_timeout_ms: Option<u64>,
         termination_grace_ms: Option<u64>,
-    },
-    ListRuns {
-        name: InstanceName,
     },
     ShowRun {
         run: RunId,
@@ -526,7 +540,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
     };
     match first.as_str() {
         "pack" => parse_pack(&mut parser),
-        "revision" => lifecycle::parse_revision(&mut parser).map(Command::Lifecycle),
+        "revision" => catalog::parse_revision(&mut parser),
         "instance" => parse_instance(&mut parser),
         "input" => parse_input(&mut parser),
         "action" => parse_action(&mut parser),
@@ -580,7 +594,9 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
 
 fn parse_instance(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "instance command")?.as_str() {
-        operation @ ("delete" | "abandon" | "deletion") => {
+        "history" => catalog::parse_history(parser),
+        "deletion" => catalog::parse_deletion(parser),
+        operation @ ("delete" | "abandon") => {
             retirements::parse_instance(parser, operation).map(Command::Retirement)
         }
         "migration-paths" => migrations::parse(parser, true).map(Command::Migration),
@@ -914,11 +930,7 @@ fn parse_run(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "run command")?.as_str() {
         "delete" => lifecycle::parse_run_delete(parser).map(Command::Lifecycle),
         "artifact" => artifacts::parse(parser).map(Command::Artifact),
-        "list" => {
-            let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
-            require_end(parser)?;
-            Ok(Command::ListRuns { name })
-        }
+        "list" => catalog::parse_runs(parser),
         "show" => {
             let run = parse_run_id(&value_string(parser, "RunId")?)?;
             require_end(parser)?;
@@ -1007,12 +1019,14 @@ fn execute(
         )
         .map_err(io_operation);
     }
+    if let Command::Catalog(command) = command {
+        return catalog::execute(command, &storage_root, stdout);
+    }
     let readonly = matches!(
         command,
         Command::ListActions { .. }
             | Command::ShowAction { .. }
             | Command::Invoke { plan: true, .. }
-            | Command::ListRuns { .. }
             | Command::ShowRun { .. }
     );
     let application = if readonly {
@@ -1341,27 +1355,6 @@ fn execute(
                 }
             }
         }
-        Command::ListRuns { name } => {
-            let (instance, _) = resolve_instance(&application, &name)?;
-            for run in application.list_managed_runs(instance).map_err(app_error)? {
-                snapshots::write_summary(stdout, &run)?;
-                if let Some(evidence) =
-                    application.inspect_diagnostics(run.id).map_err(app_error)?
-                {
-                    writeln!(
-                        stdout,
-                        "diagnostics: retain_text={} closed={} observed={} retained={}",
-                        evidence.retain_text,
-                        evidence.closed,
-                        evidence.observed,
-                        evidence.events.len()
-                    )
-                    .map_err(io_operation)?;
-                } else {
-                    writeln!(stdout, "diagnostics: legacy/not collected").map_err(io_operation)?;
-                }
-            }
-        }
         Command::ShowRun { run } => {
             let inspection = application
                 .managed_run_inspection(run)
@@ -1379,6 +1372,7 @@ fn execute(
             }
         }
         Command::Help
+        | Command::Catalog(_)
         | Command::Version
         | Command::GeneratePackageId
         | Command::UpgradeStorage
@@ -3061,7 +3055,12 @@ runtime_content:
         stderr.clear();
         assert_eq!(
             run(
-                vec!["run".into(), "list".into(), "node".into()],
+                vec![
+                    "run".into(),
+                    "list".into(),
+                    "node".into(),
+                    "--no-trunc".into()
+                ],
                 storage_env,
                 &mut io::empty(),
                 &mut stdout,
@@ -3069,7 +3068,10 @@ runtime_content:
             ),
             0
         );
-        assert!(stdout.is_empty(), "invalid timeout must create no Run");
+        assert!(
+            String::from_utf8_lossy(&stdout).contains("0 records shown."),
+            "invalid timeout must create no Run"
+        );
     }
 
     // Test-ID: PR-TEST-0118
@@ -3277,7 +3279,12 @@ runtime_content:
         stderr.clear();
         assert_eq!(
             run(
-                vec!["run".into(), "list".into(), "node".into()],
+                vec![
+                    "run".into(),
+                    "list".into(),
+                    "node".into(),
+                    "--no-trunc".into()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -3381,7 +3388,12 @@ runtime_content:
         stderr.clear();
         assert_eq!(
             run(
-                vec!["run".into(), "list".into(), "node".into()],
+                vec![
+                    "run".into(),
+                    "list".into(),
+                    "node".into(),
+                    "--no-trunc".into()
+                ],
                 storage_env,
                 &mut io::empty(),
                 &mut stdout,
@@ -3392,8 +3404,12 @@ runtime_content:
             String::from_utf8_lossy(&stderr)
         );
         let listing = String::from_utf8_lossy(&stdout);
-        assert!(listing.contains("phase: finished"));
-        assert!(listing.contains("outcome: succeeded"));
+        assert!(
+            listing
+                .lines()
+                .skip(1)
+                .any(|line| line.ends_with("  finished  succeeded"))
+        );
     }
 
     // Test-ID: PR-TEST-0126
@@ -3425,7 +3441,12 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["run".into(), "list".into(), "node".into()],
+                vec![
+                    "run".into(),
+                    "list".into(),
+                    "node".into(),
+                    "--no-trunc".into()
+                ],
                 storage_env,
                 &mut io::empty(),
                 &mut listing,
@@ -3436,15 +3457,13 @@ runtime_content:
             String::from_utf8_lossy(&stderr)
         );
         let listing = String::from_utf8_lossy(&listing);
-        assert_eq!(
-            listing
-                .lines()
-                .filter(|line| line.starts_with("run: "))
-                .count(),
-            1
-        );
-        assert!(listing.contains("phase: finished"));
-        assert!(listing.contains("outcome: succeeded"));
+        let rows: Vec<_> = listing
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].ends_with("  finished  succeeded"));
     }
 
     // Test-ID: PR-TEST-0127
@@ -3476,7 +3495,12 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["run".into(), "list".into(), "node".into()],
+                vec![
+                    "run".into(),
+                    "list".into(),
+                    "node".into(),
+                    "--no-trunc".into()
+                ],
                 storage_env,
                 &mut io::empty(),
                 &mut listing,
@@ -3487,15 +3511,13 @@ runtime_content:
             String::from_utf8_lossy(&stderr)
         );
         let listing = String::from_utf8_lossy(&listing);
-        assert_eq!(
-            listing
-                .lines()
-                .filter(|line| line.starts_with("run: "))
-                .count(),
-            1
-        );
-        assert!(listing.contains("phase: finished"));
-        assert!(listing.contains("outcome: succeeded"));
+        let rows: Vec<_> = listing
+            .lines()
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].ends_with("  finished  succeeded"));
     }
 
     // Test-ID: PR-TEST-0078

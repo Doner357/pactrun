@@ -134,7 +134,7 @@ pub(super) fn apply_revision_metadata_in_transaction(
     Ok(())
 }
 
-fn validate_reference_label_lookup_rows(
+pub(super) fn validate_reference_label_lookup_rows(
     database: &Connection,
     label: &ReferenceLabel,
 ) -> Result<(), PersistenceError> {
@@ -793,7 +793,7 @@ fn cas_requires_change<T: Eq>(
     }
 }
 
-fn load_revision_metadata_from(
+pub(super) fn load_revision_metadata_from(
     database: &Connection,
     revision: &RevisionIdentity,
     core: &RevisionCoreV1,

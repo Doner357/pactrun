@@ -380,7 +380,7 @@ binding with the most source claims, or an older or newer association.
 Deterministic results MUST use the typed ordering defined by PR-REQ-0250 rather
 than insertion or query-plan order.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0532.**
 
 ### PR-REQ-0020 - Metadata observations
 
@@ -463,7 +463,7 @@ one management environment. Names MAY be reused after deletion, but durable
 provenance MUST use `InstanceId` as its authoritative historical referent.
 M2 exact syntax and ordering are closed by PR-REQ-0263.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0531.**
 
 ### PR-REQ-0025 - Opaque InstanceStateVersion
 
@@ -875,4 +875,4 @@ future typed installation or source-observation model. M1-D MUST NOT persist
 them as current Revision metadata before `LocalInstall` identity, cardinality,
 and lifecycle are defined.
 
-**Verification: PR-TEST-0058, PR-TEST-0064, PR-TEST-0066.**
+**Verification: PR-TEST-0058, PR-TEST-0064, PR-TEST-0066, PR-TEST-0530, PR-TEST-0535.**
