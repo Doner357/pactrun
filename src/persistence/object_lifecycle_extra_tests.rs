@@ -55,7 +55,7 @@ fn collection_never_bootstraps_a_missing_reference_catalog() {
 #[test]
 fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() {
     fn rows(db: &Connection) -> std::collections::BTreeMap<String, Vec<String>> {
-        let names=db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'writable_admissions' ORDER BY name").unwrap()
+        let names=db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'writable_admissions' AND name NOT IN ('run_diagnostic_collections','run_diagnostic_events') ORDER BY name").unwrap()
             .query_map([],|r|r.get::<_,String>(0)).unwrap().collect::<Result<Vec<_>,_>>().unwrap();
         let mut result = std::collections::BTreeMap::new();
         for name in names {
@@ -137,6 +137,18 @@ fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() 
     let before = rows(&db);
     assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     assert_eq!(rows(&db), before);
+    assert_eq!(
+        db.query_row("SELECT count(*) FROM run_diagnostic_collections", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        db.query_row("SELECT count(*) FROM run_diagnostic_events", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
     assert_eq!(fs::read(&live).unwrap(), b"service-owned-sentinel");
     assert_eq!(
         fs::read(

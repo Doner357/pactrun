@@ -303,7 +303,7 @@ fn pre_acceptance_errors_create_no_run_and_never_launch_the_hook() {
 // Test-ID: PR-TEST-0146
 // Verifies: PR-REQ-0094, PR-REQ-0097, PR-REQ-0285
 #[test]
-fn declared_hook_failure_is_durable_and_structurally_redacted() {
+fn declared_hook_failure_is_durable_and_its_explanation_is_attributed() {
     let scenario = Scenario::new(0x146, basic_source());
     scenario.install_and_create("node");
     let invoked = scenario.invoke("node", "failure");
@@ -314,5 +314,7 @@ fn declared_hook_failure_is_durable_and_structurally_redacted() {
     let run = run_details_projection(&shown);
     assert_eq!(run.outcome, "failed");
     let view = String::from_utf8_lossy(&shown.stdout);
-    assert!(!view.contains("fixture failure"));
+    assert!(view.contains("fixture failure"));
+    assert!(view.contains("kind=completion"));
+    assert!(view.contains("hook completion: failure"));
 }

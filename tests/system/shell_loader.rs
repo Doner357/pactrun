@@ -109,8 +109,114 @@ fn shell_loader_risk_acknowledgments_and_nonzero_exit_preserve_recovery() {
     }
 }
 
+fn diagnostic_script(scenario: &Scenario, marker: &str) {
+    let event = scenario.path("diagnostic-input.json");
+    fs::write(&event,serde_json::to_vec(&json!({"type":"diagnostic","severity":"info","code":"operation_note","message":marker})).unwrap()).unwrap();
+    let request = format!(
+        "diagnostic --file \"{}\"",
+        event.to_string_lossy().replace('\\', "/")
+    );
+    fs::write(
+        scenario.source.join("script.txt"),
+        helper_calls(&[&request], 0),
+    )
+    .unwrap();
+}
+fn assert_retained_explanation(scenario: &Scenario, output: &std::process::Output, marker: &str) {
+    let both = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let run = both
+        .lines()
+        .find_map(|line| line.strip_prefix("run: "))
+        .expect(&both)
+        .split_whitespace()
+        .next()
+        .unwrap();
+    let shown = scenario.run(["run", "show", run]);
+    assert_success(&shown);
+    let history = String::from_utf8_lossy(&shown.stdout);
+    assert!(history.contains(marker), "{history}");
+    assert!(history.contains("collection_closed=true"), "{history}");
+}
+// Test-ID: PR-TEST-0527
+// Verifies: PR-REQ-0351, PR-REQ-0352
+#[test]
+fn blocked_diagnostic_stderr_does_not_hold_timeout_or_execution_ownership() {
+    use std::{
+        process::Stdio,
+        thread,
+        time::{Duration, Instant},
+    };
+    let (shell, executable) = shells()[0];
+    let yaml = source(shell, executable, &[]).replace("terminal: output", "terminal: none");
+    let scenario = Scenario::new(732, &yaml);
+    diagnostic_script(
+        &scenario,
+        &format!("evidence-before-timeout{}tail-marker", "x".repeat(100000)),
+    );
+    let path = scenario.source.join("script.txt");
+    let script = fs::read_to_string(&path).unwrap().replace(
+        "exit 0\n",
+        if cfg!(windows) {
+            "Start-Sleep -Seconds 30\n"
+        } else {
+            "sleep 30\n"
+        },
+    );
+    fs::write(path, script).unwrap();
+    scenario.install_and_create("sample");
+    let mut process = command(
+        &scenario.storage,
+        &scenario.path(""),
+        [
+            "invoke",
+            "sample",
+            "run",
+            "--action-timeout-ms",
+            "3000",
+            "--termination-grace-ms",
+            "50",
+        ],
+    )
+    .stdout(Stdio::null())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        if process.try_wait().unwrap().is_some() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = process.kill();
+            let _ = process.wait();
+            panic!("blocked diagnostics retained execution ownership");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let listed = scenario.run(["run", "list", "sample"]);
+    assert_success(&listed);
+    let list = String::from_utf8_lossy(&listed.stdout);
+    let run = list
+        .lines()
+        .find_map(|line| line.strip_prefix("run: "))
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap();
+    let shown = scenario.run(["run", "show", run]);
+    assert_success(&shown);
+    let history = String::from_utf8_lossy(&shown.stdout);
+    assert!(history.contains("outcome: timed_out"), "{history}");
+    assert!(history.contains("evidence-before-timeout") && history.contains("tail-marker"));
+    assert!(history.contains("middle truncated") && history.contains("collection_closed=true"));
+}
+
 // Test-ID: PR-TEST-0489
-// Verifies: PR-REQ-0349
+// Verifies: PR-REQ-0349, PR-REQ-0351
 #[test]
 fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
     for (shell, executable) in shells() {
@@ -129,7 +235,7 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
             &format!("{capabilities}runtime_content:"),
         );
         let scenario = Scenario::new(704, &yaml);
-        fs::write(scenario.source.join("script.txt"), "exit 0\n").unwrap();
+        diagnostic_script(&scenario, "operation-evidence");
         scenario.install_and_create("sample");
         let capture = execute(
             &scenario,
@@ -142,12 +248,13 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
             ],
         );
         assert_success(&capture);
+        assert_retained_explanation(&scenario, &capture, "operation-evidence");
         let text = String::from_utf8(capture.stdout).unwrap();
         let snapshot = text
             .lines()
             .find_map(|l| l.strip_prefix("snapshot: "))
             .expect(&text);
-        assert_success(&execute(
+        let restore = execute(
             &scenario,
             &[
                 "snapshot",
@@ -157,8 +264,10 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
                 "--execution-timeout-ms",
                 "10000",
             ],
-        ));
-        assert_success(&execute(
+        );
+        assert_success(&restore);
+        assert_retained_explanation(&scenario, &restore, "operation-evidence");
+        let cleanup = execute(
             &scenario,
             &[
                 "instance",
@@ -167,18 +276,20 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
                 "--execution-timeout-ms",
                 "10000",
             ],
-        ));
+        );
+        assert_success(&cleanup);
+        assert_retained_explanation(&scenario, &cleanup, "operation-evidence");
     }
 }
 
 // Test-ID: PR-TEST-0495
-// Verifies: PR-REQ-0349
+// Verifies: PR-REQ-0349, PR-REQ-0351
 #[test]
 fn shell_loader_plain_migration_and_missing_target_output_are_distinct() {
     for (shell, executable) in shells() {
         for missing in [false, true] {
             let scenario = Scenario::new(705, &source(shell, executable, &[]));
-            fs::write(scenario.source.join("script.txt"), "exit 0\n").unwrap();
+            diagnostic_script(&scenario, "migration-evidence");
             let revision = scenario.install_and_create("sample");
             let digest = revision.rsplit('/').next().unwrap();
             let base =
@@ -209,6 +320,7 @@ fn shell_loader_plain_migration_and_missing_target_output_are_distinct() {
                     "10000",
                 ],
             );
+            assert_retained_explanation(&scenario, &result, "migration-evidence");
             assert_eq!(
                 result.status.success(),
                 !missing,
@@ -955,4 +1067,66 @@ fn shell_loader_rejects_ambient_file_locator_without_touching_its_bytes() {
             .count(),
         0
     );
+}
+
+// Test-ID: PR-TEST-0520
+// Verifies: PR-REQ-0283, PR-REQ-0285, PR-REQ-0351
+#[test]
+fn hook_diagnostics_survive_process_exit_with_explicit_retention_and_safe_display() {
+    for (shell, executable) in shells() {
+        for terminal in ["none", "output", "interactive"] {
+            let yaml = source(shell, executable, &[])
+                .replace("terminal: output", &format!("terminal: {terminal}"));
+            let scenario = Scenario::new(731, &yaml);
+            let event = scenario.path("diagnostic.json");
+            fs::write(&event,serde_json::to_vec(&json!({"type":"diagnostic","severity":"error","code":"investigate","message":"debug-visible-marker\u{1b}[31m"})).unwrap()).unwrap();
+            let request = format!(
+                "diagnostic --file \"{}\"",
+                event.to_string_lossy().replace('\\', "/")
+            );
+            fs::write(
+                scenario.source.join("script.txt"),
+                helper_calls(&[&request], 0),
+            )
+            .unwrap();
+            scenario.install_and_create("sample");
+            for disabled in [false, true] {
+                let mut args = vec!["invoke", "sample", "run", "--action-timeout-ms", "10000"];
+                if disabled {
+                    args.push("--no-retain-hook-text");
+                }
+                let result = execute(&scenario, &args);
+                assert_success(&result);
+                let live = String::from_utf8_lossy(&result.stderr);
+                assert!(live.contains("debug-visible-marker"), "{live}");
+                assert!(
+                    !live.contains('\u{1b}'),
+                    "terminal controls must be escaped"
+                );
+                let run = live
+                    .lines()
+                    .find_map(|line| line.strip_prefix("run: "))
+                    .unwrap()
+                    .split_whitespace()
+                    .next()
+                    .unwrap();
+                let inspection = scenario.run(["run", "show", run]);
+                assert_success(&inspection);
+                let history = String::from_utf8_lossy(&inspection.stdout);
+                assert_eq!(
+                    history.contains("debug-visible-marker"),
+                    !disabled,
+                    "{history}"
+                );
+                assert!(history.contains("collection_closed=true"), "{history}");
+                assert!(
+                    history.contains("outcome: succeeded"),
+                    "diagnostic error must not change outcome: {history}"
+                );
+                let list = scenario.run(["run", "list", "sample"]);
+                assert_success(&list);
+                assert!(!String::from_utf8_lossy(&list.stdout).contains("debug-visible-marker"));
+            }
+        }
+    }
 }

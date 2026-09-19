@@ -15,6 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::diagnostic_scope::diagnostic_scope;
 use serde_json::json;
 
 use crate::{
@@ -58,10 +59,16 @@ impl fmt::Debug for TargetRuntimeFacts {
 }
 
 pub(super) trait RecoveryRiskPersistence {
+    fn diagnostic_root(&self) -> Option<std::path::PathBuf> {
+        None
+    }
     fn set_recovery_risk(&self, run: RunId, requested: RecoveryRiskState) -> Result<(), ()>;
 }
 
 impl RecoveryRiskPersistence for PactrunPersistence {
+    fn diagnostic_root(&self) -> Option<std::path::PathBuf> {
+        Some(self.diagnostic_root())
+    }
     fn set_recovery_risk(&self, run: RunId, requested: RecoveryRiskState) -> Result<(), ()> {
         match requested {
             RecoveryRiskState::Open => self.open_recovery_risk(run),
@@ -75,6 +82,9 @@ pub(crate) struct LiveExecution {
     run: RunId,
     materialized: MaterializedAction,
     supervisor: ProcessSupervisor,
+    // Rust drops fields in declaration order: return terminal ownership before
+    // enabling deferred diagnostic presentation.
+    diagnostics: Option<super::diagnostics::DiagnosticScope>,
     protocol: LiveProtocol,
     state: ProtocolState,
     winner: OutcomeArbiter,
@@ -191,6 +201,7 @@ pub(super) fn execute_materialized(
             );
         }
     };
+    let diagnostics = diagnostic_scope(risk_persistence, run, &materialized, &cancellation);
     let supervisor = match cancellation.arbitrate_launch(|| {
         ProcessSupervisor::spawn(
             materialized.program(),
@@ -236,6 +247,7 @@ pub(super) fn execute_materialized(
     drive_execution(
         risk_persistence,
         LiveExecution {
+            diagnostics,
             run,
             materialized,
             supervisor,
@@ -343,6 +355,7 @@ pub(super) fn execute_snapshot_with_risk(
             return run;
         }
     };
+    let diagnostics = diagnostic_scope(risk, run, &materialized, &cancellation);
     let mut pending_materialization = Some(materialized);
     match claim.launch_once(|_| {
         let mut materialized = pending_materialization.take().expect("one launch attempt");
@@ -362,6 +375,7 @@ pub(super) fn execute_snapshot_with_risk(
                     ProtocolState::new_capture(materialized.session_id().to_owned())
                 };
                 Ok(LiveExecution {
+                    diagnostics,
                     run,
                     materialized,
                     supervisor,
@@ -435,7 +449,12 @@ fn drive_execution(
     mut live: LiveExecution,
 ) -> OwnerContinuation {
     loop {
-        while let Some(event) = next_protocol_event(&mut live) {
+        // Bound per-turn protocol work so a diagnostic flood cannot starve
+        // cancellation, deadline observation or process supervision.
+        for _ in 0..32 {
+            let Some(event) = next_protocol_event(&mut live) else {
+                break;
+            };
             match handle_wire_event(risk_persistence, &mut live, event) {
                 Flow::Continue => {}
                 Flow::RetryDurable(operation) => {
@@ -619,7 +638,13 @@ fn apply_step(
             }
             Flow::Continue
         }
-        ProtocolStep::Diagnostic | ProtocolStep::CancelAcknowledged => Flow::Continue,
+        ProtocolStep::Diagnostic(text) => {
+            if let Some(scope) = &live.diagnostics {
+                scope.record(text);
+            }
+            Flow::Continue
+        }
+        ProtocolStep::CancelAcknowledged => Flow::Continue,
         ProtocolStep::RiskRequest {
             request_id,
             requested,
@@ -636,6 +661,17 @@ fn apply_step(
             acknowledge_risk(live, request_id, requested)
         }
         ProtocolStep::Completed(completion) => {
+            if let Some(scope) = &live.diagnostics {
+                scope.record(crate::domain::HookText {
+                    kind: crate::domain::DiagnosticKind::Completion,
+                    severity: None,
+                    code: completion.code.as_ref().map(|c| c.as_str().to_owned()),
+                    message: completion.message.clone(),
+                    completion_status: Some(completion.status),
+                    truncated: false,
+                    truncated_prefix_bytes: 0,
+                });
+            }
             if live.materialized.operation() == super::protocol::SessionOperation::Capture {
                 if completion.status == HookCompletionStatus::Success && live.captured_at.is_none()
                 {
@@ -674,7 +710,10 @@ fn apply_step(
             live.protocol = LiveProtocol::Closed;
             Flow::Continue
         }
-        ProtocolStep::HookProtocolError => {
+        ProtocolStep::HookProtocolError(text) => {
+            if let Some(scope) = &live.diagnostics {
+                scope.record(text);
+            }
             live.protocol = LiveProtocol::Closed;
             Flow::Fail(FailureKind::HookReportedProtocol)
         }

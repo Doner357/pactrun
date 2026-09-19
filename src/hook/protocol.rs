@@ -111,7 +111,7 @@ impl ConnectedProtocol {
         let mut writer = ProtocolWriter { stream };
         writer.write_preamble()?;
         writer.write_payload(&payload)?;
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(2);
         thread::spawn(move || read_hook_messages(reader, &sender, operation));
         Ok(Self { writer, receiver })
     }
@@ -219,7 +219,7 @@ pub(super) enum WireEvent {
 
 fn read_hook_messages(
     mut stream: ProtocolStream,
-    sender: &mpsc::Sender<WireEvent>,
+    sender: &mpsc::SyncSender<WireEvent>,
     operation: SessionOperation,
 ) {
     read_wire_events_for(&mut stream, operation, |event| sender.send(event).is_ok());
@@ -355,7 +355,7 @@ pub(super) enum HookMessage {
         protocol_version: u64,
         session_id: String,
     },
-    Diagnostic,
+    Diagnostic(crate::domain::HookText),
     Request {
         request_id: u64,
         requested: RecoveryRiskState,
@@ -364,7 +364,7 @@ pub(super) enum HookMessage {
         control_id: u64,
     },
     Complete(HookCompletion),
-    ProtocolError,
+    ProtocolError(crate::domain::HookText),
 }
 
 #[derive(Debug)]
@@ -428,9 +428,21 @@ fn parse_diagnostic(mut object: Fields) -> Result<HookMessage, ProtocolFailure> 
     if !matches!(severity.as_str(), "info" | "warning" | "error") {
         return Err(invalid_message());
     }
-    take_hook_code(&mut object, "code")?;
-    let _ = take_string(&mut object, "message")?;
-    Ok(HookMessage::Diagnostic)
+    let code = take_hook_code(&mut object, "code")?;
+    let message = take_string(&mut object, "message")?;
+    Ok(HookMessage::Diagnostic(crate::domain::HookText {
+        kind: crate::domain::DiagnosticKind::Diagnostic,
+        severity: Some(match severity.as_str() {
+            "info" => crate::domain::DiagnosticSeverity::Info,
+            "warning" => crate::domain::DiagnosticSeverity::Warning,
+            _ => crate::domain::DiagnosticSeverity::Error,
+        }),
+        code: Some(code.as_str().to_owned()),
+        message: Some(message),
+        completion_status: None,
+        truncated: false,
+        truncated_prefix_bytes: 0,
+    }))
 }
 
 fn parse_request(mut object: Fields) -> Result<HookMessage, ProtocolFailure> {
@@ -592,9 +604,17 @@ const fn invalid_session_path() -> ProtocolFailure {
 
 fn parse_hook_protocol_error(mut object: Fields) -> Result<HookMessage, ProtocolFailure> {
     closed(&object, &["code", "message"])?;
-    take_hook_code(&mut object, "code")?;
-    let _ = take_string(&mut object, "message")?;
-    Ok(HookMessage::ProtocolError)
+    let code = take_hook_code(&mut object, "code")?;
+    let message = take_string(&mut object, "message")?;
+    Ok(HookMessage::ProtocolError(crate::domain::HookText {
+        kind: crate::domain::DiagnosticKind::ProtocolError,
+        severity: None,
+        code: Some(code.as_str().to_owned()),
+        message: Some(message),
+        completion_status: None,
+        truncated: false,
+        truncated_prefix_bytes: 0,
+    }))
 }
 
 type Fields = Vec<(String, RawJsonValue)>;
@@ -725,14 +745,14 @@ enum Phase {
 #[derive(Debug)]
 pub(super) enum ProtocolStep {
     Ready,
-    Diagnostic,
+    Diagnostic(crate::domain::HookText),
     RiskRequest {
         request_id: u64,
         requested: RecoveryRiskState,
     },
     CancelAcknowledged,
     Completed(HookCompletion),
-    HookProtocolError,
+    HookProtocolError(crate::domain::HookText),
 }
 
 impl ProtocolState {
@@ -820,9 +840,9 @@ impl ProtocolState {
                 self.phase = Phase::Active;
                 Ok(ProtocolStep::Ready)
             }
-            HookMessage::Diagnostic => {
+            HookMessage::Diagnostic(text) => {
                 self.require_active()?;
-                Ok(ProtocolStep::Diagnostic)
+                Ok(ProtocolStep::Diagnostic(text))
             }
             HookMessage::Request {
                 request_id,
@@ -914,10 +934,10 @@ impl ProtocolState {
                 self.phase = Phase::Terminal;
                 Ok(ProtocolStep::Completed(completion))
             }
-            HookMessage::ProtocolError => {
+            HookMessage::ProtocolError(text) => {
                 self.require_active()?;
                 self.phase = Phase::Terminal;
-                Ok(ProtocolStep::HookProtocolError)
+                Ok(ProtocolStep::HookProtocolError(text))
             }
         }
     }
@@ -968,12 +988,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn action_message_parser_is_strict_and_does_not_retain_diagnostics() {
+    fn action_message_parser_is_strict_and_preserves_attributed_diagnostics() {
         assert!(matches!(
             parse_hook_message(
                 br#"{"type":"diagnostic","severity":"info","code":"ready","message":"sensitive text"}"#
             ),
-            Ok(HookMessage::Diagnostic)
+            Ok(HookMessage::Diagnostic(_))
         ));
         assert_eq!(
             parse_hook_message(br#"{"type":"session_ready","type":"session_ready"}"#)

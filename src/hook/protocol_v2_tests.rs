@@ -162,7 +162,7 @@ fn target_proposal_requires_acknowledged_open_and_receipt_never_clears_risk_or_r
     assert!(transform.accept(message(proposal())).is_err());
     assert!(
         transform
-            .accept(Message::Common(HookMessage::Diagnostic))
+            .accept(message(json!({"type":"diagnostic","severity":"info","code":"late","message":"not accepted"})))
             .is_err()
     );
     let mut failed = state(true);

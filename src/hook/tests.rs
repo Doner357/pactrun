@@ -52,6 +52,19 @@ const MODE_PREFIX: &str = "pactrun-hook-mode:";
 const LINGER: Duration = Duration::from_millis(1500);
 const WAIT_LIMIT: Duration = Duration::from_secs(60);
 
+fn without_hook_text() -> ActionCancellation {
+    let cancellation = ActionCancellation::default();
+    cancellation
+        .diagnostics
+        .disabled
+        .store(true, Ordering::Release);
+    cancellation
+}
+
+mod diagnostic_runtime {
+    include!("diagnostic_tests.rs");
+}
+
 mod capture_runtime {
     include!("capture_tests.rs");
 }
@@ -692,6 +705,12 @@ impl HookWorker {
             .collect();
         let mode = parameters["mode"].as_str().unwrap().to_owned();
         let marker = PathBuf::from(parameters["marker"].as_str().unwrap());
+        let mut launches = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(marker_variant(&marker, "launches"))
+            .unwrap();
+        writeln!(launches, "launch").unwrap();
         fs::write(marker_variant(&marker, "session"), session.to_string()).unwrap();
         fs::write(marker_variant(&marker, "args"), self.arguments.join("\n")).unwrap();
         fs::write(
@@ -722,6 +741,16 @@ impl HookWorker {
         let sensitive = parameters["sensitive_value"].as_str().unwrap().to_owned();
 
         match mode.as_str() {
+            "diagnostic_flood" => {
+                let message = "flood-evidence".repeat(4000);
+                for _ in 0..20000 {
+                    write_frame(
+                        &mut self.stream,
+                        &json!({"type":"diagnostic","severity":"info","code":"flood","message":message}),
+                    );
+                }
+                let _ = read_frame(&mut self.stream);
+            }
             "success" => {
                 self.complete(json!({"status": "success", "produced_outputs": []}));
                 self.expect_accepted();
@@ -1014,9 +1043,9 @@ fn run_action_transcript(
                     submitted = done.produced_outputs.clone();
                     completion = Some("submitted");
                 }
-                ProtocolStep::HookProtocolError => completion = Some("protocol_error"),
+                ProtocolStep::HookProtocolError(_) => completion = Some("protocol_error"),
                 ProtocolStep::Ready
-                | ProtocolStep::Diagnostic
+                | ProtocolStep::Diagnostic(_)
                 | ProtocolStep::CancelAcknowledged => {}
             }
         } else {
@@ -1931,11 +1960,17 @@ fn terminal_modes_keep_the_protocol_off_stdio() {
 fn sensitive_values_endpoints_and_raw_frames_are_not_retained() {
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("sensitive");
-    let facts = fixture.execute(
+    let cancellation = ActionCancellation::default();
+    cancellation
+        .diagnostics
+        .disabled
+        .store(true, Ordering::Release);
+    let facts = fixture.execute_with(
         "direct",
         "sensitive_diagnostic",
         &marker,
         policy(None, None, None),
+        cancellation,
     );
     assert_eq!(facts.outcome, RunOutcome::Succeeded);
     let environment = fs::read_to_string(marker_variant(&marker, "env")).unwrap();
@@ -2013,9 +2048,9 @@ fn sensitive_values_endpoints_and_raw_frames_are_not_retained() {
 }
 
 // Test-ID: PR-TEST-0113
-// Verifies: PR-REQ-0283
+// Verifies: PR-REQ-0283, PR-REQ-0351
 #[test]
-fn production_finalization_drops_hook_text_but_keeps_structural_status() {
+fn production_finalization_separates_hook_evidence_from_structural_outcome() {
     const CODE_MARKER: &str = "hook_completion_marker";
     const COMPLETION_MESSAGE_MARKER: &str = "slice5_hook_completion_marker";
     const DIAGNOSTIC_MARKER: &str = "slice5_hook_diagnostic_marker";
@@ -2082,13 +2117,22 @@ fn production_finalization_drops_hook_text_but_keeps_structural_status() {
     assert_eq!(message_present, 0);
     assert!(message.is_empty());
 
-    let durable = database_bytes(&storage);
-    for marker in [CODE_MARKER, COMPLETION_MESSAGE_MARKER, DIAGNOSTIC_MARKER] {
-        assert!(
-            !contains(&durable, marker.as_bytes()),
-            "durable Run persistence retains {marker}"
-        );
-    }
+    let evidence = reopened.inspect_diagnostics(run).unwrap().unwrap();
+    assert!(evidence.retain_text && evidence.started && evidence.closed);
+    let codes = evidence
+        .events
+        .iter()
+        .filter_map(|e| e.text.code.as_deref())
+        .collect::<Vec<_>>();
+    let messages = evidence
+        .events
+        .iter()
+        .filter_map(|e| e.text.message.as_deref())
+        .collect::<Vec<_>>();
+    assert!(codes.contains(&CODE_MARKER));
+    assert!(messages.contains(&COMPLETION_MESSAGE_MARKER));
+    assert!(messages.contains(&DIAGNOSTIC_MARKER));
+    assert!(!format!("{evidence:?}").contains(DIAGNOSTIC_MARKER));
 }
 
 // Test-ID: PR-TEST-0100

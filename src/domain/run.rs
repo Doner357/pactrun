@@ -407,6 +407,7 @@ pub(crate) struct ManagedRunView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ManagedRunInspectionData {
+    pub(crate) diagnostics: Option<super::DiagnosticInspection>,
     pub(crate) run: ManagedRunView,
     pub(crate) current_recovery_guard: Option<RecoveryGuardView>,
     pub(crate) capture_result: Option<super::SnapshotId>,

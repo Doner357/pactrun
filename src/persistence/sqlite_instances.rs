@@ -162,6 +162,10 @@ impl PactrunPersistence {
             .database
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
+        let transaction = database
+            .unchecked_transaction()
+            .map_err(|e| PersistenceError::sqlite("begin Instance list snapshot", e))?;
+        let database = &transaction;
         let mut statement = database
             .prepare(
                 "SELECT instance_id, instance_name, active_package_id, \
@@ -185,18 +189,23 @@ impl PactrunPersistence {
             let (id, name, package, digest, version) =
                 row.map_err(|error| PersistenceError::sqlite("read Instance row", error))?;
             let id = instance_id(id)?;
-            let view = load_instance_from(&database, id, name, package, digest, version)?;
+            let view = load_instance_from(database, id, name, package, digest, version)?;
             result.push(InstanceSummary {
                 id: view.id,
                 name: view.name,
                 active_revision: view.active_revision,
                 state_version: view.state_version,
                 required_inputs_satisfied: view.required_inputs_satisfied,
+                recovery_guard: view.recovery_guard,
             });
         }
         ensure_ordered(&result, |left, right| {
             left.name.cmp(&right.name).then(left.id.cmp(&right.id))
         })?;
+        drop(statement);
+        transaction
+            .commit()
+            .map_err(|e| PersistenceError::sqlite("finish Instance list snapshot", e))?;
         Ok(result)
     }
 
@@ -666,6 +675,7 @@ fn load_instance_from(
         state_version,
         required_inputs_satisfied,
         bindings,
+        recovery_guard: super::sqlite_runs::load_instance_recovery_guard_from(database, id)?,
     })
 }
 

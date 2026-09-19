@@ -44,6 +44,12 @@ test('catalog matches every requirement-bearing document and its original status
   }
 });
 
+test('Run evidence SQL remains identical to the owning V11 specification', async () => {
+  const spec = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v11.md')[1];
+  const sql = await readFile(path.join(root, 'src/persistence/persistence_schema_v11_additions.sql'), 'utf8');
+  assert.equal(spec.split('```sql\n')[1].split('```')[0].trim(), sql.trim());
+});
+
 test('usage guides are placeholders, not completed tutorials', () => {
   const names = ['agents/use-pactrun.md', 'agents/author-packs.md', 'agents/integrate-hooks.md'];
   for (const [name, body] of docs) {
@@ -97,20 +103,20 @@ test('current entries reflect V10 integration while preserving M7 and bounded M6
   assert.doesNotMatch(current, /Cleanup execution remains Proposed/);
   const agentEntry = docs.find(([file]) => file === 'agents/index.md')[1].replace(/\s+/g, ' ');
   assert.match(agentEntry, /M5, bounded M6, M6\.5 ServiceStorage and M7 Cleanup\/deletion are implemented and integrated into local `develop`/);
-  assert.match(agentEntry, /current persistence baseline is V10, with explicit exact-V8\/V9 upgrade/);
+  assert.match(agentEntry, /integrated develop persistence baseline is V10, with explicit exact-V8\/V9 upgrade/);
   const capacity = document('snapshot-capacity-and-restore-status.md');
   assert.match(capacity.replace(/\s+/g, ' '), /S0-S5 implemented, verified and integrated into local `develop`/);
   assert.match(capacity, /ead810f1a81e5a52e351e96b11987a8b3d766d36/);
   assert.match(capacity, /b99ffbd748f5417c0aa8537fe9c5e2234142a31c/);
   assert.match(agentEntry, /Shell Adapter \/ Loader is implemented, verified and integrated into local develop/);
-  assert.match(agentEntry, /Hook diagnostic presentation remains an unresolved follow-up/);
+  assert.match(agentEntry, /Hook diagnostic presentation was unresolved at Loader closeout/);
   const shell = document('shell-adapter-loader-status.md');
   assert.match(shell.replace(/\s+/g, ' '), /S0-S6 implemented, verified and integrated into local `develop`/);
   assert.match(shell, /4c294e0bfc3f6cb023d5a837764f898f1b0509d2/);
   assert.match(shell, /5d90472d99a57e33b49d9da712eee891b1861066/);
   assert.match(shell, /Known follow-up: usable Hook diagnostics/);
   assert.match(shell, /no live diagnostic presentation or diagnostic history consumer/);
-  assert.match(agentEntry, /Execution Diagnostics and Instance State Observability is next, starting with S0/);
+  assert.match(agentEntry, /The follow-up is implemented and verified by A on its feature branch/);
   assert.match(capacity, /reused evidence/);
   for (const entry of [current, agentEntry]) {
     assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
@@ -194,7 +200,7 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
   }
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   assert.match(current, /pub\(super\) const SCHEMA_V9_VERSION: i64 = 9;/);
-  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 10;/);
+  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 11;/);
   const capacity = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v10.md')[1];
   assert.match(capacity.replace(/\s+/g, ' '), /Only explicit upgrade from exact V9 or the previously supported exact V8/);
   assert.match(capacity, /Legacy rows and bytes remain inline without a bulk/);
@@ -362,7 +368,9 @@ test('approved remaining milestones assign gaps without silently implementing co
     assert.ok(document(name).includes('remaining-capability-milestones.md'), name);
   }
   const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
-  assert.match(handoff, /A's S0 is next/);
+  assert.match(handoff, /A implementation and verification are complete/);
+  assert.match(handoff, /B is next after integration/);
+  assert.doesNotMatch(handoff, /A's S0 is next/);
   assert.doesNotMatch(handoff, /Machine-readable CLI Output is the next separately planned capability/);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/remaining-capability-milestones/);

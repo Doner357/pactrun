@@ -8,6 +8,8 @@
 #![allow(dead_code)]
 
 mod deletion;
+mod diagnostics;
+pub(crate) use diagnostics::*;
 mod error;
 mod execution;
 mod identity;

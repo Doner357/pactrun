@@ -9,6 +9,8 @@ Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
 approval. Implementation evidence is recorded separately from design approval.
 
+Current feature work: the approved [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) milestone is implemented and verified on its feature branch. Its checkout uses V11; integrated develop remains V10 until separately requested Git integration. The next capability after integration is B (Object Catalog/History/Metadata), beginning with its separate S0.
+
 ## What is already recorded as implemented
 
 The [M4 closeout](./m4-implementation-status.md) records integration through M4:
@@ -145,8 +147,12 @@ the earlier scope/rationale. The operator approved the
 [remaining A-E sequence](./remaining-capability-milestones.md) on 2026-09-19:
 execution diagnostics/Instance observability; object catalog/history/metadata;
 Revision bundles; machine-readable CLI output; then Versioning and Baseline
-Consolidation. A's S0 is next. This authorizes recording the plan only, not runtime
-implementation or unresolved contract choices. Full usage-guide work is excluded.
+Consolidation. A implementation and verification are complete on the feature
+branch; its [delivery record](./execution-diagnostics-observability-status.md)
+separates validation from pending Git integration. B is next after integration,
+starting with its own S0. The original grouping authorized planning only; A's
+later implementation approval does not authorize B-E runtime work. Full
+usage-guide work remains excluded.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
 implemented, verified and integrated into local develop after authorized commit

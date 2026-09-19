@@ -26,3 +26,5 @@ observation and authorized path disclosure, not generic service-content editing.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).
+
+- [Execution diagnostics](./execution-diagnostics.md): accepted Hook evidence, bounded retention and explicit completeness.

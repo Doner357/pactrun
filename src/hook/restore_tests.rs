@@ -113,7 +113,7 @@ fn capture(f: &RuntimeFixture) -> SnapshotId {
         .accept_snapshot_plan(
             plan,
             AdmissionOptions::default(),
-            ActionCancellation::default(),
+            without_hook_text(),
         )
         .unwrap();
     assert!(!f.application.advance_owner_continuation(run).unwrap());
@@ -167,7 +167,7 @@ fn open_consequence(f: &RuntimeFixture) {
             AdmissionOptions {
                 recovery_override: true,
             },
-            ActionCancellation::default(),
+            without_hook_text(),
         )
         .unwrap();
     assert!(!f.application.advance_owner_continuation(run).unwrap());
@@ -343,7 +343,7 @@ fn real_capture_to_restore_exposes_selected_content_and_atomically_replaces_a_di
         snapshot,
         "success",
         &marker,
-        ActionCancellation::default(),
+        without_hook_text(),
         false,
     );
     let before = count(&f, "managed_input_payloads");
@@ -477,7 +477,7 @@ fn failed_cancelled_timed_out_and_protocol_invalid_restore_preserves_target_and_
         let counter = consequence(&f);
         let bytes = export(&f, f.instance.id, "secret_config");
         let marker = f.marker("restore");
-        let cancellation = ActionCancellation::default();
+        let cancellation = without_hook_text();
         let run = admit(
             &f,
             f.instance.id,

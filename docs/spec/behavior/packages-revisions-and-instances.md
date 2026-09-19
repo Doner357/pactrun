@@ -53,6 +53,12 @@ installation, insertion, timestamp, locale, or database query order.
 
 ### PR-REQ-0087 - Instance presentation
 
+Instance list/show MUST expose the stable InstanceId and exact active Revision.
+Input/Secret completeness and current recovery guard MUST be derived from one
+read snapshot and presented separately. Missing required bindings are identified
+without reading values. Absence of a guard is not proof of service health or
+unconditional execution eligibility. No persistent readiness flag is introduced.
+
 User-facing Instance inspection MUST distinguish the stable managed object, its
 human name, active exact Revision, current trust state, and configuration
 completeness. It MUST NOT represent missing required Inputs as an invalid object
@@ -61,7 +67,7 @@ or invent a `NeedsConfiguration` lifecycle state.
 M2 exact name syntax, deterministic listing, and minimum inspection fields are
 defined by PR-REQ-0263.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0525.**
 
 ### PR-REQ-0088 - Historical identity after name reuse
 
@@ -174,7 +180,7 @@ order. Inspection MUST show the exact active Revision, state version, derived
 active/retained Input roles, missing required Inputs, and local Revision trust
 without exposing managed payload bytes.
 
-**Verification: PR-TEST-0078, PR-TEST-0079.**
+**Verification: PR-TEST-0525, PR-TEST-0078, PR-TEST-0079.**
 
 ## ServiceStorage-backed live resources
 

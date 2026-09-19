@@ -23,6 +23,7 @@ use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
 mod artifacts;
+mod async_stderr;
 mod lifecycle;
 mod migrations;
 mod retirements;
@@ -94,6 +95,7 @@ Usage:\n\
   pactrun storage upgrade\n\
   pactrun storage gc [--plan]\n\
 \n\
+Hook execution options: --no-retain-hook-text disables saved text, not live display.\n\
 Snapshot execution options: --param, --param-file, --param-stdin, --plan, --authorize-recovery-override,\n\
   --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
 Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
@@ -160,6 +162,7 @@ enum Command {
         action: ActionIdentity,
     },
     Invoke {
+        no_retain_hook_text: bool,
         name: InstanceName,
         action: ActionIdentity,
         parameters: Vec<ParameterSourceSpec>,
@@ -204,6 +207,7 @@ enum ParameterSourceSpec {
 
 #[derive(Default)]
 struct ExecutionOptions {
+    no_retain_hook_text: bool,
     parameters: Vec<ParameterSourceSpec>,
     plan: bool,
     recovery_override: bool,
@@ -275,8 +279,9 @@ pub(crate) fn run_from_env() -> i32 {
     }
     let storage_root = env::var_os(STORAGE_ROOT_ENV);
     let cancellation = ActionCancellation::default();
+    cancellation.diagnostics.enable_live();
     let mut stdout = io::stdout();
-    let mut stderr = io::stderr();
+    let mut stderr = async_stderr::AsyncStderr::new();
     if SystemCancellationHandler
         .install(cancellation.clone())
         .is_err()
@@ -471,7 +476,31 @@ fn run_with_cancellation(
             return 2;
         }
     };
-    match execute(command, storage_root, stdin, stdout, stderr, cancellation) {
+    let disable_text = match &command {
+        Command::Invoke {
+            no_retain_hook_text,
+            ..
+        } => *no_retain_hook_text,
+        Command::Snapshot(snapshots::SnapshotCommand::Execute { options, .. }) => {
+            options.no_retain_hook_text
+        }
+        Command::CreateAndRestore(command) => command.options.no_retain_hook_text,
+        Command::Retirement(retirements::RetirementCommand::Execute { options, .. }) => {
+            options.no_retain_hook_text
+        }
+        Command::Migration(migrations::MigrationCommand::Plan {
+            no_retain_hook_text,
+            ..
+        }) => *no_retain_hook_text,
+        _ => false,
+    };
+    cancellation
+        .diagnostics
+        .disabled
+        .store(disable_text, std::sync::atomic::Ordering::Release);
+    let result = execute(command, storage_root, stdin, stdout, stderr, cancellation);
+    cancellation.diagnostics.finish();
+    match result {
         Ok(()) => 0,
         Err(error) => {
             let _ = writeln!(stderr, "error: {error}");
@@ -783,6 +812,7 @@ fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
     let action = parse_action_id(&required_value_string(parser, "Action identity")?)?;
     let options = parse_execution_options(parser, "action-timeout-ms")?;
     Ok(Command::Invoke {
+        no_retain_hook_text: options.no_retain_hook_text,
         name,
         action,
         parameters: options.parameters,
@@ -817,6 +847,8 @@ fn parse_execution_option(
     options: &mut ExecutionOptions,
 ) -> Result<(), CliError> {
     match argument {
+        "no-retain-hook-text" if !options.no_retain_hook_text => options.no_retain_hook_text = true,
+        "no-retain-hook-text" => return Err(CliError::usage("duplicate --no-retain-hook-text")),
         "param" => {
             let value = required_parser_value(parser, "parameter assignment")?;
             let (id, text) = split_parameter_assignment(value, "--param", true)?;
@@ -1058,14 +1090,20 @@ fn execute(
             for instance in application.list_instances().map_err(app_error)? {
                 writeln!(
                     stdout,
-                    "{}\t{}\t{}\t{}",
+                    "{}\t{}\t{}\t{}\t{}\tguard={}",
+                    instance.id,
                     instance.name.as_str(),
                     format_revision(&instance.active_revision),
                     instance.state_version,
                     if instance.required_inputs_satisfied {
-                        "ready"
+                        "required_inputs_satisfied"
                     } else {
                         "missing_required_inputs"
+                    },
+                    if instance.recovery_guard.is_some() {
+                        "manual_recovery_required"
+                    } else {
+                        "none"
                     }
                 )
                 .map_err(io_operation)?;
@@ -1161,6 +1199,7 @@ fn execute(
             write_action_detail(stdout, &action)?;
         }
         Command::Invoke {
+            no_retain_hook_text: _,
             name,
             action,
             parameters,
@@ -1306,6 +1345,21 @@ fn execute(
             let (instance, _) = resolve_instance(&application, &name)?;
             for run in application.list_managed_runs(instance).map_err(app_error)? {
                 snapshots::write_summary(stdout, &run)?;
+                if let Some(evidence) =
+                    application.inspect_diagnostics(run.id).map_err(app_error)?
+                {
+                    writeln!(
+                        stdout,
+                        "diagnostics: retain_text={} closed={} observed={} retained={}",
+                        evidence.retain_text,
+                        evidence.closed,
+                        evidence.observed,
+                        evidence.events.len()
+                    )
+                    .map_err(io_operation)?;
+                } else {
+                    writeln!(stdout, "diagnostics: legacy/not collected").map_err(io_operation)?;
+                }
             }
         }
         Command::ShowRun { run } => {
@@ -1314,6 +1368,7 @@ fn execute(
                 .map_err(app_error)?
                 .ok_or_else(|| CliError::operation("Run is not persisted"))?;
             snapshots::write_run(stdout, &inspection)?;
+            write_diagnostics(stdout, run, inspection.diagnostics.as_ref())?;
         }
         Command::ReconcileRuns => {
             for run in application
@@ -1875,19 +1930,21 @@ fn write_run_state(
             if let Some(failure) = &outcome.primary_failure {
                 writeln!(
                     output,
-                    "primary_failure: {}:{}\tstep: {}",
+                    "primary_failure: {}:{}\tstep: {}\nexplanation: {}",
                     failure.failure.error.owner(),
                     failure.failure.error.code(),
-                    format_failed_step(failure.step)
+                    format_failed_step(failure.step),
+                    failure_explanation(&failure.failure.error)
                 )
                 .map_err(io_operation)?;
             }
             for failure in &outcome.secondary_failures {
                 writeln!(
                     output,
-                    "secondary_failure: {}:{}",
+                    "secondary_failure: {}:{}\nexplanation: {}",
                     failure.error.owner(),
-                    failure.error.code()
+                    failure.error.code(),
+                    failure_explanation(&failure.error)
                 )
                 .map_err(io_operation)?;
             }
@@ -1898,7 +1955,7 @@ fn write_run_state(
                     format_hook_status(completion.status)
                 )
                 .map_err(io_operation)?;
-                writeln!(output, "hook_completion_text: withheld").map_err(io_operation)?;
+                writeln!(output, "legacy_hook_completion_text: withheld").map_err(io_operation)?;
             }
             for artifact in &outcome.artifacts {
                 writeln!(
@@ -2147,6 +2204,23 @@ fn write_instance(
     output: &mut dyn Write,
     view: &crate::domain::InstanceView,
 ) -> Result<(), CliError> {
+    writeln!(output, "instance_id: {}", view.id).map_err(io_operation)?;
+    if let Some(guard) = &view.recovery_guard {
+        writeln!(
+            output,
+            "current_recovery_guard: {} run={} entered_at_unix_ms={}",
+            format_trigger(guard.trigger),
+            guard.run,
+            guard.entered_at_unix_ms
+        )
+        .map_err(io_operation)?;
+    } else {
+        writeln!(
+            output,
+            "current_recovery_guard: none (not an execution guarantee)"
+        )
+        .map_err(io_operation)?;
+    }
     writeln!(output, "name: {}", view.name.as_str()).map_err(io_operation)?;
     writeln!(
         output,
@@ -2353,6 +2427,103 @@ fn publish_output_file_with_fault(
         fault(point).map_err(|error| io::Error::other(error.message))
     })
     .map_err(io_operation)
+}
+
+fn write_diagnostics(
+    output: &mut dyn Write,
+    run: RunId,
+    inspection: Option<&crate::persistence::DiagnosticInspection>,
+) -> Result<(), CliError> {
+    let Some(view) = inspection else {
+        return writeln!(
+            output,
+            "hook diagnostics: legacy/not collected by this feature"
+        )
+        .map_err(io_operation);
+    };
+    writeln!(
+        output,
+        "hook diagnostics: retain_text={} started={} collection_closed={} persistence_failed={}",
+        view.retain_text, view.started, view.closed, view.failed
+    )
+    .map_err(io_operation)?;
+    if !view.closed {
+        writeln!(
+            output,
+            "hook diagnostics: collection unfinished; tail completeness unknown"
+        )
+        .map_err(io_operation)?;
+    }
+    if !view.retain_text {
+        return writeln!(
+            output,
+            "hook text: retention disabled; absence is not evidence of no emission"
+        )
+        .map_err(io_operation);
+    }
+    let mut previous = 0;
+    for event in &view.events {
+        if event.sequence > previous + 1 {
+            writeln!(
+                output,
+                "hook diagnostics: omitted sequence {}..{}",
+                previous + 1,
+                event.sequence - 1
+            )
+            .map_err(io_operation)?;
+        }
+        crate::hook::diagnostics::write_event(output, run, event).map_err(io_operation)?;
+        previous = event.sequence;
+    }
+    if view.observed > previous {
+        writeln!(
+            output,
+            "hook diagnostics: omitted sequence {}..{}",
+            previous + 1,
+            view.observed
+        )
+        .map_err(io_operation)?;
+    }
+    Ok(())
+}
+
+fn failure_explanation(error: &crate::domain::PactrunErrorRefV1) -> &'static str {
+    match (error.owner(), error.code()) {
+        ("execution", "launch_failed") => "The Hook process could not be launched.",
+        ("execution", "session_materialization_failed") => {
+            "The Hook execution context could not be prepared or verified."
+        }
+        ("execution", "protocol_transport_failed") => {
+            "Communication with the Hook ended or failed before the required completion."
+        }
+        ("execution", "hook_reported_protocol_error") => {
+            "The Hook reported a protocol failure; inspect the attributed Hook explanation if retained."
+        }
+        ("execution", "managed_output_publication_failed") => {
+            "Managed results could not be published; inspect the Run outcome and retained result references."
+        }
+        ("execution", "workspace_cleanup_failed") => {
+            "Execution workspace cleanup failed; this is separate from the primary operation result."
+        }
+        ("admission", "plan_invalidated") => {
+            "The current state no longer satisfies the accepted plan's admission requirements."
+        }
+        ("hook_protocol_v1" | "hook_protocol_v2", "unexpected_message") => {
+            "A Hook message was not permitted at this protocol stage."
+        }
+        ("hook_protocol_v1" | "hook_protocol_v2", "invalid_message") => {
+            "A Hook message did not satisfy the protocol contract; its raw content is not displayed."
+        }
+        ("hook_protocol_v1" | "hook_protocol_v2", _) => {
+            "Hook protocol validation failed; the exact taxonomy code identifies the violated rule."
+        }
+        ("service_storage", _) => {
+            "The required service-storage authority or resource could not be qualified."
+        }
+        _ => {
+            "Pactrun could not complete the indicated step; the exact taxonomy identity is retained above."
+        }
+    }
 }
 
 #[cfg(test)]

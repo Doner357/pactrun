@@ -15,7 +15,7 @@ fn transcript(session: &Value, messages: &[Value]) -> Result<Value, String> {
             match state.accept(decoded).map_err(|e|e.code.to_owned())? {
                 ProtocolStep::RiskRequest {request_id, requested} => pending = Some((request_id, requested)),
                 ProtocolStep::Completed(done) => {submitted = done.produced_outputs; completion = Some("submitted");},
-                ProtocolStep::HookProtocolError => completion=Some("protocol_error"),
+                ProtocolStep::HookProtocolError(_) => completion=Some("protocol_error"),
                 _ => {},
             }
         } else {

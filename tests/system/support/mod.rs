@@ -511,9 +511,11 @@ pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProj
         .filter(|line| !line.is_empty())
         .map(|line| {
             let columns = line.split('\t').collect::<Vec<_>>();
-            assert_eq!(columns.len(), 4, "malformed instance-list row: {line}");
+            assert_eq!(columns.len(), 6, "malformed instance-list row: {line}");
+            assert!(columns[5].starts_with("guard="));
+            assert_ne!(columns[4], "ready");
             InstanceListProjection {
-                name: columns[0].to_owned(),
+                name: columns[1].to_owned(),
             }
         })
         .collect()
@@ -1215,11 +1217,9 @@ pub(crate) fn system_hook() {
                     "type": "diagnostic",
                     "severity": "warning",
                     "code": "leak_attempt",
-                    "message": format!(
-                        "protected Hook free text: {secret}; config={}; secret-input={}",
-                        String::from_utf8_lossy(&binding_bytes["config"]),
-                        String::from_utf8_lossy(&binding_bytes["secret_input"]),
-                    ),
+                    // This fixture verifies Pactrun-owned projections, not a
+                    // nonexistent universal detector for Hook-authored secrets.
+                    "message": "protected context verified",
                 }),
             )
             .unwrap();

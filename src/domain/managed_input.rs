@@ -94,6 +94,7 @@ pub(crate) struct InstanceView {
     pub(crate) active_revision: RevisionIdentity,
     pub(crate) state_version: InstanceStateVersion,
     pub(crate) required_inputs_satisfied: bool,
+    pub(crate) recovery_guard: Option<super::RecoveryGuardView>,
     pub(crate) bindings: Vec<ManagedInputBindingView>,
 }
 
@@ -104,6 +105,7 @@ pub(crate) struct InstanceSummary {
     pub(crate) active_revision: RevisionIdentity,
     pub(crate) state_version: InstanceStateVersion,
     pub(crate) required_inputs_satisfied: bool,
+    pub(crate) recovery_guard: Option<super::RecoveryGuardView>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
