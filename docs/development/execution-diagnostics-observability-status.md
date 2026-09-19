@@ -4,7 +4,7 @@ title: Execution Diagnostics and Instance Observability
 
 # Execution diagnostics and Instance observability
 
-**Status: Complete implementation and verification on the feature branch; not integrated or published.**
+**Status: Complete. Implemented, verified and integrated into local develop; not published.**
 
 ## Approved baseline and delivery
 
@@ -65,7 +65,8 @@ or timeout values. No tests were disabled beyond the pre-existing ignored cases.
 | Passed | Focused bounded retention, UTF-8/unknown-time persistence, process-loss evidence, opt-out, write failure, flood/deadline, blocked stderr, schema upgrade and Instance guard/completeness checks |
 | Passed | Site source checks: 24; typecheck and Docusaurus production build, including compatibility anchor preservation |
 | Passed; documentation-only closeout | Final source/document/traceability checks and configured-remote site typecheck/build; unchanged runtime reuses the full gate above |
-| Not performed | Commit, merge, push, release, Pages workflow changes, deployment or implementation of B |
+| Completed after explicit authorization | Local implementation commit and no-fast-forward develop merge; the feature and merge trees are identical |
+| Not performed | Push, release, Pages workflow changes, deployment or implementation of B |
 
 Earlier attempts are not passing evidence: the first remote library candidate had
 429 passes, 17 failures and three ignored tests. Failures identified stale retention
@@ -83,11 +84,18 @@ recheck is recorded separately rather than described as another fresh full CI.
 
 ## Integration and retained resources
 
-The branch is feature/execution-diagnostics-observability, based on develop. No
-commit or merge has been made. Develop therefore remains the integrated V10
-baseline until separately requested Git integration; V11 is the verified feature
-candidate. B, Object Catalog/History/Metadata, is the next capability in the
-approved sequence after this delivery is integrated; its S0 remains separate work.
+After explicit operator authorization, the implementation was committed as
+`cc4b8c1958aff88434189810351b238d8de64bf3` on
+`feature/execution-diagnostics-observability` and merged into local develop with
+no-fast-forward merge `1c881c2d8913968db4bbdbfb6fa43ddab07fe0e6`. The feature and
+merge trees were compared and are identical. V11 is now the integrated baseline.
+
+This integration closeout changes documentation and its navigation checks only.
+Unchanged runtime, tests, fixtures, dependencies and build inputs reuse the full-CI
+evidence above; no fresh full-CI run is claimed for an identical Git merge.
+Integration documentation is checked separately, including source/traceability
+checks and the configured-remote site typecheck/build. B, Object Catalog/History/
+Metadata, is next, beginning with its own S0; no B implementation is authorized.
 
 Local evidence remains under target/. Source archives, test logs, caches and the
 generated documentation remain in the dedicated remote execution-diagnostics

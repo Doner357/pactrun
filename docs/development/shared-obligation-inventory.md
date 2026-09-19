@@ -396,7 +396,7 @@ Code blocks and informative headings are not promoted to new normative contracts
 ## A traceability updates
 
 PR-REQ-0087 now cites the actual PR-TEST-0525 Instance acceptance. A implementation
-and verification are complete on the feature branch; see the
+and verification are complete and integrated into local develop; see the
 [delivery record](./execution-diagnostics-observability-status.md). New evidence
 for PR-REQ-0351/0352 and the revised PR-REQ-0283/0285 is recorded in their owning
 Spec pages. Related parameter/Input protection wording was aligned to distinguish

@@ -89,8 +89,8 @@ runtime work, not just the historical status on a format page.
 M7 is implemented, verified and integrated into local develop, but not published.
 See the [acceptance record](../development/m7-implementation-status.md).
 That historical integration writes V8; managed-object lifecycle subsequently
-introduced V9. The current integrated baseline is V10, as recorded in the
-[Snapshot capacity closeout](../development/snapshot-capacity-and-restore-status.md).
+introduced V9. The current integrated baseline is V11, as recorded in the
+[diagnostics integration record](../development/execution-diagnostics-observability-status.md).
 The historical M6.5 and M7 integration records are unchanged.
 
 | Contract | Status |
