@@ -16,6 +16,8 @@ Milestone state on this page is planning metadata. It must not be treated as
 evidence that a requirement has automated coverage or that a format or protocol
 is Frozen.
 
+Current feature work: the approved [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) milestone is implemented and verified on its feature branch. Its checkout uses V11; integrated develop remains V10 until separately requested Git integration. The next capability after integration is B (Object Catalog/History/Metadata), beginning with its separate S0.
+
 ## Development entry after Spec migration
 
 Use the [Spec map](../spec/index.md), [task reading paths](./reading-paths.md),
@@ -849,16 +851,17 @@ implemented and integrated. On 2026-09-19 the operator approved this
 
 | Order | Remaining milestone | State |
 | --- | --- | --- |
-| A | Execution Diagnostics and Instance State Observability | Approved planning scope; next, starting with S0 |
+| A | Execution Diagnostics and Instance State Observability | Implemented and verified on feature branch; Git integration pending |
 | B | Object Catalog, Historical Discovery and Metadata Operations | Approved planning scope; after A |
 | C | Revision Bundle Export and Import | Approved planning scope; after B |
 | D | Machine-readable CLI Output | Existing scope, now after A-C |
 | E | Versioning and Baseline Consolidation | Existing final milestone, after D |
 
-A-E are sequence labels, not M-series identifiers. The approval records the plan,
-not completed detailed contracts or authorization to begin runtime work. Full
+A-E are sequence labels, not M-series identifiers. The original approval recorded
+the grouping only; A subsequently received separate design/implementation approval
+and completed verification. B-E still require their own detailed S0 closure. Full
 usage-guide writing is excluded; necessary Spec/help/acceptance material is not.
-A's S0 establishes the obligation inventory, and every milestone closes its own
+A's S0 established the obligation inventory, and every milestone closes its own
 user-entry-point, observable-result and test evidence. Unowned gaps cannot wait
 silently for E. No calendar date or effort estimate is assigned.
 
@@ -872,14 +875,12 @@ exact-V8/V9 upgrade; the [lifecycle record](./managed-object-lifecycle-status.md
 retains its historical V9 evidence. Shell Adapter / Loader is now
 [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md),
 including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagnostic
-presentation remains an explicitly recorded follow-up; integration does not claim
-that observability goal is complete. It is explicitly assigned to A by the new
-approval. Execution Diagnostics and Instance State Observability is next;
-machine-readable output follows the new capability work in D. Local integration does not
-authorize push, release or publication.
-No runtime implementation, calendar start or publication is started by this
-documentation change. Small slices can be accepted independently within their
-milestones. M8 remains rejected and its number is not reused.
+presentation was assigned to A and is now implemented and verified in its
+[feature delivery](./execution-diagnostics-observability-status.md). A awaits
+separately requested Git integration; B is the next capability after integration,
+starting with its own S0. Machine-readable output remains D. No push, release,
+publication or B implementation is implied. M8 remains rejected and its number
+is not reused.
 
 Final consolidation removes development-only compatibility machinery, not all
 previously created data: final-contract conformance decides acceptance, independent

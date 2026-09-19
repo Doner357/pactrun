@@ -4,6 +4,8 @@ This text interface currently serves specification lookup and development of
 Pactrun. User-operation, Pack-author, and Hook-integration usage guides remain
 placeholders; do not interpret them as completed tutorials.
 
+Current feature work: the approved [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) milestone is implemented and verified on its feature branch. Its checkout uses V11; integrated develop remains V10 until separately requested Git integration. The next capability after integration is B (Object Catalog/History/Metadata), beginning with its separate S0.
+
 ## Establish authority and state
 
 - Read the [Spec map](../spec/index.md). Only Spec defines product requirements.
@@ -11,7 +13,7 @@ placeholders; do not interpret them as completed tutorials.
   M5, bounded M6, M6.5 ServiceStorage and M7 Cleanup/deletion are implemented
   and integrated into local `develop`. Managed Object Lifecycle and GC is also
   implemented, verified and integrated. Snapshot Capacity and Restore Workflow is
-  integrated as well; the current persistence baseline is V10, with explicit
+  integrated as well; the integrated develop persistence baseline is V10, with explicit
   exact-V8/V9 upgrade. M8 is rejected and archived; no next
   numbered milestone is selected. Release-readiness work has no assigned start,
   and integration does not authorize publication. Consult the linked closeout
@@ -20,15 +22,17 @@ placeholders; do not interpret them as completed tutorials.
   and follow the [remaining A-E sequence approved on 2026-09-19](../development/remaining-capability-milestones.md).
   A is execution diagnostics/Instance observability; B is object catalog/history/metadata;
   C is Revision bundles; D is machine-readable output; E is final consolidation.
-  This is planning approval, not runtime implementation authority; full usage guides
+  The original grouping approved planning; A received separate implementation
+  approval, while B-E retain their own S0 gates. Full usage guides
   are excluded, while necessary Spec/help/acceptance work remains. Lifecycle/GC is already
   integrated, as is Snapshot Capacity and Restore Workflow. Shell Adapter / Loader
   is implemented, verified and integrated into local develop;
   see its [implementation record](../development/shell-adapter-loader-status.md).
-  Hook diagnostic presentation remains an unresolved follow-up; protocol delivery
-  does not establish a usable diagnostic display or history feature.
-  The follow-up is explicitly assigned to A. Execution Diagnostics and Instance
-  State Observability is next, starting with S0 and the shared obligation inventory. New
+  Hook diagnostic presentation was unresolved at Loader closeout; protocol
+  delivery alone did not establish usable display or history.
+  The follow-up is implemented and verified by A on its feature branch. Git
+  integration remains pending; B is next after integration, with its own S0.
+  Consult the shared obligation inventory and A delivery record above. New
   functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the
   [contributor policy](../development/development-and-verification.md).

@@ -12,6 +12,8 @@ website build. They do not constitute additional requirements.
 
 | Contract | Original status |
 | --- | --- |
+| [Execution Diagnostics](behavior/execution-diagnostics.md) | Implemented and verified normative behavior; integration is tracked separately. |
+| [Persistence Schema V11](persistence/persistence-schema-v11.md) | Implemented and verified normative internal contract; non-Frozen. |
 | [Pack Source YAML V3](contracts/pack-source-yaml-v3.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and implemented. |
 | [Shell Loader](contracts/shell-loader.md) | Implemented normative adapter contract; non-Frozen. |
 | [Revision Core V3](contracts/revision-core-format-v3.md) | Frozen normative Package contract specification. |

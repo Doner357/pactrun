@@ -84,6 +84,7 @@ pub(super) fn parse_instance(
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let mut expected = None;
     let mut options = ExecutionOptions {
+        no_retain_hook_text: false,
         parameters: vec![],
         plan: false,
         recovery_override: false,

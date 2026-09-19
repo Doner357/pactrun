@@ -615,14 +615,14 @@ fn coordination_upgrade_accepts_only_exact_predecessor_and_preserves_data() {
         }
         let result = PactrunPersistence::upgrade_storage(&root);
         match version {
-            8 | 9 => assert!(result.unwrap()),
-            10 => assert!(!result.unwrap()),
+            8..=10 => assert!(result.unwrap()),
+            11 => assert!(!result.unwrap()),
             _ => assert!(result.is_err()),
         }
         assert_eq!(
             db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
                 .unwrap(),
-            if matches!(version, 8 | 9) {
+            if matches!(version, 8..=10) {
                 SCHEMA_VERSION
             } else {
                 version as i64

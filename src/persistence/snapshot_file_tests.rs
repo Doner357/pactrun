@@ -43,7 +43,7 @@ fn explicit_upgrade_preserves_real_inline_snapshots_and_refuses_implicit_upgrade
     assert_eq!(
         db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        10
+        crate::persistence::SCHEMA_VERSION
     );
     assert_eq!(
         db.query_row::<i64, _, _>("SELECT count(*) FROM snapshot_blob_chunks", [], |r| r

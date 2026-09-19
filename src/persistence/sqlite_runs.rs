@@ -168,6 +168,7 @@ impl PactrunPersistence {
             })
             .transpose()?;
         Ok(Some(crate::domain::ManagedRunInspectionData {
+            diagnostics: super::sqlite_diagnostics::load_diagnostics_from(&tx, run)?,
             migration_progress: super::sqlite_migration_runs::progress_view(&tx, run)?,
             run: view,
             current_recovery_guard: guard,
@@ -417,6 +418,15 @@ impl PactrunPersistence {
             .map_err(|error| AcceptanceError::NotCommitted {
                 run,
                 source: PersistenceError::sqlite("insert Run operation kind", error),
+            })?;
+        transaction
+            .execute(
+                "INSERT INTO run_diagnostic_collections(run_id,retain_text) VALUES (?1,?2)",
+                params![run.as_bytes().as_slice(), arbiter.retain_hook_text()],
+            )
+            .map_err(|error| AcceptanceError::NotCommitted {
+                run,
+                source: PersistenceError::sqlite("initialize diagnostic policy", error),
             })?;
         insert_managed_invocation(&transaction, run, operation)
             .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
@@ -2708,7 +2718,7 @@ fn guard_row(
         .transpose()
 }
 
-fn load_instance_recovery_guard_from(
+pub(super) fn load_instance_recovery_guard_from(
     database: &Connection,
     instance: InstanceId,
 ) -> Result<Option<RecoveryGuardView>, PersistenceError> {
@@ -4247,7 +4257,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            29 // V7's 28 relations plus the typed V8 deletion invocation.
+            31 // Existing Run relations plus V11 collection and event evidence.
         );
         assert!(
             columns

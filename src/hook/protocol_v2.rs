@@ -240,7 +240,7 @@ impl Connected {
         let mut writer = ProtocolWriter { stream };
         writer.stream.write_all(PREAMBLE_V2)?;
         writer.write_payload(&payload)?;
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::sync_channel(2);
         thread::spawn(move || {
             read_events(&mut reader, operation, |event| sender.send(event).is_ok())
         });

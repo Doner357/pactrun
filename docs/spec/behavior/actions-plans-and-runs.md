@@ -77,25 +77,27 @@ PR-TEST-0169, PR-TEST-0170, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
 The crate-private RunView and the Slice 5 single-snapshot inspection substrate
 remain the implementation basis for this user-visible projection.
 
-### PR-REQ-0285 - Structural-only human Run inspection
+### PR-REQ-0285 - Typed Run inspection and attributed Hook explanations {#pr-req-0285---structural-only-human-run-inspection}
 
 The ordinary human `run show`, `run list`, and invocation summaries MUST use a
-typed structural projection rather than formatting arbitrary persisted Run
+typed projection rather than formatting arbitrary persisted Run
 text. They MAY show Run, Instance, Revision, and Action identities, phase,
 outcome, timing, taxonomy references, failed logical step, structural Hook
 success or failure, published output identities and byte lengths, terminal
 recovery risk, the current same-snapshot recovery guard, and fixed Pactrun
 diagnostics.
 
-They MUST NOT show Legacy or current Hook code, completion messages, diagnostic
-messages, protocol-error text, arbitrary persisted failure messages, or any
-free-text derivative such as a fragment, length, hash, or encoding. A Hook
-completion MUST be rendered as structural status with fixed text stating that
-Hook free text is not displayed. Terminal escaping for an allowed identity is
-not redaction. Historical absent, present-empty, and present-value fields MUST
-remain exact in persistence while mapping to the same restricted human view.
+`run show` and live presentation MUST expose new attributed Hook explanations
+under the bounded retention policy. Lists MUST remain structural. Inspection MUST
+distinguish disabled retention, omissions, truncated messages and collection not
+normally closed; an unknown crash tail MUST NOT imply no diagnostic was emitted.
+Events MUST be ordered by Run-local sequence rather than wall-clock time.
+Arbitrary persisted failure messages and Legacy free text MUST NOT become new
+accepted events. Historical absent, present-empty and present-value fields remain
+exact. Terminal-control escaping is mandatory but is not sensitive-data redaction.
+This debugging policy supersedes structural-only text display on 2026-09-19.
 
-**Verification: PR-TEST-0114, PR-TEST-0146, PR-TEST-0154, PR-TEST-0175.**
+**Verification: PR-TEST-0520, PR-TEST-0114, PR-TEST-0146, PR-TEST-0154, PR-TEST-0175.**
 
 ### PR-REQ-0288 - Invocation parameter sources and policy values
 
@@ -108,8 +110,9 @@ trimmed, Unicode-normalized, BOM-stripped, shell-expanded, or otherwise
 rewritten. Duplicate identities, unknown parameters, and conflicting stdin
 sources MUST be rejected before source acquisition. An `interactive` Action
 MUST reject `--param-stdin` even for preview. Effective redaction MUST remain
-the declaration-or-Protected-source maximum, and parameter values MUST NOT
-appear in plans, Run history, or ordinary diagnostics.
+the declaration-or-Protected-source maximum. Pactrun MUST NOT project parameter
+values into plans, Run history or Pactrun-owned diagnostics. Separately attributed
+Hook text follows PR-REQ-0098 and PR-REQ-0351.
 
 Non-negative decimal timeout values MUST be safely converted before deadline
 construction. Zero means immediate expiry or no grace; omitted startup and
@@ -156,10 +159,16 @@ PR-TEST-0153, PR-TEST-0169, PR-TEST-0171, PR-TEST-0176, PR-TEST-0177.**
 
 ### PR-REQ-0098 - Sensitive Run data
 
-Run records and ordinary diagnostics MUST NOT store sensitive parameter values,
-Secret values, or value-derived digests intended to reveal them. Interactive
-terminal sessions MUST NOT be retained as complete transcripts by default;
-structured Hook diagnostics MAY be retained.
+Pactrun-generated Run facts, parameter/Input projections and ordinary Pactrun
+errors MUST NOT copy sensitive parameter values, Secret values, or revealing
+value-derived digests. Interactive terminal sessions MUST NOT be retained as
+complete transcripts by default.
+
+Hook-authored free text is separately attributed and governed by PR-REQ-0283 and
+PR-REQ-0351. Hook authors MUST NOT disclose sensitive values. Default bounded
+retention does not authorize Parameter/Input export or promise universal taint
+tracking/redaction of arbitrary Hook text. This clarification supersedes the old
+blanket suppression of Hook explanations, not protection of Pactrun-owned facts.
 
 **Verification: PR-TEST-0099, PR-TEST-0154, PR-TEST-0167, PR-TEST-0175.**
 

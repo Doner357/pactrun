@@ -190,3 +190,10 @@ only the specifically authorized 5.1 acceptance child receives Process RemoteSig
 The first full-suite attempt failed the two obsolete unknown-V3 test cases;
 the corrected full candidate subsequently passed. Neither the first failed attempt
 nor focused checks are presented as a fresh complete-CI pass on the later delta.
+
+## Diagnostic follow-up delivery
+
+The separately approved [execution diagnostics milestone](./execution-diagnostics-observability-status.md)
+has now implemented and verified the follow-up on its feature branch. Its new
+retention/disclosure rules do not rewrite the historical Loader acceptance above.
+Git integration and publication remain separately tracked.

@@ -601,6 +601,13 @@ impl PactrunApplication {
     }
 
     #[allow(dead_code)]
+    pub(crate) fn inspect_diagnostics(
+        &self,
+        run: RunId,
+    ) -> Result<Option<crate::persistence::DiagnosticInspection>, ApplicationError> {
+        Ok(self.persistence.inspect_diagnostics(run)?)
+    }
+
     pub(crate) fn load_run(&self, run: RunId) -> Result<Option<RunView>, ApplicationError> {
         Ok(self.persistence.load_run(run)?)
     }

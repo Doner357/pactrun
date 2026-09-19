@@ -405,18 +405,21 @@ other Hook-authored protocol text MUST NOT intentionally disclose Secret or
 sensitive values. Schema validation cannot generally recognize hashes,
 encodings, substrings, transformations, or application-specific derivations.
 M0-B fixtures verify only structure and lexical constraints and do not claim
-complete leakage detection. Runtime defensive redaction and log handling remain
-integration work; this obligation does not make Pactrun a secret vault or OS
-sandbox.
+complete leakage detection. Runtime collection and presentation follow the
+[execution diagnostics policy](../behavior/execution-diagnostics.md). That policy
+does not promise universal redaction or make Pactrun a secret vault or OS sandbox.
 
 **Verification: PR-TEST-0024.**
 
 ### PR-REQ-0283 - Runtime Hook text retention boundary
 
-The production runtime Run representation MUST retain necessary Hook structural
-state, including success or failure, without default persistence of arbitrary
-Hook code, message, diagnostics, or protocol-error free text. This slice MUST
-NOT add opt-in settings or CLI spelling. The existing V4 optional completion
+New production Runs MUST retain structural Hook state and, by default, bounded
+accepted diagnostic, completion and protocol-error explanations for debugging.
+`--no-retain-hook-text` MUST disable text persistence without disabling display.
+Omission, truncation and unknown crash tails MUST remain explicit. Rejected frames
+MUST NOT become accepted evidence. Hook text is not Pactrun outcome authority.
+This approved policy supersedes non-retention on 2026-09-19; it does not collect
+Legacy events retroactively. The existing V4 optional completion
 representation and exact historical reading of absent versus present-empty
 values remain unchanged.
 
@@ -426,7 +429,7 @@ endpoints, or execution paths. This boundary does not require scanning or
 rewriting opaque Artifact bytes and does not claim general detection of
 sensitive derived values.
 
-**Verification: PR-TEST-0084, PR-TEST-0113.**
+**Verification: PR-TEST-0084, PR-TEST-0113, PR-TEST-0520, PR-TEST-0522.**
 
 ### PR-REQ-0215 - Recovery-risk request state machine
 

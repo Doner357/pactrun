@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
         {type: 'category', label: 'Observable behavior', items: [
           'spec/behavior/index',
           'spec/behavior/actions-plans-and-runs',
+          'spec/behavior/execution-diagnostics',
           'spec/behavior/command-and-output-reference',
           'spec/behavior/managed-object-lifecycle',
           'spec/behavior/inputs-secrets-and-readiness',
@@ -62,6 +63,7 @@ const sidebars: SidebarsConfig = {
           'spec/persistence/persistence-schema-v8',
           'spec/persistence/persistence-schema-v9',
           'spec/persistence/persistence-schema-v10',
+          'spec/persistence/persistence-schema-v11',
         ]},
           {type: 'category', label: 'Shell Adapter / Loader', items: [
             'spec/contracts/revision-core-format-v3',
@@ -88,6 +90,8 @@ const sidebars: SidebarsConfig = {
         'development/release-readiness',
         'development/product-completion-milestones',
         'development/remaining-capability-milestones',
+        'development/execution-diagnostics-observability-status',
+        'development/shared-obligation-inventory',
         'development/managed-object-lifecycle-status',
           'development/snapshot-capacity-and-restore-status',
           'development/shell-adapter-loader-status',

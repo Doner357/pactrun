@@ -116,20 +116,20 @@ impl ConnectedProtocol {
 }
 pub(super) enum ProtocolStep {
     Ready,
-    Diagnostic,
+    Diagnostic(crate::domain::HookText),
     RiskRequest {
         request_id: u64,
         requested: RecoveryRiskState,
     },
     CancelAcknowledged,
     Completed(v1::HookCompletion),
-    HookProtocolError,
+    HookProtocolError(crate::domain::HookText),
     TargetProposed(v2::AcceptedTargetProposal),
 }
 fn step(common: v1::ProtocolStep) -> ProtocolStep {
     match common {
         v1::ProtocolStep::Ready => ProtocolStep::Ready,
-        v1::ProtocolStep::Diagnostic => ProtocolStep::Diagnostic,
+        v1::ProtocolStep::Diagnostic(text) => ProtocolStep::Diagnostic(text),
         v1::ProtocolStep::RiskRequest {
             request_id,
             requested,
@@ -139,7 +139,7 @@ fn step(common: v1::ProtocolStep) -> ProtocolStep {
         },
         v1::ProtocolStep::CancelAcknowledged => ProtocolStep::CancelAcknowledged,
         v1::ProtocolStep::Completed(c) => ProtocolStep::Completed(c),
-        v1::ProtocolStep::HookProtocolError => ProtocolStep::HookProtocolError,
+        v1::ProtocolStep::HookProtocolError(text) => ProtocolStep::HookProtocolError(text),
     }
 }
 #[derive(Debug)]

@@ -70,7 +70,10 @@ with explicit upgrade from exact V8 or V9 and preserved legacy inline readers.
 Immutable data references keep new service bytes out of SQLite WAL while
 preserving atomic Snapshot publication and guarded Restore. Full CI and real
 beyond-ceiling round trips passed; local integration does not authorize publication.
-Shell Adapter / Loader is the next separately planned scope.
+Shell Adapter / Loader is integrated. The approved
+[execution diagnostics milestone](./docs/development/execution-diagnostics-observability-status.md)
+is implemented and verified on a feature branch, including V11 and default
+bounded Hook evidence. Git integration remains a separately requested action.
 
 ## Repository layout
 

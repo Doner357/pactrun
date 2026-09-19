@@ -29,8 +29,8 @@ use crate::{
 
 fn unsupported_source(state: DatabaseState) -> PersistenceError {
     match state {
-        DatabaseState::V8 | DatabaseState::V9 => PersistenceError::UpgradeRequired,
-        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V10 storage; use a compatible build to reach exact V8 or V9 before explicit upgrade".to_owned()),
+        DatabaseState::V8 | DatabaseState::V9 | DatabaseState::V10 => PersistenceError::UpgradeRequired,
+        _ => PersistenceError::DatabaseOwnership("this build accepts pristine or exact V11 storage; use a compatible build to reach exact V8 or V9 before explicit upgrade".to_owned()),
     }
 }
 
@@ -42,7 +42,7 @@ pub(super) fn open_writer_database(
         Connection::open(path).map_err(|e| PersistenceError::sqlite("open writer database", e))?;
     configure_connection(&database)?;
     let advisory = classify_database(&database)?;
-    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V10) {
+    if !matches!(advisory, DatabaseState::Pristine | DatabaseState::V11) {
         return Err(unsupported_source(advisory));
     }
     establish_wal_mode(&database)?;
@@ -69,7 +69,7 @@ pub(super) fn open_writer_database(
                 .map_err(|e| PersistenceError::sqlite("initialize current version", e))?;
             fault(FaultPoint::BeforeBootstrapCommit);
         }
-        DatabaseState::V10 => {}
+        DatabaseState::V11 => {}
         other => return Err(unsupported_source(other)),
     }
     transaction.execute(
@@ -285,6 +285,7 @@ pub(super) fn require_quiescent_admissions_at_version(
             | (DatabaseState::V8, 8)
             | (DatabaseState::V9, 9)
             | (DatabaseState::V10, 10)
+            | (DatabaseState::V11, 11)
     ) {
         return Err(PersistenceError::SchemaMismatch(
             "unexpected writer-admission source version".to_owned(),

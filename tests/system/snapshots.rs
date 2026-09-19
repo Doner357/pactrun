@@ -935,7 +935,7 @@ fn snapshot_hook_worker() {
         fs::read(secret["readonly_path"].as_str().unwrap()).unwrap(),
         SECRET
     );
-    let mut done = json!({"type":"complete","operation":operation,"status":if mode=="failure"||mode=="open_failure" {"failure"}else{"success"},"code":"private-hook-code","message":PRIVATE});
+    let mut done = json!({"type":"complete","operation":operation,"status":if mode=="failure"||mode=="open_failure" {"failure"}else{"success"},"code":"snapshot_complete","message":"snapshot fixture completion"});
     if operation == "snapshot_capture" {
         let root = Path::new(
             session["operation"]["candidate"]["root_path"]

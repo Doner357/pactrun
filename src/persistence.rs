@@ -12,6 +12,8 @@ mod runtime_content_store;
 #[cfg(test)]
 mod schema_v5_contract_tests;
 mod sqlite_deletions;
+mod sqlite_diagnostics;
+pub(crate) use sqlite_diagnostics::DiagnosticInspection;
 mod sqlite_instances;
 mod sqlite_migration_runs;
 mod sqlite_migrations;
@@ -47,6 +49,9 @@ pub(crate) use sqlite_v9::current_to_v9_fixture;
 /// Implementations run the supplied commit while holding the acceptance
 /// decision, or return `None` so the caller can roll the transaction back.
 pub(crate) trait AcceptanceArbiter {
+    fn retain_hook_text(&self) -> bool {
+        true
+    }
     fn before_durable_acceptance(
         &self,
         commit: impl FnOnce() -> Result<(), PersistenceError>,

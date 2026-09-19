@@ -21,8 +21,8 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("inspect coordination upgrade", e))?;
         configure_read_connection(&reader)?;
         match classify_database(&reader)? {
-            DatabaseState::V10 => return Ok(false),
-            DatabaseState::V8 | DatabaseState::V9 => {}
+            DatabaseState::V11 => return Ok(false),
+            DatabaseState::V8 | DatabaseState::V9 | DatabaseState::V10 => {}
             _ => return Err(unsupported()),
         }
         drop(reader);
@@ -40,8 +40,8 @@ impl PactrunPersistence {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|e| PersistenceError::sqlite("serialize coordination upgrade", e))?;
         match classify_database(&tx)? {
-            DatabaseState::V10 => return Ok(false),
-            DatabaseState::V8 | DatabaseState::V9 => {}
+            DatabaseState::V11 => return Ok(false),
+            DatabaseState::V8 | DatabaseState::V9 | DatabaseState::V10 => {}
             _ => return Err(unsupported()),
         }
         let source: i64 = tx
@@ -53,8 +53,12 @@ impl PactrunPersistence {
             tx.execute_batch(include_str!("persistence_schema_v9_additions.sql"))
                 .map_err(|e| PersistenceError::sqlite("activate coordination", e))?;
         }
-        tx.execute_batch(include_str!("persistence_schema_v10_additions.sql"))
-            .map_err(|e| PersistenceError::sqlite("activate immutable data references", e))?;
+        if source < 10 {
+            tx.execute_batch(include_str!("persistence_schema_v10_additions.sql"))
+                .map_err(|e| PersistenceError::sqlite("activate immutable data references", e))?;
+        }
+        tx.execute_batch(include_str!("persistence_schema_v11_additions.sql"))
+            .map_err(|e| PersistenceError::sqlite("activate Run diagnostics", e))?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)
             .map_err(|e| PersistenceError::sqlite("publish coordination version", e))?;
         validate_schema(&tx, SCHEMA_VERSION)?;
@@ -69,7 +73,7 @@ impl PactrunPersistence {
 
 fn unsupported() -> PersistenceError {
     PersistenceError::DatabaseOwnership(
-        "V10 upgrade accepts exact V8 or V9 only; no implicit older upgrade chain".to_owned(),
+        "V11 upgrade accepts exact V8, V9 or V10 only; no implicit older upgrade chain".to_owned(),
     )
 }
 
@@ -97,6 +101,7 @@ pub(super) fn current_to_v8_fixture(db: &mut Connection) {
 
 #[cfg(test)]
 pub(crate) fn current_to_v9_fixture(db: &mut Connection) {
+    current_to_v10_fixture(db);
     if db
         .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
         .unwrap()
@@ -155,4 +160,25 @@ pub(crate) fn current_to_v9_fixture(db: &mut Connection) {
         .unwrap();
     db.pragma_update(None, "user_version", 9).unwrap();
     validate_schema(db, 9).unwrap();
+}
+
+#[cfg(test)]
+pub(crate) fn current_to_v10_fixture(db: &mut Connection) {
+    if db
+        .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
+        .unwrap()
+        != 11
+    {
+        return;
+    }
+    db.execute_batch("DROP TABLE run_diagnostic_events; DROP TABLE run_diagnostic_collections;")
+        .unwrap();
+    let admissions = include_str!("persistence_schema_v10_additions.sql")
+        .split_once("DROP TABLE writable_admissions;")
+        .unwrap()
+        .1;
+    db.execute_batch(&format!("DROP TABLE writable_admissions;{admissions}"))
+        .unwrap();
+    db.pragma_update(None, "user_version", 10).unwrap();
+    validate_schema(db, 10).unwrap();
 }

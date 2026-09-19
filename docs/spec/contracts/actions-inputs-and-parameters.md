@@ -163,7 +163,10 @@ NOT be part of the initial contract.
 
 ### PR-REQ-0135 - Sensitive parameter channel
 
-A sensitive parameter value MUST NOT be recorded in Run history. The CLI MUST
+Pactrun MUST NOT record a sensitive parameter value as invocation metadata in Run
+history. Hook-authored explanations follow the attribution and non-disclosure
+boundaries in PR-REQ-0098 and PR-REQ-0351; this is not a general taint detector.
+The CLI MUST
 offer a value path that does not expose the value directly in command-line
 arguments, such as prompt, file, or standard-input binding.
 

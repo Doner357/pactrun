@@ -292,13 +292,17 @@ protection. Future Migration target publication MUST satisfy this persisted
 invariant, but M2 does not define or execute Migration transformation or
 declassification.
 
-Ordinary views, inspection, diagnostics, and human output MUST apply effective
+Pactrun-owned Input views, inspection, diagnostics, and human output MUST apply effective
 protection and MUST NOT reveal Secret bytes, a preview, digest, length, payload
 identifier, or another payload-derived value. Raw export requires the purpose-
 specific authorization in PR-REQ-0092 before bytes are acquired, including
 when an active Normal declaration references a sticky Secret payload. That
 authorization permits disclosure only: it does not select a destination,
 decode text, declassify, or authorize any other sensitive operation.
+
+This governs projections from Input authorities. Separately attributed Hook text
+follows the author non-disclosure duty and PR-REQ-0098 and PR-REQ-0351 retention
+policy; it grants no Input export authority or general taint detection guarantee.
 
 M2 provides no cryptographic encryption at rest, vault or key management, or
 secure erasure guarantee. Database pages, WAL/journal files, backups, internal

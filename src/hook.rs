@@ -4,6 +4,8 @@
 
 mod capture;
 mod deletions;
+mod diagnostic_scope;
+pub(crate) mod diagnostics;
 mod materialize;
 mod migrations;
 mod platform;
@@ -78,6 +80,7 @@ pub(crate) struct HookRuntimePolicy {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionCancellation {
+    pub(crate) diagnostics: Arc<diagnostics::Diagnostics>,
     requested: Arc<AtomicBool>,
     acceptance_gate: Arc<Mutex<()>>,
     #[cfg(test)]
@@ -222,6 +225,9 @@ fn checked_deadline(start: Instant, duration: Duration) -> Option<Instant> {
 }
 
 impl AcceptanceArbiter for ActionCancellation {
+    fn retain_hook_text(&self) -> bool {
+        self.diagnostics.retain()
+    }
     fn before_durable_acceptance(
         &self,
         commit: impl FnOnce() -> Result<(), PersistenceError>,

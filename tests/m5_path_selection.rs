@@ -290,6 +290,18 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
             0
         );
         let tx = db.transaction().unwrap();
+        for table in ["run_diagnostic_events", "run_diagnostic_collections"] {
+            assert_eq!(
+                tx.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+        tx.execute_batch(
+            "DROP TABLE run_diagnostic_events; DROP TABLE run_diagnostic_collections;",
+        )
+        .unwrap();
         assert_eq!(
             tx.query_row::<i64, _, _>(
                 "SELECT count(*) FROM snapshot_blobs WHERE storage_kind=1",
@@ -336,8 +348,8 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
         Some(2)
     );
     let first = successful(&f.root, &["storage", "upgrade"]);
-    assert!(first.contains("V10 (upgraded)"));
-    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V10 (already current)"));
+    assert!(first.contains("V11 (upgraded)"));
+    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V11 (already current)"));
     assert_eq!(
         paths,
         ids(&successful(
@@ -380,7 +392,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 10);
+    assert_eq!(version, 11);
 }
 
 // Test-ID: PR-TEST-0290

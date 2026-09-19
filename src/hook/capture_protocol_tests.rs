@@ -61,7 +61,7 @@ fn transcript(messages: &[Value]) -> Result<Value, String> {
                     request_id,
                     requested,
                 } => pending = Some((request_id, requested)),
-                ProtocolStep::HookProtocolError => completion = Some("protocol_error"),
+                ProtocolStep::HookProtocolError(_) => completion = Some("protocol_error"),
                 _ => {}
             }
         } else {

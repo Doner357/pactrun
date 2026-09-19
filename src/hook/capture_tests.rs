@@ -376,7 +376,7 @@ fn real_observe_and_mutate_capture_publish_v2_from_the_pinned_active_view() {
     for access in ["observe", "mutate"] {
         let f = fixture(access);
         let marker = f.marker("capture");
-        let run = accept_capture(&f, "success", &marker, ActionCancellation::default());
+        let run = accept_capture(&f, "success", &marker, without_hook_text());
         f.replace_binding();
         let before = f
             .application
@@ -696,7 +696,7 @@ fn failed_cancelled_timed_out_and_invalid_captures_never_publish_a_snapshot() {
     ] {
         let f = fixture("mutate");
         let marker = f.marker(mode);
-        let cancellation = ActionCancellation::default();
+        let cancellation = without_hook_text();
         let run = accept_capture(&f, mode, &marker, cancellation.clone());
         let cancelling = if mode == "hang" {
             Some(cancel_after(

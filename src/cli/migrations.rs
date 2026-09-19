@@ -10,6 +10,7 @@ pub(super) enum MigrationCommand {
         limit: usize,
     },
     Plan {
+        no_retain_hook_text: bool,
         name: InstanceName,
         target: RevisionReference,
         path: Option<MigrationPathId>,
@@ -25,10 +26,14 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let (mut target, mut path, mut after, mut limit) = (None, None, None, None);
     let (mut plan, mut authorize, mut override_guard) = (false, false, false);
+    let mut no_retain_hook_text = false;
     let mut inputs = Vec::new();
     let (mut startup, mut execution, mut grace) = (None, None, None);
     while let Some(argument) = parser.next().map_err(lex_error)? {
         match argument {
+            Arg::Long("no-retain-hook-text") if !listing && !no_retain_hook_text => {
+                no_retain_hook_text = true
+            }
             Arg::Long("to") => set_once(
                 &mut target,
                 parse_revision_reference(value_string(parser, "target Revision")?)?,
@@ -94,6 +99,7 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
         })
     } else {
         Ok(MigrationCommand::Plan {
+            no_retain_hook_text,
             name,
             target,
             path,
@@ -153,6 +159,7 @@ pub(super) fn execute(
             write_page(output, &page)
         }
         MigrationCommand::Plan {
+            no_retain_hook_text: _,
             path,
             authorize,
             plan: plan_only,

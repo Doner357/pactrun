@@ -5,7 +5,8 @@ title: Remaining Capability Milestones
 # Remaining capability milestones
 
 **Status: Approved remaining scope and work order on 2026-09-19.
-Detailed contracts and runtime implementation are pending.**
+A is implemented and verified on its feature branch; detailed contracts and
+runtime implementation remain pending for B-E.**
 
 The operator approved the following grouping after the diagnostic and capability
 gap review, and authorized recording the plan only. This record does not start
@@ -33,7 +34,10 @@ calendar dates and effort estimates are not assigned.
 | D | Machine-readable CLI Output | Expose deliberate typed results for the completed command/inspection surface |
 | E | Versioning and Baseline Consolidation | Close the formal baseline, support/evolution mechanisms and remaining obligation inventory |
 
-**Next: A.** D is no longer the immediately next capability. A and B establish
+**Delivery update:** A is implemented and verified on its feature branch; Git
+integration remains separate. B is the next capability after that integration,
+starting with its own S0. The original work-order decision was **Next: A.**
+D is no longer the immediately next capability. A and B establish
 the observable data and public operations; C adds transport results and failures.
 Only then should D close machine-output models and command coverage. E stays last.
 This avoids encoding missing features as JSON or repeatedly redesigning envelopes.
@@ -61,8 +65,11 @@ This avoids encoding missing features as JSON or repeatedly redesigning envelope
 | S2 | Human live presentation, policy-governed post-run inspection and Instance status presentation |
 | S3 | Positive and negative end-to-end acceptance, including cancellation, sensitive text and broken output |
 
-The approved direction is live usability without silent full-text persistence,
-and explicit policy for later inspection. S0 must settle defaults, authorization,
+The original grouping proposed live usability without default text persistence.
+On 2026-09-19 the operator superseded it with default bounded retention and
+ordinary post-run disclosure for debugging, including completion/protocol-error
+explanations. See the [approved execution baseline](./execution-diagnostics-observability-status.md).
+S0 must record defaults, authorization,
 retention limits/lifetime, omitted/truncated/not-retained reporting and terminal
 none/output/interactive behavior. This plan does not approve a specific logging
 flag, table, field, schema version or opt-in spelling. Hook authors remain

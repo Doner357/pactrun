@@ -1701,7 +1701,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            70 // V7's 62 tables plus eight V8 lifecycle/history relations.
+            72 // Existing schema tables plus V11 collection and event evidence.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
