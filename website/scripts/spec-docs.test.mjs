@@ -379,7 +379,8 @@ test('approved remaining milestones assign gaps without silently implementing co
   }
   const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
   assert.match(handoff, /A implementation and verification are complete/);
-  assert.match(handoff, /B is active under its/);
+  assert.match(handoff, /B is implemented, verified and integrated into local develop/);
+  assert.match(handoff, /C is next, beginning with its own S0/);
   assert.ok(handoff.includes("object-catalog-history-metadata-baseline.md"));
   assert.doesNotMatch(handoff, /A's S0 is next/);
   assert.doesNotMatch(handoff, /Machine-readable CLI Output is the next separately planned capability/);

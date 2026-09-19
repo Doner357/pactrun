@@ -4,8 +4,8 @@ title: Object Catalog, History and Metadata Status
 
 # Object catalog, history and metadata status
 
-**Status: S0-S4 implemented and verified on feature/object-catalog-history-metadata.
-Not committed or integrated into develop; no publication is authorized.**
+**Status: S0-S4 implemented, verified and integrated into local develop.
+No push, release or publication is authorized.**
 
 The [approved baseline](./design-notes/object-catalog-history-metadata-baseline.md)
 records the operator's B S0-S4 authorization. The owning
@@ -56,7 +56,8 @@ no product timeout, filter or acceptance rule was weakened.
 | Passed; dependency-reused Windows evidence | PowerShell 7/5.1 Shell acceptance: 23, serial; the subsequent alias-only parser fix and added catalog tests do not change its exercised Shell/Run-list paths |
 | Passed | Documentation source/link checks: 25; site typecheck and Docusaurus build |
 | Passed | Final-candidate local and remote source-manifest checks |
-| Not performed | Commit, merge, push, release, Pages changes or deployment |
+| Completed after explicit authorization | Implementation commit and no-fast-forward local develop merge; identical trees |
+| Not performed | Push, release, Pages changes or deployment |
 
 Initial preflights are not passing evidence: one new test initially referenced
 the preceding requirement ID, and legacy Run-list assertions expected the old
@@ -69,12 +70,28 @@ This closeout changes documentation only. Its source/link/traceability and remot
 site checks are rerun separately; unchanged runtime/test/dependency inputs reuse
 the completed full gate rather than claiming another fresh full-suite run.
 
+## Local develop integration
+
+After explicit operator authorization, implementation commit
+`7c00b7ee4204587e0e8f1247d7ed672413aac7e3` on
+`feature/object-catalog-history-metadata` was merged into local develop with
+no-fast-forward merge `c189288ccf1533a6f6c5000c11357ee2a0f2dd37`.
+Both have tree `1da0b0f9a2635d8e8333078cf29dfed8fc05395e`, matching the
+verified delivered source. There were no conflicts or runtime changes. No
+consumed Git-derived build input was found; the unchanged full-CI evidence
+above is reused, not reported as a new full-suite run.
+
+Integration closeout updates only development documentation and its navigation
+assertions. Source/link/traceability and configured-remote site typecheck/build
+are checked separately. C, Revision Bundle Export and Import, is next, starting
+with its own S0; integration does not authorize C runtime implementation.
+
 ## Boundaries and retained resources
 
 Revision Bundle remains C, machine output D and baseline consolidation E.
 Full usage-guide authoring is excluded; CLI help, owning Spec, this record and
-traceability accompany the implementation. No commit, merge, push, release,
-Pages workflow modification or deployment has been performed. Existing unrelated
+traceability accompany the implementation. No push, release, Pages workflow
+modification or deployment has been performed. Existing unrelated
 untracked Pages configuration and the user archive remain untouched.
 
 The source archives, logs, Cargo cache/test artifacts, installed site dependencies
