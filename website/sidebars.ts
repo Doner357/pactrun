@@ -87,6 +87,7 @@ const sidebars: SidebarsConfig = {
         'development/implementation-roadmap', 'development/development-and-verification',
         'development/release-readiness',
         'development/product-completion-milestones',
+        'development/remaining-capability-milestones',
         'development/managed-object-lifecycle-status',
           'development/snapshot-capacity-and-restore-status',
           'development/shell-adapter-loader-status',

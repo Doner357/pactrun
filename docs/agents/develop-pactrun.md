@@ -7,7 +7,8 @@ commit, push, deploy, change machines, or perform service side effects.
 2. Read [the Spec map](../spec/index.md) and choose a [task path](../development/reading-paths.md).
 3. Check [the roadmap](../development/implementation-roadmap.md),
    [current handoff](../development/next-milestone.md), and
-   [product completion work order](../development/product-completion-milestones.md).
+   [original completion plan](../development/product-completion-milestones.md), and
+   [current remaining A-E work order](../development/remaining-capability-milestones.md).
 4. Read actual owning rules, including unnumbered constraints, definitions,
    exceptions, and the exact format/version scope. Use [the glossary](../spec/glossary.md)
    to find a term's owner, not as a replacement definition.

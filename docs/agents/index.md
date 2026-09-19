@@ -16,15 +16,19 @@ placeholders; do not interpret them as completed tutorials.
   numbered milestone is selected. Release-readiness work has no assigned start,
   and integration does not authorize publication. Consult the linked closeout
   records for implementation and verification evidence.
-- Follow the [product completion work order](../development/product-completion-milestones.md):
-  lifecycle/GC, Snapshot capacity/restore convenience, shell loader, machine-readable
-  CLI output, then versioning/baseline consolidation. Lifecycle/GC is already
+- Read the [original product completion plan](../development/product-completion-milestones.md)
+  and follow the [remaining A-E sequence approved on 2026-09-19](../development/remaining-capability-milestones.md).
+  A is execution diagnostics/Instance observability; B is object catalog/history/metadata;
+  C is Revision bundles; D is machine-readable output; E is final consolidation.
+  This is planning approval, not runtime implementation authority; full usage guides
+  are excluded, while necessary Spec/help/acceptance work remains. Lifecycle/GC is already
   integrated, as is Snapshot Capacity and Restore Workflow. Shell Adapter / Loader
   is implemented, verified and integrated into local develop;
   see its [implementation record](../development/shell-adapter-loader-status.md).
   Hook diagnostic presentation remains an unresolved follow-up; protocol delivery
   does not establish a usable diagnostic display or history feature.
-  Machine-readable CLI Output is next and requires its own plan. New
+  The follow-up is explicitly assigned to A. Execution Diagnostics and Instance
+  State Observability is next, starting with S0 and the shared obligation inventory. New
   functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the
   [contributor policy](../development/development-and-verification.md).

@@ -7,6 +7,14 @@ title: Product Completion Milestones
 **Status: Approved planning scope and work order, recorded on 2026-09-17.
 Detailed design and runtime implementation are pending.**
 
+**Current remaining order, approved 2026-09-19:** the
+[remaining capability plan](./remaining-capability-milestones.md) inserts execution
+diagnostics/Instance observability, object catalog/history/metadata, and Revision
+bundles before machine-readable output and final consolidation. A is next. The
+five numbered sections below retain the original planning scope and rationale;
+they are not the current five remaining milestones. This update records planning
+only and excludes full user, Pack Author and Hook usage-guide work.
+
 Subsequent execution of the first scope is tracked in the
 [lifecycle implementation record](./managed-object-lifecycle-status.md). Its
 approved lifecycle contracts and verified local develop integration do not complete the later
@@ -32,7 +40,7 @@ publication. Close the detailed design and affected Spec before each implementat
 The rationale paragraphs below record the reasons for this planning decision
 now. They do not invent the original reasoning behind older implementations.
 
-## Agreed work order
+## Original agreed work order (2026-09-17)
 
 | Order | Milestone | Included small feature |
 | --- | --- | --- |
