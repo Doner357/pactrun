@@ -194,6 +194,6 @@ nor focused checks are presented as a fresh complete-CI pass on the later delta.
 ## Diagnostic follow-up delivery
 
 The separately approved [execution diagnostics milestone](./execution-diagnostics-observability-status.md)
-has now implemented and verified the follow-up on its feature branch. Its new
+has now implemented, verified and integrated the follow-up into local develop. Its new
 retention/disclosure rules do not rewrite the historical Loader acceptance above.
-Git integration and publication remain separately tracked.
+Its Git integration is recorded in that delivery record; publication remains separate.

@@ -9,7 +9,7 @@ Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
 approval. Implementation evidence is recorded separately from design approval.
 
-Current feature work: the approved [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) milestone is implemented and verified on its feature branch. Its checkout uses V11; integrated develop remains V10 until separately requested Git integration. The next capability after integration is B (Object Catalog/History/Metadata), beginning with its separate S0.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is next, beginning with its separate S0; integration does not authorize publication.
 
 ## What is already recorded as implemented
 
@@ -32,7 +32,7 @@ integrated into local develop, including V7, V2 installation and service
 execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
 and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V10](../spec/persistence/persistence-schema-v10.md), internal and non-Frozen, with explicit exact-V8/V9 upgrade.
+- Current integrated persistence: [V11](../spec/persistence/persistence-schema-v11.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
 - Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
 - Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
 - Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
@@ -129,7 +129,8 @@ evidence. The operator separately authorized the completed local commit and
 merge. This does not grant permission to push or publish. That historical
 integration initialized V8 and explicitly upgraded exact V7. The subsequent
 managed-object lifecycle integration introduced V9 with exact-V8 upgrade. The
-Snapshot capacity integration now initializes V10 and explicitly upgrades V8/V9.
+Snapshot capacity integration introduced V10 with explicit V8/V9 upgrade.
+The subsequent diagnostics integration initializes V11 and explicitly upgrades V8/V9/V10.
 
 [Closed ServiceStorage semantics](./design-notes/service-storage-semantic-baseline.md)
 remain authoritative. Inputs, metadata and Workspace are not live-service
@@ -147,10 +148,10 @@ the earlier scope/rationale. The operator approved the
 [remaining A-E sequence](./remaining-capability-milestones.md) on 2026-09-19:
 execution diagnostics/Instance observability; object catalog/history/metadata;
 Revision bundles; machine-readable CLI output; then Versioning and Baseline
-Consolidation. A implementation and verification are complete on the feature
-branch; its [delivery record](./execution-diagnostics-observability-status.md)
-separates validation from pending Git integration. B is next after integration,
-starting with its own S0. The original grouping authorized planning only; A's
+Consolidation. A implementation and verification are complete and integrated
+into local develop; its [delivery record](./execution-diagnostics-observability-status.md)
+records the verified source and exact Git integration. B is next, starting with
+its own S0. The original grouping authorized planning only; A's
 later implementation approval does not authorize B-E runtime work. Full
 usage-guide work remains excluded.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md)
@@ -162,8 +163,8 @@ and integrated into local develop after authorization on 2026-09-18; see the
 adjustment, full CI and real beyond-ceiling round trips are complete.
 Shell Adapter / Loader is now [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md)
 after separately authorized commit/merge, with scoped full-CI and platform
-evidence. Hook diagnostic presentation remains unimplemented but is now explicitly
-assigned to A; the prior Loader closeout did not complete it. D's machine-readable
+evidence. Hook diagnostic presentation was not completed by the prior Loader
+closeout; the subsequent A milestone implemented, verified and integrated it. D's machine-readable
 models follow A-C rather than wrapping incomplete user workflows. No implementation
 is started by recording this plan. Push, release and publication remain separately authorized.
 No new M-series identifiers are assigned and M8 is not revived.

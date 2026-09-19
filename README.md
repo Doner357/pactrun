@@ -65,15 +65,17 @@ guards, retention, retry and read-only preview semantics.
 The integrated [Snapshot Capacity and Restore workflow](./docs/development/snapshot-capacity-and-restore-status.md)
 removes fixed service-data byte ceilings, retains structural/resource safeguards,
 and adds `instance create <name> --revision <reference> --restore-from <snapshot-id>`.
-The current `develop` baseline is [PersistenceSchemaV10](./docs/spec/persistence/persistence-schema-v10.md),
+That integration introduced [PersistenceSchemaV10](./docs/spec/persistence/persistence-schema-v10.md),
 with explicit upgrade from exact V8 or V9 and preserved legacy inline readers.
 Immutable data references keep new service bytes out of SQLite WAL while
 preserving atomic Snapshot publication and guarded Restore. Full CI and real
 beyond-ceiling round trips passed; local integration does not authorize publication.
 Shell Adapter / Loader is integrated. The approved
 [execution diagnostics milestone](./docs/development/execution-diagnostics-observability-status.md)
-is implemented and verified on a feature branch, including V11 and default
-bounded Hook evidence. Git integration remains a separately requested action.
+is implemented, verified and integrated into local `develop`, with default
+bounded Hook evidence. The current baseline is
+[PersistenceSchemaV11](./docs/spec/persistence/persistence-schema-v11.md), with
+explicit exact-V8/V9/V10 upgrade. No release or publication is implied.
 
 ## Repository layout
 

@@ -4,7 +4,7 @@ This text interface currently serves specification lookup and development of
 Pactrun. User-operation, Pack-author, and Hook-integration usage guides remain
 placeholders; do not interpret them as completed tutorials.
 
-Current feature work: the approved [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) milestone is implemented and verified on its feature branch. Its checkout uses V11; integrated develop remains V10 until separately requested Git integration. The next capability after integration is B (Object Catalog/History/Metadata), beginning with its separate S0.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is next, beginning with its separate S0; integration does not authorize publication.
 
 ## Establish authority and state
 
@@ -13,8 +13,8 @@ Current feature work: the approved [Execution Diagnostics and Instance Observabi
   M5, bounded M6, M6.5 ServiceStorage and M7 Cleanup/deletion are implemented
   and integrated into local `develop`. Managed Object Lifecycle and GC is also
   implemented, verified and integrated. Snapshot Capacity and Restore Workflow is
-  integrated as well; the integrated develop persistence baseline is V10, with explicit
-  exact-V8/V9 upgrade. M8 is rejected and archived; no next
+  integrated as well; the integrated develop persistence baseline is V11, with explicit
+  exact-V8/V9/V10 upgrade. M8 is rejected and archived; no next
   numbered milestone is selected. Release-readiness work has no assigned start,
   and integration does not authorize publication. Consult the linked closeout
   records for implementation and verification evidence.
@@ -30,8 +30,8 @@ Current feature work: the approved [Execution Diagnostics and Instance Observabi
   see its [implementation record](../development/shell-adapter-loader-status.md).
   Hook diagnostic presentation was unresolved at Loader closeout; protocol
   delivery alone did not establish usable display or history.
-  The follow-up is implemented and verified by A on its feature branch. Git
-  integration remains pending; B is next after integration, with its own S0.
+  The follow-up is implemented, verified and integrated by A into local develop.
+  B is next, with its own S0.
   Consult the shared obligation inventory and A delivery record above. New
   functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the

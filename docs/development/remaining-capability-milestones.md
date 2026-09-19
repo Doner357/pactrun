@@ -5,7 +5,7 @@ title: Remaining Capability Milestones
 # Remaining capability milestones
 
 **Status: Approved remaining scope and work order on 2026-09-19.
-A is implemented and verified on its feature branch; detailed contracts and
+A is implemented, verified and integrated into local develop; detailed contracts and
 runtime implementation remain pending for B-E.**
 
 The operator approved the following grouping after the diagnostic and capability
@@ -34,9 +34,8 @@ calendar dates and effort estimates are not assigned.
 | D | Machine-readable CLI Output | Expose deliberate typed results for the completed command/inspection surface |
 | E | Versioning and Baseline Consolidation | Close the formal baseline, support/evolution mechanisms and remaining obligation inventory |
 
-**Delivery update:** A is implemented and verified on its feature branch; Git
-integration remains separate. B is the next capability after that integration,
-starting with its own S0. The original work-order decision was **Next: A.**
+**Delivery update:** A is implemented, verified and integrated into local develop.
+B is the next capability, starting with its own S0. The original work-order decision was **Next: A.**
 D is no longer the immediately next capability. A and B establish
 the observable data and public operations; C adds transport results and failures.
 Only then should D close machine-output models and command coverage. E stays last.

@@ -6,9 +6,9 @@ title: Internal persistence
 
 **Status: Informative navigation.**
 
-V10 remains the integrated develop baseline. The separately approved diagnostics
-feature uses [V11](./persistence-schema-v11.md), with explicit exact-V8/V9/V10
-upgrade; verification and Git integration are tracked separately.
+[V11](./persistence-schema-v11.md) is the integrated develop baseline, with
+explicit exact-V8/V9/V10 upgrade. The diagnostics delivery record distinguishes
+source verification from the completed local Git integration.
 V6 is the historical M5/M6 baseline. Older schemas retain their historical and compatibility
 obligations; their presence is not permission for an implicit upgrade chain.
 
@@ -22,6 +22,7 @@ obligations; their presence is not permission for an implicit upgrade chain.
 - [Persistence Schema V8](./persistence-schema-v8.md): Historical retirement baseline with explicit exact-V7 upgrade.
 - [Persistence Schema V9](./persistence-schema-v9.md): Historical lifecycle runtime, with explicit exact-V8 upgrade only; superseded by V10.
 - [Persistence Schema V10](./persistence-schema-v10.md): Implemented, verified and integrated Snapshot capacity baseline; explicit V8/V9 upgrade and immutable data references; not published.
+- [Persistence Schema V11](./persistence-schema-v11.md): Current integrated baseline; bounded Run evidence with explicit V8/V9/V10 upgrade; not published.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).
