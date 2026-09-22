@@ -67,6 +67,50 @@ fn setup(direct_requires_input: bool) -> Fixture {
         c,
     }
 }
+
+// Test-ID: PR-TEST-0565
+// Verifies: PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
+#[test]
+fn json_migration_discovery_plan_and_execution_use_one_complete_response() {
+    let f = setup(false);
+    let schema: serde_json::Value = serde_json::from_str(include_str!(
+        "../docs/spec/contracts/cli-json-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    let json = |args: &[&str]| {
+        let mut all = vec!["--format", "json"];
+        all.extend_from_slice(args);
+        let result = command(&f.root, &all);
+        let value: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        validator.validate(&value).unwrap();
+        (result.status.success(), value)
+    };
+    let (ok, paths) = json(&["instance", "migration-paths", "demo", "--to", &f.c]);
+    assert!(ok, "{paths}");
+    assert_eq!(paths["result"]["candidates"].as_array().unwrap().len(), 2);
+    let (ok, ambiguous) = json(&["instance", "migrate", "demo", "--to", &f.c, "--plan"]);
+    assert!(!ok);
+    assert_eq!(
+        ambiguous["result"]["candidates"].as_array().unwrap().len(),
+        2
+    );
+    let (ok, plan) = json(&["instance", "migrate", "demo", "--to", &f.b, "--plan"]);
+    assert!(ok, "{plan}");
+    assert_eq!(plan["result"]["preview"], "not_admitted");
+    let (ok, run) = json(&["instance", "migrate", "demo", "--to", &f.b]);
+    assert!(ok, "{run}");
+    assert_eq!(
+        run["result"]["inspection"]["run"]["state"]["outcome"],
+        "succeeded"
+    );
+    let id = run["result"]["inspection"]["run"]["run_id"]
+        .as_str()
+        .unwrap();
+    let (ok, shown) = json(&["run", "show", id]);
+    assert!(ok);
+    assert_eq!(shown["result"]["run"], run["result"]["inspection"]["run"]);
+}
 fn ids(text: &str) -> Vec<String> {
     text.lines()
         .filter_map(|line| line.strip_prefix("path_id: ").map(str::to_owned))

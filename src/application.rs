@@ -11,7 +11,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -64,6 +64,12 @@ pub(crate) struct ExportObservation {
 
 #[derive(Debug)]
 pub(crate) enum ApplicationError {
+    Publication {
+        operation: &'static str,
+        destination: PathBuf,
+        destination_published: bool,
+        source: std::io::Error,
+    },
     Io {
         operation: &'static str,
         source: std::io::Error,
@@ -90,6 +96,15 @@ pub(crate) enum ApplicationError {
 impl fmt::Display for ApplicationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Publication {
+                operation,
+                destination_published,
+                source,
+                ..
+            } => write!(
+                formatter,
+                "{operation}; destination_published={destination_published}: {source}"
+            ),
             Self::Io { operation, source } => write!(formatter, "{operation}: {source}"),
             Self::Configuration(message)
             | Self::InvalidInstallation(message)
@@ -121,7 +136,7 @@ impl fmt::Display for ApplicationError {
 impl std::error::Error for ApplicationError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Io { source, .. } => Some(source),
+            Self::Io { source, .. } | Self::Publication { source, .. } => Some(source),
             Self::Authoring(source) => Some(source),
             Self::SourceAcquisition(source) => Some(source),
             Self::Staging(source) => Some(source),
@@ -475,11 +490,11 @@ impl PactrunApplication {
             crate::pack_transport::encode(&staged, include_metadata, self.staging()?, cancellation)
                 .map_err(ApplicationError::InvalidInstallation)?;
         crate::output_publication::publish_pack(&archive, destination, cancellation).map_err(
-            |failure| {
-                ApplicationError::InvalidInstallation(format!(
-                    "Pack export failed; destination_published={}: {}",
-                    failure.destination_published, failure.source
-                ))
+            |failure| ApplicationError::Publication {
+                operation: "Pack export failed",
+                destination: destination.to_path_buf(),
+                destination_published: failure.destination_published,
+                source: failure.source,
             },
         )
     }

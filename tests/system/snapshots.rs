@@ -1,5 +1,8 @@
 //! M4 journeys use a fresh executable for every public product operation.
-use super::support::{Scenario, assert_exit, assert_success, first_line, instance_projection};
+use super::support::{
+    Scenario, assert_empty_json_result, assert_exit, assert_success, first_line,
+    instance_projection,
+};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -240,7 +243,10 @@ fn create_and_restore_rejects_invalid_preflight_and_options_without_creating() {
         ]),
         1,
     );
-    assert!(other.run(["instance", "list"]).stdout.is_empty());
+    assert_empty_json_result(
+        &other.run(["--format", "json", "instance", "list"]),
+        "items",
+    );
     assert_eq!(s.hook_launches(), before);
 }
 
@@ -268,7 +274,7 @@ fn create_restore_missing_capability_and_timeout_keep_the_documented_boundaries(
         ]),
         1,
     );
-    assert!(s.run(["instance", "list"]).stdout.is_empty());
+    assert_empty_json_result(&s.run(["--format", "json", "instance", "list"]), "items");
     assert_eq!(s.hook_launches(), 0);
 
     let s = Scenario::new(0x96, &source("observe"));
@@ -459,10 +465,16 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
         run_count(&b.run(["run", "list", "service", "--no-trunc"])),
         1
     );
-    assert!(
-        b.run(["snapshot", "list", "--instance", "service"])
-            .stdout
-            .is_empty()
+    assert_empty_json_result(
+        &b.run([
+            "--format",
+            "json",
+            "snapshot",
+            "list",
+            "--instance",
+            "service",
+        ]),
+        "items",
     );
     let roundtrip = b.path("roundtrip.snapshot");
     assert_success(&export(&b, &id, &roundtrip));
@@ -726,7 +738,7 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
             .lines()
             .any(|line| line.ends_with("  running  -"))
     );
-    assert!(s.run(["run", "reconcile"]).stdout.is_empty());
+    assert_empty_json_result(&s.run(["--format", "json", "run", "reconcile"]), "run_ids");
     let _ = actor.terminate();
     let reconciled = s.run(["run", "reconcile"]);
     assert_success(&reconciled);
@@ -734,7 +746,7 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     let show = s.run(["run", "show", run]);
     assert_success(&show);
     assert_eq!(field(&show, "outcome"), "interrupted");
-    assert!(s.run(["run", "reconcile"]).stdout.is_empty());
+    assert_empty_json_result(&s.run(["--format", "json", "run", "reconcile"]), "run_ids");
 }
 
 // Test-ID: PR-TEST-0272
@@ -838,7 +850,7 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
     assert_exit(&error, 1);
     safe(&error);
     assert!(String::from_utf8_lossy(&error.stderr).contains("verification incomplete"));
-    assert!(s.run(["snapshot", "list"]).stdout.is_empty());
+    assert_empty_json_result(&s.run(["--format", "json", "snapshot", "list"]), "items");
     let other = Scenario::new(0x78, &source("mutate"));
     initialize(&other);
     assert_success(&other.run(["snapshot", "import", base.to_str().unwrap()]));

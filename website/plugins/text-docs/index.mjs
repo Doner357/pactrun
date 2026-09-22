@@ -11,7 +11,7 @@ export async function readDocuments(root, relative = '') {
     if (entry.isSymbolicLink()) throw new Error('Documentation symlinks are not supported: ' + name);
     if (entry.isDirectory() && !omitted.has(name.split('/')[0])) {
       documents.push(...await readDocuments(root, name));
-    } else if (entry.isFile() && name.endsWith('.md')) {
+    } else if (entry.isFile() && (name.endsWith('.md') || name.endsWith('.schema.json'))) {
       documents.push([name, (await readFile(path.join(root, name), 'utf8')).replaceAll('\r\n', '\n')]);
     }
   }
@@ -22,6 +22,10 @@ export function markdownBody(source) {
   // Keep the original body, including exact contract blocks and admonitions.
   // Only Docusaurus front matter is omitted; never summarize normative text.
   return source.replace(/^---\n[\s\S]*?\n---\n/, '').trimStart();
+}
+
+function textBody(name, source) {
+  return name.endsWith('.md') ? markdownBody(source) : source;
 }
 
 function linkProse(body) {
@@ -41,6 +45,7 @@ export function validateLinks(documents) {
   const files = new Set(documents.map(([name]) => name));
   files.add('publication.json');
   for (const [name, body] of documents) {
+    if (!name.endsWith('.md')) continue;
     for (const match of linkProse(body).matchAll(/\[[^\]\n]*\]\(([^)\s]+)\)/g)) {
       const href = match[1];
       if (/^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(href)) continue;
@@ -66,7 +71,7 @@ export async function exportText({docsDir, outDir}) {
   for (const [name, source] of documents) {
     const destination = path.join(target, name);
     await mkdir(path.dirname(destination), {recursive: true});
-    await writeFile(destination, markdownBody(source));
+    await writeFile(destination, textBody(name, source));
   }
   await mkdir(target, {recursive: true});
   await writeFile(path.join(target, 'publication.json'), JSON.stringify({
@@ -123,7 +128,7 @@ export default function textDocs(context) {
       }
       for (const [name, source] of documents) {
         const published = await readFile(path.join(outDir, 'agent-docs', name), 'utf8');
-        if (published !== markdownBody(source)) throw new Error('Text publication drift: ' + name);
+        if (published !== textBody(name, source)) throw new Error('Text publication drift: ' + name);
       }
     },
   };

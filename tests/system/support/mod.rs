@@ -446,6 +446,21 @@ pub(crate) fn assert_success(output: &Output) {
     );
 }
 
+pub(crate) fn assert_empty_json_result(output: &Output, field: &str) {
+    assert_success(output);
+    let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(response["format"], "pactrun.cli.v1");
+    assert_eq!(response["status"], "success");
+    assert!(response["error"].is_null());
+    assert!(
+        response["result"][field]
+            .as_array()
+            .expect("typed collection")
+            .is_empty(),
+        "unexpected result: {response}"
+    );
+}
+
 pub(crate) fn assert_exit(output: &Output, expected: i32) {
     assert_eq!(
         output.status.code(),
@@ -505,9 +520,11 @@ pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
 }
 
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
-    std::str::from_utf8(&output.stdout)
-        .unwrap()
-        .lines()
+    let text = std::str::from_utf8(&output.stdout).unwrap();
+    if text.trim() == "No managed Instances." {
+        return Vec::new();
+    }
+    text.lines()
         .filter(|line| !line.is_empty())
         .map(|line| {
             let columns = line.split('\t').collect::<Vec<_>>();

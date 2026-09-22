@@ -442,7 +442,7 @@ fn catalog_output_failure_is_read_only_and_control_text_is_escaped() {
         after: None,
         no_trunc: false,
     });
-    assert!(execute(command, &root, &mut Broken).is_err());
+    assert!(execute(command, &root, &mut Broken, presentation::Format::Human).is_err());
     assert!(safe("中文\u{1b}[2J\r\n\u{202e}").starts_with("中文\\u{1b}"));
     assert_ne!(safe("\\n"), safe("\n"));
     assert_eq!(quoted("Absent"), "\"Absent\"");

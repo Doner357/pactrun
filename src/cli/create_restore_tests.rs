@@ -139,6 +139,7 @@ fn create_restore_revalidates_after_create_and_never_resolves_a_replacement_name
             &mut writer,
             &mut stderr,
             &cancellation,
+            presentation::Format::Human,
         );
         let error = result.unwrap_err();
         assert!(!error.usage);

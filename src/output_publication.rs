@@ -13,10 +13,6 @@ pub(crate) enum OutputPublicationPoint {
     AfterFinalNamePublication,
 }
 
-pub(crate) fn publish(source: &StagedFile, destination: &Path) -> io::Result<()> {
-    publish_with_fault(source, destination, |_| Ok(()))
-}
-
 /// Carries publication truth even when the subsequent durability barrier fails.
 #[derive(Debug)]
 pub(crate) struct PublicationFailure {
@@ -29,6 +25,20 @@ pub(crate) fn publish_reported(
     destination: &Path,
 ) -> Result<(), PublicationFailure> {
     publish_reported_with_fault(source, destination, |_| Ok(()))
+}
+
+#[cfg(test)]
+pub(crate) fn fail_after_publication(
+    source: &StagedFile,
+    destination: &Path,
+) -> Result<(), PublicationFailure> {
+    publish_reported_with_fault(source, destination, |point| {
+        if point == OutputPublicationPoint::AfterFinalNamePublication {
+            Err(io::Error::other("injected post-publication failure"))
+        } else {
+            Ok(())
+        }
+    })
 }
 
 pub(crate) fn publish_pack(
