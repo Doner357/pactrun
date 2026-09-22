@@ -2,6 +2,53 @@ use std::{cmp::Ordering, fmt};
 
 use fluent_uri::Uri;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum PackMetadataConflict {
+    #[default]
+    Reject,
+    Overwrite,
+    Keep,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PortablePresentationTemplate {
+    pub(crate) target: PresentationTargetV1,
+    pub(crate) field: PresentationField,
+    pub(crate) value: PresentationValue,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub(crate) struct PortableMetadataTemplate {
+    pub(crate) reference_labels: Vec<(ReferenceLabel, ReferenceLabelSource)>,
+    pub(crate) presentation: Vec<PortablePresentationTemplate>,
+    pub(crate) provenance: Vec<ProvenanceClaim>,
+}
+
+impl PortableMetadataTemplate {
+    pub(crate) fn from_view(view: RevisionMetadataView) -> Self {
+        let mut result = Self::default();
+        for item in view.items {
+            match item {
+                RevisionMetadataItem::ReferenceLabel(binding) => result
+                    .reference_labels
+                    .push((binding.label, binding.source)),
+                RevisionMetadataItem::Presentation(p) => {
+                    result.presentation.push(PortablePresentationTemplate {
+                        target: p.target,
+                        field: p.field,
+                        value: p.value,
+                    })
+                }
+                RevisionMetadataItem::Provenance { claim, .. } => result.provenance.push(claim),
+                RevisionMetadataItem::LocalAlias { .. }
+                | RevisionMetadataItem::LocalNote { .. }
+                | RevisionMetadataItem::LocalTrust { .. } => {}
+            }
+        }
+        result
+    }
+}
+
 use super::{
     ActionIdentity, InputIdentity, ManagedOutputIdentity, ParameterIdentity, RevisionContentDigest,
     RevisionIdentity,

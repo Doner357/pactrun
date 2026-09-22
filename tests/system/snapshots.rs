@@ -225,7 +225,7 @@ fn create_and_restore_rejects_invalid_preflight_and_options_without_creating() {
     );
     let other = Scenario::new(0x93, &source("observe"));
     let other_revision = other.install();
-    let bundle = s.path("preflight.zip");
+    let bundle = s.path("preflight.snapshot");
     assert_success(&export(&s, &id, &bundle));
     assert_success(&other.run(["snapshot", "import", bundle.to_str().unwrap()]));
     assert_exit(
@@ -356,12 +356,14 @@ fn manifest(path: &Path) -> Vec<u8> {
     out
 }
 fn export(s: &Scenario, id: &str, path: &Path) -> Output {
+    assert_eq!(path.extension().unwrap(), "snapshot");
+    let base = path.with_extension("");
     s.run([
         "snapshot",
         "export",
         id,
         "--output",
-        path.to_str().unwrap(),
+        base.to_str().unwrap(),
         "--authorize-sensitive-export",
     ])
 }
@@ -384,13 +386,14 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
         safe(&out);
         assert!(String::from_utf8_lossy(&out.stdout).contains(&id));
     }
-    let bundle = a.path("snapshot.zip");
+    let bundle = a.path("snapshot.snapshot");
+    let base = a.path("snapshot");
     let refused = a.run([
         "snapshot",
         "export",
         &id,
         "--output",
-        bundle.to_str().unwrap(),
+        base.to_str().unwrap(),
     ]);
     assert_exit(&refused, 1);
     assert!(!bundle.exists());
@@ -461,7 +464,7 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
             .stdout
             .is_empty()
     );
-    let roundtrip = b.path("roundtrip.zip");
+    let roundtrip = b.path("roundtrip.snapshot");
     assert_success(&export(&b, &id, &roundtrip));
     assert_eq!(manifest(&roundtrip), canonical);
     let markers = fs::read_to_string(a.path("hook-launches")).unwrap();
@@ -533,7 +536,7 @@ fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format(
         field(&s.run(["snapshot", "show", &id]), "integrity_format"),
         "1"
     );
-    let output = s.path("v1-out.zip");
+    let output = s.path("v1-out.snapshot");
     assert_success(&export(&s, &id, &output));
     assert_eq!(manifest(&output), original);
     assert!(

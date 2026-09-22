@@ -432,13 +432,14 @@ fn snapshot_export_keeps_its_consistent_read_across_another_process_deletion() {
     let snap = snapshot(&p, &rev, InstanceId::from_bytes([1; 16]));
     let barrier = temp.path().join("barrier");
     fs::create_dir(&barrier).unwrap();
-    let output = temp.path().join("snapshot.bundle");
+    let output_base = temp.path().join("snapshot.bundle");
+    let output = temp.path().join("snapshot.bundle.snapshot");
     let args = vec![
         "snapshot".to_owned(),
         "export".to_owned(),
         snap.to_string(),
         "--output".to_owned(),
-        output.to_str().unwrap().to_owned(),
+        output_base.to_str().unwrap().to_owned(),
         "--authorize-sensitive-export".to_owned(),
     ];
     let mut child = worker(&root, &args)

@@ -19,7 +19,6 @@ use super::runtime_content_store::{
     RuntimeContentStore, RuntimeContentStoreError, StoredRuntimeBlob,
     validate_existing_regular_entry, validate_supported_storage_root,
 };
-use super::sqlite_revision_metadata::apply_revision_metadata_in_transaction;
 #[cfg(test)]
 use crate::revision_core_v1::{
     calculate_revision_content_digest_v1, encode_canonical_revision_core_v1,
@@ -482,6 +481,34 @@ impl PactrunPersistence {
         publications: &[StoredRuntimeBlob],
         metadata: Option<&RevisionMetadataMutationBatch>,
     ) -> Result<RevisionIdentity, PersistenceError> {
+        self.persist_pack_revision(
+            package_id,
+            content,
+            publications,
+            metadata,
+            None,
+            &super::UnconditionalAcceptance,
+        )
+        .map(|r| r.0)
+    }
+    pub(crate) fn persist_pack_revision(
+        &self,
+        package_id: PackageId,
+        content: &ValidatedRevisionContent,
+        publications: &[StoredRuntimeBlob],
+        metadata: Option<&RevisionMetadataMutationBatch>,
+        policy: Option<crate::domain::PackMetadataConflict>,
+        cancellation: &impl super::AcceptanceArbiter,
+    ) -> Result<
+        (
+            RevisionIdentity,
+            Vec<(
+                crate::domain::PresentationTargetV1,
+                crate::domain::PresentationField,
+            )>,
+        ),
+        PersistenceError,
+    > {
         if content.core.version() > 1 && SCHEMA_VERSION < 7 {
             return Err(PersistenceError::CorruptRevision(
                 "Core V2 requires the V7 persistence boundary".to_owned(),
@@ -504,6 +531,7 @@ impl PactrunPersistence {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(|error| PersistenceError::sqlite("begin Revision transaction", error))?;
         self.check_write_admission(&transaction)?;
+        let mut kept = Vec::new();
 
         if let Some(raw) = load_raw_revision(&transaction, &identity)? {
             let actual_references = load_reference_rows(&transaction, &identity)?;
@@ -518,12 +546,15 @@ impl PactrunPersistence {
             }
             validate_raw_revision(&identity, raw, actual_references)?;
             if let Some(metadata) = metadata {
-                apply_revision_metadata_in_transaction(&transaction, &identity, metadata)?;
+                kept = super::pack_publication::apply_install_metadata(
+                    &transaction,
+                    &identity,
+                    metadata,
+                    policy,
+                )?;
             }
-            transaction
-                .commit()
-                .map_err(|error| PersistenceError::sqlite("commit idempotent retry", error))?;
-            return Ok(identity);
+            super::pack_publication::commit_install(transaction, cancellation)?;
+            return Ok((identity, kept));
         }
 
         validate_publications(
@@ -569,14 +600,17 @@ impl PactrunPersistence {
                 })?;
         }
         if let Some(metadata) = metadata {
-            apply_revision_metadata_in_transaction(&transaction, &identity, metadata)?;
+            kept = super::pack_publication::apply_install_metadata(
+                &transaction,
+                &identity,
+                metadata,
+                policy,
+            )?;
         }
         fault(FaultPoint::BeforeRevisionCommit);
-        transaction
-            .commit()
-            .map_err(|error| PersistenceError::sqlite("commit Revision transaction", error))?;
+        super::pack_publication::commit_install(transaction, cancellation)?;
         fault(FaultPoint::AfterRevisionCommit);
-        Ok(identity)
+        Ok((identity, kept))
     }
 
     pub(crate) fn load_revision(
@@ -1311,6 +1345,7 @@ fn validate_publications(
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum FaultPoint {
+    AfterPackExportRead,
     BeforeObjectDeletionCommit,
     AfterObjectDeletionCommit,
     BeforeCollectionRemoval,
@@ -1368,6 +1403,7 @@ impl FaultPoint {
     #[cfg(test)]
     pub(crate) fn name(self) -> &'static str {
         match self {
+            Self::AfterPackExportRead => "after_pack_export_read",
             Self::BeforeObjectDeletionCommit => "before_object_deletion_commit",
             Self::AfterObjectDeletionCommit => "after_object_deletion_commit",
             Self::BeforeCollectionRemoval => "before_collection_removal",

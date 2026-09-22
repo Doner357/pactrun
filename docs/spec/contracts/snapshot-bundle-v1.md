@@ -79,6 +79,12 @@ authoritative Snapshot or final output name. Cleanup is best-effort and makes
 no secure-erasure claim. Actual host resource failures remain distinct from
 the [structural and representation limits](../behavior/m4-runtime-capabilities.md).
 
+The subsequently approved [export naming rule](../behavior/command-and-output-reference.md#pr-req-0357---specialized-envelope-export-filenames)
+defines `.snapshot` as the specialized Snapshot suffix. `snapshot export --output`
+now takes a base path and always appends `.snapshot`, even to a base already ending
+in that suffix. Import still takes an exact path; legacy `.zip` names remain valid.
+This naming rule changes neither Stored-ZIP nor sensitive-export authorization.
+
 **Verification: PR-TEST-0206, PR-TEST-0207, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0211, PR-TEST-0212, PR-TEST-0213, PR-TEST-0214, PR-TEST-0215, PR-TEST-0216, PR-TEST-0217, PR-TEST-0218, PR-TEST-0219, PR-TEST-0276, PR-TEST-0479, PR-TEST-0480, PR-TEST-0481.**
 
 Implementation note: bounded preflight checks the original local/central

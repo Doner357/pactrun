@@ -8,6 +8,7 @@ mod chunked_blob;
 mod immutable_data;
 #[cfg(test)]
 mod object_lifecycle_tests;
+mod pack_publication;
 mod runtime_content_store;
 #[cfg(test)]
 mod schema_v5_contract_tests;

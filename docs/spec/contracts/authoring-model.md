@@ -28,7 +28,7 @@ behavior are optional capabilities and must not burden minimal Packs.
 Authors describe capabilities they provide. They are not required to enumerate
 large sets of negative `supports_x: false` flags.
 
-YAML V1/V2 are the current built-in frontends. The internal Candidate model below
+YAML V1/V2/V3 are the current built-in frontends. The internal Candidate model below
 is not a public API. A common external entry point for third-party frontends is
 deferred until concrete demand; install-time Recipes were
 [rejected with M8](../../development/history/m8-recipes-rejected.md).

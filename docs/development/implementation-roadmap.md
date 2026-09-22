@@ -16,7 +16,7 @@ Milestone state on this page is planning metadata. It must not be treated as
 evidence that a requirement has automated coverage or that a format or protocol
 is Frozen.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is implemented, verified and integrated into local develop. C (Revision Bundle Export and Import) is next, beginning with its own S0; integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C (Portable Pack and Revision Export) is [implemented and verified on its feature branch](./pack-transport-status.md), not committed or integrated. D follows C and requires separate S0 approval. Integration does not authorize publication.
 
 ## Development entry after Spec migration
 
@@ -855,7 +855,7 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | --- | --- | --- |
 | A | Execution Diagnostics and Instance State Observability | Implemented, verified and integrated into local develop |
 | B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented, verified and integrated into local develop |
-| C | Revision Bundle Export and Import | Approved planning scope; after B |
+| C | Portable Pack and Revision Export | S0-S3 [implemented and verified](./pack-transport-status.md); not committed or integrated |
 | D | Machine-readable CLI Output | Existing scope, now after A-C |
 | E | Versioning and Baseline Consolidation | Existing final milestone, after D |
 
@@ -863,7 +863,8 @@ A-E are sequence labels, not M-series identifiers. The original approval recorde
 the grouping only; A subsequently received separate design/implementation approval
 and completed verification and local develop integration. B subsequently received
 [S0-S4 implementation approval](./design-notes/object-catalog-history-metadata-baseline.md).
-C-E still require their own detailed S0 closure. Full
+C received [S0-S3 implementation approval](./design-notes/pack-transport-baseline.md)
+for directory/ZIP Packs and unified installation. D-E still require their own detailed S0 closure. Full
 usage-guide writing is excluded; necessary Spec/help/acceptance material is not.
 A's S0 established the obligation inventory, and every milestone closes its own
 user-entry-point, observable-result and test evidence. Unowned gaps cannot wait
@@ -882,7 +883,8 @@ including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagno
 presentation was assigned to A and is now implemented and verified in its
 [integrated delivery](./execution-diagnostics-observability-status.md). A is
 complete in local develop; B is also implemented, verified and integrated under
-its separate approval. C is next, beginning with its own S0.
+its separate approval. C has completed its separately approved S0-S3 work;
+it is not yet committed or integrated into develop. D's design approval follows C.
 See the [B implementation record](./object-catalog-history-metadata-status.md).
 Machine-readable output remains D. No push, release or publication is implied.
 M8 remains rejected and its number

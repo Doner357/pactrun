@@ -657,9 +657,18 @@ mod implementation {
     /// Enumerate the opened directory, not a reconstructed pathname. Returned
     /// native names are data and are opened only relative to that same handle.
     fn retirement_names(file: &File) -> io::Result<std::collections::VecDeque<OsString>> {
+        source_names(file, usize::MAX)
+    }
+
+    /// Bounded enumeration for Pack acquisition, using the opened directory.
+    pub fn source_names(
+        file: &File,
+        maximum: usize,
+    ) -> io::Result<std::collections::VecDeque<OsString>> {
         use windows_sys::Wdk::Storage::FileSystem::{FileNamesInformation, NtQueryDirectoryFile};
         let mut names = std::collections::VecDeque::new();
         let mut buffer = vec![0u64; 8192];
+        let mut restart = true;
         loop {
             let mut status_block = IO_STATUS_BLOCK::default();
             // SAFETY: all handles/pointers remain live for this synchronous
@@ -676,9 +685,10 @@ mod implementation {
                     FileNamesInformation,
                     true,
                     ptr::null(),
-                    false,
+                    restart,
                 )
             };
+            restart = false;
             if status as u32 == 0x8000_0006 {
                 break;
             } // STATUS_NO_MORE_FILES
@@ -710,6 +720,9 @@ mod implementation {
                 std::slice::from_raw_parts(base.add(12).cast::<u16>(), length / 2)
             });
             if name != "." && name != ".." {
+                if names.len() >= maximum {
+                    return Err(io::Error::other("Pack directory entry limit exceeded"));
+                }
                 names.push_back(name);
             }
         }

@@ -96,6 +96,37 @@ fn parse_limit(value: String) -> Result<usize, CliError> {
 pub(super) fn parse_revision(parser: &mut Parser) -> Result<Command, CliError> {
     let operation = required_value_string(parser, "Revision command")?;
     let command = match operation.as_str() {
+        "export" => {
+            let revision =
+                parse_revision_reference(required_value_string(parser, "Revision reference")?)?;
+            let mut output = None;
+            let mut include_metadata = false;
+            while let Some(arg) = parser.next().map_err(lex_error)? {
+                match arg {
+                    Arg::Long("output") => set_once(
+                        &mut output,
+                        PathBuf::from(required_value(parser, "output base path")?),
+                        "--output",
+                    )?,
+                    Arg::Long("include-portable-metadata") if !include_metadata => {
+                        include_metadata = true
+                    }
+                    _ => {
+                        return Err(CliError::usage(
+                            "unsupported or duplicate Revision export option",
+                        ));
+                    }
+                }
+            }
+            let output = output.ok_or_else(|| CliError::usage("--output is required"))?;
+            let output =
+                export_paths::destination(output.into_os_string(), export_paths::Format::Pack)?;
+            return Ok(Command::ExportRevision {
+                revision,
+                output,
+                include_metadata,
+            });
+        }
         "list" => CatalogCommand::Revisions(paging(parser, exact)?),
         "show" => {
             let reference =

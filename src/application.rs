@@ -432,6 +432,7 @@ impl PactrunApplication {
         Ok(self.persistence.collect_content(execute)?)
     }
 
+    #[cfg(test)]
     pub(crate) fn install_pack_source(
         &self,
         source_root: &Path,
@@ -442,6 +443,44 @@ impl PactrunApplication {
             self.staging()?,
             source_root,
             explicit_local_metadata,
+        )
+    }
+
+    pub(crate) fn install_pack(
+        &self,
+        path: &Path,
+        policy: crate::domain::PackMetadataConflict,
+        cancellation: &ActionCancellation,
+    ) -> Result<InstallPackResult, ApplicationError> {
+        let candidate = crate::pack_transport::acquire(path, self.staging()?, cancellation)
+            .map_err(ApplicationError::InvalidInstallation)?;
+        let empty = RevisionMetadataMutationBatch::new(Vec::new()).expect("empty metadata plan");
+        installation::install_prepared(&self.persistence, candidate, &empty, policy, cancellation)
+    }
+
+    pub(crate) fn export_revision_pack(
+        &self,
+        revision: &RevisionIdentity,
+        destination: &Path,
+        include_metadata: bool,
+        cancellation: &ActionCancellation,
+    ) -> Result<(), ApplicationError> {
+        let staged = self.persistence.stage_pack_export(
+            revision,
+            self.staging()?,
+            include_metadata,
+            cancellation,
+        )?;
+        let archive =
+            crate::pack_transport::encode(&staged, include_metadata, self.staging()?, cancellation)
+                .map_err(ApplicationError::InvalidInstallation)?;
+        crate::output_publication::publish_pack(&archive, destination, cancellation).map_err(
+            |failure| {
+                ApplicationError::InvalidInstallation(format!(
+                    "Pack export failed; destination_published={}: {}",
+                    failure.destination_published, failure.source
+                ))
+            },
         )
     }
 

@@ -183,7 +183,10 @@ fn parse_inner(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
                 match arg {
                     Arg::Long("output") => set_once(
                         &mut path,
-                        bundle_path(required_parser_value(parser, "bundle output")?)?,
+                        export_paths::destination(
+                            required_parser_value(parser, "Snapshot output base")?,
+                            export_paths::Format::Snapshot,
+                        )?,
                         "--output",
                     )?,
                     Arg::Long("authorize-sensitive-export") if !authorized => authorized = true,
@@ -305,9 +308,14 @@ pub(super) fn execute(
                 .map_err(safe_error)?;
             writeln!(
                 stdout,
-                "snapshot: {id}\nexport: published_without_replacement"
+                "snapshot: {id}\nexport: published_without_replacement\noutput: {}",
+                format_path(&path)
             )
-            .map_err(io_operation)
+            .map_err(|error| {
+                CliError::operation(format!(
+                    "Snapshot destination was published, but reporting success failed: {error}"
+                ))
+            })
         }
     }
 }

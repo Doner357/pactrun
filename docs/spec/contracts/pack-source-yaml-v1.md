@@ -266,6 +266,13 @@ descriptor. If the kernel or filesystem cannot provide all these semantics,
 installation MUST fail before content staging rather than use weaker pathname
 traversal.
 
+These opened-object rules govern the directory form. For a ZIP-based source Pack,
+[Pack Distribution V1](./pack-distribution-v1.md) instead establishes the privately
+staged archive as the immutable acquisition anchor. Exact validated member names
+form its root-relative namespace; the same SourceRelativePathV1 spelling rules
+apply. Archive paths are never extracted into a host namespace. Both forms converge
+on the same source projection and owned staged-content boundary.
+
 The fixed manifest is acquired by the same platform-specific source-root-
 relative, exact-name, no-follow, no-mount-crossing, regular-file, and same-open-
 object rules. Only exact `pactrun.yaml` is valid; `pactrun.yml`, case variants,

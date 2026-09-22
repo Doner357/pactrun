@@ -8,6 +8,8 @@ title: Authoring and format contracts
 
 Authoring, normalized identity, wire, errors, and transport are distinct contracts. Their versions and stability statuses are independent.
 
+- [Pack Distribution V1](./pack-distribution-v1.md): Source/distribution Pack directories and ZIP-based `.pack` files, exact Revision export, and transactional metadata conflict policies.
+
 - [Actions, Inputs, and Parameters](./actions-inputs-and-parameters.md): Read the author-facing declarations and the distinctions between managed bindings, invocation parameters, and future service-resource exposure.
 - [Authoring Model](./authoring-model.md): Understand the authoring contract and its relationship to the normalized Revision boundary. Read the concrete source format separately.
 - [Error Taxonomy V1](./error-taxonomy-v1.md): Look up stable Pactrun-owned error identity and catalog rules. An error identity is separate from a Run outcome or a Hook-owned code.

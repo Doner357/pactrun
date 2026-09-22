@@ -2,12 +2,13 @@
 use crate::managed_data::StagedFile;
 use std::{
     fs::{self, File},
-    io,
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OutputPublicationPoint {
+    CopyChunk,
     BeforeFinalNamePublication,
     AfterFinalNamePublication,
 }
@@ -28,6 +29,25 @@ pub(crate) fn publish_reported(
     destination: &Path,
 ) -> Result<(), PublicationFailure> {
     publish_reported_with_fault(source, destination, |_| Ok(()))
+}
+
+pub(crate) fn publish_pack(
+    source: &StagedFile,
+    destination: &Path,
+    cancellation: &crate::hook::ActionCancellation,
+) -> Result<(), PublicationFailure> {
+    let mut gate = None;
+    publish_reported_with_fault(source, destination, |point| match point {
+        OutputPublicationPoint::CopyChunk => crate::pack_transport::check_cancel(cancellation),
+        OutputPublicationPoint::BeforeFinalNamePublication => {
+            gate = Some(cancellation.lock_acceptance_gate());
+            crate::pack_transport::check_cancel(cancellation)
+        }
+        OutputPublicationPoint::AfterFinalNamePublication => {
+            gate.take();
+            Ok(())
+        }
+    })
 }
 
 fn publish_reported_with_fault(
@@ -75,7 +95,15 @@ pub(crate) fn publish_with_fault(
     let (path, mut file) = create_temporary(parent)?;
     let result = (|| {
         let mut reader = source.try_clone_reader().map_err(io::Error::other)?;
-        io::copy(&mut reader, &mut file)?;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            fault(OutputPublicationPoint::CopyChunk)?;
+            let n = reader.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buffer[..n])?;
+        }
         file.sync_all()?;
         fault(OutputPublicationPoint::BeforeFinalNamePublication)?;
         publish_no_replace(&file, &path, destination)?;
