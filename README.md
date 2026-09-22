@@ -79,7 +79,7 @@ explicit exact-V8/V9/V10 upgrade. No release or publication is implied.
 
 ## Repository layout
 
-Portable Pack transport is implemented and verified on its feature branch; see the
+Portable Pack transport is implemented, verified and integrated into local develop; see the
 [C implementation record](./docs/development/pack-transport-status.md). The approved
 [Pack format](./docs/spec/contracts/pack-distribution-v1.md) supports source and
 distribution directories or ZIP-based `.pack` files through `pack install`.
@@ -88,7 +88,7 @@ Revision and Snapshot export take `--output <base-path>` and always append
 `.pack` and `.snapshot` respectively, even if the base already has that suffix.
 Input and Artifact export retain exact caller-selected filenames. Import uses
 the exact supplied path; existing Snapshot `.zip` files remain supported.
-This feature-branch work is not a release or a develop integration claim.
+Local integration does not authorize release or publication.
 
 - `src/` contains the production crate and crate-private architecture modules.
 - `xtask/` contains repository-level verification commands.

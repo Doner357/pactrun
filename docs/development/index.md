@@ -49,7 +49,7 @@ Its Hook diagnostic presentation gap is now assigned to A in the
 Execution diagnostics/Instance observability is integrated into local develop.
 [Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
 also implemented, verified and integrated. [Portable Pack transport](./pack-transport-status.md)
-is implemented and verified on its feature branch, not committed or integrated.
+is implemented, verified and integrated into local develop.
 Machine-readable output follows C with separate S0 approval, then final consolidation. This excludes
 full usage-guide writing. No retired milestone number is reused.
 The [format review](./design-notes/m6-5-format-activation-review.md)

@@ -4,16 +4,16 @@ title: Pack Transport Status
 
 # Pack transport status
 
-**Status: C S0-S3 implemented and verified on feature/revision-pack-transport;
-not committed or integrated into develop.**
+**Status: C S0-S3 implemented, verified and integrated into local develop,
+including the approved export naming follow-up.**
 
 The operator approved the [Pack contract](../spec/contracts/pack-distribution-v1.md)
 on 2026-09-22: directory/ZIP source and distribution installation, exact export,
 private typed common installation, optional portable metadata and overwrite/keep.
 The [approved baseline](./design-notes/pack-transport-baseline.md) records scope
 and rationale. Schema V11 and Frozen identity contracts remain unchanged. D and E
-follow C; D still requires its own design approval. No commit, merge, push or
-publication is implied.
+follow C; D still requires its own design approval. Local commit and merge were
+separately authorized. No push, release or publication is authorized.
 
 ## Delivered behavior
 
@@ -36,7 +36,7 @@ publication is implied.
   both paths. No public Candidate API, SDK, Bundle object, schema migration,
   machine-output envelope, or service-state transport is introduced.
 
-## Verification
+## Initial C verification
 
 The configured-remote complete `cargo xtask ci` gate passed against source archive
 SHA-256:
@@ -105,9 +105,51 @@ results-only update below does not change tested runtime inputs.
 | Passed | Bidirectional traceability, 25 documentation/link/catalog checks, site typecheck and production build; documentation closeout rechecked separately |
 | Not run for this bounded follow-up | A fresh full `cargo xtask ci`; the earlier full gate above remains historical C baseline evidence, not a claim about a fresh pipeline after the naming change |
 
-## Retained resources and Git boundary
+## Local develop integration
 
-The feature branch remains uncommitted and unmerged. Existing unrelated untracked
+After explicit operator authorization, implementation commit
+`c09bf196fdf40771bcf9b3ebfbd2edbd73fa9d93` on
+`feature/revision-pack-transport` was merged into local develop with no-fast-forward
+merge `171545fa09b4a798ddc351e4186c3116184be591`. Both have tree
+`0de72ec32d82725d80f7d6117da0f8c8b2fdba75`. There were no conflicts or runtime
+changes during merge, and no consumed Git-derived build input was found.
+
+The integration candidate, including the final export naming policy, passed a
+fresh complete configured-remote `cargo xtask ci` gate against archive SHA-256:
+
+```text
+9e0f85af7a00920f965127bcd47c41077b83e758d91031d5e067c6eb7749e733
+```
+
+The archive and per-file source manifests were checked on the persistent supported
+filesystem before and after the run; local source matched before commit. The
+complete passing run used `CARGO_PROFILE_TEST_DEBUG=0` and `RUST_TEST_THREADS=1`.
+The latter serializes the test harness, not the explicit multithreaded and
+cross-process scenarios inside tests. No test filter, assertion or product timeout
+was weakened. Linux library acceptance was 479 passed and four explicitly ignored;
+system acceptance was 70 passed, xtask 40 passed, and the CLI process suites passed.
+Formatting, all-target/all-feature Clippy, conformance, traceability, site typecheck
+and all 25 documentation checks plus the production build passed. Earlier explicit
+capacity evidence above is reused for unchanged transport inputs, not claimed as
+a newly executed capacity run during integration.
+
+Two preceding attempts are not passing complete-gate evidence. The first exposed
+an old Snapshot export concurrency test still opening its former exact output
+path. Its fixture now supplies a base path and reads the appended `.snapshot`
+path, retaining the same cross-process deletion and integrity assertions; the
+focused test passed on Windows and Linux. A subsequent parallel run encountered
+`WouldBlock` in the unchanged Linux retirement interruption test. That test passed
+12 isolated repetitions, and then passed in the complete serial-harness run. This
+does not claim a conclusively established cause for the parallel-run interruption.
+
+This integration closeout changes documentation and navigation assertions only.
+The unchanged runtime gate is reused for the identical merge; documentation/link/
+traceability checks and configured-remote site typecheck/build are rerun separately.
+D is the next design milestone and still needs its own S0 approval.
+
+## Retained resources and publication boundary
+
+The feature branch is retained after local integration. Existing unrelated untracked
 Pages configuration and the user archive were not changed. Source archives,
 manifests, logs, Cargo artifacts and the generated documentation site remain in
 the dedicated remote workspace; local evidence and isolated dependency cache are
