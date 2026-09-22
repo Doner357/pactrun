@@ -39,3 +39,5 @@ pactrun-windows-ntfs = { path = "crates/pactrun-windows-ntfs" }
 
 [dev-dependencies]
 tempfile = "3"
+schemars = "=1.2.2"
+jsonschema = { version = "=0.57.0", default-features = false }

@@ -170,10 +170,14 @@ Management and inspection commands SHOULD provide versioned machine-readable
 output. Raw and interactive Hook terminal channels MUST remain direct streams
 and MUST NOT be embedded in a JSON-style wrapper.
 
-M2 deliberately adds no machine-readable envelope; raw Input export to stdout
-is the payload stream boundary in PR-REQ-0266.
+The historical M2 baseline added no machine-readable envelope. D defines the
+[versioned JSON interface](../contracts/cli-json-v1.md) selected by a leading
+`--format human|json`; human is the default. Raw Input export to stdout retains
+the payload stream boundary in PR-REQ-0266. JSON actual execution with Hook
+terminal streams is rejected before execution side effects; planning remains
+available. Format selection does not change operation authorization or recovery.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0556, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0561, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565.**
 
 ### PR-REQ-0271 - M2 application and minimal human CLI
 

@@ -50,7 +50,7 @@ Execution diagnostics/Instance observability is integrated into local develop.
 [Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
 also implemented, verified and integrated. [Portable Pack transport](./pack-transport-status.md)
 is implemented, verified and integrated into local develop.
-Machine-readable output follows C with separate S0 approval, then final consolidation. This excludes
+Machine-readable output follows C under its [approved S0-S4 baseline](./design-notes/cli-presentation-baseline.md); see the [implementation record](./cli-presentation-status.md). Final consolidation remains after D. This excludes
 full usage-guide writing. No retired milestone number is reused.
 The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.

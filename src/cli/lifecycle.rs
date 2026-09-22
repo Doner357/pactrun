@@ -26,23 +26,11 @@ pub(super) fn parse_run_delete(parser: &mut Parser) -> Result<LifecycleCommand, 
     })
 }
 
-pub(super) fn write_deletion(
-    stdout: &mut dyn Write,
-    result: ObjectDeletionResult,
-) -> Result<(), CliError> {
-    match result {
-        ObjectDeletionResult::Deleted => writeln!(stdout, "object deleted").map_err(io_operation),
-        ObjectDeletionResult::AlreadyAbsent => {
-            writeln!(stdout, "object already absent").map_err(io_operation)
-        }
-        ObjectDeletionResult::Blocked(reason) => Err(CliError::operation(reason.message())),
-    }
-}
-
 pub(super) fn execute(
     command: LifecycleCommand,
     root: &Path,
     stdout: &mut dyn Write,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     if let LifecycleCommand::Collect { plan } = command {
         let app = if plan {
@@ -52,27 +40,24 @@ pub(super) fn execute(
         }
         .map_err(app_error)?;
         let report = app.collect_content(!plan).map_err(app_error)?;
-        writeln!(
-            stdout,
-            "{}: candidates={}, removed={}, retained={}, unsupported={}, failed={}",
-            if plan {
-                "collection preview (not reserved)"
-            } else {
-                "collection"
-            },
-            report.candidates,
-            report.removed,
-            report.retained,
-            report.unsupported,
-            report.failed
-        )
-        .map_err(io_operation)?;
+        let result = presentation::Collection::new(plan, &report);
         if report.failed != 0 {
-            return Err(CliError::operation(
+            if format == presentation::Format::Human {
+                result.human(stdout)?;
+            }
+            let mut error = CliError::operation(
                 "collection incomplete; some removals could not be confirmed and may already be absent; retry after resolving the storage problem",
-            ));
+            );
+            error.partial = Some(presentation::PartialResult::Collection(Box::new(result)));
+            return Err(error);
         }
-        return Ok(());
+        return presentation::render(
+            format,
+            "storage gc",
+            &result,
+            stdout,
+            presentation::Collection::human,
+        );
     }
     let app = PactrunApplication::open(root).map_err(app_error)?;
     let target = match command {
@@ -89,5 +74,46 @@ pub(super) fn execute(
             other => resolve_revision(&app, other)?,
         }),
     };
-    write_deletion(stdout, app.delete_object(&target).map_err(app_error)?)
+    let name = match target {
+        ObjectDeletion::Run { .. } => "run delete",
+        ObjectDeletion::Revision(_) => "revision delete",
+        _ => unreachable!(),
+    };
+    render_deletion(
+        format,
+        name,
+        stdout,
+        app.delete_object(&target).map_err(app_error)?,
+    )
+}
+
+pub(super) fn render_deletion(
+    format: presentation::Format,
+    command: &str,
+    out: &mut dyn Write,
+    result: ObjectDeletionResult,
+) -> Result<(), CliError> {
+    let outcome = match result {
+        ObjectDeletionResult::Deleted => "deleted",
+        ObjectDeletionResult::AlreadyAbsent => "already_absent",
+        ObjectDeletionResult::Blocked(reason) => return Err(CliError::operation(reason.message())),
+    };
+    presentation::render(
+        format,
+        command,
+        &presentation::Deletion { outcome },
+        out,
+        |value, out| {
+            writeln!(
+                out,
+                "object {}",
+                if value.outcome == "deleted" {
+                    "deleted"
+                } else {
+                    "already absent"
+                }
+            )
+            .map_err(io_operation)
+        },
+    )
 }

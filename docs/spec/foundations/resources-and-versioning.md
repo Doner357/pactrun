@@ -253,7 +253,7 @@ MUST be a versioned interface, and breaking changes MUST require an explicit
 version change. Interactive Hook terminal streams MUST NOT be wrapped in the
 structured output envelope.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0554, PR-TEST-0556, PR-TEST-0557.**
 
 ## Import identity
 

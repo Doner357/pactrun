@@ -6,7 +6,7 @@ title: Remaining Capability Milestones
 
 **Status: Approved remaining scope and work order on 2026-09-19.
 A is implemented, verified and integrated into local develop. C is implemented,
-verified and integrated into local develop; D-E remain pending. B S0-S4 is implemented, verified
+verified and integrated into local develop; D S0-S4 is implemented and verified on its feature branch, not integrated; E remains pending. B S0-S4 is implemented, verified
 and integrated into local develop; see its
 [record](./object-catalog-history-metadata-status.md).**
 
@@ -42,7 +42,7 @@ B is also implemented, verified and integrated under the separately approved
 C is now implemented, verified and integrated into local develop under the
 [Pack transport baseline](./design-notes/pack-transport-baseline.md). Its
 [status record](./pack-transport-status.md) distinguishes implementation evidence
-from the separately authorized local integration. D follows C and requires separate S0 approval.
+from the separately authorized local integration. D follows C under the approved [S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); its [implementation record](./cli-presentation-status.md) tracks verification separately.
 The sections below retain the original grouping rationale;
 the approved Pack baseline owns the subsequent concrete scope refinement.
 The original work-order decision was **Next: A.**

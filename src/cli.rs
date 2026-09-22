@@ -1,4 +1,4 @@
-//! Closed M2 human CLI parsing, composition, and terminal presentation.
+//! Closed CLI parsing and composition with human and versioned JSON presentation.
 
 use std::{
     collections::BTreeSet,
@@ -25,12 +25,19 @@ use lexopt::{Arg, Parser};
 mod artifacts;
 mod async_stderr;
 mod catalog;
+mod catalog_presentation;
+mod execution_presentation;
 mod export_paths;
 mod lifecycle;
+mod migration_presentation;
 mod migrations;
+mod presentation;
 mod retirements;
+#[cfg(test)]
+mod schema_tests;
 mod service_storage;
 mod snapshots;
+mod transport_presentation;
 
 use crate::{
     application::{ApplicationError, InputAcquisition, MigrationRelationState, PactrunApplication},
@@ -52,6 +59,9 @@ use crate::domain::RevisionMetadataMutationBatch;
 const STORAGE_ROOT_ENV: &str = "PACTRUN_STORAGE_ROOT";
 const HELP: &str = "Pactrun 0.1.0\n\
 Usage:\n\
+  pactrun [--format human|json] <command> [options]\n\
+  Default: human. JSON uses pactrun.cli.v1; raw payloads are unchanged.\n\
+  JSON execution refuses Hook terminal streams before launch; use human execution then JSON Run inspection.\n\
   pactrun pack generate-id\n\
   pactrun pack install <directory-or-pack-file> [--metadata-conflict overwrite|keep]\n\
   pactrun revision export <revision-reference> --output <base-path> [--include-portable-metadata]\n\
@@ -246,6 +256,9 @@ struct ExecutionOptions {
 struct CliError {
     message: String,
     usage: bool,
+    kind: presentation::ErrorKind,
+    reference: Option<presentation::ErrorReference>,
+    partial: Option<presentation::PartialResult>,
 }
 
 trait CancellationHandlerInstaller {
@@ -264,10 +277,22 @@ impl CancellationHandlerInstaller for SystemCancellationHandler {
 const CANCELLATION_HANDLER_FAILURE: &str = "foreground Ctrl+C handler could not be installed; no Run was created; retry after checking console signal support";
 
 impl CliError {
+    fn with_run_context(mut self, run: RunId) -> Self {
+        if self.partial.is_none() {
+            self.partial = Some(presentation::PartialResult::Run(presentation::KnownRun {
+                run_id: run.to_string(),
+            }));
+        }
+        self
+    }
+
     fn usage(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
             usage: true,
+            kind: presentation::ErrorKind::Usage,
+            reference: None,
+            partial: None,
         }
     }
 
@@ -275,6 +300,9 @@ impl CliError {
         Self {
             message: message.into(),
             usage: false,
+            kind: presentation::ErrorKind::Operation,
+            reference: None,
+            partial: None,
         }
     }
 }
@@ -308,12 +336,14 @@ pub(crate) fn run_from_env() -> i32 {
     cancellation.diagnostics.enable_live();
     let mut stdout = io::stdout();
     let mut stderr = async_stderr::AsyncStderr::new();
+    if let Some(exit) = preflight_presentation(&args, &mut stdout, &mut stderr) {
+        return exit;
+    }
     if SystemCancellationHandler
         .install(cancellation.clone())
         .is_err()
     {
-        let _ = writeln!(stderr, "error: {CANCELLATION_HANDLER_FAILURE}");
-        return 1;
+        return report_startup_failure(&args, &mut stdout, &mut stderr);
     }
     if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
@@ -348,9 +378,11 @@ fn run_with_handler_installer<I: CancellationHandlerInstaller>(
     stderr: &mut dyn Write,
 ) -> i32 {
     let cancellation = ActionCancellation::default();
+    if let Some(exit) = preflight_presentation(&args, stdout, stderr) {
+        return exit;
+    }
     if installer.install(cancellation.clone()).is_err() {
-        let _ = writeln!(stderr, "error: {CANCELLATION_HANDLER_FAILURE}");
-        return 1;
+        return report_startup_failure(&args, stdout, stderr);
     }
     run_with_cancellation(args, storage_root, stdin, stdout, stderr, &cancellation)
 }
@@ -495,13 +527,20 @@ fn run_with_cancellation(
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
 ) -> i32 {
+    let recognized = presentation::recognize(&args);
+    let (format, args) = match presentation::select(args) {
+        Ok(selected) => selected,
+        Err(error) => return report_cli_failure(recognized, None, false, error, stdout, stderr),
+    };
+    let raw_request = presentation::raw_input_request(&args);
     let command = match parse_command(args) {
         Ok(command) => command,
         Err(error) => {
-            let _ = writeln!(stderr, "error: {error}");
-            return 2;
+            return report_cli_failure(format, None, raw_request, error, stdout, stderr);
         }
     };
+    let command_name = presentation::command_name(&command);
+    let raw = matches!(&command, Command::ExportInput { output, .. } if output == "-");
     let disable_text = match &command {
         Command::Invoke {
             no_retain_hook_text,
@@ -524,15 +563,99 @@ fn run_with_cancellation(
         .diagnostics
         .disabled
         .store(disable_text, std::sync::atomic::Ordering::Release);
-    let result = execute(command, storage_root, stdin, stdout, stderr, cancellation);
+    let result = execute(
+        command,
+        storage_root,
+        stdin,
+        stdout,
+        stderr,
+        cancellation,
+        format,
+    );
     cancellation.diagnostics.finish();
     match result {
         Ok(()) => 0,
-        Err(error) => {
-            let _ = writeln!(stderr, "error: {error}");
-            if error.usage { 2 } else { 1 }
+        Err(error) => report_cli_failure(format, Some(command_name), raw, error, stdout, stderr),
+    }
+}
+
+fn preflight_presentation(
+    args: &[OsString],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> Option<i32> {
+    let parsed = presentation::select(args.to_vec()).and_then(|(_, args)| parse_command(args));
+    parsed.err().map(|error| {
+        report_cli_failure(
+            presentation::recognize(args),
+            None,
+            presentation::raw_input_request(args),
+            error,
+            stdout,
+            stderr,
+        )
+    })
+}
+
+fn report_startup_failure(
+    args: &[OsString],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> i32 {
+    let mut error = CliError::operation(CANCELLATION_HANDLER_FAILURE);
+    error.kind = presentation::ErrorKind::Startup;
+    // Parsing is pure and identifies the raw channel without opening storage.
+    let raw = presentation::select(args.to_vec())
+        .ok()
+        .and_then(|(_, args)| parse_command(args).ok())
+        .is_some_and(
+            |command| matches!(command, Command::ExportInput { output, .. } if output == "-"),
+        );
+    report_cli_failure(
+        presentation::recognize(args),
+        None,
+        raw,
+        error,
+        stdout,
+        stderr,
+    )
+}
+
+fn report_cli_failure(
+    format: presentation::Format,
+    command: Option<&str>,
+    raw: bool,
+    error: CliError,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> i32 {
+    let exit = if error.usage { 2 } else { 1 };
+    if matches!(format, presentation::Format::Json)
+        && !matches!(error.kind, presentation::ErrorKind::Output)
+    {
+        let destination: &mut dyn Write = if raw { &mut *stderr } else { &mut *stdout };
+        if let Err(output_error) =
+            presentation::failure(command, error.partial.as_ref(), &error, destination)
+        {
+            if !raw {
+                let _ = writeln!(
+                    stderr,
+                    "error: response output failed: {output_error}; operation state is not inferred"
+                );
+            }
+            return 1;
+        }
+    } else {
+        let _ = writeln!(stderr, "error: {error}");
+        if let Some(presentation::PartialResult::Publication(publication)) = &error.partial {
+            let _ = writeln!(
+                stderr,
+                "publication: destination_published={} (this attempt only; no rollback or durability guarantee)",
+                publication.destination_published
+            );
         }
     }
+    exit
 }
 
 fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
@@ -989,16 +1112,44 @@ fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
+    use presentation::{Format, render};
     match command {
-        Command::Help => return stdout.write_all(HELP.as_bytes()).map_err(io_operation),
+        Command::Help => {
+            return render(
+                format,
+                "help",
+                &presentation::Help { usage: HELP },
+                stdout,
+                |value, out| out.write_all(value.usage.as_bytes()).map_err(io_operation),
+            );
+        }
         Command::Version => {
-            return writeln!(stdout, "pactrun {}", env!("CARGO_PKG_VERSION")).map_err(io_operation);
+            return render(
+                format,
+                "version",
+                &presentation::Version {
+                    product_version: env!("CARGO_PKG_VERSION"),
+                },
+                stdout,
+                |value, out| {
+                    writeln!(out, "pactrun {}", value.product_version).map_err(io_operation)
+                },
+            );
         }
         Command::GeneratePackageId => {
             let id = PackageId::generate()
                 .map_err(|error| CliError::operation(format!("CSPRNG failed: {error}")))?;
-            return writeln!(stdout, "{id}").map_err(io_operation);
+            return render(
+                format,
+                "pack generate-id",
+                &presentation::Package {
+                    package_id: id.to_string(),
+                },
+                stdout,
+                |value, out| writeln!(out, "{}", value.package_id).map_err(io_operation),
+            );
         }
         _ => {}
     }
@@ -1011,20 +1162,42 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
+    if format == Format::Json
+        && let Command::Invoke {
+            name,
+            action,
+            plan: false,
+            ..
+        } = &command
+    {
+        let app = PactrunApplication::open_read_only(&storage_root).map_err(app_error)?;
+        let (_, definition) = app
+            .load_action_definition(name, action)
+            .map_err(app_error)?;
+        require_json_terminal_free(definition.hook.io.terminal)?;
+    }
     if let Command::Lifecycle(command) = command {
-        return lifecycle::execute(command, &storage_root, stdout);
+        return lifecycle::execute(command, &storage_root, stdout, format);
     }
     if let Command::Artifact(command) = command {
-        return artifacts::execute(command, &storage_root, stdout);
+        return artifacts::execute(command, &storage_root, stdout, format);
     }
     if let Command::Retirement(command) = command {
-        return retirements::execute(command, &storage_root, stdout, stderr, cancellation);
+        return retirements::execute(command, &storage_root, stdout, stderr, cancellation, format);
     }
     if let Command::Migration(command) = command {
-        return migrations::execute(command, &storage_root, stdout, cancellation);
+        return migrations::execute(command, &storage_root, stdout, cancellation, format);
     }
     if let Command::Snapshot(command) = command {
-        return snapshots::execute(command, &storage_root, stdin, stdout, stderr, cancellation);
+        return snapshots::execute(
+            command,
+            &storage_root,
+            stdin,
+            stdout,
+            stderr,
+            cancellation,
+            format,
+        );
     }
     if let Command::CreateAndRestore(command) = command {
         return snapshots::create_and_restore(
@@ -1034,10 +1207,11 @@ fn execute(
             stdout,
             stderr,
             cancellation,
+            format,
         );
     }
     if let Command::ServiceStorage(command) = command {
-        return service_storage::execute(command, &storage_root, stdout);
+        return service_storage::execute(command, &storage_root, stdout, format);
     }
     if matches!(command, Command::UpgradeStorage) {
         if !storage_root.is_absolute() {
@@ -1045,20 +1219,31 @@ fn execute(
         }
         let upgraded = crate::persistence::PactrunPersistence::upgrade_storage(&storage_root)
             .map_err(|error| CliError::operation(error.to_string()))?;
-        return writeln!(
+        return render(
+            format,
+            "storage upgrade",
+            &presentation::StorageUpgrade {
+                schema_version: crate::persistence::SCHEMA_VERSION,
+                upgraded,
+            },
             stdout,
-            "storage schema: V{} ({})",
-            crate::persistence::SCHEMA_VERSION,
-            if upgraded {
-                "upgraded"
-            } else {
-                "already current"
-            }
-        )
-        .map_err(io_operation);
+            |value, out| {
+                writeln!(
+                    out,
+                    "storage schema: V{} ({})",
+                    value.schema_version,
+                    if value.upgraded {
+                        "upgraded"
+                    } else {
+                        "already current"
+                    }
+                )
+                .map_err(io_operation)
+            },
+        );
     }
     if let Command::Catalog(command) = command {
-        return catalog::execute(command, &storage_root, stdout);
+        return catalog::execute(command, &storage_root, stdout, format);
     }
     let readonly = matches!(
         command,
@@ -1088,6 +1273,20 @@ fn execute(
             application
                 .export_revision_pack(&identity, &output, include_metadata, cancellation)
                 .map_err(app_error)?;
+            if format == Format::Json {
+                let result = transport_presentation::PackExport {
+                    revision: (&identity).into(),
+                    output: output.as_path().into(),
+                    portable_metadata_included: include_metadata,
+                };
+                return render(
+                    format,
+                    "revision export",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 stdout,
                 "exported {}\noutput: {}",
@@ -1107,6 +1306,15 @@ fn execute(
             let installed = application
                 .install_pack(&source_root, metadata_conflict, cancellation)
                 .map_err(app_error)?;
+            if format == Format::Json {
+                return render(
+                    format,
+                    "pack install",
+                    &transport_presentation::PackInstall::from(&installed),
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(stdout, "{}", format_revision(&installed.revision)).map_err(io_operation)?;
             for (target, field) in &installed.kept_metadata {
                 writeln!(
@@ -1170,34 +1378,33 @@ fn execute(
             let view = application
                 .create_instance(name, revision, acquisitions)
                 .map_err(app_error)?;
-            write_instance(stdout, &view)?;
+            render(
+                format,
+                "instance create",
+                &presentation::Instance::from(&view),
+                stdout,
+                presentation::Instance::human,
+            )?;
         }
         Command::ListInstances => {
-            for instance in application.list_instances().map_err(app_error)? {
-                writeln!(
-                    stdout,
-                    "{}\t{}\t{}\t{}\t{}\tguard={}",
-                    instance.id,
-                    instance.name.as_str(),
-                    format_revision(&instance.active_revision),
-                    instance.state_version,
-                    if instance.required_inputs_satisfied {
-                        "required_inputs_satisfied"
-                    } else {
-                        "missing_required_inputs"
-                    },
-                    if instance.recovery_guard.is_some() {
-                        "manual_recovery_required"
-                    } else {
-                        "none"
-                    }
-                )
-                .map_err(io_operation)?;
-            }
+            let views = application.list_instances().map_err(app_error)?;
+            render(
+                format,
+                "instance list",
+                &presentation::Instances::from_views(&views),
+                stdout,
+                presentation::Instances::human,
+            )?;
         }
         Command::ShowInstance { name } => {
             let (_, view) = resolve_instance(&application, &name)?;
-            write_instance(stdout, &view)?;
+            render(
+                format,
+                "instance show",
+                &presentation::Instance::from(&view),
+                stdout,
+                presentation::Instance::human,
+            )?;
         }
         Command::ResolveManualRecovery { name, expected } => {
             let (instance, view) = resolve_instance(&application, &name)?;
@@ -1205,11 +1412,25 @@ fn execute(
             let next = application
                 .resolve_manual_recovery(instance, expected)
                 .map_err(app_error)?;
-            writeln!(stdout, "{next}").map_err(io_operation)?;
+            render(
+                format,
+                "instance resolve-manual-recovery",
+                &presentation::StateVersion {
+                    state_version: next.to_string(),
+                },
+                stdout,
+                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
+            )?;
         }
         Command::ListInputs { name } => {
             let (_, view) = resolve_instance(&application, &name)?;
-            write_inputs(stdout, &view)?;
+            render(
+                format,
+                "input list",
+                &presentation::Inputs::from_view(&view),
+                stdout,
+                presentation::Inputs::human,
+            )?;
         }
         Command::SetInput {
             name,
@@ -1228,7 +1449,15 @@ fn execute(
             let version = application
                 .set_input(instance, input, expected, source)
                 .map_err(app_error)?;
-            writeln!(stdout, "{version}").map_err(io_operation)?;
+            render(
+                format,
+                "input set",
+                &presentation::StateVersion {
+                    state_version: version.to_string(),
+                },
+                stdout,
+                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
+            )?;
         }
         Command::ExportInput {
             name,
@@ -1249,13 +1478,28 @@ fn execute(
                 stdout.flush().map_err(io_operation)?;
             } else {
                 publish_output_file(&observation.bytes, Path::new(&output))?;
-                writeln!(
-                    stderr,
-                    "exported {} at InstanceStateVersion {}",
-                    input.as_str(),
-                    observation.state_version
-                )
-                .map_err(io_operation)?;
+                let destination: &mut dyn Write = if format == Format::Json {
+                    &mut *stdout
+                } else {
+                    &mut *stderr
+                };
+                render(
+                    format,
+                    "input export",
+                    &presentation::InputExport {
+                        input_id: input.as_str().into(),
+                        state_version: observation.state_version.to_string(),
+                    },
+                    destination,
+                    |value, out| {
+                        writeln!(
+                            out,
+                            "exported {} at InstanceStateVersion {}",
+                            value.input_id, value.state_version
+                        )
+                        .map_err(io_operation)
+                    },
+                )?;
             }
         }
         Command::DeleteInput {
@@ -1268,12 +1512,38 @@ fn execute(
             let version = application
                 .delete_input(instance, &input, expected)
                 .map_err(app_error)?;
-            writeln!(stdout, "{version}").map_err(io_operation)?;
+            render(
+                format,
+                "input delete",
+                &presentation::StateVersion {
+                    state_version: version.to_string(),
+                },
+                stdout,
+                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
+            )?;
         }
         Command::ListActions { name } => {
             let (_, actions) = application
                 .list_action_definitions(&name)
                 .map_err(app_error)?;
+            if format == Format::Json {
+                let result = execution_presentation::Actions {
+                    items: actions
+                        .iter()
+                        .map(execution_presentation::Action::from)
+                        .collect(),
+                };
+                return render(
+                    format,
+                    "action list",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
+            if actions.is_empty() {
+                writeln!(stdout, "No Actions declared.").map_err(io_operation)?;
+            }
             for action in &actions {
                 write_action_summary(stdout, action)?;
             }
@@ -1282,6 +1552,15 @@ fn execute(
             let (_, action) = application
                 .load_action_definition(&name, &action)
                 .map_err(app_error)?;
+            if format == Format::Json {
+                return render(
+                    format,
+                    "action show",
+                    &execution_presentation::Action::from(&action),
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             write_action_detail(stdout, &action)?;
         }
         Command::Invoke {
@@ -1338,6 +1617,16 @@ fn execute(
                 ));
             }
             if plan {
+                if format == Format::Json {
+                    let result = execution_presentation::Plan::new(
+                        &compiled,
+                        recovery_override,
+                        startup_timeout_ms,
+                        action_timeout_ms,
+                        termination_grace_ms,
+                    );
+                    return render(format, "invoke", &result, stdout, |_, _| unreachable!());
+                }
                 write_plan(
                     stdout,
                     &compiled,
@@ -1374,13 +1663,16 @@ fn execute(
                     admission_options,
                     candidate,
                     cancellation,
-                )? {
+                )
+                .map_err(|error| error.with_run_context(candidate))?
+                {
                     AdmissionRecovery::Admitted(admitted) => *admitted,
                     AdmissionRecovery::Terminal(run) => {
                         write_terminal_run_best_effort(&application, run, stderr);
                         return Err(CliError::operation(format!(
                             "Run {run} became terminal while Admission was being resolved"
-                        )));
+                        ))
+                        .with_run_context(run));
                     }
                 },
                 Err(error) => return Err(app_error(error)),
@@ -1411,7 +1703,28 @@ fn execute(
                     }
                 }
             };
-            let _ = write_run(stderr, &inspection);
+            if format == Format::Human {
+                let _ = write_run(stderr, &inspection);
+            }
+            if format == Format::Json {
+                let managed = application
+                    .managed_run_inspection(run)
+                    .map_err(|error| app_error(error).with_run_context(run))?
+                    .ok_or_else(|| {
+                        CliError::operation("completed Run inspection is unavailable")
+                            .with_run_context(run)
+                    })?;
+                let result = execution_presentation::Inspection::from(&managed);
+                if matches!(&managed.run.state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded)
+                {
+                    return render(format, "invoke", &result, stdout, |_, _| unreachable!());
+                }
+                let mut error = CliError::operation(
+                    "Run did not succeed; inspect the typed Run outcome before deciding what to do next",
+                );
+                error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
+                return Err(error);
+            }
             match inspection.run.state {
                 crate::domain::RunState::Finished(outcome)
                     if outcome.outcome == RunOutcome::Succeeded => {}
@@ -1432,16 +1745,34 @@ fn execute(
                 .managed_run_inspection(run)
                 .map_err(app_error)?
                 .ok_or_else(|| CliError::operation("Run is not persisted"))?;
+            if format == Format::Json {
+                return render(
+                    format,
+                    "run show",
+                    &execution_presentation::Inspection::from(&inspection),
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             snapshots::write_run(stdout, &inspection)?;
             write_diagnostics(stdout, run, inspection.diagnostics.as_ref())?;
         }
         Command::ReconcileRuns => {
-            for run in application
+            let runs = application
                 .reconcile_lost_action_owners()
-                .map_err(app_error)?
-            {
-                writeln!(stdout, "{run}").map_err(io_operation)?;
-            }
+                .map_err(app_error)?;
+            let result = execution_presentation::Reconciled {
+                run_ids: runs.iter().map(ToString::to_string).collect(),
+            };
+            render(format, "run reconcile", &result, stdout, |value, out| {
+                if value.run_ids.is_empty() {
+                    return writeln!(out, "No lost Run owners to reconcile.").map_err(io_operation);
+                }
+                for id in &value.run_ids {
+                    writeln!(out, "{id}").map_err(io_operation)?;
+                }
+                Ok(())
+            })?;
         }
         Command::Help
         | Command::Catalog(_)
@@ -1464,6 +1795,15 @@ fn execute(
 enum AdmissionRecovery {
     Admitted(Box<AdmittedExecution>),
     Terminal(RunId),
+}
+
+fn require_json_terminal_free(terminal: crate::domain::TerminalContractV1) -> Result<(), CliError> {
+    if terminal != crate::domain::TerminalContractV1::None {
+        return Err(CliError::usage(
+            "JSON execution does not support Hook terminal streams; execute in human mode, then inspect the Run with --format json",
+        ));
+    }
+    Ok(())
 }
 
 /// Continues an exact candidate Run after an uncertain acceptance or Admission
@@ -2469,7 +2809,64 @@ fn lex_error(error: lexopt::Error) -> CliError {
 }
 
 fn app_error(error: ApplicationError) -> CliError {
-    CliError::operation(error.to_string())
+    let mut result = CliError::operation(error.to_string());
+    preserve_error_facts(&error, &mut result);
+    result
+}
+
+fn preserve_error_facts(error: &ApplicationError, result: &mut CliError) {
+    if let ApplicationError::Publication {
+        destination,
+        destination_published,
+        ..
+    } = error
+    {
+        result.partial = Some(presentation::PartialResult::Publication(Box::new(
+            presentation::Publication {
+                destination: destination.as_path().into(),
+                destination_published: *destination_published,
+            },
+        )));
+    }
+    let reference = match error {
+        ApplicationError::Revision(e) => e.stable_ref(),
+        ApplicationError::RevisionContent(crate::revision_content::RevisionContentError::V1(e)) => {
+            e.stable_ref()
+        }
+        _ => {
+            let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
+            let mut reference = None;
+            while let Some(current) = source {
+                if let Some(core) = current.downcast_ref::<crate::domain::RevisionCoreV1Error>() {
+                    reference = core.stable_ref();
+                    break;
+                }
+                source = current.source();
+            }
+            reference
+        }
+    };
+    result.reference = reference.map(|r| presentation::ErrorReference {
+        owner: r.owner().into(),
+        code: r.code().into(),
+    });
+    if let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) = &error {
+        let reference = refusal.error_ref();
+        result.reference = Some(presentation::ErrorReference {
+            owner: reference.owner().into(),
+            code: reference.code().into(),
+        });
+        result.partial = Some(presentation::PartialResult::Run(presentation::KnownRun {
+            run_id: run.to_string(),
+        }));
+    } else if let ApplicationError::Execution(ExecutorError::Persistence {
+        run: Some(run), ..
+    }) = &error
+    {
+        result.partial = Some(presentation::PartialResult::Run(presentation::KnownRun {
+            run_id: run.to_string(),
+        }));
+    }
 }
 
 fn io_operation(error: io::Error) -> CliError {
@@ -2480,7 +2877,22 @@ fn io_operation(error: io::Error) -> CliError {
 use crate::output_publication::OutputPublicationPoint;
 
 fn publish_output_file(source: &StagedFile, destination: &Path) -> Result<(), CliError> {
-    crate::output_publication::publish(source, destination).map_err(io_operation)
+    crate::output_publication::publish_reported(source, destination)
+        .map_err(|failure| publication_error(failure, destination))
+}
+
+fn publication_error(
+    failure: crate::output_publication::PublicationFailure,
+    destination: &Path,
+) -> CliError {
+    let mut error = CliError::operation(failure.source.to_string());
+    error.partial = Some(presentation::PartialResult::Publication(Box::new(
+        presentation::Publication {
+            destination: destination.into(),
+            destination_published: failure.destination_published,
+        },
+    )));
+    error
 }
 
 #[cfg(test)]
@@ -2598,6 +3010,7 @@ mod tests {
     use tempfile::TempDir;
 
     include!("cli/create_restore_tests.rs");
+    include!("cli/json_tests.rs");
 
     struct FailingCancellationHandler;
 

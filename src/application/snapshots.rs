@@ -154,10 +154,12 @@ impl PactrunApplication {
                 source,
             })?;
         let stage = self.persistence.export_snapshot_stage(id, true)?;
-        crate::output_publication::publish(&stage, destination).map_err(|source| {
-            ApplicationError::Io {
+        crate::output_publication::publish_reported(&stage, destination).map_err(|failure| {
+            ApplicationError::Publication {
                 operation: "publish Snapshot bundle without replacement",
-                source,
+                destination: destination.to_path_buf(),
+                destination_published: failure.destination_published,
+                source: failure.source,
             }
         })?;
         Ok(())

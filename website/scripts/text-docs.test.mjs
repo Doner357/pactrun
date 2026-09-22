@@ -42,6 +42,8 @@ test('text export is deterministic, preserves relative links, and removes stale 
     await writeFile(path.join(docsDir, 'agents/index.md'), '# Agent\n[Spec](../index.md)\n');
     await writeFile(path.join(docsDir, 'archive/old.md'), '# Historical\n');
     await writeFile(path.join(docsDir, 'proposals/new.md'), '# Proposed\n');
+    const schema = '  {"type":"object","description":"[not Markdown](missing.md)"}\n';
+    await writeFile(path.join(docsDir, 'cli.schema.json'), schema);
     const first = await exportText({docsDir, outDir});
     const second = await exportText({docsDir, outDir});
     assert.deepEqual(first, second);
@@ -50,7 +52,8 @@ test('text export is deterministic, preserves relative links, and removes stale 
     await writeFile(path.join(outDir, 'agent-docs/index.md'), '# Corrupted export\n');
     await assert.rejects(plugin.postBuild({outDir, routesPaths: ['/']}), /drift/);
     await exportText({docsDir, outDir});
-    assert.equal(first.count, 2);
+    assert.equal(first.count, 3);
+    assert.equal(await readFile(path.join(outDir, 'agent-docs/cli.schema.json'), 'utf8'), schema);
     assert.equal(await readFile(path.join(outDir, 'keep.html'), 'utf8'), 'human');
     await assert.rejects(readFile(path.join(outDir, 'agent-docs/stale.md')));
     await assert.rejects(readFile(path.join(outDir, 'agent-docs/archive/old.md')));

@@ -38,6 +38,7 @@ pub(super) fn create_and_restore(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     let CreateRestoreCommand {
         name,
@@ -53,6 +54,9 @@ pub(super) fn create_and_restore(
         let (declarations, hook) = app
             .create_restore_definition(&revision, snapshot)
             .map_err(safe_error)?;
+        if format == presentation::Format::Json {
+            require_json_terminal_free(hook.io.terminal)?;
+        }
         let parameters =
             read_snapshot_parameters(&declarations, &hook, &options, stdin, cancellation)?;
         crate::domain::bind_operation_parameters(&declarations, parameters.clone()).map_err(
@@ -72,7 +76,9 @@ pub(super) fn create_and_restore(
     let mut run = None;
     let result = (|| {
         // A reporting failure must also preserve and identify the created object.
-        write_instance(stdout, &created)?;
+        if format == presentation::Format::Human {
+            write_instance(stdout, &created)?;
+        }
         execute_intent(
             &app,
             SnapshotIntent {
@@ -85,11 +91,39 @@ pub(super) fn create_and_restore(
                 stdin,
                 stdout,
                 stderr,
+                format,
+                publish_result: false,
             },
             cancellation,
             &mut run,
         )
     })();
+    if format == presentation::Format::Json {
+        let restore = run
+            .and_then(|id| app.managed_run_inspection(id).ok().flatten())
+            .as_ref()
+            .map(execution_presentation::Inspection::from);
+        let projection = transport_presentation::CreatedRestore {
+            created_instance: (&created).into(),
+            restore_run_id: run.map(|id| id.to_string()),
+            restore,
+        };
+        return match result {
+            Ok(()) => presentation::render(
+                format,
+                "instance create",
+                &projection,
+                stdout,
+                |_, _| unreachable!(),
+            ),
+            Err(mut error) => {
+                error.partial = Some(presentation::PartialResult::CreatedRestore(Box::new(
+                    projection,
+                )));
+                Err(error)
+            }
+        };
+    }
     if let Err(error) = result {
         let _ = writeln!(
             stderr,
@@ -210,6 +244,7 @@ pub(super) fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     if matches!(
         command,
@@ -246,7 +281,9 @@ pub(super) fn execute(
     }
     .map_err(safe_error)?;
     match command {
-        SnapshotCommand::Delete(id) => lifecycle::write_deletion(
+        SnapshotCommand::Delete(id) => lifecycle::render_deletion(
+            format,
+            "snapshot delete",
             stdout,
             app.delete_object(&crate::domain::ObjectDeletion::Snapshot(id))
                 .map_err(app_error)?,
@@ -264,24 +301,95 @@ pub(super) fn execute(
                 stdin,
                 stdout,
                 stderr,
+                format,
+                publish_result: true,
             },
             cancellation,
         ),
         SnapshotCommand::List(name) => {
-            for snapshot in app.list_snapshots(name.as_ref()).map_err(safe_error)? {
+            let values = app.list_snapshots(name.as_ref()).map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = transport_presentation::Snapshots {
+                    items: values.iter().map(Into::into).collect(),
+                };
+                return presentation::render(
+                    format,
+                    "snapshot list",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
+            if values.is_empty() {
+                writeln!(stdout, "No Snapshots.").map_err(io_operation)?;
+            }
+            for snapshot in values {
                 write_inspection(stdout, &snapshot)?;
             }
             Ok(())
         }
         SnapshotCommand::Show(id) => {
-            write_inspection(stdout, &app.inspect_snapshot(id).map_err(safe_error)?)
+            let value = app.inspect_snapshot(id).map_err(safe_error)?;
+            presentation::render(
+                format,
+                "snapshot show",
+                &transport_presentation::Snapshot::from(&value),
+                stdout,
+                |_, out| write_inspection(out, &value),
+            )
         }
         SnapshotCommand::Verify(id) => {
             let verified = app.verify_snapshot(id).map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = transport_presentation::SnapshotVerified {
+                    snapshot_id: id.to_string(),
+                    integrity_format: verified.inspection.version.number(),
+                    intrinsic_verification: "valid",
+                    content_verification: "valid",
+                    relational_verification: if verified.relational
+                        == SnapshotRelationalVerification::Valid
+                    {
+                        "valid"
+                    } else {
+                        "not_evaluated"
+                    },
+                };
+                return presentation::render(
+                    format,
+                    "snapshot verify",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(stdout,"snapshot: {id}\nintegrity_format: {}\nintrinsic_verification: valid\ncontent_verification: valid\nrelational_verification: {}",verified.inspection.version.number(),if verified.relational==SnapshotRelationalVerification::Valid {"valid"}else{"not_evaluated"}).map_err(io_operation)
         }
         SnapshotCommand::Import(path) => {
             let receipt = app.import_snapshot_file(&path).map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = transport_presentation::SnapshotImported {
+                    snapshot_id: receipt.id.to_string(),
+                    outcome: if receipt.inserted {
+                        "published"
+                    } else {
+                        "already_present"
+                    },
+                    relational_verification: if receipt.relational
+                        == SnapshotRelationalVerification::Valid
+                    {
+                        "valid"
+                    } else {
+                        "not_evaluated"
+                    },
+                };
+                return presentation::render(
+                    format,
+                    "snapshot import",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 stdout,
                 "snapshot: {}\nimport: {}\nrelational_verification: {}",
@@ -306,6 +414,20 @@ pub(super) fn execute(
         } => {
             app.export_snapshot_file(id, &path, authorized, stderr)
                 .map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = transport_presentation::SnapshotExported {
+                    snapshot_id: id.to_string(),
+                    outcome: "published_without_replacement",
+                    output: path.as_path().into(),
+                };
+                return presentation::render(
+                    format,
+                    "snapshot export",
+                    &result,
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 stdout,
                 "snapshot: {id}\nexport: published_without_replacement\noutput: {}",
@@ -332,6 +454,8 @@ struct ExecutionIo<'a> {
     stdin: &'a mut dyn Read,
     stdout: &'a mut dyn Write,
     stderr: &'a mut dyn Write,
+    format: presentation::Format,
+    publish_result: bool,
 }
 
 fn execute_managed(
@@ -346,6 +470,9 @@ fn execute_managed(
     let (instance, declarations, hook) = app
         .snapshot_definition(name, operation)
         .map_err(safe_error)?;
+    if io.format == presentation::Format::Json && !options.plan {
+        require_json_terminal_free(hook.io.terminal)?;
+    }
     let parameters =
         read_snapshot_parameters(&declarations, &hook, &options, io.stdin, cancellation)?;
     execute_intent(
@@ -405,7 +532,13 @@ fn execute_intent(
     cancellation: &ActionCancellation,
     accepted_run: &mut Option<RunId>,
 ) -> Result<(), CliError> {
-    let ExecutionIo { stdout, stderr, .. } = io;
+    let ExecutionIo {
+        stdout,
+        stderr,
+        format,
+        publish_result,
+        ..
+    } = io;
     let policy = policy(&options)?;
     let operation = intent.operation;
     let parameter_stdin = options
@@ -431,6 +564,18 @@ fn execute_intent(
         ));
     }
     if options.plan {
+        if format == presentation::Format::Json {
+            return presentation::render(
+                format,
+                match operation {
+                    SnapshotOperation::Capture => "snapshot capture",
+                    SnapshotOperation::Restore(_) => "snapshot restore",
+                },
+                &transport_presentation::SnapshotPlan::new(&plan, &options),
+                stdout,
+                |_, _| unreachable!(),
+            );
+        }
         return write_plan(stdout, &plan, &options);
     }
     if matches!(operation, SnapshotOperation::Restore(_)) {
@@ -464,12 +609,37 @@ fn execute_intent(
     }
     let inspection = app
         .managed_run_inspection(run)
-        .map_err(safe_error)?
+        .map_err(|error| safe_error(error).with_run_context(run))?
         .ok_or_else(|| {
             CliError::operation(
                 "Snapshot acceptance was proven absent; no replacement Run was created",
             )
+            .with_run_context(run)
         })?;
+    if format == presentation::Format::Json {
+        let result = execution_presentation::Inspection::from(&inspection);
+        if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+        {
+            if !publish_result {
+                return Ok(());
+            }
+            return presentation::render(
+                format,
+                match operation {
+                    SnapshotOperation::Capture => "snapshot capture",
+                    SnapshotOperation::Restore(_) => "snapshot restore",
+                },
+                &result,
+                stdout,
+                |_, _| unreachable!(),
+            );
+        }
+        let mut error = CliError::operation(
+            "Snapshot Run did not succeed; inspect the typed outcome before retrying",
+        );
+        error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
+        return Err(error);
+    }
     let _ = write_run(stderr, &inspection);
     match &inspection.run.state {
         RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
@@ -505,7 +675,7 @@ fn retry_or_fail(
         thread::sleep(Duration::from_secs(1));
         Ok(())
     } else {
-        Err(safe_error(error))
+        Err(safe_error(error).with_run_context(run))
     }
 }
 fn operation_name(operation: &ManagedRunIdentity) -> &'static str {
@@ -639,6 +809,8 @@ pub(super) fn write_run(
 pub(super) fn safe_error(error: ApplicationError) -> CliError {
     use crate::snapshot_bundle::BundleError as B;
     use crate::snapshot_integrity::SnapshotCodecError as C;
+    let mut result = CliError::operation("");
+    preserve_error_facts(&error, &mut result);
     let message = match error {
         ApplicationError::SnapshotCompilation(SnapshotPlanError::MissingRequired(_)) => {
             "Capture requires all required active bindings; use input list and input set before retrying"
@@ -699,10 +871,13 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
         ApplicationError::Persistence(PersistenceError::UnauthorizedSnapshotExport) => {
             "Snapshot export requires --authorize-sensitive-export for this operation"
         }
-        ApplicationError::Io { source, .. } if source.kind() == io::ErrorKind::AlreadyExists => {
+        ApplicationError::Io { source, .. } | ApplicationError::Publication { source, .. }
+            if source.kind() == io::ErrorKind::AlreadyExists =>
+        {
             "output destination already exists; no-clobber publication refused replacement"
         }
         ApplicationError::Io { .. }
+        | ApplicationError::Publication { .. }
         | ApplicationError::Staging(_)
         | ApplicationError::Persistence(
             PersistenceError::Io { .. }
@@ -716,5 +891,6 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
             "Snapshot operation could not complete safely; inspect the exact Instance, Revision, storage and Run state"
         }
     };
-    CliError::operation(message)
+    result.message = message.into();
+    result
 }

@@ -406,6 +406,7 @@ pub(super) fn execute(
     command: CatalogCommand,
     root: &Path,
     out: &mut dyn Write,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     let app = if matches!(command, CatalogCommand::Mutation { .. }) {
         // Validate an existing store before opening a writer; metadata is never an installer.
@@ -420,6 +421,23 @@ pub(super) fn execute(
             let page = app
                 .catalog_revisions(options.limit, options.after.as_ref())
                 .map_err(app_error)?;
+            if format == presentation::Format::Json {
+                let result = catalog_presentation::Page {
+                    items: page
+                        .items
+                        .iter()
+                        .map(|r| catalog_presentation::RevisionEntry::new(r, false))
+                        .collect(),
+                    next: page.next.as_ref().map(exact_text),
+                };
+                return presentation::render(
+                    format,
+                    "revision list",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(out, "PACKAGE ID  REVISION DIGEST  ALIASES  LABELS").map_err(io_operation)?;
             for row in &page.items {
                 let aliases = row
@@ -468,6 +486,19 @@ pub(super) fn execute(
             let row = app
                 .catalog_resolve_revision(&selector(reference))
                 .map_err(app_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    if metadata_only {
+                        "revision metadata show"
+                    } else {
+                        "revision show"
+                    },
+                    &catalog_presentation::RevisionEntry::new(&row, !metadata_only),
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 out,
                 "Revision: {}\nCore format: V{}",
@@ -484,6 +515,27 @@ pub(super) fn execute(
             let page = app
                 .catalog_history(options.limit, options.after, deletions)
                 .map_err(app_error)?;
+            if format == presentation::Format::Json {
+                let result = catalog_presentation::Page {
+                    items: page
+                        .items
+                        .iter()
+                        .map(catalog_presentation::History::from)
+                        .collect(),
+                    next: page.next.map(|id| id.to_string()),
+                };
+                return presentation::render(
+                    format,
+                    if deletions {
+                        "instance deletion list"
+                    } else {
+                        "instance history list"
+                    },
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 out,
                 "INSTANCE ID  CURRENT NAME  RECORDED NAME  MANAGEMENT  DELETION"
@@ -506,6 +558,15 @@ pub(super) fn execute(
         }
         CatalogCommand::Instance(id) => {
             let row = app.catalog_instance(id).map_err(app_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    "instance history show",
+                    &catalog_presentation::History::from(&row),
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 out,
                 "INSTANCE ID  CURRENT NAME  RECORDED NAME  MANAGEMENT  DELETION"
@@ -523,6 +584,23 @@ pub(super) fn execute(
             let page = app
                 .catalog_runs(&selector, options.limit, options.after)
                 .map_err(app_error)?;
+            if format == presentation::Format::Json {
+                let result = catalog_presentation::Page {
+                    items: page
+                        .items
+                        .iter()
+                        .map(execution_presentation::Run::from)
+                        .collect(),
+                    next: page.next.map(|id| id.to_string()),
+                };
+                return presentation::render(
+                    format,
+                    "run list",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(out, "RUN ID  INSTANCE ID  OPERATION  PHASE  OUTCOME")
                 .map_err(io_operation)?;
             for row in &page.items {
@@ -566,6 +644,19 @@ pub(super) fn execute(
         }
         CatalogCommand::Alias(alias) => {
             let target = app.catalog_alias(&alias).map_err(app_error)?;
+            if format == presentation::Format::Json {
+                let result = catalog_presentation::Alias {
+                    alias: alias.as_str().into(),
+                    target: target.as_ref().map(Into::into),
+                };
+                return presentation::render(
+                    format,
+                    "revision alias show",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 out,
                 "Alias: {}\nTarget: {}",
@@ -581,6 +672,18 @@ pub(super) fn execute(
             let row = app
                 .catalog_resolve_revision(&selector(reference))
                 .map_err(app_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    match kind {
+                        LocalKind::Note => "revision note show",
+                        LocalKind::Trust => "revision trust show",
+                    },
+                    &catalog_presentation::Local::new(&row),
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(out, "Revision: {}", exact_text(&row.identity)).map_err(io_operation)?;
             local_metadata(out, &row.metadata, kind)
         }
@@ -594,6 +697,21 @@ pub(super) fn execute(
                     CliError::operation(format!("Metadata conflict: current state differs from expected. No changes applied.\nInspect: {inspect}"))
                 } else { app_error(e) }
             })?;
+            if format == presentation::Format::Json {
+                let command =
+                    presentation::command_name(&Command::Catalog(CatalogCommand::Mutation {
+                        revision: revision.clone(),
+                        operation: operation.clone(),
+                        inspect: inspect.clone(),
+                    }));
+                return presentation::render(
+                    format,
+                    command,
+                    &catalog_presentation::Mutation::new(&revision, &operation),
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(
                 out,
                 "Applied (including idempotent retries).\nRevision: {}",

@@ -19,6 +19,18 @@ enum ServiceOperation {
     Locate(ServiceResourceIdentity, ServiceAccessIntent),
 }
 
+impl ServiceCommand {
+    pub(super) fn presentation_name(&self) -> &'static str {
+        match self.operation {
+            ServiceOperation::Storages => "service-storage list",
+            ServiceOperation::Resources => "resource list",
+            ServiceOperation::Show(_) => "resource show",
+            ServiceOperation::Observe(_) => "resource observe",
+            ServiceOperation::Locate(..) => "resource locate",
+        }
+    }
+}
+
 pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<Command, CliError> {
     let operation = required_value_string(parser, "service command")?;
     if storage && operation == "detached" {
@@ -84,6 +96,7 @@ pub(super) fn execute(
     command: ServiceCommand,
     root: &Path,
     out: &mut dyn Write,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     let app = PactrunApplication::open_read_only(root).map_err(safe_error)?;
     let ServiceCommand {
@@ -94,6 +107,41 @@ pub(super) fn execute(
     match operation {
         ServiceOperation::Storages => {
             let state = app.load_instance_services(&name).map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = Storages {
+                    items: state
+                        .storages
+                        .iter()
+                        .filter(|s| s.role == role)
+                        .map(|s| Storage {
+                            storage_id: s.declaration.id.as_str().into(),
+                            role: role_name(role),
+                            revision: (&s.declaration_revision).into(),
+                        })
+                        .collect(),
+                    preserved: if role == ServiceRole::Retained {
+                        state
+                            .preserved
+                            .iter()
+                            .map(|p| Preserved {
+                                allocation_id: p.allocation.to_string(),
+                                origin_storage_id: p.origin_storage.as_str().into(),
+                                origin_revision: (&p.origin_revision).into(),
+                                origin_run_id: p.origin_run.map(|id| id.to_string()),
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
+                };
+                return presentation::render(
+                    format,
+                    "service-storage list",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             for storage in state.storages.iter().filter(|s| s.role == role) {
                 writeln!(
                     out,
@@ -114,6 +162,23 @@ pub(super) fn execute(
         }
         ServiceOperation::Resources => {
             let state = app.load_instance_services(&name).map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = Resources {
+                    items: state
+                        .resources
+                        .iter()
+                        .filter(|r| r.role == role)
+                        .map(|r| Resource::new(r, false))
+                        .collect(),
+                };
+                return presentation::render(
+                    format,
+                    "resource list",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             for resource in state.resources.iter().filter(|r| r.role == role) {
                 summary(out, resource)?;
             }
@@ -122,6 +187,15 @@ pub(super) fn execute(
             let resource = app
                 .load_service_resource(&name, &id, role)
                 .map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    "resource show",
+                    &Resource::new(&resource, true),
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             summary(out, &resource)?;
             writeln!(out, "locator: {}\ndeclaration_revision: {}\nstored_mutation: {}\neffective_mutation: {}",
                 resource.declaration.locator.as_str(), format_revision(&resource.declaration_revision),
@@ -129,10 +203,26 @@ pub(super) fn execute(
                 if role == ServiceRole::Retained { "unavailable_until_reattachment".into() } else { mutation(&resource.declaration.user_mutation) }).map_err(io_operation)?;
         }
         ServiceOperation::Observe(id) => {
-            match app
+            let observed = app
                 .observe_service_resource(&name, &id, role)
-                .map_err(safe_error)?
-            {
+                .map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                let result = Observation::from(&observed);
+                if let ServiceObservation::Unknown(cause) = observed {
+                    let mut error =
+                        CliError::operation(ServiceAccessError::Unknown(cause).to_string());
+                    error.partial = Some(presentation::PartialResult::Observation(result));
+                    return Err(error);
+                }
+                return presentation::render(
+                    format,
+                    "resource observe",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
+            match observed {
                 ServiceObservation::Present { kind, kind_matches } => writeln!(
                     out,
                     "Present kind={} kind_matches={kind_matches}",
@@ -152,10 +242,146 @@ pub(super) fn execute(
             let path = app
                 .locate_service_resource(&name, &id, role, intent)
                 .map_err(safe_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    "resource locate",
+                    &Location {
+                        path: path.as_path().into(),
+                    },
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             writeln!(out, "{}", format_path(&path)).map_err(io_operation)?;
         }
     }
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct Location {
+    path: presentation::NativePath,
+}
+
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct Storage {
+    storage_id: String,
+    role: &'static str,
+    revision: presentation::Revision,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct Preserved {
+    allocation_id: String,
+    origin_storage_id: String,
+    origin_revision: presentation::Revision,
+    origin_run_id: Option<String>,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct Storages {
+    items: Vec<Storage>,
+    preserved: Vec<Preserved>,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct Resources {
+    items: Vec<Resource>,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct Resource {
+    resource_id: String,
+    storage_id: String,
+    kind: &'static str,
+    role: &'static str,
+    read_exposure: &'static str,
+    effective_mutation: Mutation,
+    details: Option<ResourceDetails>,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct ResourceDetails {
+    locator: String,
+    declaration_revision: presentation::Revision,
+    stored_mutation: Mutation,
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum Mutation {
+    Unavailable,
+    UnavailableUntilReattachment,
+    Direct,
+    Operation { action_id: String },
+}
+impl From<&ServiceUserMutation> for Mutation {
+    fn from(m: &ServiceUserMutation) -> Self {
+        match m {
+            ServiceUserMutation::Unavailable => Self::Unavailable,
+            ServiceUserMutation::Direct => Self::Direct,
+            ServiceUserMutation::Operation { action_id } => Self::Operation {
+                action_id: action_id.as_str().into(),
+            },
+        }
+    }
+}
+impl Resource {
+    fn new(r: &ServiceResourceAssociation, details: bool) -> Self {
+        Self {
+            resource_id: r.declaration.id.as_str().into(),
+            storage_id: r.declaration.storage_id.as_str().into(),
+            kind: match r.declaration.kind {
+                ServiceResourceKind::File => "file",
+                ServiceResourceKind::Directory => "directory",
+            },
+            role: role_name(r.role),
+            read_exposure: match r.declaration.read_exposure {
+                ServiceReadExposure::Readable => "readable",
+                ServiceReadExposure::Hidden => "hidden",
+            },
+            effective_mutation: if r.role == ServiceRole::Retained {
+                Mutation::UnavailableUntilReattachment
+            } else {
+                (&r.declaration.user_mutation).into()
+            },
+            details: details.then(|| ResourceDetails {
+                locator: r.declaration.locator.as_str().into(),
+                declaration_revision: (&r.declaration_revision).into(),
+                stored_mutation: (&r.declaration.user_mutation).into(),
+            }),
+        }
+    }
+}
+#[derive(serde::Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub(super) enum Observation {
+    Present {
+        kind: &'static str,
+        kind_matches: bool,
+    },
+    Absent,
+    Unknown {
+        cause: &'static str,
+    },
+}
+impl From<&ServiceObservation> for Observation {
+    fn from(value: &ServiceObservation) -> Self {
+        match value {
+            ServiceObservation::Present { kind, kind_matches } => Self::Present {
+                kind: observed_kind(*kind),
+                kind_matches: *kind_matches,
+            },
+            ServiceObservation::Absent => Self::Absent,
+            ServiceObservation::Unknown(cause) => Self::Unknown {
+                cause: cause_name(*cause),
+            },
+        }
+    }
 }
 fn role_name(role: ServiceRole) -> &'static str {
     match role {
@@ -209,6 +435,8 @@ fn summary(out: &mut dyn Write, resource: &ServiceResourceAssociation) -> Result
     .map_err(io_operation)
 }
 fn safe_error(error: ApplicationError) -> CliError {
+    let mut result = CliError::operation("");
+    preserve_error_facts(&error, &mut result);
     let message = match error {
         ApplicationError::ServiceStorage(error) => error.to_string(),
         ApplicationError::ActionResolution(
@@ -219,5 +447,6 @@ fn safe_error(error: ApplicationError) -> CliError {
         ) => "service_storage.corrupt_storage_state".into(),
         _ => "ServiceStorage query failed; verify the selected store and its schema".into(),
     };
-    CliError::operation(message)
+    result.message = message;
+    result
 }

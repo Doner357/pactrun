@@ -59,6 +59,7 @@ pub(super) fn execute(
     command: ArtifactCommand,
     root: &Path,
     stdout: &mut dyn Write,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     if matches!(
         command,
@@ -98,9 +99,21 @@ pub(super) fn execute(
                     } else {
                         "Artifact export destination could not be published"
                     };
-                    CliError::operation(message)
+                    let mut result = publication_error(error, &destination);
+                    result.message = message.into();
+                    result
                 })?;
-            writeln!(stdout, "Artifact exported").map_err(io_operation)
+            presentation::render(
+                format,
+                "run artifact export",
+                &presentation::ArtifactResult {
+                    run_id: run.to_string(),
+                    output_id: output.as_str().into(),
+                    outcome: "exported",
+                },
+                stdout,
+                |_, out| writeln!(out, "Artifact exported").map_err(io_operation),
+            )
         }
         ArtifactCommand::Delete { run, output } => {
             let deleted =
@@ -114,12 +127,28 @@ pub(super) fn execute(
                             "Artifact deletion failed; check that storage is writable",
                         ),
                     })?;
-            writeln!(
+            presentation::render(
+                format,
+                "run artifact delete",
+                &presentation::ArtifactResult {
+                    run_id: run.to_string(),
+                    output_id: output.as_str().into(),
+                    outcome: if deleted { "deleted" } else { "already_absent" },
+                },
                 stdout,
-                "Artifact {}",
-                if deleted { "deleted" } else { "already absent" }
+                |value, out| {
+                    writeln!(
+                        out,
+                        "Artifact {}",
+                        if value.outcome == "deleted" {
+                            "deleted"
+                        } else {
+                            "already absent"
+                        }
+                    )
+                    .map_err(io_operation)
+                },
             )
-            .map_err(io_operation)
         }
     }
 }

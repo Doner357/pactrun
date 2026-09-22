@@ -126,6 +126,7 @@ pub(super) fn execute(
     root: &Path,
     output: &mut dyn Write,
     cancellation: &ActionCancellation,
+    format: presentation::Format,
 ) -> Result<(), CliError> {
     if cancellation.is_requested() {
         return Err(CliError::operation(
@@ -156,6 +157,15 @@ pub(super) fn execute(
                 limit,
             )
             .map_err(migration_error)?;
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    "instance migration-paths",
+                    &migration_presentation::Paths::from(&page),
+                    output,
+                    |_, _| unreachable!(),
+                );
+            }
             write_page(output, &page)
         }
         MigrationCommand::Plan {
@@ -192,6 +202,13 @@ pub(super) fn execute(
                             MIGRATION_PATH_PAGE_DEFAULT,
                         )
                         .map_err(migration_error)?;
+                        if format == presentation::Format::Json {
+                            let mut error = migration_error(MigrationError::AmbiguousPath);
+                            error.partial = Some(presentation::PartialResult::MigrationPaths(
+                                Box::new((&page).into()),
+                            ));
+                            return Err(error);
+                        }
                         write_page(output, &page)?;
                         return Err(migration_error(MigrationError::AmbiguousPath));
                     }
@@ -216,6 +233,13 @@ pub(super) fn execute(
             )
             .map_err(app_error)?;
             if !plan_only {
+                if format == presentation::Format::Json {
+                    for edge in plan.edges() {
+                        if let Some(hook) = &edge.bindings.declaration().hook {
+                            require_json_terminal_free(hook.io.terminal)?;
+                        }
+                    }
+                }
                 let writer = PactrunApplication::open(root).map_err(app_error)?;
                 let inputs = inputs
                     .into_iter()
@@ -245,7 +269,7 @@ pub(super) fn execute(
                         Ok(true) => break,
                         Ok(false) => {}
                         Err(_) => {
-                            if !warned {
+                            if !warned && format == presentation::Format::Human {
                                 let _ = writeln!(
                                     output,
                                     "Run {run}: owner retained while waiting for durable Migration state"
@@ -257,7 +281,35 @@ pub(super) fn execute(
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
-                let inspection=writer.managed_run_inspection(run).map_err(app_error)?.ok_or_else(||CliError::operation("Migration acceptance was proven absent; no replacement Run was created"))?;
+                let inspection=writer.managed_run_inspection(run).map_err(|error|app_error(error).with_run_context(run))?.ok_or_else(||CliError::operation("Migration acceptance was proven absent; no replacement Run was created").with_run_context(run))?;
+                if format == presentation::Format::Json {
+                    let result = execution_presentation::Inspection::from(&inspection);
+                    if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+                    {
+                        let current = writer
+                            .load_instance(instance)
+                            .map_err(|error| app_error(error).with_run_context(run))?
+                            .ok_or_else(|| {
+                                CliError::operation("Instance disappeared after Migration")
+                                    .with_run_context(run)
+                            })?;
+                        return presentation::render(
+                            format,
+                            "instance migrate",
+                            &migration_presentation::Completed {
+                                inspection: result,
+                                current_instance: (&current).into(),
+                            },
+                            output,
+                            |_, _| unreachable!(),
+                        );
+                    }
+                    let mut error = CliError::operation(
+                        "Migration did not succeed; inspect its last committed boundary before deciding what to do next",
+                    );
+                    error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
+                    return Err(error);
+                }
                 snapshots::write_run(output, &inspection)?;
                 return match &inspection.run.state {
                     RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
@@ -280,6 +332,15 @@ pub(super) fn execute(
                         "Migration has not reached a durable terminal state",
                     )),
                 };
+            }
+            if format == presentation::Format::Json {
+                return presentation::render(
+                    format,
+                    "instance migrate",
+                    &migration_presentation::Plan::new(&id, &plan, &policy),
+                    output,
+                    |_, _| unreachable!(),
+                );
             }
             writeln!(output, "Migration plan (read-only; no Run created)\npath_id: {id}\nexpected_state_version: {}", plan.expected_state_version()).map_err(io_operation)?;
             let timeout = |duration: Option<Duration>| {

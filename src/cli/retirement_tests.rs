@@ -68,6 +68,64 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+// Test-ID: PR-TEST-0563
+// Verifies: PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
+#[test]
+fn json_retirement_handoff_and_storage_views_preserve_disclosure_boundaries() {
+    let (_temp, root, instance, allocation, path) = fixture();
+    let json = |args: &[&str]| {
+        let mut all = vec!["--format", "json"];
+        all.extend_from_slice(args);
+        let (code, out, err) = invoke(&root, &all);
+        let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+        schema_tests::assert_response(&value);
+        assert_eq!(code, 0, "{value}; {err}");
+        assert!(!out.contains("service-owned-private-sentinel"));
+        value["result"].clone()
+    };
+    let storages = json(&["service-storage", "list", "retire"]);
+    assert_eq!(storages["items"].as_array().unwrap().len(), 1);
+    assert!(
+        json(&["resource", "list", "retire"])["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        json(&["service-storage", "detached", "list"])["items"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let plan = json(&["instance", "abandon", "retire", "--plan"]);
+    assert_eq!(plan["work"], "abandon_without_hook");
+    assert!(path.exists());
+    let result = json(&["instance", "abandon", "retire"]);
+    assert_eq!(result["run"]["state"]["outcome"], "succeeded");
+    assert!(path.exists());
+    json(&["instance", "deletion", "show", &instance.id.to_string()]);
+    let allocation_id = allocation.to_string();
+    let hidden = json(&["service-storage", "detached", "show", &allocation_id]);
+    assert!(hidden["locations"].is_null());
+    let shown = json(&[
+        "service-storage",
+        "detached",
+        "show",
+        &allocation_id,
+        "--reveal-location",
+    ]);
+    assert!(!shown["locations"].as_array().unwrap().is_empty());
+    let discarded = json(&[
+        "service-storage",
+        "detached",
+        "discard",
+        &allocation_id,
+        "--confirm-discard",
+    ]);
+    assert_eq!(discarded["new_completion"], true);
+    assert!(!path.exists());
+}
+
 // Test-ID: PR-TEST-0415
 // Verifies: PR-REQ-0335, PR-REQ-0337, PR-REQ-0340
 #[test]

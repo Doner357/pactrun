@@ -85,6 +85,12 @@ Preserve the exact documented upgrade gates rather than inferring one from this
 index. See [remaining decisions](../development/next-milestone.md) for deferred
 runtime work, not just the historical status on a format page.
 
+## CLI presentation contract
+
+| Contract | Status |
+| --- | --- |
+| [CLI JSON V1](contracts/cli-json-v1.md) | Approved normative versioned CLI presentation contract. |
+
 ## M7 approved implementation contracts
 
 M7 is implemented, verified and integrated into local develop, but not published.
