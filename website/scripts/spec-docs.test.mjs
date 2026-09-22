@@ -380,12 +380,22 @@ test('approved remaining milestones assign gaps without silently implementing co
   const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
   assert.match(handoff, /A implementation and verification are complete/);
   assert.match(handoff, /B is implemented, verified and integrated into local develop/);
-  assert.match(handoff, /C is next, beginning with its own S0/);
+  assert.match(handoff, /C is implemented and verified on its feature branch/);
+  assert.match(handoff, /not committed or integrated/);
+  assert.match(handoff, /D follows C and requires separate S0 approval/);
+  assert.ok(handoff.includes('pack-transport-baseline.md'));
   assert.ok(handoff.includes("object-catalog-history-metadata-baseline.md"));
   assert.doesNotMatch(handoff, /A's S0 is next/);
   assert.doesNotMatch(handoff, /Machine-readable CLI Output is the next separately planned capability/);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/remaining-capability-milestones/);
+  assert.match(sidebar, /spec\/contracts\/pack-distribution-v1/);
+  assert.match(sidebar, /development\/pack-transport-status/);
+  const pack = document('development/pack-transport-status.md').replace(/\s+/g, ' ');
+  assert.match(pack, /C S0-S3 implemented and verified/);
+  assert.match(pack, /not committed or integrated into develop/);
+  assert.match(pack, /536,870,913 runtime bytes/);
+  assert.match(pack, /No public Candidate API/);
 });
 
 test('contributor rules preserve product naming, rationale and branch target discipline', async () => {

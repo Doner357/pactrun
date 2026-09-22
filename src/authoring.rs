@@ -60,19 +60,7 @@ pub(crate) struct RuntimeSourceRecordV1 {
     pub(crate) executable: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PortablePresentationTemplate {
-    pub(crate) target: PresentationTargetV1,
-    pub(crate) field: PresentationField,
-    pub(crate) value: PresentationValue,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub(crate) struct PortableMetadataTemplate {
-    pub(crate) reference_labels: Vec<(ReferenceLabel, ReferenceLabelSource)>,
-    pub(crate) presentation: Vec<PortablePresentationTemplate>,
-    pub(crate) provenance: Vec<ProvenanceClaim>,
-}
+pub(crate) use crate::domain::{PortableMetadataTemplate, PortablePresentationTemplate};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct NormalizedPackSourceCandidate {

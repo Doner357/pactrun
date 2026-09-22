@@ -25,6 +25,7 @@ use lexopt::{Arg, Parser};
 mod artifacts;
 mod async_stderr;
 mod catalog;
+mod export_paths;
 mod lifecycle;
 mod migrations;
 mod retirements;
@@ -38,19 +39,23 @@ use crate::{
         CompiledHookLaunch, HookLaunchV1, InputIdentity, InstanceName, InstanceStateVersion,
         LocalAlias, ManagedInputProtection, ManagedInputRole, OperationAccessV1, PackageId,
         ParameterIdentity, ParameterTypeV1, RawParameterInput, ReferenceLabel,
-        RevisionContentDigest, RevisionIdentity, RevisionMetadataMutationBatch, RunId, RunOutcome,
-        RunState,
+        RevisionContentDigest, RevisionIdentity, RunId, RunOutcome, RunState,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
     hook::{ActionCancellation, HookRuntimePolicy},
     managed_data::StagedFile,
 };
 
+#[cfg(test)]
+use crate::domain::RevisionMetadataMutationBatch;
+
 const STORAGE_ROOT_ENV: &str = "PACTRUN_STORAGE_ROOT";
 const HELP: &str = "Pactrun 0.1.0\n\
 Usage:\n\
   pactrun pack generate-id\n\
-  pactrun pack install <source-root>\n\
+  pactrun pack install <directory-or-pack-file> [--metadata-conflict overwrite|keep]\n\
+  pactrun revision export <revision-reference> --output <base-path> [--include-portable-metadata]\n\
+    Always appends .pack: rv -> rv.pack; rv.pack -> rv.pack.pack.\n\
   pactrun hook <command> [options] (Shell Loader helpers; see pactrun hook --help)\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
   pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]\n\
@@ -107,7 +112,8 @@ Usage:\n\
   pactrun snapshot show <snapshot-id>\n\
   pactrun snapshot verify <snapshot-id>\n\
   pactrun snapshot import <bundle-path>\n\
-  pactrun snapshot export <snapshot-id> --output <bundle-path> --authorize-sensitive-export\n\
+  pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export\n\
+    Always appends .snapshot: backup -> backup.snapshot; backup.snapshot -> backup.snapshot.snapshot.\n\
   pactrun storage upgrade\n\
   pactrun storage gc [--plan]\n\
 \n\
@@ -137,6 +143,12 @@ enum Command {
     GeneratePackageId,
     Install {
         source_root: PathBuf,
+        metadata_conflict: crate::domain::PackMetadataConflict,
+    },
+    ExportRevision {
+        revision: RevisionReference,
+        output: PathBuf,
+        include_metadata: bool,
     },
     CreateInstance {
         name: InstanceName,
@@ -585,8 +597,34 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
         }
         "install" => {
             let source_root = PathBuf::from(required_value(parser, "source root")?);
-            require_end(parser)?;
-            Ok(Command::Install { source_root })
+            if source_root == Path::new("-") {
+                return Err(CliError::usage(
+                    "Pack stdin is not supported; specify a filesystem path",
+                ));
+            }
+            let mut policy = None;
+            while let Some(arg) = parser.next().map_err(lex_error)? {
+                match arg {
+                    Arg::Long("metadata-conflict") if policy.is_none() => {
+                        policy = Some(
+                            match value_string(parser, "metadata conflict policy")?.as_str() {
+                                "overwrite" => crate::domain::PackMetadataConflict::Overwrite,
+                                "keep" => crate::domain::PackMetadataConflict::Keep,
+                                _ => {
+                                    return Err(CliError::usage(
+                                        "--metadata-conflict must be overwrite or keep",
+                                    ));
+                                }
+                            },
+                        )
+                    }
+                    _ => return Err(CliError::usage("unsupported or duplicate Pack option")),
+                }
+            }
+            Ok(Command::Install {
+                source_root,
+                metadata_conflict: policy.unwrap_or_default(),
+            })
         }
         other => Err(CliError::usage(format!("unknown pack command {other:?}"))),
     }
@@ -1036,13 +1074,47 @@ fn execute(
     }
     .map_err(app_error)?;
     match command {
-        Command::Install { source_root } => {
-            let empty = RevisionMetadataMutationBatch::new(Vec::new())
-                .expect("an empty metadata batch is valid");
+        Command::ExportRevision {
+            revision,
+            output,
+            include_metadata,
+        } => {
+            let identity = resolve_revision(&application, revision)?;
+            writeln!(
+                stderr,
+                "warning: exported Pack is unencrypted and may contain sensitive authored content"
+            )
+            .map_err(io_operation)?;
+            application
+                .export_revision_pack(&identity, &output, include_metadata, cancellation)
+                .map_err(app_error)?;
+            writeln!(
+                stdout,
+                "exported {}\noutput: {}",
+                format_revision(&identity),
+                format_path(&output)
+            )
+            .map_err(|error| {
+                CliError::operation(format!(
+                    "Pack destination was published, but reporting success failed: {error}"
+                ))
+            })?;
+        }
+        Command::Install {
+            source_root,
+            metadata_conflict,
+        } => {
             let installed = application
-                .install_pack_source(&source_root, &empty)
+                .install_pack(&source_root, metadata_conflict, cancellation)
                 .map_err(app_error)?;
             writeln!(stdout, "{}", format_revision(&installed.revision)).map_err(io_operation)?;
+            for (target, field) in &installed.kept_metadata {
+                writeln!(
+                    stdout,
+                    "metadata kept (not applied): {target:?} / {field:?}"
+                )
+                .map_err(io_operation)?;
+            }
             for migration in installed.migrations {
                 match migration.state {
                     MigrationRelationState::NotEvaluated => writeln!(

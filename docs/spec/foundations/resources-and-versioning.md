@@ -207,7 +207,11 @@ identify their kind, format version, manifest, and content. Unsupported formats
 MUST be rejected rather than guessed. Packaging or compression changes MUST NOT
 change contained domain identity.
 
-**Verification: Pending automated coverage.**
+For Revision transport, this envelope is the user-facing distribution Pack in
+[Pack Distribution V1](../contracts/pack-distribution-v1.md), not a separately
+managed Bundle object. Snapshot transport remains independent and unchanged.
+
+**Verification: PR-TEST-0538, PR-TEST-0540, PR-TEST-0542.**
 
 ### PR-REQ-0082 - Hook Protocol version
 

@@ -12,6 +12,7 @@ website build. They do not constitute additional requirements.
 
 | Contract | Original status |
 | --- | --- |
+| [Pack Distribution V1](contracts/pack-distribution-v1.md) | Approved C implementation contract, 2026-09-22. |
 | [Execution Diagnostics](behavior/execution-diagnostics.md) | Implemented and verified normative behavior; integration is tracked separately. |
 | [Persistence Schema V11](persistence/persistence-schema-v11.md) | Implemented and verified normative internal contract; non-Frozen. |
 | [Pack Source YAML V3](contracts/pack-source-yaml-v3.md) | Candidate normative Package authoring contract; versioned, non-Frozen, and implemented. |

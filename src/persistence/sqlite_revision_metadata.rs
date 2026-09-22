@@ -1244,7 +1244,7 @@ fn load_local_metadata(
     Ok(())
 }
 
-fn load_revision_core(
+pub(super) fn load_revision_core(
     database: &Connection,
     revision: &RevisionIdentity,
 ) -> Result<RevisionCoreV1, PersistenceError> {

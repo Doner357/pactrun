@@ -1,25 +1,29 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::Read,
-    path::Path,
-    sync::Arc,
-};
+#[cfg(test)]
+use std::{path::Path, sync::Arc};
 
+#[cfg(test)]
 use crate::{
     authoring::{
-        NormalizedPackDefinition, PortableMetadataTemplate, SecureSourceRoot, SourceRelativePathV1,
-        VersionedPackSourceCandidate, parse_pack_source_yaml,
+        NormalizedPackDefinition, SecureSourceRoot, SourceRelativePathV1,
+        VersionedPackSourceCandidate,
     },
     domain::{
-        CurrentState, ReferenceLabelBinding, RevisionContentDigest, RevisionIdentity,
-        RevisionMetadataMutation, RevisionMetadataMutationBatch, RuntimeContentProjectionInputV1,
-        RuntimeFileKindV1, RuntimeFileV1, Sha256Digest, ValidatedRevisionContent,
-        project_runtime_content_closure_v1, validate_revision_sources_v1,
+        RuntimeContentProjectionInputV1, RuntimeFileKindV1, RuntimeFileV1,
+        project_runtime_content_closure_v1,
     },
     managed_data::{StagedRuntimeSource, StagingSession},
-    persistence::{PactrunPersistence, StoredRuntimeBlob},
-    revision_content::{calculate_revision_content_digest, validate_revision_content},
+    revision_content::validate_revision_content,
 };
+use crate::{
+    domain::{
+        CurrentState, PortableMetadataTemplate, ReferenceLabelBinding, RevisionContentDigest,
+        RevisionIdentity, RevisionMetadataMutation, RevisionMetadataMutationBatch, Sha256Digest,
+        ValidatedRevisionContent, validate_revision_sources_v1,
+    },
+    persistence::PactrunPersistence,
+    revision_content::calculate_revision_content_digest,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::ApplicationError;
 
@@ -40,8 +44,13 @@ pub(crate) struct MigrationRelationView {
 pub(crate) struct InstallPackResult {
     pub(crate) revision: RevisionIdentity,
     pub(crate) migrations: Vec<MigrationRelationView>,
+    pub(crate) kept_metadata: Vec<(
+        crate::domain::PresentationTargetV1,
+        crate::domain::PresentationField,
+    )>,
 }
 
+#[cfg(test)]
 struct StagedRuntimeEntry {
     id: crate::domain::ContentId,
     blob_digest: Sha256Digest,
@@ -49,68 +58,105 @@ struct StagedRuntimeEntry {
     source: Arc<StagedRuntimeSource>,
 }
 
+#[cfg(test)]
 struct StagedRuntimeContentSet {
     entries: Vec<StagedRuntimeEntry>,
 }
 
+#[cfg(test)]
 struct RevisionCandidate {
     definition: NormalizedPackDefinition,
     staged: StagedRuntimeContentSet,
 }
 
+#[cfg(test)]
 pub(super) fn install_pack_source(
     persistence: &PactrunPersistence,
     staging: &StagingSession,
     source_root: &Path,
     explicit_local_metadata: &RevisionMetadataMutationBatch,
 ) -> Result<InstallPackResult, ApplicationError> {
-    let root = SecureSourceRoot::open(source_root)?;
-    let mut manifest = root.open_manifest()?;
-    let mut manifest_bytes = Vec::new();
-    manifest
-        .read_to_end(&mut manifest_bytes)
-        .map_err(|source| ApplicationError::Io {
-            operation: "read pactrun.yaml",
-            source,
-        })?;
-    // Select the declared source version before acquisition; never retry a
-    // failed V1 parse as V2 or change an installed Revision's identity.
-    let source_candidate = parse_pack_source_yaml(&manifest_bytes)?;
-    let candidate = resolve_candidate(staging, &root, source_candidate)?;
-
-    // Intrinsic validation and Frozen projection precede every durable blob.
-    let content = validate_revision_content(
-        candidate.definition.revision.clone(),
-        candidate.definition.runtime_content.clone(),
+    let candidate = crate::pack_transport::acquire(
+        source_root,
+        staging,
+        &crate::hook::ActionCancellation::default(),
     )
-    .map_err(ApplicationError::RevisionContent)?;
-    validate_staged_coverage(&content, &candidate.staged)?;
-    let digest =
-        calculate_revision_content_digest(&content).map_err(ApplicationError::RevisionContent)?;
-    let identity = RevisionIdentity::new(candidate.definition.package_id, digest);
-    let metadata = metadata_batch(
-        &identity,
-        &candidate.definition.portable_metadata,
+    .map_err(ApplicationError::InvalidInstallation)?;
+    install_prepared(
+        persistence,
+        candidate,
         explicit_local_metadata,
-    )?;
-    validate_metadata_plan(&identity, &content, &metadata)?;
+        crate::domain::PackMetadataConflict::Reject,
+        &crate::hook::ActionCancellation::default(),
+    )
+}
 
-    // Physical publication is deduplicated solely by byte-derived digest.
-    let publications = publish_distinct_blobs(persistence, &candidate.staged)?;
-    let revision = persistence.persist_versioned_revision_with_metadata(
+pub(super) fn install_prepared(
+    persistence: &PactrunPersistence,
+    candidate: crate::revision_installation::PreparedRevision,
+    local: &RevisionMetadataMutationBatch,
+    policy: crate::domain::PackMetadataConflict,
+    cancellation: &crate::hook::ActionCancellation,
+) -> Result<InstallPackResult, ApplicationError> {
+    let crate::revision_installation::PreparedRevision {
+        identity,
+        content,
+        metadata,
+        blobs,
+    } = candidate;
+    let expected: BTreeSet<_> = content
+        .runtime_content
+        .files()
+        .iter()
+        .map(|f| f.blob_digest.clone())
+        .collect();
+    if expected != blobs.keys().cloned().collect()
+        || calculate_revision_content_digest(&content).map_err(ApplicationError::RevisionContent)?
+            != identity.content_digest
+    {
+        return Err(ApplicationError::InvalidInstallation(
+            "Pack candidate identity or blob closure mismatch".into(),
+        ));
+    }
+    let batch = metadata_batch(&identity, &metadata, local)?;
+    validate_metadata_plan(&identity, &content, &batch)?;
+    let mut publications = Vec::new();
+    for (digest, blob) in blobs {
+        crate::pack_transport::check_cancel(cancellation).map_err(|source| {
+            ApplicationError::Io {
+                operation: "install Pack",
+                source,
+            }
+        })?;
+        let mut reader = crate::pack_transport::CancelReader {
+            inner: blob.bytes.try_clone_reader()?,
+            cancellation,
+        };
+        let witness = persistence.put_runtime_content(&digest, &mut reader)?;
+        if witness.digest() != &digest || witness.byte_len() != blob.bytes.byte_len() {
+            return Err(ApplicationError::InvalidInstallation(
+                "Pack publication witness mismatch".into(),
+            ));
+        }
+        publications.push(witness);
+    }
+    let (revision, kept_metadata) = persistence.persist_pack_revision(
         identity.package_id,
         &content,
         &publications,
-        &metadata,
+        Some(&batch),
+        Some(policy),
+        cancellation,
     )?;
-    debug_assert_eq!(revision, identity);
     let migrations = inspect_migrations(persistence, &revision, &content)?;
     Ok(InstallPackResult {
         revision,
         migrations,
+        kept_metadata,
     })
 }
 
+#[cfg(test)]
 fn resolve_candidate(
     staging: &StagingSession,
     root: &SecureSourceRoot,
@@ -162,6 +208,7 @@ fn resolve_candidate(
     })
 }
 
+#[cfg(test)]
 fn validate_staged_coverage(
     content: &ValidatedRevisionContent,
     staged: &StagedRuntimeContentSet,
@@ -253,30 +300,6 @@ fn validate_metadata_plan(
         }
     }
     Ok(())
-}
-
-fn publish_distinct_blobs(
-    persistence: &PactrunPersistence,
-    staged: &StagedRuntimeContentSet,
-) -> Result<Vec<StoredRuntimeBlob>, ApplicationError> {
-    let mut distinct = BTreeMap::<Sha256Digest, Arc<StagedRuntimeSource>>::new();
-    for entry in &staged.entries {
-        distinct
-            .entry(entry.blob_digest.clone())
-            .or_insert_with(|| Arc::clone(&entry.source));
-    }
-    let mut publications = Vec::with_capacity(distinct.len());
-    for (digest, source) in distinct {
-        let mut reader = source.bytes.try_clone_reader()?;
-        let witness = persistence.put_runtime_content(&digest, &mut reader)?;
-        if witness.byte_len() != source.bytes.byte_len() || witness.digest() != &digest {
-            return Err(ApplicationError::InvalidInstallation(
-                "runtime-content publication witness differs from staged bytes".to_owned(),
-            ));
-        }
-        publications.push(witness);
-    }
-    Ok(publications)
 }
 
 fn inspect_migrations(

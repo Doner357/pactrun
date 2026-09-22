@@ -33,9 +33,15 @@ pactrun snapshot list [--instance <instance>]
 pactrun snapshot show <snapshot-id>
 pactrun snapshot verify <snapshot-id>
 pactrun snapshot import <bundle-path>
-pactrun snapshot export <snapshot-id> --output <bundle-path> --authorize-sensitive-export
+pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export
 pactrun storage upgrade
 ```
+
+The later [specialized export naming rule](./command-and-output-reference.md#pr-req-0357---specialized-envelope-export-filenames)
+requires export to append `.snapshot` unconditionally to the supplied base path.
+For example, `--output backup` writes `backup.snapshot`, while
+`--output backup.snapshot` writes `backup.snapshot.snapshot`. Import continues to
+use the exact supplied path. The success report includes the final output path.
 
 Among Snapshot subcommands, only capture/restore accept execution-options:
 

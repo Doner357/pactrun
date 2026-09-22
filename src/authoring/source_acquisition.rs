@@ -49,6 +49,12 @@ impl std::error::Error for SourceAcquisitionError {
 }
 
 impl SecureSourceRoot {
+    pub(crate) fn file_names(
+        &self,
+        maximum: usize,
+    ) -> io::Result<std::collections::BTreeSet<String>> {
+        platform::file_names(&self.root, maximum)
+    }
     pub(crate) fn open(path: &Path) -> Result<Self, SourceAcquisitionError> {
         platform::open_root(path)
             .map(|root| Self { root })

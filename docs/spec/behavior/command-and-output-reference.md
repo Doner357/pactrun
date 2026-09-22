@@ -146,11 +146,14 @@ The CLI MUST provide conceptual list, show, export, import, and delete
 operations for Revisions. Human references MUST be resolved to exact identity,
 and ambiguity MUST fail.
 
-**Verification: PR-TEST-0465, PR-TEST-0529, PR-TEST-0535.**
+**Verification: PR-TEST-0465, PR-TEST-0529, PR-TEST-0535, PR-TEST-0538, PR-TEST-0545.**
 
 Lifecycle evidence covers deletion, exact-reference resolution and ambiguity
-refusal. Catalog evidence adds list/show; export/import remain assigned to C.
-This partial coverage does not claim that the entire command family is available.
+refusal. Catalog evidence adds list/show; C adds export and unified Pack installation.
+The approved C [Pack contract](../contracts/pack-distribution-v1.md) provides
+`revision export` and imports through `pack install`, without a second import
+command. Consult the [implementation record](../../development/pack-transport-status.md)
+for current verification and integration status.
 
 ### PR-REQ-0119 - Security-sensitive authorization spelling
 
@@ -337,6 +340,40 @@ claim to have verified or restored service-owned state.
 
 **Verification: PR-TEST-0112, PR-TEST-0118, PR-TEST-0156, PR-TEST-0159,
 PR-TEST-0165, PR-TEST-0173, PR-TEST-0174.**
+
+## Specialized export naming
+
+### PR-REQ-0357 - Specialized envelope export filenames
+
+Revision and Snapshot export interpret `--output <base-path>` as a filename base,
+not a complete destination. The CLI MUST unconditionally append `.pack` for a
+Revision and `.snapshot` for a Snapshot, exactly once per command. It MUST NOT
+detect, strip, replace, normalize or avoid an existing suffix: `rv` produces
+`rv.pack`, `rv.pack` produces `rv.pack.pack`, and `backup.snapshot` produces
+`backup.snapshot.snapshot`. Parent path components and native filename units are
+preserved. Empty bases, stdout `-`, and directory-only spellings MUST be refused.
+
+All publication and no-clobber checks MUST use the final appended path, not the
+base. An existing base file is not the destination and MUST remain untouched;
+existing final destinations MUST never be replaced. Missing parent directories
+are not created automatically. Success MUST report the final path using the
+CLI's safe host-path presentation. The application publication boundary continues
+to receive an exact final path; it does not append another suffix.
+
+This is a CLI naming change, not a container, identity, integrity, permission or
+schema change. Snapshot exports remain unencrypted Stored-ZIP and require
+`--authorize-sensitive-export`; Revision exports retain their warning without
+that flag. Imports consume the exact supplied path and validate contents, never
+infer validity from an extension. Existing Snapshot `.zip` files remain importable.
+Input and Run Artifact exports remain raw bytes with caller-selected complete
+filenames; Input stdout remains supported. Raw exports MUST NOT acquire these
+suffixes or a new envelope implicitly.
+
+Callers of the former complete-path export interface must remove their intended
+final suffix from `--output` to retain the same output filename. A doubled suffix
+is deliberate, not a compatibility fallback or format-selection mechanism.
+
+**Verification: PR-TEST-0550, PR-TEST-0551, PR-TEST-0552.**
 
 ## Remaining open spelling
 

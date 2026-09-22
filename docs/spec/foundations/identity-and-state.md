@@ -426,7 +426,7 @@ metadata kind and does not define serialization, carriage, import conflict, or
 merge policy. Publisher claims and digests MUST NOT be presented as publisher
 authentication.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0539.**
 
 ### PR-REQ-0022 - Repeat Revision import
 
@@ -444,7 +444,7 @@ resolution MUST report ambiguity and MUST NOT use last-write-wins or implicit
 latest selection. The Export Bundle Format and its import application policy
 remain separate design work.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0538, PR-TEST-0539, PR-TEST-0540.**
 
 ## Instance identity and state publication
 
