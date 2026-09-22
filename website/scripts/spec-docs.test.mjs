@@ -380,8 +380,8 @@ test('approved remaining milestones assign gaps without silently implementing co
   const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
   assert.match(handoff, /A implementation and verification are complete/);
   assert.match(handoff, /B is implemented, verified and integrated into local develop/);
-  assert.match(handoff, /C is implemented and verified on its feature branch/);
-  assert.match(handoff, /not committed or integrated/);
+  assert.match(handoff, /C is implemented, verified and integrated into local develop/);
+  assert.match(handoff, /Integration does not authorize publication/);
   assert.match(handoff, /D follows C and requires separate S0 approval/);
   assert.ok(handoff.includes('pack-transport-baseline.md'));
   assert.ok(handoff.includes("object-catalog-history-metadata-baseline.md"));
@@ -392,8 +392,10 @@ test('approved remaining milestones assign gaps without silently implementing co
   assert.match(sidebar, /spec\/contracts\/pack-distribution-v1/);
   assert.match(sidebar, /development\/pack-transport-status/);
   const pack = document('development/pack-transport-status.md').replace(/\s+/g, ' ');
-  assert.match(pack, /C S0-S3 implemented and verified/);
-  assert.match(pack, /not committed or integrated into develop/);
+  assert.match(pack, /C S0-S3 implemented, verified and integrated into local develop/);
+  assert.match(pack, /No push, release or publication is authorized/);
+  assert.match(pack, /Local develop integration/);
+  assert.match(pack, /RUST_TEST_THREADS=1/);
   assert.match(pack, /536,870,913 runtime bytes/);
   assert.match(pack, /No public Candidate API/);
 });

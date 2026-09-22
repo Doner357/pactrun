@@ -9,7 +9,7 @@ Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
 approval. Implementation evidence is recorded separately from design approval.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](./execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](./object-catalog-history-metadata-status.md). The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C is implemented and verified on its feature branch, not committed or integrated; see the [C record](./pack-transport-status.md). D follows C and requires separate S0 approval. Integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](./execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](./object-catalog-history-metadata-status.md). The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C is implemented, verified and integrated into local develop; see the [C record](./pack-transport-status.md). D follows C and requires separate S0 approval. Integration does not authorize publication.
 
 ## What is already recorded as implemented
 
@@ -153,9 +153,9 @@ into local develop; its [delivery record](./execution-diagnostics-observability-
 records the verified source and exact Git integration. B is implemented, verified
 and integrated into local develop under its
 [separately approved S0-S4 baseline](./design-notes/object-catalog-history-metadata-baseline.md).
-C is implemented and verified on its feature branch under the separately approved
-[Pack transport baseline](./design-notes/pack-transport-baseline.md), not committed
-or integrated into develop. D follows C and requires separate S0 approval;
+C is implemented, verified and integrated into local develop under the separately approved
+[Pack transport baseline](./design-notes/pack-transport-baseline.md), including the
+export naming follow-up. D follows C and requires separate S0 approval;
 D-E runtime work remains unapproved. The original grouping authorized planning only. Full
 usage-guide work remains excluded.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md)
