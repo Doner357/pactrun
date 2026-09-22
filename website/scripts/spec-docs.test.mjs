@@ -382,7 +382,7 @@ test('approved remaining milestones assign gaps without silently implementing co
   assert.match(handoff, /B is implemented, verified and integrated into local develop/);
   assert.match(handoff, /C is implemented, verified and integrated into local develop/);
   assert.match(handoff, /Integration does not authorize publication/);
-  assert.match(handoff, /D follows C under the approved/);
+  assert.match(handoff, /D is implemented, verified and integrated into local develop/);
   assert.ok(handoff.includes('pack-transport-baseline.md'));
   assert.ok(handoff.includes("object-catalog-history-metadata-baseline.md"));
   assert.doesNotMatch(handoff, /A's S0 is next/);
