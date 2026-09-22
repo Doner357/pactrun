@@ -4,8 +4,8 @@ title: CLI Presentation Implementation Status
 
 # CLI presentation implementation status
 
-**Status: D S0-S4 implemented and verified on `feature/cli-presentation-json`;
-not committed or integrated into develop.**
+**Status: D S0-S4 implemented, verified and integrated into local `develop`;
+not pushed or published.**
 
 The [baseline](./design-notes/cli-presentation-baseline.md) and
 [JSON contract](../spec/contracts/cli-json-v1.md) record the approved scope.
@@ -130,9 +130,24 @@ and remote site typecheck/build are checked separately, not called a fresh full 
 
 ## Git, retained resources and next work
 
-The feature branch and unstaged task changes remain for operator review. No
-commit, merge, push, release or publication was performed. Existing unrelated
-untracked Pages configuration and the user archive were preserved.
+After explicit operator authorization, implementation commit
+`faa41593affc35559333c5365137709a128afa64` on
+`feature/cli-presentation-json` was merged into local develop with no-fast-forward
+merge `2b69837197c8cd7216bbc51a27677dfe02d20440`. Both have tree
+`1cb7ec3ac33d7aab75392813b502295527cb72d6`. The merge had no conflicts and
+introduced no runtime changes. All 400 delivery-manifest entries matched before
+commit, and staged bytes matched the reviewed working tree. No consumed Git-derived
+build input was found, so the recorded runtime evidence applies to the identical
+implementation and merge trees; this is reused evidence, not a new full-CI run.
+
+The subsequent integration closeout changes status Markdown and its navigation
+assertion only. Documentation/link/traceability checks and remote site typecheck/
+build are rerun for that closeout. It does not modify Rust, schemas, fixtures,
+dependencies or runtime build inputs.
+
+Feature branches are retained. No push, release or publication was performed.
+Existing unrelated untracked Pages configuration, the user archive and local
+agent guidance were excluded from commits and preserved.
 
 Source archives, manifests, logs, isolated Cargo artifacts, dedicated test scratch
 and generated documentation remain in the configured remote test workspace.
@@ -140,6 +155,7 @@ Local evidence and the isolated dependency cache remain under target/. No previe
 server was started or stopped and no network exposure or sharing was changed.
 
 E (Versioning and Baseline Consolidation) is the next design milestone and still
-requires its own S0 approval. D's Git integration remains separately authorized.
+requires its own S0 approval. D integration does not authorize E implementation.
 
-No commit, merge, push, release or publication is authorized by this record.
+This record grants no authorization for further Git mutations, push, release or
+publication.

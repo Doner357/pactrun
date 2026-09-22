@@ -4,8 +4,8 @@ title: CLI Presentation Implementation Baseline
 
 # CLI presentation implementation baseline
 
-**Status: D S0-S4 approved on 2026-09-22; implemented and verified on the feature
-branch, with Git integration separate.**
+**Status: D S0-S4 approved on 2026-09-22; implemented, verified and integrated
+into local develop after separate operator authorization.**
 
 See the [implementation and verification record](../cli-presentation-status.md)
 for tested inputs, acceptance scope and retained resources.

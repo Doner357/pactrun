@@ -16,7 +16,7 @@ Milestone state on this page is planning metadata. It must not be treated as
 evidence that a requirement has automated coverage or that a format or protocol
 is Frozen.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C (Portable Pack and Revision Export) is [implemented, verified and integrated into local develop](./pack-transport-status.md). D follows C under the approved [S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); its [implementation record](./cli-presentation-status.md) tracks verification separately. Integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C (Portable Pack and Revision Export) is [implemented, verified and integrated into local develop](./pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
 
 ## Development entry after Spec migration
 
@@ -856,7 +856,7 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | A | Execution Diagnostics and Instance State Observability | Implemented, verified and integrated into local develop |
 | B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented, verified and integrated into local develop |
 | C | Portable Pack and Revision Export | S0-S3 and export naming [implemented, verified and integrated into local develop](./pack-transport-status.md) |
-| D | Machine-readable CLI Output | S0-S4 implemented and verified on the feature branch; [integration remains separate](./cli-presentation-status.md) |
+| D | Machine-readable CLI Output | S0-S4 [implemented, verified and integrated into local develop](./cli-presentation-status.md) |
 | E | Versioning and Baseline Consolidation | Existing final milestone, after D |
 
 A-E are sequence labels, not M-series identifiers. The original approval recorded
@@ -864,7 +864,7 @@ the grouping only; A subsequently received separate design/implementation approv
 and completed verification and local develop integration. B subsequently received
 [S0-S4 implementation approval](./design-notes/object-catalog-history-metadata-baseline.md).
 C received [S0-S3 implementation approval](./design-notes/pack-transport-baseline.md)
-for directory/ZIP Packs and unified installation. D S0-S4 is approved; E still requires its own detailed S0 closure. Full
+for directory/ZIP Packs and unified installation. D S0-S4 is implemented, verified and integrated; E still requires its own detailed S0 closure. Full
 usage-guide writing is excluded; necessary Spec/help/acceptance material is not.
 A's S0 established the obligation inventory, and every milestone closes its own
 user-entry-point, observable-result and test evidence. Unowned gaps cannot wait
@@ -884,7 +884,7 @@ presentation was assigned to A and is now implemented and verified in its
 [integrated delivery](./execution-diagnostics-observability-status.md). A is
 complete in local develop; B is also implemented, verified and integrated under
 its separate approval. C has completed its separately approved S0-S3 work;
-it is now committed and integrated into local develop. D now has separate S0-S4 approval; verification and Git integration remain separate.
+it is now committed and integrated into local develop. D has also completed its separately approved S0-S4 work and authorized local develop integration.
 See the [B implementation record](./object-catalog-history-metadata-status.md).
 Machine-readable output remains D. No push, release or publication is implied.
 M8 remains rejected and its number
