@@ -4,8 +4,11 @@ title: IPC Initialization and Capability Presentation
 
 # IPC initialization and capability presentation
 
-**Status: Implemented and verified in the working tree on 2026-09-23.
-Not committed, integrated or released.**
+**Status: Implemented, verified and locally integrated on 2026-09-23.**
+
+The subsequent [short-ID integration record](./short-id-selectors-status.md)
+records the authorized implementation commit and local `develop` merge, including
+this IPC/capability work. The verification details below retain their original scope.
 
 The operator approved automatic safe Linux IPC location handling, accurate Core
 and built-in Loader initialization attribution, and presentation metadata in
@@ -69,7 +72,8 @@ unchanged runtime reuses the recorded full-gate evidence, not another fresh CI r
 
 ## Retained resources and authorization
 
-The feature branch remains uncommitted. Source archives, manifests, build outputs,
+At this initial verification checkpoint the feature was uncommitted; its later
+authorized integration is recorded above. Source archives, manifests, build outputs,
 isolated website dependencies, generated documentation and logs remain in the
 dedicated remote verification workspace; local build/evidence artifacts remain
 under target/. Dedicated IPC scratch is cleared after the final documentation

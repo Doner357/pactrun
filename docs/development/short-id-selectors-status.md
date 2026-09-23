@@ -4,7 +4,7 @@ title: Short Object ID Selectors
 
 # Short object ID selectors
 
-**Status: Implemented and verified; ready for authorized local integration, 2026-09-23.**
+**Status: Implemented, verified and integrated into local `develop`, 2026-09-23.**
 
 The operator approved unique-prefix CLI selection and local commit/merge to
 `develop` after successful verification. The owning rules are in the
@@ -29,6 +29,12 @@ recorded in [design references](./design-references.md).
   recovery semantics change.
 
 ## Verification and integration
+
+Implementation commit: `bbe9da11b78ae45e31894ec60d2d0f60fab41064`.
+Local implementation merge: `3a4a8b601cc574c0701f7e813e388f74260bf07f`.
+The merge tree equals the verified feature tree. This record update and linked
+checkpoint statuses are documentation-only closeout; runtime evidence is reused.
+No remote push or publication was performed.
 
 The tests cover lexical boundaries, hidden-page
 collisions, namespace isolation, typed errors, frozen resolved identities, exact
