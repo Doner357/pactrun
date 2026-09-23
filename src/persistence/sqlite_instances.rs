@@ -439,7 +439,7 @@ impl PactrunPersistence {
     }
 }
 
-fn resolve_instance_name_from(
+pub(super) fn resolve_instance_name_from(
     database: &Connection,
     name: &InstanceName,
 ) -> Result<Option<InstanceId>, PersistenceError> {

@@ -7,18 +7,21 @@ use crate::domain::{
 use crate::persistence::{PersistenceError, SnapshotInspection};
 
 pub(super) enum SnapshotCommand {
-    Delete(SnapshotId),
+    Delete(Selector<SnapshotId>),
     Execute {
         name: InstanceName,
-        operation: SnapshotOperation,
+        operation: Operation,
         options: ExecutionOptions,
     },
-    List(Option<InstanceName>),
-    Show(SnapshotId),
-    Verify(SnapshotId),
+    List {
+        name: Option<InstanceName>,
+        no_trunc: bool,
+    },
+    Show(Selector<SnapshotId>),
+    Verify(Selector<SnapshotId>),
     Import(PathBuf),
     Export {
-        id: SnapshotId,
+        id: Selector<SnapshotId>,
         path: PathBuf,
         authorized: bool,
     },
@@ -27,8 +30,37 @@ pub(super) enum SnapshotCommand {
 pub(super) struct CreateRestoreCommand {
     pub(super) name: InstanceName,
     pub(super) revision: RevisionReference,
-    pub(super) snapshot: SnapshotId,
+    pub(super) snapshot: Selector<SnapshotId>,
     pub(super) options: ExecutionOptions,
+}
+
+pub(super) enum Operation {
+    Capture,
+    Restore(Selector<SnapshotId>),
+}
+impl Operation {
+    fn full(self) -> SnapshotOperation {
+        match self {
+            Self::Capture => SnapshotOperation::Capture,
+            Self::Restore(id) => SnapshotOperation::Restore(id.full()),
+        }
+    }
+}
+impl SnapshotCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        match self {
+            Self::Delete(id)
+            | Self::Show(id)
+            | Self::Verify(id)
+            | Self::Export { id, .. }
+            | Self::Execute {
+                operation: Operation::Restore(id),
+                ..
+            } => id.resolve(r)?,
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 pub(super) fn create_and_restore(
@@ -46,6 +78,7 @@ pub(super) fn create_and_restore(
         snapshot,
         options,
     } = command;
+    let snapshot = snapshot.full();
     policy(&options)?;
     // Read parameter sources once, before Create; stdin cannot be replayed.
     let (revision, parameters) = {
@@ -149,10 +182,8 @@ pub(super) fn create_and_restore(
 pub(super) fn parse(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
     parse_inner(parser).map_err(|_|CliError::usage("invalid Snapshot command or arguments; use the documented snapshot forms and --execution-timeout-ms"))
 }
-fn id(parser: &mut Parser) -> Result<SnapshotId, CliError> {
-    required_value_string(parser, "SnapshotId")?
-        .parse()
-        .map_err(CliError::usage)
+fn id(parser: &mut Parser) -> Result<Selector<SnapshotId>, CliError> {
+    required_value_string(parser, "SnapshotId")?.parse()
 }
 fn bundle_path(value: OsString) -> Result<PathBuf, CliError> {
     if value == "-" || value.is_empty() {
@@ -165,9 +196,9 @@ fn parse_inner(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
         operation @ ("capture" | "restore") => {
             let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
             let operation = if operation == "capture" {
-                SnapshotOperation::Capture
+                Operation::Capture
             } else {
-                SnapshotOperation::Restore(id(parser)?)
+                Operation::Restore(id(parser)?)
             };
             let options = parse_execution_options(parser, "execution-timeout-ms")?;
             Ok(SnapshotCommand::Execute {
@@ -178,8 +209,10 @@ fn parse_inner(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
         }
         "list" => {
             let mut name = None;
+            let mut no_trunc = false;
             while let Some(arg) = parser.next().map_err(lex_error)? {
                 match arg {
+                    Arg::Long("no-trunc") if !no_trunc => no_trunc = true,
                     Arg::Long("instance") => set_once(
                         &mut name,
                         parse_instance_name(value_string(parser, "Instance name")?)?,
@@ -188,7 +221,7 @@ fn parse_inner(parser: &mut Parser) -> Result<SnapshotCommand, CliError> {
                     _ => return Err(CliError::usage("unsupported option")),
                 }
             }
-            Ok(SnapshotCommand::List(name))
+            Ok(SnapshotCommand::List { name, no_trunc })
         }
         "delete" => {
             let id = id(parser)?;
@@ -270,7 +303,7 @@ pub(super) fn execute(
         SnapshotCommand::Execute {
             options: ExecutionOptions { plan: true, .. },
             ..
-        } | SnapshotCommand::List(_)
+        } | SnapshotCommand::List { .. }
             | SnapshotCommand::Show(_)
             | SnapshotCommand::Verify(_)
     );
@@ -285,7 +318,7 @@ pub(super) fn execute(
             format,
             "snapshot delete",
             stdout,
-            app.delete_object(&crate::domain::ObjectDeletion::Snapshot(id))
+            app.delete_object(&crate::domain::ObjectDeletion::Snapshot(id.full()))
                 .map_err(app_error)?,
         ),
         SnapshotCommand::Execute {
@@ -295,7 +328,7 @@ pub(super) fn execute(
         } => execute_managed(
             &app,
             &name,
-            operation,
+            operation.full(),
             options,
             ExecutionIo {
                 stdin,
@@ -306,29 +339,65 @@ pub(super) fn execute(
             },
             cancellation,
         ),
-        SnapshotCommand::List(name) => {
-            let values = app.list_snapshots(name.as_ref()).map_err(safe_error)?;
+        SnapshotCommand::List { name, no_trunc } => {
             if format == presentation::Format::Json {
-                let result = transport_presentation::Snapshots {
-                    items: values.iter().map(Into::into).collect(),
+                let full = app
+                    .inspect_snapshots_complete(name.as_ref(), None)
+                    .map_err(safe_error)?;
+                let value = transport_presentation::Snapshots {
+                    items: full.items.iter().map(Into::into).collect(),
                 };
                 return presentation::render(
                     format,
                     "snapshot list",
-                    &result,
+                    &definitions::Related::new(value, &full.revisions, &full.unavailable_revisions),
                     stdout,
                     |_, _| unreachable!(),
                 );
             }
+            let values = app.list_snapshots(name.as_ref()).map_err(safe_error)?;
             if values.is_empty() {
                 writeln!(stdout, "No Snapshots.").map_err(io_operation)?;
+            } else {
+                writeln!(stdout, "SNAPSHOT ID  ORIGIN INSTANCE  CAPTURED AT")
+                    .map_err(io_operation)?;
             }
-            for snapshot in values {
-                write_inspection(stdout, &snapshot)?;
+            let ids = short_ids::labels(
+                &app,
+                crate::domain::CatalogIdentityKind::Snapshot,
+                values.iter().map(|s| s.id.to_string()).collect(),
+                no_trunc,
+            )?;
+            // Snapshot origins can outlive every managed Instance history record.
+            // Keep these references complete rather than abbreviating an unavailable object.
+            for (snapshot, id) in values.into_iter().zip(ids) {
+                writeln!(
+                    stdout,
+                    "{}  {}  {}.{:09}",
+                    id,
+                    snapshot.origin,
+                    snapshot.captured_at.unix_seconds(),
+                    snapshot.captured_at.nanoseconds()
+                )
+                .map_err(io_operation)?;
             }
             Ok(())
         }
         SnapshotCommand::Show(id) => {
+            let id = id.full();
+            if format == presentation::Format::Json {
+                let full = app
+                    .inspect_snapshots_complete(None, Some(id))
+                    .map_err(safe_error)?;
+                let value = transport_presentation::Snapshot::from(&full.items[0]);
+                return presentation::render(
+                    format,
+                    "snapshot show",
+                    &definitions::Related::new(value, &full.revisions, &full.unavailable_revisions),
+                    stdout,
+                    |_, _| unreachable!(),
+                );
+            }
             let value = app.inspect_snapshot(id).map_err(safe_error)?;
             presentation::render(
                 format,
@@ -339,6 +408,7 @@ pub(super) fn execute(
             )
         }
         SnapshotCommand::Verify(id) => {
+            let id = id.full();
             let verified = app.verify_snapshot(id).map_err(safe_error)?;
             if format == presentation::Format::Json {
                 let result = transport_presentation::SnapshotVerified {
@@ -412,6 +482,7 @@ pub(super) fn execute(
             path,
             authorized,
         } => {
+            let id = id.full();
             app.export_snapshot_file(id, &path, authorized, stderr)
                 .map_err(safe_error)?;
             if format == presentation::Format::Json {
@@ -564,6 +635,14 @@ fn execute_intent(
         ));
     }
     if options.plan {
+        let selection = match operation {
+            SnapshotOperation::Capture => capability_presentation::Selection::Capture,
+            SnapshotOperation::Restore(_) => capability_presentation::Selection::Restore,
+        };
+        let author = capability_presentation::load(
+            app,
+            &[(plan.operation().revision().clone(), selection)],
+        )?;
         if format == presentation::Format::Json {
             return presentation::render(
                 format,
@@ -571,15 +650,23 @@ fn execute_intent(
                     SnapshotOperation::Capture => "snapshot capture",
                     SnapshotOperation::Restore(_) => "snapshot restore",
                 },
-                &transport_presentation::SnapshotPlan::new(&plan, &options),
+                &capability_presentation::Presented {
+                    value: transport_presentation::SnapshotPlan::new(&plan, &options),
+                    presentation: author,
+                },
                 stdout,
                 |_, _| unreachable!(),
             );
         }
-        return write_plan(stdout, &plan, &options);
+        write_plan(stdout, &plan, &options)?;
+        return capability_presentation::write(stdout, &author, false);
     }
-    if matches!(operation, SnapshotOperation::Restore(_)) {
-        writeln!(stderr,"Warning: Restore replaces complete target bindings and may change service state; failed publication does not replay the Hook.").map_err(io_operation)?;
+    if format == presentation::Format::Human && matches!(operation, SnapshotOperation::Restore(_)) {
+        writeln!(
+            stderr,
+            "Warning: Restore replaces target bindings and may change service state."
+        )
+        .map_err(io_operation)?;
     }
     let run = app
         .accept_snapshot_plan(
@@ -640,9 +727,13 @@ fn execute_intent(
         error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
         return Err(error);
     }
-    let _ = write_run(stderr, &inspection);
+    if !matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+    {
+        let _ = write_run(stderr, &inspection);
+    }
     match &inspection.run.state {
         RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
+            let _ = writeln!(stderr, "run: {run}\noutcome: succeeded");
             if let Some(id) = inspection.capture_result {
                 writeln!(stdout, "snapshot: {id}").map_err(io_operation)?;
             }
@@ -699,13 +790,18 @@ fn write_plan(
     plan: &crate::domain::SnapshotExecutionPlan,
     options: &ExecutionOptions,
 ) -> Result<(), CliError> {
-    writeln!(out,"operation: {}\ninstance_id: {}\nrevision: {}\nexpected_state_version: {}\naccess: {}\nterminal: {}\nprotocol_version: {}",operation_name(plan.operation()),plan.instance(),format_revision(plan.operation().revision()),plan.expected_state_version(),access_name(plan.access()),terminal_name(plan.hook().io.terminal),plan.hook().protocol_version.get()).map_err(io_operation)?;
+    writeln!(
+        out,
+        "operation: {}\ninstance_id: {}\nrevision: {}\naccess: {}\nterminal: {}",
+        operation_name(plan.operation()),
+        plan.instance(),
+        format_revision(plan.operation().revision()),
+        access_name(plan.access()),
+        terminal_name(plan.hook().io.terminal)
+    )
+    .map_err(io_operation)?;
     if let ManagedRunIdentity::Restore { snapshot, .. } = plan.operation() {
-        writeln!(
-            out,
-            "snapshot: {snapshot}\ntarget_eligibility: compiler_checks_passed_not_admitted"
-        )
-        .map_err(io_operation)?;
+        writeln!(out, "snapshot: {snapshot}").map_err(io_operation)?;
     } else {
         writeln!(out, "required_inputs_satisfied: true").map_err(io_operation)?;
     }
@@ -718,18 +814,28 @@ fn write_plan(
         )
         .map_err(io_operation)?;
     }
-    for step in plan.steps() {
+    writeln!(out, "step: launch_hook").map_err(io_operation)?;
+    writeln!(out,"startup_timeout_ms: {}\nexecution_timeout_ms: {}\ntermination_grace_ms: {}\nrecovery_override: {}\nMode: preview",options.startup_timeout_ms.map(|n|n.to_string()).unwrap_or_else(||"unlimited".to_owned()),options.action_timeout_ms.map(|n|n.to_string()).unwrap_or_else(||"unlimited".to_owned()),options.termination_grace_ms.unwrap_or(5_000),if options.recovery_override {"authorized_for_this_invocation"}else{"not_authorized"}).map_err(io_operation)
+}
+fn write_inspection(out: &mut dyn Write, s: &SnapshotInspection) -> Result<(), CliError> {
+    writeln!(
+        out,
+        "Snapshot: {}\nProducer revision: {}\nOrigin instance: {}\nCaptured at: {}.{:09}",
+        s.id,
+        format_revision(&s.producer),
+        s.origin,
+        s.captured_at.unix_seconds(),
+        s.captured_at.nanoseconds()
+    )
+    .map_err(io_operation)?;
+    if s.restore_capability.is_err() {
         writeln!(
             out,
-            "step: {}",
-            format_failed_step(crate::domain::RunFailedStep::SnapshotPlan(*step))
+            "Restore unavailable: snapshot exceeds this build's capacity."
         )
         .map_err(io_operation)?;
     }
-    writeln!(out,"startup_timeout_ms: {}\nexecution_timeout_ms: {}\ntermination_grace_ms: {}\nrecovery_override: {}\npreview: not_admitted\nwarning: Plan is not Admission and created no Run",options.startup_timeout_ms.map(|n|n.to_string()).unwrap_or_else(||"unlimited".to_owned()),options.action_timeout_ms.map(|n|n.to_string()).unwrap_or_else(||"unlimited".to_owned()),options.termination_grace_ms.unwrap_or(5_000),if options.recovery_override {"authorized_for_this_invocation"}else{"not_authorized"}).map_err(io_operation)
-}
-fn write_inspection(out: &mut dyn Write, s: &SnapshotInspection) -> Result<(), CliError> {
-    writeln!(out,"snapshot: {}\nintegrity_format: {}\nproducer_revision: {}\norigin_instance_id: {}\ncaptured_at: {}.{:09}\npublication_verification: intrinsic_and_content_verified\npublication_relational_verification: not_recorded\ncurrent_content_verification: not_performed\nrestore_capacity: {}\ntarget_eligibility: target_not_specified",s.id,s.version.number(),format_revision(&s.producer),s.origin,s.captured_at.unix_seconds(),s.captured_at.nanoseconds(),if s.restore_capability.is_ok() {"within_profile_not_execution_approval"}else{"exceeds_build_profile"}).map_err(io_operation)
+    Ok(())
 }
 
 pub(super) fn write_summary(out: &mut dyn Write, run: &ManagedRunView) -> Result<(), CliError> {
@@ -832,14 +938,10 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
         ApplicationError::Persistence(
             PersistenceError::SnapshotBundle(B::Capability(_))
             | PersistenceError::SnapshotCodec(C::Capability(_)),
-        ) => {
-            "Snapshot build capability exceeded; verification incomplete, not a format-corruption verdict"
-        }
+        ) => "Snapshot exceeds this build's capacity; verification incomplete",
         ApplicationError::Persistence(PersistenceError::SnapshotBundle(B::Integrity(
             C::Capability(_),
-        ))) => {
-            "Snapshot build capability exceeded; verification incomplete, not a format-corruption verdict"
-        }
+        ))) => "Snapshot exceeds this build's capacity; verification incomplete",
         ApplicationError::Persistence(PersistenceError::SnapshotBundle(B::Profile(_))) => {
             "Snapshot bundle profile validation failed"
         }

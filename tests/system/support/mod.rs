@@ -520,19 +520,24 @@ pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
 }
 
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
-    let text = std::str::from_utf8(&output.stdout).unwrap();
-    if text.trim() == "No managed Instances." {
-        return Vec::new();
-    }
-    text.lines()
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let columns = line.split('\t').collect::<Vec<_>>();
-            assert_eq!(columns.len(), 6, "malformed instance-list row: {line}");
-            assert!(columns[5].starts_with("guard="));
-            assert_ne!(columns[4], "ready");
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(response["format"], "pactrun.cli.v1");
+    assert_eq!(response["status"], "success");
+    response["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| {
+            assert!(row["instance_id"].is_string());
+            assert!(row["active_revision"].is_object());
+            assert!(row["state_version"].is_string());
+            assert!(row["required_inputs_satisfied"].is_boolean());
+            assert!(
+                row.get("recovery_guard")
+                    .is_some_and(|g| g.is_null() || g.is_object())
+            );
             InstanceListProjection {
-                name: columns[1].to_owned(),
+                name: row["name"].as_str().unwrap().to_owned(),
             }
         })
         .collect()

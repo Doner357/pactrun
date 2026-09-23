@@ -10,6 +10,10 @@ into local develop after separate operator authorization.**
 See the [implementation and verification record](../cli-presentation-status.md)
 for tested inputs, acceptance scope and retained resources.
 
+The separately approved [CLI interface refinement](../cli-interface-refinement-status.md)
+extends this original baseline with complete machine projections, noninteractive
+terminal delivery and JSONL. The decisions below record the original D scope.
+
 The operator approved one typed backend result with human and JSON renderers.
 JSON is a versioned public interface for tools and agents; human presentation
 may evolve for readability. Neither renderer interprets arbitrary Hook output

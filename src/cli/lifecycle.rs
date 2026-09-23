@@ -2,9 +2,23 @@ use super::*;
 use crate::domain::{ObjectDeletion, ObjectDeletionResult};
 
 pub(super) enum LifecycleCommand {
-    Collect { plan: bool },
+    Collect {
+        plan: bool,
+    },
     Revision(RevisionReference),
-    Run { run: RunId, delete_artifacts: bool },
+    Run {
+        run: Selector<RunId>,
+        delete_artifacts: bool,
+    },
+}
+impl LifecycleCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        match self {
+            Self::Run { run, .. } => run.resolve(r),
+            Self::Revision(v) => r.revision(v),
+            _ => Ok(()),
+        }
+    }
 }
 
 pub(super) fn parse_run_delete(parser: &mut Parser) -> Result<LifecycleCommand, CliError> {
@@ -66,7 +80,7 @@ pub(super) fn execute(
             run,
             delete_artifacts,
         } => ObjectDeletion::Run {
-            run,
+            run: run.full(),
             delete_artifacts,
         },
         LifecycleCommand::Revision(reference) => ObjectDeletion::Revision(match reference {

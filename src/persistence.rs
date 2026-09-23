@@ -51,6 +51,7 @@ pub(crate) use sqlite_v9::current_to_v9_fixture;
 /// Implementations run the supplied commit while holding the acceptance
 /// decision, or return `None` so the caller can roll the transaction back.
 pub(crate) trait AcceptanceArbiter {
+    fn accepted(&self, _run: crate::domain::RunId) {}
     fn retain_hook_text(&self) -> bool {
         true
     }
@@ -59,6 +60,8 @@ pub(crate) trait AcceptanceArbiter {
         commit: impl FnOnce() -> Result<(), PersistenceError>,
     ) -> AcceptanceCommitResult;
 }
+
+pub(crate) use sqlite_catalog::SnapshotCatalog;
 
 pub(crate) struct UnconditionalAcceptance;
 

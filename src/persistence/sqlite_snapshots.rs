@@ -341,6 +341,13 @@ fn verify_stored(
     }
     Ok(relational)
 }
+pub(super) fn inspection_from(
+    db: &Connection,
+    id: SnapshotId,
+) -> Result<SnapshotInspection, PersistenceError> {
+    Ok(inspection(&load_snapshot(db, id)?))
+}
+
 fn inspection(snapshot: &StoredSnapshot) -> SnapshotInspection {
     let manifest = snapshot.manifest.manifest();
     let mut budget = RestoreExpansionBudget::default();

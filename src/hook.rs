@@ -4,6 +4,7 @@
 
 mod capture;
 mod deletions;
+pub(crate) mod delivery;
 mod diagnostic_scope;
 pub(crate) mod diagnostics;
 mod materialize;
@@ -15,6 +16,7 @@ mod runtime;
 pub(crate) mod service_storage;
 pub(crate) mod shell_loader;
 mod snapshots;
+pub(crate) mod startup;
 mod versioned_protocol;
 pub(crate) use deletions::{accept_deletion, execute_ready as execute_ready_deletion};
 pub(crate) use migrations::TargetCommitPermit;
@@ -81,6 +83,7 @@ pub(crate) struct HookRuntimePolicy {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionCancellation {
     pub(crate) diagnostics: Arc<diagnostics::Diagnostics>,
+    pub(crate) delivery: Arc<delivery::DeliverySlot>,
     requested: Arc<AtomicBool>,
     acceptance_gate: Arc<Mutex<()>>,
     #[cfg(test)]
@@ -225,6 +228,9 @@ fn checked_deadline(start: Instant, duration: Duration) -> Option<Instant> {
 }
 
 impl AcceptanceArbiter for ActionCancellation {
+    fn accepted(&self, run: RunId) {
+        self.delivery.accepted(run);
+    }
     fn retain_hook_text(&self) -> bool {
         self.diagnostics.retain()
     }
@@ -1026,6 +1032,8 @@ pub(super) enum FailureKind {
     SessionMaterialization,
     Launch,
     ProtocolTransport,
+    IpcInitialization(startup::Reason),
+    LoaderInitialization(startup::Reason),
     HookReportedProtocol,
     HookFailure,
     Protocol(protocol::ProtocolFailure),
@@ -1096,6 +1104,18 @@ impl FailureKind {
                 "protocol_transport_failed",
                 ActionPlanStep::AcceptCompletion,
                 "Hook Protocol transport failed",
+            ),
+            Self::IpcInitialization(reason) => (
+                "execution",
+                "ipc_initialization_failed",
+                ActionPlanStep::EstablishSession,
+                reason.message(),
+            ),
+            Self::LoaderInitialization(reason) => (
+                "execution",
+                "shell_loader_initialization_failed",
+                ActionPlanStep::EstablishSession,
+                reason.message(),
             ),
             Self::HookReportedProtocol => (
                 "execution",

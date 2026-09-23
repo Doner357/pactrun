@@ -54,7 +54,7 @@ test('usage guides are placeholders, not completed tutorials', () => {
   const names = ['agents/use-pactrun.md', 'agents/author-packs.md', 'agents/integrate-hooks.md'];
   for (const [name, body] of docs) {
     if (!names.includes(name) && !name.startsWith('pactrun-users/') && !name.startsWith('package-authors/')) continue;
-    assert.match(body, /placeholder|reserves the\s+documentation structure/i, name);
+    assert.match(body, /placeholder|reserves the\s+documentation structure|guidance is planned|guided example are planned/i, name);
     assert.doesNotMatch(body, /^### PR-REQ-\d+/m, name);
   }
 });
@@ -79,7 +79,7 @@ test('M5 integration remains distinct from separately approved M6 work', async (
   assert.match(status.replace(/\s+/g, ' '), /Hook-backed chains and operator file inputs are integrated into the existing Migration Run path/);
   assert.match(status.replace(/\s+/g, ' '), /No ServiceStorage representation\/runtime, generalized M6 recovery/);
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
-  assert.match(readme.replace(/\s+/g, ' '), /target-qualified operator file inputs, declarative and Hook-backed chains/);
+  assert.match(readme.replace(/\s+/g, ' '), /Migrate Instances through declarative or Hook-backed revision paths/);
   assert.doesNotMatch(readme, /in-progress M5|not full M5 completion|remain pending; this is/);
 });
 

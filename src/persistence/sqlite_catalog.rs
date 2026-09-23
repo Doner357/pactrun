@@ -6,6 +6,12 @@ use super::{PactrunPersistence, PersistenceError};
 use crate::domain::*;
 use rusqlite::{Connection, OptionalExtension, params};
 
+pub(crate) struct SnapshotCatalog {
+    pub(crate) items: Vec<super::SnapshotInspection>,
+    pub(crate) revisions: Vec<RevisionCatalogEntry>,
+    pub(crate) unavailable_revisions: Vec<RevisionIdentity>,
+}
+
 fn sql(error: rusqlite::Error) -> PersistenceError {
     PersistenceError::sqlite("read catalog", error)
 }
@@ -44,6 +50,266 @@ fn revision(
 }
 
 impl PactrunPersistence {
+    pub(crate) fn revision_abbreviations(
+        &self,
+        ids: &[RevisionIdentity],
+    ) -> Result<Vec<(String, String)>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        ids.iter().map(|id| {
+            let package=id.package_id.to_string();let digest=hex::encode(id.content_digest.as_bytes());
+            let mut p=Vec::new();let mut d=Vec::new();
+            for (comparison,order) in [("<","DESC"),(">","ASC")] {
+                if let Some(v)=tx.query_row(&format!("SELECT lower(hex(package_id)) FROM revisions WHERE package_id {comparison} ?1 ORDER BY package_id {order} LIMIT 1"),[id.package_id.as_bytes().as_slice()],|r|r.get::<_,String>(0)).optional().map_err(sql)?{p.push(v);}
+                if let Some(v)=tx.query_row(&format!("SELECT lower(hex(revision_content_digest)) FROM revisions WHERE package_id=?1 AND revision_content_digest {comparison} ?2 ORDER BY revision_content_digest {order} LIMIT 1"),params![id.package_id.as_bytes().as_slice(),id.content_digest.as_bytes().as_slice()],|r|r.get::<_,String>(0)).optional().map_err(sql)?{d.push(v);}
+            }
+            let short=|s:&str,others:Vec<String>|{let n=others.iter().map(|v|s.bytes().zip(v.bytes()).take_while(|(a,b)|a==b).count()+1).max().unwrap_or(12).max(12).min(s.len());s[..n].to_string()};
+            Ok((short(&package,p),format!("sha256:{}",short(&digest,d))))
+        }).collect()
+    }
+    pub(crate) fn identity_prefix(
+        &self,
+        kind: CatalogIdentityKind,
+        prefix: &str,
+    ) -> Result<IdentityMatches, PersistenceError> {
+        let (table, column) = identity_table(kind);
+        let db = self.open_read_connection()?;
+        let (low, high) = prefix_bounds(prefix, 32)?;
+        let mut stmt = db.prepare(&format!("SELECT lower(hex({column})) FROM {table} WHERE {column}>=?1 AND (?2 IS NULL OR {column}<?2) ORDER BY {column} LIMIT 21")).map_err(sql)?;
+        let mut candidates = stmt
+            .query_map(params![low, high], |r| r.get::<_, String>(0))
+            .map_err(sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(sql)?;
+        let has_more = candidates.len() > 20;
+        candidates.truncate(20);
+        Ok(IdentityMatches {
+            candidates,
+            has_more,
+        })
+    }
+
+    pub(crate) fn revision_prefix(
+        &self,
+        package: &str,
+        digest: &str,
+    ) -> Result<IdentityMatches, PersistenceError> {
+        let db = self.open_read_connection()?;
+        let (pl, ph) = prefix_bounds(package, 32)?;
+        let (dl, dh) = prefix_bounds(digest, 64)?;
+        let mut stmt = db.prepare("SELECT 'exact:'||lower(hex(package_id))||'/sha256:'||lower(hex(revision_content_digest)) FROM revisions WHERE package_id>=?1 AND (?2 IS NULL OR package_id<?2) AND revision_content_digest>=?3 AND (?4 IS NULL OR revision_content_digest<?4) ORDER BY package_id,revision_content_digest LIMIT 21").map_err(sql)?;
+        let mut candidates = stmt
+            .query_map(params![pl, ph, dl, dh], |r| r.get::<_, String>(0))
+            .map_err(sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(sql)?;
+        let has_more = candidates.len() > 20;
+        candidates.truncate(20);
+        Ok(IdentityMatches {
+            candidates,
+            has_more,
+        })
+    }
+
+    pub(crate) fn identity_abbreviations(
+        &self,
+        kind: CatalogIdentityKind,
+        values: &[String],
+    ) -> Result<Vec<String>, PersistenceError> {
+        let (table, column) = identity_table(kind);
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let mut before=tx.prepare(&format!("SELECT lower(hex({column})) FROM {table} WHERE {column}<?1 ORDER BY {column} DESC LIMIT 1")).map_err(sql)?;
+        let mut after=tx.prepare(&format!("SELECT lower(hex({column})) FROM {table} WHERE {column}>?1 ORDER BY {column} LIMIT 1")).map_err(sql)?;
+        values
+            .iter()
+            .map(|id| {
+                let bytes = hex::decode(id).map_err(|_| corrupt())?;
+                let previous = before
+                    .query_row([&bytes], |r| r.get::<_, String>(0))
+                    .optional()
+                    .map_err(sql)?;
+                let next = after
+                    .query_row([&bytes], |r| r.get::<_, String>(0))
+                    .optional()
+                    .map_err(sql)?;
+                let n = previous
+                    .iter()
+                    .chain(next.iter())
+                    .map(|other| {
+                        id.bytes()
+                            .zip(other.bytes())
+                            .take_while(|(a, b)| a == b)
+                            .count()
+                            + 1
+                    })
+                    .max()
+                    .unwrap_or(12)
+                    .max(12)
+                    .min(id.len());
+                Ok(id[..n].to_owned())
+            })
+            .collect()
+    }
+    pub(crate) fn catalog_retirements(
+        &self,
+        limit: usize,
+        after: Option<InstanceId>,
+    ) -> Result<CatalogPage<RetirementCatalogEntry, InstanceId>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let mut stmt = tx.prepare("SELECT h.instance_id FROM instance_history_identities h WHERE (?1 IS NULL OR h.instance_id>?1) AND (EXISTS(SELECT 1 FROM instance_deletion_obligations d WHERE d.instance_id=h.instance_id) OR EXISTS(SELECT 1 FROM instance_retirement_receipts t WHERE t.instance_id=h.instance_id)) ORDER BY h.instance_id LIMIT ?2").map_err(sql)?;
+        let ids = stmt
+            .query_map(
+                params![
+                    after.as_ref().map(|id| id.as_bytes().as_slice()),
+                    bound(limit)?
+                ],
+                |r| r.get::<_, Vec<u8>>(0),
+            )
+            .map_err(sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(sql)?;
+        let entries = ids
+            .into_iter()
+            .map(|id| retirement(&tx, InstanceId::from_bytes(bytes(id)?)))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(page(entries, limit, |entry| entry.history.id))
+    }
+
+    pub(crate) fn catalog_retirement(
+        &self,
+        id: InstanceId,
+    ) -> Result<RetirementCatalogEntry, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        retirement(&tx, id)
+    }
+    pub(crate) fn catalog_run_complete(&self, id: RunId) -> Result<RunCatalog, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let run = load_managed_run_from(&tx, id)?;
+        let mut result = RunCatalog {
+            page: CatalogPage {
+                items: vec![run],
+                next: None,
+            },
+            inspections: Vec::new(),
+            revisions: Vec::new(),
+            unavailable_revisions: Vec::new(),
+        };
+        complete_runs(&tx, &mut result)?;
+        Ok(result)
+    }
+    pub(crate) fn catalog_snapshots_complete(
+        &self,
+        name: Option<&InstanceName>,
+        id: Option<SnapshotId>,
+    ) -> Result<SnapshotCatalog, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let origin = name
+            .map(|n| {
+                super::sqlite_instances::resolve_instance_name_from(&tx, n)?
+                    .ok_or_else(|| PersistenceError::MissingInstance(n.as_str().into()))
+            })
+            .transpose()?;
+        let ids = if let Some(id) = id {
+            vec![id]
+        } else {
+            let mut stmt = tx
+                .prepare("SELECT snapshot_id FROM snapshots ORDER BY snapshot_id")
+                .map_err(sql)?;
+            stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))
+                .map_err(sql)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(sql)?
+                .into_iter()
+                .map(|v| bytes(v).map(SnapshotId::from_bytes))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        let mut full = SnapshotCatalog {
+            items: Vec::new(),
+            revisions: Vec::new(),
+            unavailable_revisions: Vec::new(),
+        };
+        for id in ids {
+            let item = super::sqlite_snapshots::inspection_from(&tx, id)?;
+            if origin.is_some_and(|i| i != item.origin) {
+                continue;
+            }
+            let revision_id = &item.producer;
+            if !full.revisions.iter().any(|r| &r.identity == revision_id)
+                && !full.unavailable_revisions.contains(revision_id)
+            {
+                match revision(&tx, revision_id) {
+                    Ok(r) => full.revisions.push(r),
+                    Err(PersistenceError::MissingRevision(_)) => {
+                        full.unavailable_revisions.push(revision_id.clone())
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            full.items.push(item);
+        }
+        Ok(full)
+    }
+    pub(crate) fn catalog_instances_complete(&self) -> Result<InstanceCatalog, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let mut stmt = tx
+            .prepare("SELECT instance_id FROM instances ORDER BY instance_name,instance_id")
+            .map_err(sql)?;
+        let ids = stmt
+            .query_map([], |r| r.get::<_, Vec<u8>>(0))
+            .map_err(sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(sql)?;
+        let mut items = Vec::new();
+        let mut revisions = Vec::<RevisionCatalogEntry>::new();
+        for id in ids {
+            let view = super::sqlite_instances::load_instance_view_from(
+                &tx,
+                InstanceId::from_bytes(bytes(id)?),
+            )?
+            .ok_or_else(corrupt)?;
+            if !revisions.iter().any(|r| r.identity == view.active_revision) {
+                revisions.push(revision(&tx, &view.active_revision)?);
+            }
+            items.push(view);
+        }
+        Ok(InstanceCatalog { items, revisions })
+    }
+    pub(crate) fn catalog_instance_definition(
+        &self,
+        name: &InstanceName,
+    ) -> Result<Option<(InstanceView, RevisionCatalogEntry)>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let Some(id) = super::sqlite_instances::resolve_instance_name_from(&tx, name)? else {
+            return Ok(None);
+        };
+        let view =
+            super::sqlite_instances::load_instance_view_from(&tx, id)?.ok_or_else(corrupt)?;
+        let definition = revision(&tx, &view.active_revision)?;
+        Ok(Some((view, definition)))
+    }
+
+    pub(crate) fn catalog_revision_set(
+        &self,
+        ids: &[RevisionIdentity],
+    ) -> Result<Vec<RevisionCatalogEntry>, PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db.transaction().map_err(sql)?;
+        let mut rows = Vec::<RevisionCatalogEntry>::new();
+        for id in ids {
+            if !rows.iter().any(|row| &row.identity == id) {
+                rows.push(revision(&tx, id)?);
+            }
+        }
+        Ok(rows)
+    }
+
     pub(crate) fn catalog_alias(
         &self,
         alias: &LocalAlias,
@@ -179,6 +445,17 @@ impl PactrunPersistence {
         limit: usize,
         after: Option<RunId>,
     ) -> Result<CatalogPage<ManagedRunView, RunId>, PersistenceError> {
+        Ok(self
+            .catalog_runs_complete(selector, limit, after, false)?
+            .page)
+    }
+    pub(crate) fn catalog_runs_complete(
+        &self,
+        selector: &CatalogRunSelector,
+        limit: usize,
+        after: Option<RunId>,
+        details: bool,
+    ) -> Result<RunCatalog, PersistenceError> {
         let take = bound(limit)?;
         let mut db = self.open_read_connection()?;
         let tx = db.transaction().map_err(sql)?;
@@ -219,8 +496,102 @@ impl PactrunPersistence {
             .into_iter()
             .map(|id| load_managed_run_from(&tx, RunId::from_bytes(bytes(id)?)))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(page(entries, limit, |v| v.id))
+        let page = page(entries, limit, |v| v.id);
+        let mut result = RunCatalog {
+            page,
+            inspections: Vec::new(),
+            revisions: Vec::new(),
+            unavailable_revisions: Vec::new(),
+        };
+        if details {
+            complete_runs(&tx, &mut result)?;
+        }
+        Ok(result)
     }
+}
+
+fn identity_table(kind: CatalogIdentityKind) -> (&'static str, &'static str) {
+    match kind {
+        CatalogIdentityKind::Run => ("runs", "run_id"),
+        CatalogIdentityKind::Snapshot => ("snapshots", "snapshot_id"),
+        CatalogIdentityKind::Instance => ("instance_history_identities", "instance_id"),
+        CatalogIdentityKind::Allocation => ("service_storage_allocations", "allocation_id"),
+    }
+}
+
+fn prefix_bounds(
+    prefix: &str,
+    width: usize,
+) -> Result<(Vec<u8>, Option<Vec<u8>>), PersistenceError> {
+    if prefix.is_empty()
+        || prefix.len() > width
+        || !prefix
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+    {
+        return Err(corrupt());
+    }
+    let low = hex::decode(format!("{prefix:0<width$}")).map_err(|_| corrupt())?;
+    let mut high = low.clone();
+    let mut carry = if prefix.len() % 2 == 1 { 16u16 } else { 1 };
+    for index in (0..prefix.len().div_ceil(2)).rev() {
+        let next = u16::from(high[index]) + carry;
+        high[index] = next as u8;
+        carry = next >> 8;
+        if carry == 0 {
+            break;
+        }
+    }
+    Ok((low, if carry == 0 { Some(high) } else { None }))
+}
+
+fn retirement(db: &Connection, id: InstanceId) -> Result<RetirementCatalogEntry, PersistenceError> {
+    let history = history(db, id)?;
+    let live = super::sqlite_instances::load_instance_view_from(db, id)?;
+    let obligation = super::sqlite_deletions::obligation_from(db, id)?;
+    let mut stmt = db.prepare("SELECT r.run_id FROM runs r JOIN run_deletion_invocations d ON d.run_id=r.run_id WHERE r.instance_id=?1 ORDER BY r.run_id").map_err(sql)?;
+    let ids = stmt
+        .query_map([id.as_bytes().as_slice()], |r| r.get::<_, Vec<u8>>(0))
+        .map_err(sql)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(sql)?;
+    let runs = ids
+        .into_iter()
+        .map(|id| load_managed_run_from(db, RunId::from_bytes(bytes(id)?)))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(RetirementCatalogEntry {
+        history,
+        live,
+        obligation,
+        runs,
+    })
+}
+
+fn complete_runs(db: &Connection, result: &mut RunCatalog) -> Result<(), PersistenceError> {
+    for run in &result.page.items {
+        result
+            .inspections
+            .push(super::sqlite_runs::inspect_run_from(db, run.clone())?);
+        let ids = match &run.operation {
+            ManagedRunIdentity::Migration(m) => m.path(),
+            operation => std::slice::from_ref(operation.revision()),
+        };
+        for id in ids {
+            if result.revisions.iter().any(|r| &r.identity == id)
+                || result.unavailable_revisions.contains(id)
+            {
+                continue;
+            }
+            match revision(db, id) {
+                Ok(row) => result.revisions.push(row),
+                Err(PersistenceError::MissingRevision(_)) => {
+                    result.unavailable_revisions.push(id.clone())
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    Ok(())
 }
 
 fn history(db: &Connection, id: InstanceId) -> Result<InstanceHistoryEntry, PersistenceError> {

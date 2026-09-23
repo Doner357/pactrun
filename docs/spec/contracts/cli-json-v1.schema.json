@@ -8,6 +8,16 @@
         "action_id": {
           "type": "string"
         },
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "hook_args_count": {
           "format": "uint",
           "minimum": 0,
@@ -16,9 +26,18 @@
         "launch": {
           "$ref": "#/$defs/Launch"
         },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
         "output_ids": {
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
           },
           "type": "array"
         },
@@ -44,21 +63,10 @@
         "hook_args_count",
         "launch",
         "parameters",
-        "output_ids"
-      ],
-      "type": "object"
-    },
-    "Actions": {
-      "properties": {
-        "items": {
-          "items": {
-            "$ref": "#/$defs/Action"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "items"
+        "output_ids",
+        "metadata",
+        "outputs",
+        "hook"
       ],
       "type": "object"
     },
@@ -139,6 +147,159 @@
         "path_id",
         "revisions",
         "edge_count"
+      ],
+      "type": "object"
+    },
+    "Candidates": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "selector_kind": {
+          "$ref": "#/$defs/SelectorKind"
+        }
+      },
+      "required": [
+        "selector_kind",
+        "prefix",
+        "candidates",
+        "has_more"
+      ],
+      "type": "object"
+    },
+    "Capabilities": {
+      "properties": {
+        "capture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cleanup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cleanup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/Input2"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "migrations": {
+          "items": {
+            "$ref": "#/$defs/Migration"
+          },
+          "type": "array"
+        },
+        "restore": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_resources": {
+          "items": {
+            "$ref": "#/$defs/Resource"
+          },
+          "type": "array"
+        },
+        "service_storages": {
+          "items": {
+            "$ref": "#/$defs/Storage"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "metadata",
+        "inputs",
+        "capture",
+        "restore",
+        "migrations",
+        "cleanup",
+        "service_storages",
+        "service_resources"
+      ],
+      "type": "object"
+    },
+    "Capability": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "hook": {
+          "$ref": "#/$defs/Hook"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter2"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "access",
+        "parameters",
+        "hook",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "Channel": {
+      "enum": [
+        "stdout",
+        "stderr"
+      ],
+      "type": "string"
+    },
+    "Cleanup": {
+      "properties": {
+        "hook": {
+          "$ref": "#/$defs/Hook"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "requires": {
+          "items": {
+            "$ref": "#/$defs/InputRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requires",
+        "hook",
+        "metadata"
       ],
       "type": "object"
     },
@@ -287,6 +448,58 @@
       ],
       "type": "object"
     },
+    "Context": {
+      "properties": {
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hook_ordinal": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision2"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "source_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Revision2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Revision2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "hook_ordinal",
+        "operation",
+        "action_id",
+        "revision",
+        "source_revision",
+        "target_revision"
+      ],
+      "type": "object"
+    },
     "CreatedResource": {
       "properties": {
         "presence": {
@@ -339,6 +552,9 @@
           },
           "type": "array"
         },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        },
         "cleanup_declared": {
           "type": "boolean"
         },
@@ -374,9 +590,78 @@
         "service_resource_count",
         "snapshot_declared",
         "migration_edge_count",
-        "cleanup_declared"
+        "cleanup_declared",
+        "capabilities"
       ],
       "type": "object"
+    },
+    "DefaultValue": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "integer",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "float",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "string",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Deletion": {
       "properties": {
@@ -386,6 +671,44 @@
       },
       "required": [
         "outcome"
+      ],
+      "type": "object"
+    },
+    "DeliveryResult": {
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "event_count": {
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Record"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/StreamSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "complete",
+        "error",
+        "event_count",
+        "streams"
       ],
       "type": "object"
     },
@@ -554,7 +877,7 @@
         },
         "transitions": {
           "items": {
-            "$ref": "#/$defs/Transition"
+            "$ref": "#/$defs/Transition2"
           },
           "type": "array"
         }
@@ -570,6 +893,45 @@
         "mandatory_hook_outputs",
         "hook_present",
         "predicted_required_inputs_satisfied"
+      ],
+      "type": "object"
+    },
+    "Entry": {
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "target",
+        "display_name",
+        "summary",
+        "description",
+        "help"
       ],
       "type": "object"
     },
@@ -596,6 +958,12 @@
     },
     "Failure": {
       "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "explanation": {
           "type": "string"
         },
@@ -612,7 +980,41 @@
       "required": [
         "reference",
         "explanation",
+        "detail",
         "step"
+      ],
+      "type": "object"
+    },
+    "Grant": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      },
+      "required": [
+        "reference",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "Group": {
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/Entry"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
       ],
       "type": "object"
     },
@@ -676,6 +1078,46 @@
         "current_name",
         "retired",
         "deletion_phase"
+      ],
+      "type": "object"
+    },
+    "Hook": {
+      "properties": {
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "launch": {
+          "$ref": "#/$defs/Launch"
+        },
+        "protocol_version": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "service_access": {
+          "items": {
+            "$ref": "#/$defs/Grant"
+          },
+          "type": "array"
+        },
+        "service_requires": {
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "type": "array"
+        },
+        "terminal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "terminal",
+        "launch",
+        "hook_args_count",
+        "service_access",
+        "service_requires"
       ],
       "type": "object"
     },
@@ -777,6 +1219,29 @@
       ],
       "type": "object"
     },
+    "Input2": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "protection": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "input_id",
+        "required",
+        "protection",
+        "metadata"
+      ],
+      "type": "object"
+    },
     "InputDeclaration": {
       "properties": {
         "input_id": {
@@ -811,6 +1276,21 @@
       ],
       "type": "object"
     },
+    "InputRef": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "input_id"
+      ],
+      "type": "object"
+    },
     "InputReference": {
       "properties": {
         "input_id": {
@@ -826,25 +1306,42 @@
       ],
       "type": "object"
     },
-    "Inputs": {
+    "InspectedRun": {
       "properties": {
+        "accepted_at_unix_ms": {
+          "type": "string"
+        },
+        "accepted_state_version": {
+          "type": "string"
+        },
+        "inspection": {
+          "$ref": "#/$defs/Inspection"
+        },
         "instance_id": {
           "type": "string"
         },
-        "items": {
-          "items": {
-            "$ref": "#/$defs/Input"
-          },
-          "type": "array"
+        "operation": {
+          "$ref": "#/$defs/Operation"
         },
-        "state_version": {
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "run_id": {
           "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/State"
         }
       },
       "required": [
+        "run_id",
         "instance_id",
-        "state_version",
-        "items"
+        "revision",
+        "accepted_state_version",
+        "accepted_at_unix_ms",
+        "operation",
+        "state",
+        "inspection"
       ],
       "type": "object"
     },
@@ -941,58 +1438,6 @@
         "required_inputs_satisfied",
         "recovery_guard",
         "inputs"
-      ],
-      "type": "object"
-    },
-    "InstanceSummary": {
-      "properties": {
-        "active_revision": {
-          "$ref": "#/$defs/Revision"
-        },
-        "instance_id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "recovery_guard": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Guard"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "required_inputs_satisfied": {
-          "type": "boolean"
-        },
-        "state_version": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "instance_id",
-        "name",
-        "active_revision",
-        "state_version",
-        "required_inputs_satisfied",
-        "recovery_guard"
-      ],
-      "type": "object"
-    },
-    "Instances": {
-      "properties": {
-        "items": {
-          "items": {
-            "$ref": "#/$defs/InstanceSummary"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "items"
       ],
       "type": "object"
     },
@@ -1325,6 +1770,74 @@
         }
       ]
     },
+    "Migration": {
+      "properties": {
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "produces_target": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requires_source": {
+          "items": {
+            "$ref": "#/$defs/InputRef"
+          },
+          "type": "array"
+        },
+        "requires_target": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "resource_transitions": {
+          "items": {
+            "$ref": "#/$defs/ServiceTransition"
+          },
+          "type": "array"
+        },
+        "source_revision_digest": {
+          "type": "string"
+        },
+        "storage_transitions": {
+          "items": {
+            "$ref": "#/$defs/ServiceTransition"
+          },
+          "type": "array"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/Transition"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_revision_digest",
+        "transitions",
+        "requires_source",
+        "requires_target",
+        "produces_target",
+        "hook",
+        "storage_transitions",
+        "resource_transitions",
+        "metadata"
+      ],
+      "type": "object"
+    },
     "MigrationProgress": {
       "properties": {
         "boundary_revision": {
@@ -1347,25 +1860,6 @@
       "type": "object"
     },
     "Mutation": {
-      "properties": {
-        "desired": {
-          "$ref": "#/$defs/MutationValue"
-        },
-        "outcome": {
-          "type": "string"
-        },
-        "revision": {
-          "$ref": "#/$defs/Revision"
-        }
-      },
-      "required": [
-        "revision",
-        "outcome",
-        "desired"
-      ],
-      "type": "object"
-    },
-    "Mutation2": {
       "oneOf": [
         {
           "properties": {
@@ -1420,6 +1914,25 @@
           "type": "object"
         }
       ]
+    },
+    "Mutation2": {
+      "properties": {
+        "desired": {
+          "$ref": "#/$defs/MutationValue"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "outcome",
+        "desired"
+      ],
+      "type": "object"
     },
     "MutationValue": {
       "oneOf": [
@@ -1715,6 +2228,21 @@
         }
       ]
     },
+    "Output": {
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "output_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_id",
+        "metadata"
+      ],
+      "type": "object"
+    },
     "PackExport": {
       "properties": {
         "output": {
@@ -1816,7 +2344,7 @@
       "properties": {
         "items": {
           "items": {
-            "$ref": "#/$defs/Run"
+            "$ref": "#/$defs/Retirement"
           },
           "type": "array"
         },
@@ -1838,6 +2366,22 @@
         "default_present": {
           "type": "boolean"
         },
+        "default_redacted": {
+          "type": "boolean"
+        },
+        "default_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefaultValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
         "parameter_id": {
           "type": "string"
         },
@@ -1852,12 +2396,60 @@
         "parameter_id",
         "parameter_type",
         "sensitive",
-        "default_present"
+        "default_present",
+        "default_redacted",
+        "default_value",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "Parameter2": {
+      "properties": {
+        "default_present": {
+          "type": "boolean"
+        },
+        "default_redacted": {
+          "type": "boolean"
+        },
+        "default_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefaultValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "parameter_id": {
+          "type": "string"
+        },
+        "parameter_type": {
+          "type": "string"
+        },
+        "sensitive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "parameter_id",
+        "parameter_type",
+        "sensitive",
+        "default_present",
+        "default_redacted",
+        "default_value",
+        "metadata"
       ],
       "type": "object"
     },
     "PartialResult": {
       "anyOf": [
+        {
+          "$ref": "#/$defs/Candidates"
+        },
         {
           "$ref": "#/$defs/Publication"
         },
@@ -1910,7 +2502,120 @@
       ],
       "type": "object"
     },
-    "Plan": {
+    "PlanParameter": {
+      "properties": {
+        "effective_redaction": {
+          "type": "boolean"
+        },
+        "parameter_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parameter_id",
+        "effective_redaction"
+      ],
+      "type": "object"
+    },
+    "Presented": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Action"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented2": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "launch": {
+          "$ref": "#/$defs/Launch"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "protocol_version": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "terminal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_id",
+        "access",
+        "terminal",
+        "protocol_version",
+        "hook_args_count",
+        "launch",
+        "parameters",
+        "output_ids",
+        "metadata",
+        "outputs",
+        "hook",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented3": {
       "properties": {
         "access": {
           "type": "string"
@@ -1947,6 +2652,12 @@
         "parameters": {
           "items": {
             "$ref": "#/$defs/PlanParameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
           },
           "type": "array"
         },
@@ -2003,11 +2714,216 @@
         "execution_timeout_ms",
         "termination_grace_ms",
         "recovery_override",
-        "preview"
+        "preview",
+        "presentation"
       ],
       "type": "object"
     },
-    "Plan2": {
+    "Presented4": {
+      "properties": {
+        "core_version": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "declarations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Declarations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "items": {
+            "$ref": "#/$defs/Metadata"
+          },
+          "type": "array"
+        },
+        "metadata_scope": {
+          "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "core_version",
+        "metadata",
+        "declarations",
+        "metadata_scope",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented5": {
+      "properties": {
+        "admission": {
+          "type": "string"
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "work": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "expected_state_version",
+        "revision",
+        "work",
+        "admission",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented6": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "eligibility": {
+          "$ref": "#/$defs/SnapshotPlanEligibility"
+        },
+        "execution_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlanParameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "recovery_override": {
+          "type": "boolean"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "startup_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "terminal": {
+          "type": "string"
+        },
+        "termination_grace_ms": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "eligibility",
+        "instance_id",
+        "revision",
+        "expected_state_version",
+        "access",
+        "terminal",
+        "protocol_version",
+        "parameters",
+        "steps",
+        "startup_timeout_ms",
+        "execution_timeout_ms",
+        "termination_grace_ms",
+        "recovery_override",
+        "preview",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented7": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "type": "array"
+        },
+        "evaluation": {
+          "type": "string"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidates",
+        "has_more",
+        "next_after",
+        "evaluation",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented8": {
       "properties": {
         "edges": {
           "items": {
@@ -2026,6 +2942,12 @@
         },
         "path_id": {
           "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
         },
         "preview": {
           "type": "string"
@@ -2050,22 +2972,8 @@
         "startup_timeout_ms",
         "execution_timeout_ms",
         "termination_grace_ms",
-        "edges"
-      ],
-      "type": "object"
-    },
-    "PlanParameter": {
-      "properties": {
-        "effective_redaction": {
-          "type": "boolean"
-        },
-        "parameter_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "parameter_id",
-        "effective_redaction"
+        "edges",
+        "presentation"
       ],
       "type": "object"
     },
@@ -2124,6 +3032,468 @@
       ],
       "type": "object"
     },
+    "Record": {
+      "oneOf": [
+        {
+          "properties": {
+            "run_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "run_accepted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "byte_length": {
+              "type": "string"
+            },
+            "channel": {
+              "$ref": "#/$defs/Channel"
+            },
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "data": {
+              "maxLength": 87384,
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "encoding": {
+              "const": "base64"
+            },
+            "offset": {
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            "type": {
+              "const": "output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context",
+            "channel",
+            "offset",
+            "encoding",
+            "data",
+            "byte_length"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "severity": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context",
+            "kind",
+            "severity",
+            "code",
+            "message"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "format": {
+          "const": "pactrun.cli.events.v1"
+        },
+        "received_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "sequence",
+        "received_at_unix_ms",
+        "command"
+      ],
+      "type": "object"
+    },
+    "Reference": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "view",
+        "role",
+        "kind",
+        "id"
+      ],
+      "type": "object"
+    },
+    "Related": {
+      "properties": {
+        "active_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "type": "array"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "required_inputs_satisfied": {
+          "type": "boolean"
+        },
+        "state_version": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instance_id",
+        "name",
+        "active_revision",
+        "state_version",
+        "required_inputs_satisfied",
+        "recovery_guard",
+        "inputs",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related2": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Instance"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related3": {
+      "properties": {
+        "instance_id": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "state_version": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instance_id",
+        "state_version",
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related4": {
+      "properties": {
+        "capture_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Diagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "migration_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MigrationProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "run",
+        "current_recovery_guard",
+        "capture_result",
+        "migration_progress",
+        "diagnostics",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related5": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InspectedRun"
+          },
+          "type": "array"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "next",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related6": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Snapshot"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related7": {
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "current_content_verification": {
+          "type": "string"
+        },
+        "integrity_format": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "origin_instance_id": {
+          "type": "string"
+        },
+        "producer_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "publication_relational_verification": {
+          "type": "string"
+        },
+        "publication_verification": {
+          "type": "string"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "restore_capacity": {
+          "type": "string"
+        },
+        "snapshot_id": {
+          "type": "string"
+        },
+        "target_eligibility": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "integrity_format",
+        "producer_revision",
+        "origin_instance_id",
+        "captured_at",
+        "publication_verification",
+        "publication_relational_verification",
+        "current_content_verification",
+        "restore_capacity",
+        "target_eligibility",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
     "Relation": {
       "properties": {
         "explanation": {
@@ -2151,6 +3521,21 @@
         "presence": {
           "type": "string"
         },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      },
+      "required": [
+        "reference",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "Requirement2": {
+      "properties": {
+        "presence": {
+          "type": "string"
+        },
         "role": {
           "type": "string"
         },
@@ -2171,6 +3556,37 @@
     },
     "Resource": {
       "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "locator": {
+          "type": "string"
+        },
+        "read_exposure": {
+          "type": "string"
+        },
+        "resource_id": {
+          "type": "string"
+        },
+        "storage_id": {
+          "type": "string"
+        },
+        "user_mutation": {
+          "$ref": "#/$defs/Mutation"
+        }
+      },
+      "required": [
+        "resource_id",
+        "storage_id",
+        "locator",
+        "kind",
+        "read_exposure",
+        "user_mutation"
+      ],
+      "type": "object"
+    },
+    "Resource2": {
+      "properties": {
         "details": {
           "anyOf": [
             {
@@ -2182,7 +3598,7 @@
           ]
         },
         "effective_mutation": {
-          "$ref": "#/$defs/Mutation2"
+          "$ref": "#/$defs/Mutation"
         },
         "kind": {
           "type": "string"
@@ -2220,7 +3636,7 @@
           "type": "string"
         },
         "stored_mutation": {
-          "$ref": "#/$defs/Mutation2"
+          "$ref": "#/$defs/Mutation"
         }
       },
       "required": [
@@ -2234,13 +3650,50 @@
       "properties": {
         "items": {
           "items": {
-            "$ref": "#/$defs/Resource"
+            "$ref": "#/$defs/Resource2"
           },
           "type": "array"
         }
       },
       "required": [
         "items"
+      ],
+      "type": "object"
+    },
+    "Retirement": {
+      "properties": {
+        "current_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deletion_phase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inspection": {
+          "$ref": "#/$defs/RetirementInspection"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "recorded_name": {
+          "type": "string"
+        },
+        "retired": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instance_id",
+        "recorded_name",
+        "current_name",
+        "retired",
+        "deletion_phase",
+        "inspection"
       ],
       "type": "object"
     },
@@ -2284,34 +3737,22 @@
       ],
       "type": "object"
     },
-    "RetirementPlan": {
+    "Revision": {
       "properties": {
-        "admission": {
+        "content_digest": {
           "type": "string"
         },
-        "expected_state_version": {
-          "type": "string"
-        },
-        "instance_id": {
-          "type": "string"
-        },
-        "revision": {
-          "$ref": "#/$defs/Revision"
-        },
-        "work": {
+        "package_id": {
           "type": "string"
         }
       },
       "required": [
-        "instance_id",
-        "expected_state_version",
-        "revision",
-        "work",
-        "admission"
+        "package_id",
+        "content_digest"
       ],
       "type": "object"
     },
-    "Revision": {
+    "Revision2": {
       "properties": {
         "content_digest": {
           "type": "string"
@@ -2350,6 +3791,9 @@
           },
           "type": "array"
         },
+        "metadata_scope": {
+          "type": "string"
+        },
         "revision": {
           "$ref": "#/$defs/Revision"
         }
@@ -2358,7 +3802,8 @@
         "revision",
         "core_version",
         "metadata",
-        "declarations"
+        "declarations",
+        "metadata_scope"
       ],
       "type": "object"
     },
@@ -2433,6 +3878,18 @@
         }
       ]
     },
+    "SelectorKind": {
+      "enum": [
+        "run",
+        "snapshot",
+        "instance",
+        "allocation",
+        "revision",
+        "revision_digest",
+        "migration_path"
+      ],
+      "type": "string"
+    },
     "Service": {
       "properties": {
         "consumed_resources": {
@@ -2464,7 +3921,7 @@
         },
         "requirements": {
           "items": {
-            "$ref": "#/$defs/Requirement"
+            "$ref": "#/$defs/Requirement2"
           },
           "type": "array"
         },
@@ -2480,6 +3937,53 @@
         "consumed_resources",
         "created_resources",
         "requirements"
+      ],
+      "type": "object"
+    },
+    "ServiceSource": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "id"
+      ],
+      "type": "object"
+    },
+    "ServiceTransition": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "presence": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ServiceSource"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "sources",
+        "targets",
+        "presence"
       ],
       "type": "object"
     },
@@ -2570,86 +4074,6 @@
       ],
       "type": "object"
     },
-    "SnapshotPlan": {
-      "properties": {
-        "access": {
-          "type": "string"
-        },
-        "eligibility": {
-          "$ref": "#/$defs/SnapshotPlanEligibility"
-        },
-        "execution_timeout_ms": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "expected_state_version": {
-          "type": "string"
-        },
-        "instance_id": {
-          "type": "string"
-        },
-        "operation": {
-          "$ref": "#/$defs/Operation"
-        },
-        "parameters": {
-          "items": {
-            "$ref": "#/$defs/PlanParameter"
-          },
-          "type": "array"
-        },
-        "preview": {
-          "type": "string"
-        },
-        "protocol_version": {
-          "format": "int64",
-          "type": "integer"
-        },
-        "recovery_override": {
-          "type": "boolean"
-        },
-        "revision": {
-          "$ref": "#/$defs/Revision"
-        },
-        "startup_timeout_ms": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "steps": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "terminal": {
-          "type": "string"
-        },
-        "termination_grace_ms": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "operation",
-        "eligibility",
-        "instance_id",
-        "revision",
-        "expected_state_version",
-        "access",
-        "terminal",
-        "protocol_version",
-        "parameters",
-        "steps",
-        "startup_timeout_ms",
-        "execution_timeout_ms",
-        "termination_grace_ms",
-        "recovery_override",
-        "preview"
-      ],
-      "type": "object"
-    },
     "SnapshotPlanEligibility": {
       "oneOf": [
         {
@@ -2712,20 +4136,6 @@
         "intrinsic_verification",
         "content_verification",
         "relational_verification"
-      ],
-      "type": "object"
-    },
-    "Snapshots": {
-      "properties": {
-        "items": {
-          "items": {
-            "$ref": "#/$defs/Snapshot"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "items"
       ],
       "type": "object"
     },
@@ -2830,6 +4240,17 @@
     },
     "Storage": {
       "properties": {
+        "storage_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_id"
+      ],
+      "type": "object"
+    },
+    "Storage2": {
+      "properties": {
         "revision": {
           "$ref": "#/$defs/Revision"
         },
@@ -2867,7 +4288,7 @@
       "properties": {
         "items": {
           "items": {
-            "$ref": "#/$defs/Storage"
+            "$ref": "#/$defs/Storage2"
           },
           "type": "array"
         },
@@ -2881,6 +4302,25 @@
       "required": [
         "items",
         "preserved"
+      ],
+      "type": "object"
+    },
+    "StreamSummary": {
+      "properties": {
+        "byte_length": {
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "context": {
+          "$ref": "#/$defs/Context"
+        }
+      },
+      "required": [
+        "context",
+        "channel",
+        "byte_length"
       ],
       "type": "object"
     },
@@ -3056,6 +4496,41 @@
         }
       ]
     },
+    "Text": {
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "display_name",
+        "summary",
+        "description",
+        "help"
+      ],
+      "type": "object"
+    },
     "Timestamp": {
       "properties": {
         "nanoseconds": {
@@ -3074,6 +4549,28 @@
       "type": "object"
     },
     "Transition": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/InputRef"
+        },
+        "target_input_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target_input_id"
+      ],
+      "type": "object"
+    },
+    "Transition2": {
       "properties": {
         "kind": {
           "type": "string"
@@ -3244,7 +4741,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Instance"
+            "$ref": "#/$defs/Related"
           }
         }
       }
@@ -3263,7 +4760,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Instances"
+            "$ref": "#/$defs/Related2"
           }
         }
       }
@@ -3339,7 +4836,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Inputs"
+            "$ref": "#/$defs/Related3"
           }
         }
       }
@@ -3377,7 +4874,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Actions"
+            "$ref": "#/$defs/Presented"
           }
         }
       }
@@ -3396,7 +4893,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Action"
+            "$ref": "#/$defs/Presented2"
           }
         }
       }
@@ -3420,7 +4917,7 @@
                 "$ref": "#/$defs/Inspection"
               },
               {
-                "$ref": "#/$defs/Plan"
+                "$ref": "#/$defs/Presented3"
               }
             ]
           }
@@ -3441,7 +4938,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Inspection"
+            "$ref": "#/$defs/Related4"
           }
         }
       }
@@ -3631,7 +5128,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/RevisionEntry"
+            "$ref": "#/$defs/Presented4"
           }
         }
       }
@@ -3688,7 +5185,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Page2"
+            "$ref": "#/$defs/Page3"
           }
         }
       }
@@ -3726,7 +5223,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Page3"
+            "$ref": "#/$defs/Related5"
           }
         }
       }
@@ -3802,7 +5299,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3821,7 +5318,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3840,7 +5337,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3859,7 +5356,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3878,7 +5375,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3897,7 +5394,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Mutation"
+            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -3954,7 +5451,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Resource"
+            "$ref": "#/$defs/Resource2"
           }
         }
       }
@@ -4016,7 +5513,7 @@
                 "$ref": "#/$defs/Inspection"
               },
               {
-                "$ref": "#/$defs/RetirementPlan"
+                "$ref": "#/$defs/Presented5"
               }
             ]
           }
@@ -4042,7 +5539,7 @@
                 "$ref": "#/$defs/Inspection"
               },
               {
-                "$ref": "#/$defs/RetirementPlan"
+                "$ref": "#/$defs/Presented5"
               }
             ]
           }
@@ -4158,7 +5655,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Snapshots"
+            "$ref": "#/$defs/Related6"
           }
         }
       }
@@ -4177,7 +5674,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Snapshot"
+            "$ref": "#/$defs/Related7"
           }
         }
       }
@@ -4258,7 +5755,7 @@
                 "$ref": "#/$defs/Inspection"
               },
               {
-                "$ref": "#/$defs/SnapshotPlan"
+                "$ref": "#/$defs/Presented6"
               }
             ]
           }
@@ -4284,7 +5781,7 @@
                 "$ref": "#/$defs/Inspection"
               },
               {
-                "$ref": "#/$defs/SnapshotPlan"
+                "$ref": "#/$defs/Presented6"
               }
             ]
           }
@@ -4305,7 +5802,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/Paths"
+            "$ref": "#/$defs/Presented7"
           }
         }
       }
@@ -4326,7 +5823,7 @@
           "result": {
             "anyOf": [
               {
-                "$ref": "#/$defs/Plan2"
+                "$ref": "#/$defs/Presented8"
               },
               {
                 "$ref": "#/$defs/Completed"
@@ -4363,6 +5860,9 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PartialResult"
+            },
+            {
+              "$ref": "#/$defs/Completed"
             },
             {
               "type": "null"
@@ -4448,6 +5948,9 @@
           "type": "null"
         }
       ]
+    },
+    "delivery": {
+      "$ref": "#/$defs/DeliveryResult"
     },
     "error": {
       "anyOf": [

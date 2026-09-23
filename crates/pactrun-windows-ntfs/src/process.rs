@@ -5,8 +5,8 @@ use std::{
     cmp::Ordering,
     env,
     ffi::OsStr,
-    fs::OpenOptions,
-    io,
+    fs::{File, OpenOptions},
+    io::{self, Read},
     mem::size_of,
     os::windows::{
         ffi::OsStrExt,
@@ -36,6 +36,7 @@ use windows_sys::Win32::{
             JobObjectBasicAccountingInformation, JobObjectExtendedLimitInformation,
             QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
         },
+        Pipes::{CreatePipe, PeekNamedPipe},
         Threading::{
             CREATE_NEW_PROCESS_GROUP, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW,
             DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetCurrentProcess,
@@ -52,6 +53,47 @@ pub enum HookTerminal {
     None,
     Output,
     Interactive,
+}
+
+pub fn capture_pipe() -> io::Result<(File, File)> {
+    let mut read = ptr::null_mut();
+    let mut write = ptr::null_mut();
+    // No inheritable handles are created here. Process creation duplicates only
+    // the write ends into its explicit inheritance list.
+    if unsafe { CreatePipe(&mut read, &mut write, ptr::null(), 0) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe {
+        (
+            File::from_raw_handle(read.cast()),
+            File::from_raw_handle(write.cast()),
+        )
+    })
+}
+pub fn read_capture_pipe(file: &mut File, bytes: &mut [u8]) -> io::Result<usize> {
+    let mut available = 0;
+    if unsafe {
+        PeekNamedPipe(
+            file.as_raw_handle().cast(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+            &mut available,
+            ptr::null_mut(),
+        )
+    } == 0
+    {
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() == Some(109) {
+            return Ok(0);
+        }
+        return Err(error);
+    }
+    if available == 0 {
+        return Err(io::ErrorKind::WouldBlock.into());
+    }
+    let take = bytes.len().min(available as usize);
+    file.read(&mut bytes[..take])
 }
 
 /// Allocates a console for an isolated integration-test driver.
@@ -108,13 +150,29 @@ pub struct HookProcess {
 }
 
 impl HookProcess {
+    pub fn spawn_captured<S: AsRef<OsStr>, const N: usize>(
+        program: &Path,
+        arguments: &[S],
+        discovery: [(&str, &str); N],
+        stdout: &File,
+        stderr: &File,
+    ) -> io::Result<Self> {
+        Self::spawn_inner_captured(
+            program,
+            arguments,
+            HookTerminal::Output,
+            discovery,
+            None,
+            Some((stdout, stderr)),
+        )
+    }
     /// Inherits the parent environment with the two protocol discovery values
     /// replaced. The admitted pathname is passed unchanged as lpApplicationName.
-    pub fn spawn<S: AsRef<OsStr>>(
+    pub fn spawn<S: AsRef<OsStr>, const N: usize>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); 2],
+        discovery: [(&str, &str); N],
     ) -> io::Result<Self> {
         Self::spawn_inner(program, arguments, terminal, discovery, None)
     }
@@ -122,31 +180,42 @@ impl HookProcess {
     /// Test-only environment extension for host-native integration fixtures.
     /// It uses the same process-creation and Job Object path as `spawn`.
     #[doc(hidden)]
-    pub fn spawn_with_extra_environment<S: AsRef<OsStr>>(
+    pub fn spawn_with_extra_environment<S: AsRef<OsStr>, const N: usize>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); 2],
+        discovery: [(&str, &str); N],
         extra: (&str, &OsStr),
     ) -> io::Result<Self> {
         Self::spawn_inner(program, arguments, terminal, discovery, Some(extra))
     }
 
-    fn spawn_inner<S: AsRef<OsStr>>(
+    fn spawn_inner<S: AsRef<OsStr>, const N: usize>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); 2],
+        discovery: [(&str, &str); N],
         extra: Option<(&str, &OsStr)>,
     ) -> io::Result<Self> {
+        Self::spawn_inner_captured(program, arguments, terminal, discovery, extra, None)
+    }
+    fn spawn_inner_captured<S: AsRef<OsStr>, const N: usize>(
+        program: &Path,
+        arguments: &[S],
+        terminal: HookTerminal,
+        discovery: [(&str, &str); N],
+        extra: Option<(&str, &OsStr)>,
+        capture: Option<(&File, &File)>,
+    ) -> io::Result<Self> {
         let job = create_job()?;
-        let created = create_native_process(
+        let created = create_native_process_captured(
             program,
             arguments,
             terminal,
             &discovery,
             program.as_os_str(),
             extra,
+            capture,
         )?;
         let CreatedProcess { process, thread } = created;
         let child = Self { process, job };
@@ -254,6 +323,17 @@ fn create_native_process<S: AsRef<OsStr>>(
     argv0: &OsStr,
     extra: Option<(&str, &OsStr)>,
 ) -> io::Result<CreatedProcess> {
+    create_native_process_captured(program, arguments, terminal, discovery, argv0, extra, None)
+}
+fn create_native_process_captured<S: AsRef<OsStr>>(
+    program: &Path,
+    arguments: &[S],
+    terminal: HookTerminal,
+    discovery: &[(&str, &str)],
+    argv0: &OsStr,
+    extra: Option<(&str, &OsStr)>,
+    capture: Option<(&File, &File)>,
+) -> io::Result<CreatedProcess> {
     let mut application = checked_wide(program.as_os_str())?;
     // An exact lpApplicationName launch is not shell redirection. This
     // Executor-side guard preserves the no-implicit-shell policy for
@@ -270,7 +350,7 @@ fn create_native_process<S: AsRef<OsStr>>(
     let argv0 = checked_wide(argv0)?;
     let mut command_line = command_line(&argv0, arguments)?;
     let environment = environment_block(env::vars_os(), discovery, extra)?;
-    let standard_handles = terminal_handles(terminal)?;
+    let standard_handles = terminal_handles(terminal, capture)?;
     let inherited: Vec<HANDLE> = standard_handles
         .iter()
         .flatten()
@@ -365,17 +445,24 @@ fn create_job() -> io::Result<OwnedHandle> {
     Ok(handle)
 }
 
-fn terminal_handles(terminal: HookTerminal) -> io::Result<[Option<OwnedHandle>; 3]> {
+fn terminal_handles(
+    terminal: HookTerminal,
+    capture: Option<(&File, &File)>,
+) -> io::Result<[Option<OwnedHandle>; 3]> {
     let inherited = [
         matches!(terminal, HookTerminal::Interactive),
         !matches!(terminal, HookTerminal::None),
         !matches!(terminal, HookTerminal::None),
     ];
-    let parent = [
+    let mut parent = [
         io::stdin().as_raw_handle(),
         io::stdout().as_raw_handle(),
         io::stderr().as_raw_handle(),
     ];
+    if let Some((stdout, stderr)) = capture {
+        parent[1] = stdout.as_raw_handle();
+        parent[2] = stderr.as_raw_handle();
+    }
     let mut handles = [None, None, None];
     for index in 0..3 {
         let null;

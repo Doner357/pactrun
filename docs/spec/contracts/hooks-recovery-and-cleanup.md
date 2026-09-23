@@ -166,6 +166,42 @@ PR-TEST-0155.**
 
 ## Recovery-risk duty
 
+### PR-REQ-0361 - Owner-private IPC initialization
+
+Before launching a user Hook, Core MUST prepare its IPC listener and, for the
+built-in Shell Loader, qualify the helper endpoint location too. On Linux the
+complete native-byte endpoint lengths MUST fit the platform pathname limit.
+An overlong or non-Unicode system temporary pathname MUST select a fresh
+owner-private directory under qualified `/tmp` instead. This selection MUST NOT
+change TMPDIR, child temporary-file policy, Workspace or persistent storage.
+Other I/O errors MUST NOT trigger fallback. Private roots must belong to the
+current account, or be a qualified root-owned sticky system temporary root;
+unsafe links/replacements and adoption of existing private directories are refused.
+Random naming, owner-only permissions and per-execution cleanup remain required.
+No global scavenger is introduced. Windows retains named-pipe addressing.
+
+Initialization failure MUST use `execution:ipc_initialization_failed` at
+EstablishSession, not AcceptCompletion. A safe reason and remedy MUST remain
+available in live and historical Run inspection independently of Hook-text
+retention. Actual spawn and post-launch protocol failures retain their meanings.
+
+**Verification: PR-TEST-0570, PR-TEST-0572, PR-TEST-0574, PR-TEST-0577.**
+
+### PR-REQ-0362 - Built-in Loader startup attribution
+
+The built-in Loader MUST bind its helper listener before session_ready and before
+launching the user's script. Execution-private bounded initialization evidence,
+atomically published by that Loader, MAY identify an initialization failure to
+Core as `execution:shell_loader_initialization_failed` at EstablishSession.
+Only an identified built-in Loader may supply this evidence. User streams and
+public Hook messages MUST NOT be parsed as private startup evidence. Missing,
+invalid or uncertain evidence MUST NOT imply success, replay authority or risk
+resolution. Existing cancellation, timeout and owner-loss rules retain priority.
+The private evidence MUST be removed with the execution; it does not extend the
+public Hook protocol or require a persistence schema change.
+
+**Verification: PR-TEST-0571, PR-TEST-0572, PR-TEST-0574, PR-TEST-0576.**
+
 ### PR-REQ-0173 - Risk-entry request
 
 Before crossing a boundary after which permanent Hook loss may leave

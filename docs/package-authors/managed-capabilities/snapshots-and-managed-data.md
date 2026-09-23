@@ -6,8 +6,7 @@ title: Snapshots and Managed Data
 
 :::info Documentation status
 
-Deferred to the usage-documentation phase. This page reserves the
-documentation structure only; it is not an executable guide.
+This guidance is planned.
 
 :::
 

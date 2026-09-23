@@ -449,6 +449,7 @@ fn script_command(args: &[OsString], listener: &ProtocolListener) -> io::Result<
     command.env_remove("PACTRUN_HOOK_PROTOCOL_ENDPOINT");
     command.env_remove("PACTRUN_HOOK_PROTOCOL_TRANSPORT");
     command.env_remove("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY");
+    command.env_remove(super::startup::STATUS_ENV);
     Ok(command)
 }
 
@@ -506,17 +507,20 @@ fn execution(args: &[OsString]) -> io::Result<i32> {
     let session = read_frame(&mut wire)?;
     session::validate(&session, version)?;
     wire.write_all(&preamble)?;
+    #[cfg(unix)]
+    let listener = ProtocolListener::bind_helpers_in(Path::new(
+        &env::var_os("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY").ok_or_else(failure)?,
+    ));
+    #[cfg(windows)]
+    let listener = ProtocolListener::bind_helpers();
+    let mut listener = listener.inspect_err(|error| super::startup::publish(error, false))?;
     write_frame(
         &mut wire,
         &json!({"type":"session_ready", "protocol_version":version,"session_id":session["session_id"]}),
     )?;
-    #[cfg(unix)]
-    let mut listener = ProtocolListener::bind_helpers_in(Path::new(
-        &env::var_os("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY").ok_or_else(failure)?,
-    ))?;
-    #[cfg(windows)]
-    let mut listener = ProtocolListener::bind_helpers()?;
-    let mut child = script_command(args, &listener)?.spawn()?;
+    let mut child = script_command(args, &listener)
+        .and_then(|mut command| command.spawn())
+        .inspect_err(|error| super::startup::publish(error, true))?;
     let (send, recv) = mpsc::channel();
     let mut reader = wire.try_clone()?;
     let events = send.clone();
@@ -661,6 +665,95 @@ mod tests {
             thread::yield_now();
         };
         (listener, server, peer)
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn loader_startup_failure_worker() {
+        let Some(version) = env::var_os("PACTRUN_TEST_STARTUP_WORKER") else {
+            return;
+        };
+        let args = [
+            OsString::from("sh"),
+            OsString::from("/bin/sh"),
+            OsString::from("/never-start-this-script"),
+            version,
+        ];
+        std::process::exit(run(&args));
+    }
+
+    // Test-ID: PR-TEST-0576
+    // Verifies: PR-REQ-0362
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn real_loader_reports_helper_bind_failure_before_ready_or_user_script() {
+        for version in [1, 2] {
+            let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp");
+            fs::create_dir_all(&parent).unwrap();
+            let root = tempfile::tempdir_in(parent).unwrap();
+            let setup = super::super::startup::Setup::new(root.path()).unwrap();
+            let blocker = setup.helper.path.join("helper.sock");
+            fs::write(&blocker, b"not a socket; never remove an unrelated file").unwrap();
+            let mut listener = ProtocolListener::bind().unwrap();
+            let mut child = Command::new(env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "hook::shell_loader::tests::loader_startup_failure_worker",
+                    "--nocapture",
+                ])
+                .env("PACTRUN_TEST_STARTUP_WORKER", version.to_string())
+                .env("PACTRUN_HOOK_PROTOCOL_TRANSPORT", "unix-domain-socket")
+                .env("PACTRUN_HOOK_PROTOCOL_ENDPOINT", listener.endpoint())
+                .env(super::super::startup::STATUS_ENV, &setup.status)
+                .env(
+                    "PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY",
+                    &setup.helper.path,
+                )
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            let mut stream = loop {
+                if let Some(stream) = listener.try_accept().unwrap() {
+                    break stream;
+                }
+                if std::time::Instant::now() > deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("loader did not connect");
+                }
+                thread::sleep(Duration::from_millis(5));
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
+            let preamble = if version == 1 {
+                protocol::PREAMBLE
+            } else {
+                protocol::v2::PREAMBLE_V2
+            };
+            stream.write_all(preamble).unwrap();
+            let mut value = session();
+            value["protocol_version"] = json!(version);
+            if version == 2 {
+                value["service_authorities"] = json!([]);
+            }
+            write_frame(&mut stream, &value).unwrap();
+            let mut bytes = Vec::new();
+            stream.read_to_end(&mut bytes).unwrap();
+            assert!(!child.wait().unwrap().success());
+            assert_eq!(bytes, preamble); // No session_ready was sent.
+            assert!(matches!(
+                setup.failure(),
+                Some(super::super::FailureKind::LoaderInitialization(_))
+            ));
+            assert_eq!(
+                fs::read(&blocker).unwrap(),
+                b"not a socket; never remove an unrelated file"
+            );
+            fs::remove_file(blocker).unwrap();
+        }
     }
 
     // Test-ID: PR-TEST-0515

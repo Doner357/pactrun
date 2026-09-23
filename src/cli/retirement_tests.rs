@@ -103,7 +103,9 @@ fn json_retirement_handoff_and_storage_views_preserve_disclosure_boundaries() {
     let result = json(&["instance", "abandon", "retire"]);
     assert_eq!(result["run"]["state"]["outcome"], "succeeded");
     assert!(path.exists());
-    json(&["instance", "deletion", "show", &instance.id.to_string()]);
+    let detail = json(&["instance", "deletion", "show", &instance.id.to_string()]);
+    let list = json(&["instance", "deletion", "list"]);
+    assert_eq!(list["items"][0]["inspection"], detail);
     let allocation_id = allocation.to_string();
     let hidden = json(&["service-storage", "detached", "show", &allocation_id]);
     assert!(hidden["locations"].is_null());
@@ -179,7 +181,7 @@ fn deletion_cli_plans_without_runs_then_removes_storage_and_preserves_exact_hist
     let (code, out, err) = invoke(&root, &["instance", "delete", "retire", "--plan"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("no_cleanup_declared"));
-    assert!(out.contains("not_attempted"));
+    assert!(out.contains("Mode: preview"));
     assert!(!out.contains("service-owned-private-sentinel"));
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     assert!(p.list_managed_runs(instance.id).unwrap().is_empty());
@@ -240,14 +242,14 @@ fn abandon_handoff_and_discard_cli_preserve_bytes_until_exact_confirmation() {
     let (_temp, root, instance, allocation, path) = fixture();
     let (code, _, err) = invoke(&root, &["instance", "abandon", "retire"]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("Already removed bytes cannot be restored"));
-    assert!(err.contains("External processes are not stopped"));
+    assert!(err.contains("preserve remaining service data"));
+    assert!(err.contains("Stop external service processes separately"));
     assert_eq!(
         fs::read(path.join("secret")).unwrap(),
         b"service-owned-private-sentinel"
     );
     for args in [
-        vec!["service-storage", "detached", "list"],
+        vec!["service-storage", "detached", "list", "--no-trunc"],
         vec![
             "service-storage",
             "detached",

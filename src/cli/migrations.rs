@@ -2,24 +2,185 @@
 use super::*;
 use crate::domain::*;
 
+fn path_presentation(
+    app: &PactrunApplication,
+    page: &MigrationPathPage,
+) -> Result<Vec<capability_presentation::Group>, CliError> {
+    let requested: Vec<_> = page
+        .candidates
+        .iter()
+        .flat_map(|candidate| {
+            candidate.revisions.windows(2).map(|pair| {
+                (
+                    pair[1].clone(),
+                    capability_presentation::Selection::Edge(pair[0].content_digest),
+                )
+            })
+        })
+        .collect();
+    capability_presentation::load(app, &requested)
+}
+
 pub(super) enum MigrationCommand {
     List {
         name: InstanceName,
         target: RevisionReference,
-        after: Option<MigrationPathId>,
+        after: Option<Selector<MigrationPathId>>,
         limit: usize,
+        no_trunc: bool,
+        resolved_instance: Option<InstanceId>,
     },
     Plan {
         no_retain_hook_text: bool,
+        cancel_on_output_close: bool,
         name: InstanceName,
         target: RevisionReference,
-        path: Option<MigrationPathId>,
+        path: Option<Selector<MigrationPathId>>,
         plan: bool,
         authorize: bool,
         override_guard: bool,
-        inputs: Vec<(MigrationTargetInput, PathBuf)>,
+        inputs: Vec<(InputTarget, PathBuf)>,
         policy: HookRuntimePolicy,
+        resolved_instance: Option<InstanceId>,
     },
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct InputTarget {
+    revision: Selector<RevisionContentDigest>,
+    input: InputIdentity,
+}
+impl MigrationCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        let scoped = match self {
+            Self::List { after, .. } => matches!(after, Some(Selector::Prefix(_))),
+            Self::Plan { path, inputs, .. } => {
+                matches!(path, Some(Selector::Prefix(_)))
+                    || inputs
+                        .iter()
+                        .any(|(i, _)| matches!(i.revision, Selector::Prefix(_)))
+            }
+        };
+        let (name, target, bound) = match self {
+            Self::List {
+                name,
+                target,
+                resolved_instance,
+                ..
+            }
+            | Self::Plan {
+                name,
+                target,
+                resolved_instance,
+                ..
+            } => (name, target, resolved_instance),
+        };
+        r.revision(target)?;
+        if !scoped {
+            return Ok(());
+        }
+        let cancellation = r.cancellation.clone();
+        let app = r.app()?;
+        let instance = app
+            .resolve_instance_name(name)
+            .map_err(app_error)?
+            .ok_or_else(|| CliError::operation("Instance does not exist"))?;
+        let target_id = resolve_revision(app, target.clone())?;
+        let observation = app
+            .observe_migration_compilation(instance)
+            .map_err(|e| CliError::operation(e.to_string()))?;
+        *bound = Some(instance);
+        *target = RevisionReference::Exact(target_id.clone());
+        let path = match self {
+            Self::List { after, .. } => after,
+            Self::Plan { path, .. } => path,
+        };
+        if let Some(Selector::Prefix(prefix)) = path {
+            let text = format!("mp1-{prefix}");
+            let mut candidates = Vec::new();
+            visit_paths(&observation, &target_id, &cancellation, |c| {
+                let id = c.id.to_string();
+                if id.starts_with(&text) {
+                    candidates.push(id);
+                }
+                candidates.len() < 21
+            })?;
+            let has_more = candidates.len() > 20;
+            candidates.truncate(20);
+            let selected = short_ids::unique(
+                short_ids::SelectorKind::MigrationPath,
+                &text,
+                IdentityMatches {
+                    candidates,
+                    has_more,
+                },
+            )?;
+            *path = Some(Selector::Full(selected.parse().map_err(migration_error)?));
+        }
+        if let Self::Plan { inputs, .. } = self {
+            for (key, _) in inputs.iter_mut() {
+                if let Selector::Prefix(prefix) = &key.revision {
+                    let mut candidates: Vec<_> = observation
+                        .revisions
+                        .iter()
+                        .filter(|r| r.identity.package_id == observation.active_revision.package_id)
+                        .map(|r| r.identity.content_digest.to_string())
+                        .filter(|s| s[7..].starts_with(prefix))
+                        .take(21)
+                        .collect();
+                    let has_more = candidates.len() > 20;
+                    candidates.truncate(20);
+                    let selected = short_ids::unique(
+                        short_ids::SelectorKind::RevisionDigest,
+                        &format!("sha256:{prefix}"),
+                        IdentityMatches {
+                            candidates,
+                            has_more,
+                        },
+                    )?;
+                    key.revision = Selector::Full(selected.parse().map_err(CliError::usage)?);
+                }
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for (key, _) in inputs {
+                if !seen.insert((key.revision.clone().full(), key.input.clone())) {
+                    return Err(CliError::usage("duplicate Migration target Input"));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn visit_paths(
+    observation: &MigrationCompilationObservation,
+    target: &RevisionIdentity,
+    cancellation: &ActionCancellation,
+    mut visit: impl FnMut(&MigrationPathCandidate) -> bool,
+) -> Result<(), CliError> {
+    let mut after = None;
+    loop {
+        if cancellation.is_requested() {
+            return Err(CliError::operation("Migration path lookup cancelled"));
+        }
+        let page = list_migration_paths(
+            &observation.revisions,
+            &observation.active_revision,
+            target,
+            after.as_ref(),
+            MIGRATION_PATH_PAGE_MAX,
+        )
+        .map_err(migration_error)?;
+        for candidate in &page.candidates {
+            if !visit(candidate) {
+                return Ok(());
+            }
+        }
+        if !page.has_more {
+            return Ok(());
+        }
+        after = page.candidates.last().map(|c| c.id.clone());
+    }
 }
 
 pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationCommand, CliError> {
@@ -27,10 +188,16 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     let (mut target, mut path, mut after, mut limit) = (None, None, None, None);
     let (mut plan, mut authorize, mut override_guard) = (false, false, false);
     let mut no_retain_hook_text = false;
+    let mut cancel_on_output_close = false;
     let mut inputs = Vec::new();
+    let mut no_trunc = false;
     let (mut startup, mut execution, mut grace) = (None, None, None);
     while let Some(argument) = parser.next().map_err(lex_error)? {
         match argument {
+            Arg::Long("no-trunc") if listing && !no_trunc => no_trunc = true,
+            Arg::Long("cancel-on-output-close") if !listing && !cancel_on_output_close => {
+                cancel_on_output_close = true
+            }
             Arg::Long("no-retain-hook-text") if !listing && !no_retain_hook_text => {
                 no_retain_hook_text = true
             }
@@ -61,8 +228,8 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
                 let (revision, input) = target.split_once('/').ok_or_else(|| {
                     CliError::usage("--input-file requires <target-digest>/<input-id>=<host-path>")
                 })?;
-                let target = MigrationTargetInput {
-                    revision: revision.parse().map_err(CliError::usage)?,
+                let target = InputTarget {
+                    revision: revision.parse()?,
                     input: parse_input_id(input)?,
                 };
                 if inputs.iter().any(|(key, _)| key == &target) {
@@ -92,6 +259,8 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     let target = target.ok_or_else(|| CliError::usage("missing --to"))?;
     if listing {
         Ok(MigrationCommand::List {
+            no_trunc,
+            resolved_instance: None,
             name,
             target,
             after,
@@ -99,7 +268,9 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
         })
     } else {
         Ok(MigrationCommand::Plan {
+            resolved_instance: None,
             no_retain_hook_text,
+            cancel_on_output_close,
             name,
             target,
             path,
@@ -112,10 +283,8 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
         })
     }
 }
-fn path_id(parser: &mut Parser) -> Result<MigrationPathId, CliError> {
-    value_string(parser, "Migration path ID")?
-        .parse()
-        .map_err(|error: MigrationError| CliError::usage(error.to_string()))
+fn path_id(parser: &mut Parser) -> Result<Selector<MigrationPathId>, CliError> {
+    value_string(parser, "Migration path ID")?.parse()
 }
 fn migration_error(error: MigrationError) -> CliError {
     CliError::operation(error.to_string())
@@ -140,15 +309,32 @@ pub(super) fn execute(
     };
     // Resolve labels exactly using the same semantics as other human commands.
     let target = resolve_revision(&app, target.clone())?;
-    let instance = app
-        .resolve_instance_name(name)
-        .map_err(app_error)?
-        .ok_or_else(|| CliError::operation("Instance does not exist"))?;
+    let bound = match &command {
+        MigrationCommand::List {
+            resolved_instance, ..
+        }
+        | MigrationCommand::Plan {
+            resolved_instance, ..
+        } => *resolved_instance,
+    };
+    let instance = match bound {
+        Some(id) => id,
+        None => app
+            .resolve_instance_name(name)
+            .map_err(app_error)?
+            .ok_or_else(|| CliError::operation("Instance does not exist"))?,
+    };
     let observation = app
         .observe_migration_compilation(instance)
         .map_err(|e| CliError::operation(e.to_string()))?;
     match command {
-        MigrationCommand::List { after, limit, .. } => {
+        MigrationCommand::List {
+            after,
+            limit,
+            no_trunc,
+            ..
+        } => {
+            let after = after.map(Selector::full);
             let page = list_migration_paths(
                 &observation.revisions,
                 &observation.active_revision,
@@ -161,15 +347,21 @@ pub(super) fn execute(
                 return presentation::render(
                     format,
                     "instance migration-paths",
-                    &migration_presentation::Paths::from(&page),
+                    &capability_presentation::Presented {
+                        value: migration_presentation::Paths::from(&page),
+                        presentation: path_presentation(&app, &page)?,
+                    },
                     output,
                     |_, _| unreachable!(),
                 );
             }
-            write_page(output, &page)
+            let labels = path_labels(&observation, &target, &page, no_trunc, cancellation)?;
+            write_page(output, &page, &labels)?;
+            capability_presentation::write(output, &path_presentation(&app, &page)?, true)
         }
         MigrationCommand::Plan {
             no_retain_hook_text: _,
+            cancel_on_output_close: _,
             path,
             authorize,
             plan: plan_only,
@@ -178,8 +370,21 @@ pub(super) fn execute(
             policy,
             ..
         } => {
+            let inputs: Vec<_> = inputs
+                .into_iter()
+                .map(|(key, path)| {
+                    (
+                        MigrationTargetInput {
+                            revision: key.revision.full(),
+                            input: key.input,
+                        },
+                        path,
+                    )
+                })
+                .collect();
             let selected = match path {
                 Some(id) => id
+                    .full()
                     .resolve(
                         &observation.revisions,
                         &observation.active_revision,
@@ -209,7 +414,9 @@ pub(super) fn execute(
                             ));
                             return Err(error);
                         }
-                        write_page(output, &page)?;
+                        let labels =
+                            path_labels(&observation, &target, &page, false, cancellation)?;
+                        write_page(output, &page, &labels)?;
                         return Err(migration_error(MigrationError::AmbiguousPath));
                     }
                     Err(error) => return Err(migration_error(error)),
@@ -310,7 +517,12 @@ pub(super) fn execute(
                     error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                     return Err(error);
                 }
-                snapshots::write_run(output, &inspection)?;
+                if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+                {
+                    writeln!(output, "run: {run}\noutcome: succeeded").map_err(io_operation)?;
+                } else {
+                    snapshots::write_run(output, &inspection)?;
+                }
                 return match &inspection.run.state {
                     RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
                         let current = writer
@@ -333,16 +545,38 @@ pub(super) fn execute(
                     )),
                 };
             }
+            let requested: Vec<_> = plan
+                .edges()
+                .iter()
+                .map(|edge| {
+                    (
+                        edge.bindings.target().clone(),
+                        capability_presentation::Selection::Edge(
+                            edge.bindings.source().content_digest,
+                        ),
+                    )
+                })
+                .collect();
+            let author = capability_presentation::load(&app, &requested)?;
             if format == presentation::Format::Json {
                 return presentation::render(
                     format,
                     "instance migrate",
-                    &migration_presentation::Plan::new(&id, &plan, &policy),
+                    &capability_presentation::Presented {
+                        value: migration_presentation::Plan::new(&id, &plan, &policy),
+                        presentation: author,
+                    },
                     output,
                     |_, _| unreachable!(),
                 );
             }
-            writeln!(output, "Migration plan (read-only; no Run created)\npath_id: {id}\nexpected_state_version: {}", plan.expected_state_version()).map_err(io_operation)?;
+            writeln!(
+                output,
+                "Migration preview\npath_id: {id}\nexpected_state_version: {}",
+                plan.expected_state_version()
+            )
+            .map_err(io_operation)?;
+            capability_presentation::write(output, &author, false)?;
             let timeout = |duration: Option<Duration>| {
                 duration
                     .map(|d| d.as_millis().to_string())
@@ -367,40 +601,24 @@ pub(super) fn execute(
                 )
                 .map_err(io_operation)?;
                 if let Some(service) = &edge.service {
-                    writeln!(
-                        output,
-                        "  service_transform: {} (live presence and contents are not observed by this plan)",
-                        service.transform
-                    )
-                    .map_err(io_operation)?;
-                    for id in &service.created_storages {
-                        writeln!(
-                            output,
-                            "  create_storage: {} (allocation deferred to this edge)",
-                            id.as_str()
-                        )
+                    writeln!(output, "  service_transform: {}", service.transform)
                         .map_err(io_operation)?;
+                    for id in &service.created_storages {
+                        writeln!(output, "  create_storage: {}", id.as_str())
+                            .map_err(io_operation)?;
                     }
                     for id in &service.consumed_storages {
-                        writeln!(
-                            output,
-                            "  consume_source_storage: {} (no content deletion)",
-                            id.as_str()
-                        )
-                        .map_err(io_operation)?;
+                        writeln!(output, "  consume_source_storage_binding: {}", id.as_str())
+                            .map_err(io_operation)?;
                     }
                     for id in &service.consumed_resources {
-                        writeln!(
-                            output,
-                            "  consume_source_resource: {} (no content deletion)",
-                            id.as_str()
-                        )
-                        .map_err(io_operation)?;
+                        writeln!(output, "  consume_source_resource_binding: {}", id.as_str())
+                            .map_err(io_operation)?;
                     }
                     for (presence, resource) in &service.create_presence {
                         writeln!(
                             output,
-                            "  create_resource: {} presence={presence:?} (runtime check)",
+                            "  create_resource: {} presence={presence:?}",
                             resource.declaration.id.as_str()
                         )
                         .map_err(io_operation)?;
@@ -408,7 +626,7 @@ pub(super) fn execute(
                     for (requirement, _) in &service.requires {
                         writeln!(
                             output,
-                            "  service_requires: {:?} {:?} (runtime check)",
+                            "  service_requires: {:?} {:?}",
                             requirement.reference, requirement.presence
                         )
                         .map_err(io_operation)?;
@@ -419,12 +637,8 @@ pub(super) fn execute(
                     .iter()
                     .filter(|i| i.revision == bindings.target().content_digest)
                 {
-                    writeln!(
-                        output,
-                        "  operator_input: {} (acquisition not performed)",
-                        input.input.as_str()
-                    )
-                    .map_err(io_operation)?;
+                    writeln!(output, "  input file: {}", input.input.as_str())
+                        .map_err(io_operation)?;
                 }
                 for source in &bindings.declaration().requires_source {
                     writeln!(
@@ -470,22 +684,62 @@ pub(super) fn execute(
                 )
                 .map_err(io_operation)?;
             }
-            writeln!(
-                output,
-                "Admission not performed; plan references do not reserve resources."
-            )
-            .map_err(io_operation)
+            writeln!(output, "Mode: preview").map_err(io_operation)
         }
     }
 }
 
-fn write_page(output: &mut dyn Write, page: &MigrationPathPage) -> Result<(), CliError> {
-    writeln!(output, "Migration path candidates (relationally valid declared edges; requirements, runtime and authorization not evaluated)").map_err(io_operation)?;
-    for candidate in &page.candidates {
+fn path_labels(
+    observation: &MigrationCompilationObservation,
+    target: &RevisionIdentity,
+    page: &MigrationPathPage,
+    full: bool,
+    cancellation: &ActionCancellation,
+) -> Result<Vec<String>, CliError> {
+    let ids: Vec<_> = page.candidates.iter().map(|c| c.id.to_string()).collect();
+    if full {
+        return Ok(ids);
+    }
+    let mut sizes = vec![16usize; ids.len()];
+    visit_paths(observation, target, cancellation, |candidate| {
+        let other = candidate.id.to_string();
+        for (id, size) in ids.iter().zip(&mut sizes) {
+            if id != &other {
+                *size = (*size).max(
+                    id.bytes()
+                        .zip(other.bytes())
+                        .take_while(|(a, b)| a == b)
+                        .count()
+                        + 1,
+                );
+            }
+        }
+        true
+    })?;
+    Ok(ids
+        .into_iter()
+        .zip(sizes)
+        .map(|(id, n)| {
+            if n >= 68 || n >= id.len() {
+                id
+            } else {
+                id[..n].into()
+            }
+        })
+        .collect())
+}
+
+fn write_page(
+    output: &mut dyn Write,
+    page: &MigrationPathPage,
+    labels: &[String],
+) -> Result<(), CliError> {
+    writeln!(output, "Migration paths").map_err(io_operation)?;
+    for (candidate, label) in page.candidates.iter().zip(labels) {
         writeln!(
             output,
             "path_id: {}\n  route: {}\n  edge_count: {}",
-            candidate.id,
+            label,
             candidate
                 .revisions
                 .iter()
@@ -511,11 +765,7 @@ fn write_page(output: &mut dyn Write, page: &MigrationPathPage) -> Result<(), Cl
         )
         .map_err(io_operation)?;
     }
-    writeln!(
-        output,
-        "No Run, pin, reservation, or persistent path registry was created."
-    )
-    .map_err(io_operation)
+    Ok(())
 }
 
 #[cfg(test)]

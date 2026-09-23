@@ -52,7 +52,10 @@ fn json_management_catalog_and_raw_input_share_backend_facts() {
     let revision = json_install(&root, &source);
     let created = json_ok(&root, &["instance","create","node","--revision",&revision]);
     let shown = json_ok(&root, &["instance","show","node"]);
-    assert_eq!(created, shown);
+    for (key, value) in created.as_object().unwrap() {
+        assert_eq!(value, &shown[key]);
+    }
+    assert_eq!(shown["related_revisions"].as_array().unwrap().len(), 1);
     let list = json_ok(&root, &["instance","list"]);
     assert_eq!(list["items"][0]["instance_id"], created["instance_id"]);
     let input = temp.path().join("--format"); fs::write(&input, [0,255,10,13,123]).unwrap();
@@ -142,16 +145,17 @@ fn json_real_execution_plan_and_run_inspection_are_structured_and_redacted() {
 // Test-ID: PR-TEST-0561
 // Verifies: PR-REQ-0358, PR-REQ-0360, PR-REQ-0120
 #[test]
-fn json_terminal_modes_are_refused_before_launch_or_parameter_acquisition() {
-    for terminal in ["output","interactive"] {
+fn json_interactive_is_refused_before_launch_or_parameter_acquisition() {
+    for terminal in ["interactive"] {
         let (_temp,root,source)=cli_action_roots();
         let yaml=fs::read_to_string(source.join("pactrun.yaml")).unwrap().replace("terminal: none",&format!("terminal: {terminal}"));
         fs::write(source.join("pactrun.yaml"),yaml).unwrap();
         let revision=json_install(&root,&source); let created=json_ok(&root,&["instance","create","node","--revision",&revision]);
         let (code,value,_)=json_invoke(&root,["invoke","node","inspect","--param-file","value=does-not-exist"].map(OsString::from).to_vec());
-        assert_eq!(code,2,"{value}"); assert!(value["error"]["message"].as_str().unwrap().contains("terminal streams"));
+        assert_eq!(code,2,"{value}"); assert!(value["error"]["message"].as_str().unwrap().contains("interactive"));
         assert!(json_ok(&root,&["run","list"])["items"].as_array().unwrap().is_empty());
-        assert_eq!(json_ok(&root,&["instance","show","node"]),created);
+        let shown = json_ok(&root,&["instance","show","node"]);
+        for (key, value) in created.as_object().unwrap() { assert_eq!(value, &shown[key]); }
         json_ok(&root,&["invoke","node","inspect","--param","value=x","--plan"]);
     }
 }

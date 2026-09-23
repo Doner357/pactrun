@@ -4,12 +4,16 @@ title: CLI JSON V1
 
 # CLI JSON V1
 
+Object-ID operands follow the [CLI selector contract](./cli-id-selectors.md).
+Machine responses always retain full identities.
+
 **Status: Approved normative versioned CLI presentation contract.**
 
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-This page owns Pactrun CLI JSON V1, not exported payloads or Hook streams.
+This page owns machine CLI responses and ephemeral output delivery.
+Exported payload formats and the Hook protocol have separate contracts.
 The [schema](./cli-json-v1.schema.json) specifies command-specific result shapes.
 Read [error identity](./error-taxonomy-v1.md) and
 [command behavior](../behavior/command-and-output-reference.md) for their owners.
@@ -26,7 +30,7 @@ owns delivery scope, not additional product semantics.
 
 ### PR-REQ-0358 - Explicit CLI presentation selection
 
-The CLI MUST accept a leading `--format human` or `--format json`. Omission MUST
+The CLI MUST accept a leading `--format human`, `--format json` or `--format jsonl`. Omission MUST
 select human presentation. The selector MUST NOT be inferred from terminal
 availability, pipes, environment variables or redirects. Duplicate selectors,
 unknown values and selectors after the command MUST be usage errors. A selector
@@ -61,8 +65,9 @@ Implementations MUST preserve available typed identity before prose conversion
 and MUST NOT infer identities from strings or invent a Hook-owned Pactrun error.
 
 Result models MUST be explicit projections, not parsed prose, private-struct
-serialization or Debug output. Human and JSON rendering MUST use the same facts
-and disclosure policy. Empty collections are arrays; null denotes an absent
+serialization or Debug output. Human and machine rendering share authoritative
+facts and disclosure policy; human rendering selects a task-relevant subset.
+Machine rendering supplies the complete public projection. Empty collections are arrays; null denotes an absent
 optional value. Domain distinctions such as not checked, not applicable and
 unknown MUST have explicit typed states where the owning result distinguishes
 them; absence MUST NOT be turned into a negative assertion.
@@ -75,6 +80,36 @@ Pack, Core, Snapshot and Hook versions.
 
 **Verification: PR-TEST-0554, PR-TEST-0556, PR-TEST-0557, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0562, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565, PR-TEST-0566, PR-TEST-0567, PR-TEST-0568, PR-TEST-0569.**
 
+The two Core-owned initialization errors defined by PR-REQ-0361/0362 additionally
+expose nullable `detail` on failure projections. Only their safely classified,
+Core-generated stored reason is eligible; arbitrary stored messages and paths
+remain withheld. Existing historical identities and steps are not rewritten.
+
+### PR-REQ-0363 - Capability presentation at inspection boundaries
+
+Action list/show, revision show, migration-paths and Action/Capture/Restore/
+Migration/Cleanup plan previews MUST project existing presentation metadata from
+the exact defining Revision, without changing execution identity or eligibility.
+Action list and migration-paths show names/summaries; detail and preview show all
+four fields and applicable parameter/output descriptions. Revision show groups
+all supported targets by capability and remains usable without an Instance.
+Restore uses target-Revision metadata. A Migration edge uses its target Revision
+and exact source digest. Abandon MUST NOT present itself as Cleanup.
+
+JSON results add `presentation`, an array grouped by exact Revision with typed
+targets and nullable display_name, summary, description and help. Empty metadata
+is an empty array. Existing fields retain their meaning. Author text is not an
+assertion of runtime verification. Human output sanitizes terminal control text,
+retains IDs and avoids empty-field noise. Definition and metadata inspection is
+read-only and consistent; no per-target independent lookup is allowed. Metadata
+does not enter immutable plans or increment Instance state versions. Mutable
+presentation is not injected into historical Run/Snapshot object fields or actual
+execution results. Machine queries may include separately grouped current
+installed definitions under PR-REQ-0365. Revision metadata show retains its
+existing raw inspection interface.
+
+**Verification: PR-TEST-0573, PR-TEST-0575.**
+
 ### PR-REQ-0360 - Payload and terminal preservation
 
 Presentation MUST NOT transform raw Input/Artifact bytes, transport archives or
@@ -82,11 +117,10 @@ Hook terminal streams. A raw Input export to stdout MUST NOT gain a JSON success
 envelope; its Pactrun-owned errors use stderr in the selected format. Other
 ordinary responses MUST NOT mix human result text or logs into stdout JSON.
 
-JSON actual execution requiring a Hook output or interactive terminal contract
-MUST fail before execution side effects and before starting the Hook. Planning
-without execution MUST remain supported. This is a presentation restriction,
-not a new admission/recovery rule. Human execution followed by JSON Run inspection
-remains available. No new result-file destination or event stream is defined.
+Machine execution supports noninteractive Hook output through the delivery
+contract below. Interactive Hook execution MUST be refused before execution
+side effects. Planning remains available. Ordinary JSON keeps one final document;
+JSON Lines uses the independently versioned event envelope below.
 
 Output failure MUST NOT be represented as rollback. Once writing a response has
 begun, an implementation MUST NOT append a replacement envelope to damaged output.
@@ -96,6 +130,95 @@ Formatting MUST NOT introduce additional sensitive disclosure or authorization.
 **Verification: PR-TEST-0555, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0561, PR-TEST-0562, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565, PR-TEST-0566, PR-TEST-0567, PR-TEST-0568, PR-TEST-0569.**
 
 ## V1 representation rules
+
+### PR-REQ-0364 - Task-oriented human presentation
+
+Human list views MUST be compact and labeled; show views group useful facts and
+authored descriptions with their subjects. Previews describe planned work and
+actual blockers. Routine success reports the completed result. Errors and warnings
+state concrete consequences and next actions. Fixed disclaimers about guarantees,
+authentication, internal admission/pins or omitted internal work MUST NOT be added
+to ordinary output. Diagnostic inspection retains technical context and real gaps.
+Author content retains its meaning; terminal-control characters remain escaped in
+Pactrun-rendered text. Raw Hook terminal streams retain their channel contract.
+
+**Verification: PR-TEST-0578.**
+
+### PR-REQ-0365 - Complete public machine projections
+
+Machine listings MUST include their public show-level facts and needed definition
+and presentation context, within existing pagination boundaries. Related installed
+Revisions may be included once per response with exact identity references.
+Their `metadata_scope: current` identifies mutable metadata read at query time;
+it MUST NOT be represented as metadata retained at execution or capture time.
+Unavailable related objects are explicit; historical identities never depend on
+continued installation. Queries remain read-only and do not implicitly verify
+payloads or probe services. Existing members, types and meanings are preserved.
+Non-sensitive declared parameter defaults are available as typed values; sensitive
+defaults expose presence/redaction only. Large integer values use decimal strings.
+Raw payloads, secrets, Hook argument text and protected native paths retain their
+existing authorization/disclosure boundaries. Missing facts are not invented.
+
+**Verification: PR-TEST-0579.**
+
+### PR-REQ-0366 - Noninteractive machine delivery
+
+For actual noninteractive execution, JSON MUST deliver a final V1 response plus
+complete ephemeral terminal/diagnostic delivery data. stdout and stderr remain
+distinct tagged streams with exact byte offsets and Hook invocation context.
+Byte chunks are at most 64 KiB and use padded standard Base64. Accepted live
+diagnostics are delivered independently of the bounded historical journal.
+Memory remains bounded as output grows; owner-private segmented staging provides
+temporary delivery storage and reuses existing lease/owner-loss housekeeping.
+Delivery storage survives execution-workspace cleanup until consumed, then retires.
+It is not a Run Artifact and is not retained raw-log history.
+
+Actual execution responses add a `delivery` object with `complete`, nullable
+`error`, decimal-string `event_count`, and `streams`. Each stream summary contains
+Hook context, channel and decimal-string `byte_length`. Counts describe captured
+records and bytes; an incomplete summary cannot establish the producer's total.
+Batch JSON additionally contains `delivery.events`. JSONL omits that array from
+the final response. `event_count` excludes the final result event. Query and
+preview responses do not acquire a delivery spool or a delivery summary.
+
+Delivery failure MUST be explicit and preserve the authoritative Run outcome,
+guard and partial results. No truncation or dropped data may masquerade as complete
+delivery. Producers/pipe drainers remain independent of blocked client output and
+Core supervision. Resource failure stops capture but drains subsequent terminal
+bytes, preserving cancellation and finalization. Broken output never triggers
+replay or compensation. Interactive execution is outside this contract.
+
+**Verification: PR-TEST-0580, PR-TEST-0581, PR-TEST-0583, PR-TEST-0585.**
+
+### PR-REQ-0367 - CLI event stream V1
+
+`--format jsonl` selects `pactrun.cli.events.v1`. Each physical LF-terminated
+line follows the [event schema](./cli-events-v1.schema.json). Each
+UTF-8 line contains one compact JSON object with format, sequence, receipt time,
+command and a typed event. Sequence is a decimal string and orders observation
+within this invocation. Events are run_accepted, output, diagnostic and result.
+Only a confirmed durable acceptance may produce run_accepted. Output preserves
+each stream's byte order; stderr bytes do not imply failure. Result carries the
+V1 response and delivery summary without duplicating previously delivered bytes.
+Queries and previews emit one result. Absence of a complete final result indicates
+incomplete delivery, not a Run outcome. No reconnect/replay service is introduced.
+Raw stdout export is refused in JSONL before acquisition/publication; a file
+destination remains supported. Existing human/JSON raw export behavior is retained.
+
+**Verification: PR-TEST-0580, PR-TEST-0581, PR-TEST-0582, PR-TEST-0585.**
+
+### PR-REQ-0368 - Explicit output-close cancellation
+
+Actual JSONL executions accept `--cancel-on-output-close`. Other combinations,
+including previews, are usage errors. Default output disconnection stops delivery
+and lets the same owner finish the Run. The explicit option requests existing
+cancellation only for a confirmed closed output channel; slow consumers alone
+do not request cancellation. A terminal Run is never rewritten. Existing deadline,
+risk, owner-loss and cancellation precedence remain authoritative.
+
+**Verification: PR-TEST-0581, PR-TEST-0582, PR-TEST-0584.**
+
+## Existing representation conventions
 
 The checked-in [JSON Schema](./cli-json-v1.schema.json) is the normative shape
 inventory for 62 canonical command names. Its generation test compares explicit

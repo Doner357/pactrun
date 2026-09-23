@@ -7,6 +7,7 @@ use crate::domain::{
 };
 
 pub(super) struct ServiceCommand {
+    no_trunc: bool,
     name: InstanceName,
     role: ServiceRole,
     operation: ServiceOperation,
@@ -51,9 +52,11 @@ pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<Command, CliEr
         )
     };
     let mut retained = false;
+    let mut no_trunc = false;
     let mut intent = None;
     while let Some(arg) = parser.next().map_err(lex_error)? {
         match arg {
+            Arg::Long("no-trunc") if operation == "list" && !no_trunc => no_trunc = true,
             Arg::Long("retained") if !retained => retained = true,
             Arg::Long("intent") if operation == "locate" => {
                 let value = match value_string(parser, "access intent")?.as_str() {
@@ -82,6 +85,7 @@ pub(super) fn parse(parser: &mut Parser, storage: bool) -> Result<Command, CliEr
         _ => unreachable!("closed operation"),
     };
     Ok(Command::ServiceStorage(ServiceCommand {
+        no_trunc,
         name,
         role: if retained {
             ServiceRole::Retained
@@ -100,6 +104,7 @@ pub(super) fn execute(
 ) -> Result<(), CliError> {
     let app = PactrunApplication::open_read_only(root).map_err(safe_error)?;
     let ServiceCommand {
+        no_trunc,
         name,
         role,
         operation,
@@ -153,9 +158,19 @@ pub(super) fn execute(
                 .map_err(io_operation)?;
             }
             if role == ServiceRole::Retained {
-                for allocation in &state.preserved {
+                let ids = short_ids::labels(
+                    &app,
+                    crate::domain::CatalogIdentityKind::Allocation,
+                    state
+                        .preserved
+                        .iter()
+                        .map(|a| a.allocation.to_string())
+                        .collect(),
+                    no_trunc,
+                )?;
+                for (allocation, id) in state.preserved.iter().zip(ids) {
                     writeln!(out, "preserved allocation={} origin_storage={} origin_revision={} origin_run={}",
-                        allocation.allocation, allocation.origin_storage.as_str(), format_revision(&allocation.origin_revision),
+                        id, allocation.origin_storage.as_str(), format_revision(&allocation.origin_revision),
                         allocation.origin_run.map(|r| r.to_string()).unwrap_or_else(|| "none".into())).map_err(io_operation)?;
                 }
             }
@@ -168,7 +183,7 @@ pub(super) fn execute(
                         .resources
                         .iter()
                         .filter(|r| r.role == role)
-                        .map(|r| Resource::new(r, false))
+                        .map(|r| Resource::new(r, true))
                         .collect(),
                 };
                 return presentation::render(
@@ -312,7 +327,7 @@ struct ResourceDetails {
 #[derive(serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum Mutation {
+pub(super) enum Mutation {
     Unavailable,
     UnavailableUntilReattachment,
     Direct,
