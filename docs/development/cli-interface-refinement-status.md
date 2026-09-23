@@ -4,7 +4,10 @@ title: CLI Interface Refinement
 
 # CLI interface refinement
 
-**Status: Implemented and verified, 2026-09-23. Changes remain uncommitted.**
+**Status: Implemented, verified and locally integrated, 2026-09-23.**
+
+The [short-ID integration record](./short-id-selectors-status.md) records the
+subsequently authorized commit and `develop` merge that includes this CLI work.
 
 ## Scope
 
@@ -29,7 +32,8 @@ Terraform and JSON Lines, including the specific principles adopted.
 
 No persistence schema, identity, admission, recovery or Pack-authoring format is
 changed. Existing IPC initialization regressions remain covered.
-This work does not perform a service deployment, release, commit or push.
+The initial verification checkpoint performed no service deployment, release,
+commit or push. The later local integration is recorded above.
 
 ## Verification record
 
