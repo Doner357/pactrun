@@ -4,8 +4,7 @@ title: Packages, Revisions, and Instances (Planned)
 
 # Packages, Revisions, and Instances
 
-**Status: Planned placeholder.** Usage explanations and a guided example will
-be written in a later documentation phase. This page is not a tutorial.
+Usage explanations and a guided example are planned.
 
 ## Reserved coverage
 

@@ -149,31 +149,7 @@ impl PactrunPersistence {
             Err(PersistenceError::MissingRun(_)) => return Ok(None),
             Err(e) => return Err(e),
         };
-        let guard = load_instance_recovery_guard_from(&tx, view.instance)?;
-        let result: Option<Vec<u8>> = tx
-            .query_row(
-                "SELECT snapshot_id FROM run_capture_results WHERE run_id=?1",
-                [run.as_bytes().as_slice()],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|e| PersistenceError::sqlite("read Capture result reference", e))?;
-        let capture_result = result
-            .map(|id| {
-                id.try_into()
-                    .map(crate::domain::SnapshotId::from_bytes)
-                    .map_err(|_| {
-                        PersistenceError::CorruptRun("invalid Capture result identity".to_owned())
-                    })
-            })
-            .transpose()?;
-        Ok(Some(crate::domain::ManagedRunInspectionData {
-            diagnostics: super::sqlite_diagnostics::load_diagnostics_from(&tx, run)?,
-            migration_progress: super::sqlite_migration_runs::progress_view(&tx, run)?,
-            run: view,
-            current_recovery_guard: guard,
-            capture_result,
-        }))
+        inspect_run_from(&tx, view).map(Some)
     }
     #[cfg(test)]
     pub(crate) fn fail_next_restore_publication_for_test() {
@@ -460,6 +436,7 @@ impl PactrunPersistence {
             }
         }
         fault(FaultPoint::AfterRunAcceptCommit);
+        arbiter.accepted(run);
         Ok(run)
     }
 
@@ -2716,6 +2693,36 @@ fn guard_row(
             })
         })
         .transpose()
+}
+
+pub(super) fn inspect_run_from(
+    db: &Connection,
+    view: crate::domain::ManagedRunView,
+) -> Result<crate::domain::ManagedRunInspectionData, PersistenceError> {
+    let run = view.id;
+    let guard = load_instance_recovery_guard_from(db, view.instance)?;
+    let result: Option<Vec<u8>> = db
+        .query_row(
+            "SELECT snapshot_id FROM run_capture_results WHERE run_id=?1",
+            [run.as_bytes().as_slice()],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| PersistenceError::sqlite("read Capture result reference", e))?;
+    let capture_result = result
+        .map(|id| {
+            id.try_into()
+                .map(crate::domain::SnapshotId::from_bytes)
+                .map_err(|_| PersistenceError::CorruptRun("invalid Capture result identity".into()))
+        })
+        .transpose()?;
+    Ok(crate::domain::ManagedRunInspectionData {
+        run: view,
+        current_recovery_guard: guard,
+        capture_result,
+        diagnostics: super::sqlite_diagnostics::load_diagnostics_from(db, run)?,
+        migration_progress: super::sqlite_migration_runs::progress_view(db, run)?,
+    })
 }
 
 pub(super) fn load_instance_recovery_guard_from(

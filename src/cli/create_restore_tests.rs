@@ -131,7 +131,7 @@ fn create_restore_revalidates_after_create_and_never_resolves_a_replacement_name
             snapshots::CreateRestoreCommand {
                 name: name.clone(),
                 revision: RevisionReference::Exact(revision.clone()),
-                snapshot,
+                snapshot: snapshot.into(),
                 options: ExecutionOptions::default(),
             },
             &root,

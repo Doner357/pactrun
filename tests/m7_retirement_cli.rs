@@ -87,7 +87,7 @@ fn fixture() -> Fixture {
 fn actual_cli_plan_delete_and_old_identity_inspection_preserve_name_reuse_boundary() {
     let f = fixture();
     let plan = success(&f.store, &["instance", "delete", "sample", "--plan"]);
-    assert!(plan.contains("admission: not_attempted"));
+    assert!(plan.contains("Mode: preview"));
     assert_eq!(
         database(&f.store)
             .query_row("SELECT count(*) FROM runs", [], |r| r.get::<_, i64>(0))

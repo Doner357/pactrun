@@ -15,6 +15,7 @@ unsafe_code = "forbid"
 workspace = true
 
 [dependencies]
+base64 = "=0.22.1"
 fluent-uri = { version = "=0.4.1", default-features = false }
 getrandom = "0.4"
 hex = "0.4"
@@ -31,7 +32,7 @@ flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 crc32fast = "1"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1.1.4", features = ["fs", "process", "termios"] }
+rustix = { version = "1.1.4", features = ["fs", "process", "termios", "pipe"] }
 rustix-openpty = "0.2.0"
 
 [target.'cfg(windows)'.dependencies]

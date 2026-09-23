@@ -279,6 +279,13 @@ impl StagingSession {
         ExecutionOwnerSession::parse(name).expect("staging session names are valid owners")
     }
 
+    pub(crate) fn create_delivery_directory(&self) -> Result<ExecutionDirectory, StagingError> {
+        let root = self.session.join("delivery");
+        create_private_directory(&root)
+            .map_err(|error| StagingError::io("create delivery directory", error))?;
+        Ok(ExecutionDirectory { root })
+    }
+
     pub(crate) fn belongs_to_storage(&self, root: &Path) -> bool {
         self.root == root.join(STAGING_DIRECTORY)
     }

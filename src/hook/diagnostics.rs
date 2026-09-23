@@ -63,6 +63,7 @@ impl Diagnostics {
         DiagnosticScope {
             journal,
             stage: format!("{stage} hook_ordinal={ordinal}"),
+            delivery: None,
         }
     }
     pub(crate) fn finish(&self) {
@@ -167,9 +168,13 @@ impl Journal {
 pub(super) struct DiagnosticScope {
     journal: Arc<Journal>,
     stage: String,
+    pub(super) delivery: Option<super::delivery::Scope>,
 }
 impl DiagnosticScope {
     pub(super) fn record(&self, text: HookText) {
+        if let Some(delivery) = &self.delivery {
+            delivery.diagnostic(&text);
+        }
         let text = text.bounded();
         let terminal = text.kind != DiagnosticKind::Diagnostic;
         // No I/O is performed while this short, bounded data lock is held.

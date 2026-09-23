@@ -100,6 +100,7 @@ impl PactrunApplication {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn inspect_deletion(
         &self,
         instance: InstanceId,

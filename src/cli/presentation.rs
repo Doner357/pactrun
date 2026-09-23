@@ -44,15 +44,15 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         },
         Command::Retirement(R::Show(_)) => "instance deletion show",
         Command::Retirement(R::Confirm(_)) => "instance deletion confirm-complete",
-        Command::Retirement(R::DetachedList) => "service-storage detached list",
+        Command::Retirement(R::DetachedList { .. }) => "service-storage detached list",
         Command::Retirement(R::DetachedShow { .. }) => "service-storage detached show",
         Command::Retirement(R::Discard(_)) => "service-storage detached discard",
         Command::Snapshot(S::Delete(_)) => "snapshot delete",
         Command::Snapshot(S::Execute { operation, .. }) => match operation {
-            crate::domain::SnapshotOperation::Capture => "snapshot capture",
-            crate::domain::SnapshotOperation::Restore(_) => "snapshot restore",
+            snapshots::Operation::Capture => "snapshot capture",
+            snapshots::Operation::Restore(_) => "snapshot restore",
         },
-        Command::Snapshot(S::List(_)) => "snapshot list",
+        Command::Snapshot(S::List { .. }) => "snapshot list",
         Command::Snapshot(S::Show(_)) => "snapshot show",
         Command::Snapshot(S::Verify(_)) => "snapshot verify",
         Command::Snapshot(S::Import(_)) => "snapshot import",
@@ -68,6 +68,13 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         Command::Catalog(C::Alias(_)) => "revision alias show",
         Command::Catalog(C::Local(_, catalog::LocalKind::Note)) => "revision note show",
         Command::Catalog(C::Local(_, catalog::LocalKind::Trust)) => "revision trust show",
+        Command::Catalog(C::AliasMutation { desired, .. }) => {
+            if *desired {
+                "revision alias set"
+            } else {
+                "revision alias clear"
+            }
+        }
         Command::Catalog(C::Mutation { operation, .. }) => {
             use crate::domain::{CurrentState, RevisionMetadataMutation as Mutation};
             match operation {
@@ -97,10 +104,16 @@ pub(super) enum Format {
     #[default]
     Human,
     Json,
+    Jsonl,
 }
 
 /// Inspect only the prefix. Never scan operands (which may themselves be flags).
 pub(super) fn recognize(args: &[OsString]) -> Format {
+    if args.first().is_some_and(|arg| arg == "--format")
+        && args.get(1).is_some_and(|arg| arg == "jsonl")
+    {
+        return Format::Jsonl;
+    }
     if args.first().is_some_and(|arg| arg == "--format")
         && args.get(1).is_some_and(|arg| arg == "json")
     {
@@ -133,9 +146,10 @@ pub(super) fn select(mut args: Vec<OsString>) -> Result<(Format, Vec<OsString>),
     let format = match args.get(1).and_then(|arg| arg.to_str()) {
         Some("human") => Format::Human,
         Some("json") => Format::Json,
+        Some("jsonl") => Format::Jsonl,
         _ => {
             return Err(CliError::usage(
-                "--format requires human or json before the command",
+                "--format requires human, json or jsonl before the command",
             ));
         }
     };
@@ -209,6 +223,11 @@ pub(super) fn render<T: Serialize>(
 ) -> Result<(), CliError> {
     match format {
         Format::Human => human(result, output),
+        Format::Jsonl => {
+            let mut writer = streaming::ResultWriter::new(output, Some(command));
+            render(Format::Json, command, result, &mut writer, human)?;
+            writer.finish().map_err(output_error)
+        }
         Format::Json => document(
             output,
             &Response {
@@ -286,6 +305,7 @@ pub(super) struct StorageUpgrade {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(untagged)]
 pub(super) enum PartialResult {
+    IdentityCandidates(Box<short_ids::Candidates>),
     Publication(Box<Publication>),
     Collection(Box<Collection>),
     Run(KnownRun),
@@ -377,7 +397,7 @@ impl Collection {
             out,
             "{}: candidates={}, removed={}, retained={}, unsupported={}, failed={}",
             if self.plan {
-                "collection preview (not reserved)"
+                "collection preview"
             } else {
                 "collection"
             },
@@ -505,11 +525,7 @@ impl Instance {
             )
             .map_err(io_operation)?;
         } else {
-            writeln!(
-                out,
-                "current_recovery_guard: none (not an execution guarantee)"
-            )
-            .map_err(io_operation)?;
+            writeln!(out, "current_recovery_guard: none").map_err(io_operation)?;
         }
         writeln!(
             out,
@@ -608,22 +624,19 @@ impl Instances {
         if self.items.is_empty() {
             return writeln!(out, "No managed Instances.").map_err(io_operation);
         }
+        writeln!(out, "NAME  INPUTS  RECOVERY").map_err(io_operation)?;
         for item in &self.items {
             writeln!(
                 out,
-                "{}\t{}\texact:{}/{}\t{}\t{}\tguard={}",
-                item.instance_id,
+                "{}  {}  {}",
                 item.name,
-                item.active_revision.package_id,
-                item.active_revision.content_digest,
-                item.state_version,
                 if item.required_inputs_satisfied {
-                    "required_inputs_satisfied"
+                    "complete"
                 } else {
-                    "missing_required_inputs"
+                    "missing required values"
                 },
                 if item.recovery_guard.is_some() {
-                    "manual_recovery_required"
+                    "required"
                 } else {
                     "none"
                 }

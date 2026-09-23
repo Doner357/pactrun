@@ -5,6 +5,12 @@ slug: /development
 
 # Developing Pactrun
 
+The [short-ID selector record](./short-id-selectors-status.md) tracks shared
+object selection, validation and local integration.
+
+The [CLI interface refinement record](./cli-interface-refinement-status.md)
+tracks the current human-output and JSON/JSONL work.
+
 **Status: Informative development entry.** This section helps implementers work
 from the specification; it does not replace the product rules or an approved
 milestone scope.

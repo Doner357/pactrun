@@ -90,6 +90,7 @@ runtime work, not just the historical status on a format page.
 | Contract | Status |
 | --- | --- |
 | [CLI JSON V1](contracts/cli-json-v1.md) | Approved normative versioned CLI presentation contract. |
+| [CLI Object ID Selectors](contracts/cli-id-selectors.md) | Approved CLI contract, 2026-09-23. |
 
 ## M7 approved implementation contracts
 

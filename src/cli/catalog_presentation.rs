@@ -20,6 +20,14 @@ pub(super) struct History {
     deletion_phase: Option<&'static str>,
 }
 
+#[derive(Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct Retirement {
+    #[serde(flatten)]
+    pub(super) history: History,
+    pub(super) inspection: retirements::RetirementInspection,
+}
+
 impl From<&InstanceHistoryEntry> for History {
     fn from(row: &InstanceHistoryEntry) -> Self {
         Self {
@@ -205,6 +213,7 @@ pub(super) struct RevisionEntry {
     core_version: u8,
     metadata: Vec<Metadata>,
     declarations: Option<Declarations>,
+    metadata_scope: &'static str,
 }
 
 #[derive(Serialize)]
@@ -217,6 +226,7 @@ struct Declarations {
     snapshot_declared: bool,
     migration_edge_count: usize,
     cleanup_declared: bool,
+    capabilities: definitions::Capabilities,
 }
 
 #[derive(Serialize)]
@@ -231,10 +241,16 @@ impl RevisionEntry {
     pub(super) fn new(row: &RevisionCatalogEntry, declarations: bool) -> Self {
         Self {
             revision: (&row.identity).into(),
+            metadata_scope: "current",
             core_version: row.core.version(),
             metadata: row.metadata.items.iter().map(Into::into).collect(),
             declarations: declarations.then(|| Declarations {
-                actions: row.core.actions().iter().map(Into::into).collect(),
+                actions: row
+                    .core
+                    .actions()
+                    .iter()
+                    .map(|a| execution_presentation::Action::defined(a, row))
+                    .collect(),
                 inputs: row
                     .core
                     .inputs()
@@ -253,6 +269,7 @@ impl RevisionEntry {
                 snapshot_declared: row.core.snapshot().is_some(),
                 migration_edge_count: row.core.migrations().len(),
                 cleanup_declared: row.core.cleanup().is_some(),
+                capabilities: definitions::Capabilities::new(row),
             }),
         }
     }

@@ -4,6 +4,14 @@ title: Command and Output Reference
 
 # Command and Output Reference
 
+The [CLI object-ID selector contract](../contracts/cli-id-selectors.md) extends
+the historical exact-only operand spellings below with unique prefixes. State
+tokens and author-assigned names retain exact matching.
+
+Current author descriptions are presented at the capability query and plan
+boundaries specified by [PR-REQ-0363](../contracts/cli-json-v1.md#pr-req-0363---capability-presentation-at-inspection-boundaries).
+They are not verified prerequisites, execution eligibility, or historical facts.
+
 **Status: Normative product behavior specification. Exact option spelling
 remains open specification work where explicitly noted.**
 
@@ -172,10 +180,12 @@ and MUST NOT be embedded in a JSON-style wrapper.
 
 The historical M2 baseline added no machine-readable envelope. D defines the
 [versioned JSON interface](../contracts/cli-json-v1.md) selected by a leading
-`--format human|json`; human is the default. Raw Input export to stdout retains
-the payload stream boundary in PR-REQ-0266. JSON actual execution with Hook
-terminal streams is rejected before execution side effects; planning remains
-available. Format selection does not change operation authorization or recovery.
+`--format human|json|jsonl`; human is the default. Raw Input export to stdout
+retains the payload stream boundary in PR-REQ-0266 for human and JSON modes.
+JSONL requires a file destination for raw exports. Noninteractive terminal
+output follows the ephemeral delivery contract in PR-REQ-0366; interactive
+execution is refused in machine modes. Planning remains available.
+Format selection does not change operation authorization or recovery.
 
 **Verification: PR-TEST-0556, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0561, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565.**
 
@@ -298,8 +308,8 @@ the existing identity grammar. A RunId is a complete 32-character lowercase
 hexadecimal value. `action list/show` and `run list/show` are structural-only
 inspection and MUST not reconcile, launch, compile, acquire a staging lease,
 or migrate storage. `--plan` uses the same read-only opening, displays the
-exact compiled Plan and applicable warnings, explicitly states that it is not
-Admission, and MUST not create a Run or launch a Hook. If
+planned work and applicable warnings, labels the output as a preview,
+and MUST not create a Run or launch a Hook. If
 `--authorize-recovery-override` is supplied to `--plan`, the output MUST show
 that the authorization is projected for this invocation only; it MUST not
 change the persisted recovery guard. A host-native `resolved_path` in the

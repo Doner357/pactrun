@@ -78,7 +78,7 @@ fn action_inspection_and_plan_keep_parameterized_execution_read_only() {
     assert_success(&planned);
     let text = String::from_utf8_lossy(&planned.stdout);
     assert!(text.contains("action: parameters"));
-    assert!(text.contains("preview: not_admitted"));
+    assert!(text.contains("Mode: preview"));
     let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert_eq!(run_count(&runs), 0);
@@ -97,7 +97,11 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     assert!(shown.contains("parameter: ordinary\ttype: string"));
     assert!(shown.contains("parameter: enabled\ttype: boolean"));
     assert!(shown.contains("parameter: count\ttype: integer"));
-    assert!(shown.contains("launch: direct\tcontent_id: worker"));
+    let machine = scenario.run(["--format", "json", "action", "show", "node", "parameters"]);
+    assert_success(&machine);
+    let machine: serde_json::Value = serde_json::from_slice(&machine.stdout).unwrap();
+    assert_eq!(machine["result"]["launch"]["kind"], "direct");
+    assert_eq!(machine["result"]["launch"]["content_id"], "worker");
 
     let owner = scenario.spawn(["invoke", "node", "hold_observe"]);
     let orphan = marker_run_id(&scenario);
@@ -113,7 +117,7 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     assert!(planned.contains("instance_id: "));
     assert!(planned.contains("revision: "));
     assert!(planned.contains("launch: direct\truntime_path: "));
-    assert!(planned.contains("preview: not_admitted"));
+    assert!(planned.contains("Mode: preview"));
     let running = scenario.run(["run", "show", &orphan]);
     assert_success(&running);
     assert!(String::from_utf8_lossy(&running.stdout).contains("phase: running"));

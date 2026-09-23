@@ -43,7 +43,7 @@ fn installed_runtime_survives_source_removal_and_run_is_visible_to_a_new_process
     );
     let scenario = Scenario::new(0x142, &source);
     let revision = scenario.install();
-    let before_create = scenario.run(["instance", "list"]);
+    let before_create = scenario.run(["--format", "json", "instance", "list"]);
     assert_success(&before_create);
     assert!(instance_list_projections(&before_create).is_empty());
     let created = scenario.create_instance("node", &revision);
@@ -52,7 +52,7 @@ fn installed_runtime_survives_source_removal_and_run_is_visible_to_a_new_process
     assert_success(&incomplete);
     let incomplete = instance_projection(&incomplete);
     assert!(!incomplete.ready);
-    let listed = scenario.run(["instance", "list"]);
+    let listed = scenario.run(["--format", "json", "instance", "list"]);
     assert_success(&listed);
     let listed = instance_list_projections(&listed);
     assert_eq!(listed.len(), 1);

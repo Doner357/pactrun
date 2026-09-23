@@ -13,18 +13,69 @@ pub(super) struct PageOptions<K> {
 }
 
 pub(super) enum CatalogCommand {
-    Revisions(PageOptions<RevisionIdentity>),
+    Revisions(PageOptions<RevisionReference>),
     Revision(RevisionReference, bool),
-    History(PageOptions<InstanceId>, bool),
-    Instance(InstanceId),
-    Runs(CatalogRunSelector, PageOptions<RunId>),
+    History(PageOptions<Selector<InstanceId>>, bool),
+    Instance(Selector<InstanceId>),
+    Runs(RunSelector, PageOptions<Selector<RunId>>),
     Alias(LocalAlias),
     Local(RevisionReference, LocalKind),
     Mutation {
-        revision: RevisionIdentity,
+        revision: RevisionReference,
         operation: RevisionMetadataMutation,
         inspect: String,
     },
+    AliasMutation {
+        target: RevisionReference,
+        alias: LocalAlias,
+        expected: CurrentState<RevisionReference>,
+        desired: bool,
+        inspect: String,
+    },
+}
+
+pub(super) enum RunSelector {
+    All,
+    Name(InstanceName),
+    Identity(Selector<InstanceId>),
+}
+impl CatalogCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        match self {
+            Self::Revisions(o) => {
+                if let Some(id) = &mut o.after {
+                    r.revision(id)?;
+                }
+            }
+            Self::Revision(id, _) | Self::Local(id, _) | Self::Mutation { revision: id, .. } => {
+                r.revision(id)?
+            }
+            Self::AliasMutation {
+                target, expected, ..
+            } => {
+                r.revision(target)?;
+                if let CurrentState::Present(id) = expected {
+                    r.revision(id)?;
+                }
+            }
+            Self::History(o, _) => {
+                if let Some(id) = &mut o.after {
+                    id.resolve(r)?;
+                }
+            }
+            Self::Instance(id) => id.resolve(r)?,
+            Self::Runs(s, o) => {
+                if let RunSelector::Identity(id) = s {
+                    id.resolve(r)?;
+                }
+                if let Some(id) = &mut o.after {
+                    id.resolve(r)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -33,9 +84,9 @@ pub(super) enum LocalKind {
     Trust,
 }
 
-fn exact(value: String) -> Result<RevisionIdentity, CliError> {
+fn exact(value: String) -> Result<RevisionReference, CliError> {
     match parse_revision_reference(value)? {
-        RevisionReference::Exact(id) => Ok(id),
+        id @ (RevisionReference::Exact(_) | RevisionReference::Prefix { .. }) => Ok(id),
         _ => Err(CliError::usage(
             "writes and Revision cursors require exact:<PackageId>/sha256:<digest>",
         )),
@@ -190,12 +241,12 @@ pub(super) fn parse_runs(parser: &mut Parser) -> Result<Command, CliError> {
         match arg {
             Arg::Value(value) => set_once(
                 &mut selector,
-                CatalogRunSelector::Name(parse_instance_name(os_string(value, "Instance name")?)?),
+                RunSelector::Name(parse_instance_name(os_string(value, "Instance name")?)?),
                 "Run selector",
             )?,
             Arg::Long("instance-id") => set_once(
                 &mut selector,
-                CatalogRunSelector::Identity(id(value_string(parser, "InstanceId")?)?),
+                RunSelector::Identity(id(value_string(parser, "InstanceId")?)?),
                 "Run selector",
             )?,
             Arg::Long("limit") => set_once(
@@ -211,7 +262,7 @@ pub(super) fn parse_runs(parser: &mut Parser) -> Result<Command, CliError> {
         }
     }
     Ok(Command::Catalog(CatalogCommand::Runs(
-        selector.unwrap_or(CatalogRunSelector::All),
+        selector.unwrap_or(RunSelector::All),
         PageOptions {
             limit: limit.unwrap_or(50),
             after,
@@ -266,13 +317,11 @@ fn parse_alias(parser: &mut Parser) -> Result<CatalogCommand, CliError> {
         "pactrun revision alias show <alias> (alias value: {})",
         quoted(alias.as_str())
     );
-    Ok(CatalogCommand::Mutation {
-        revision,
-        operation: RevisionMetadataMutation::CompareAndSetLocalAlias {
-            alias,
-            expected,
-            desired,
-        },
+    Ok(CatalogCommand::AliasMutation {
+        target: revision,
+        alias,
+        expected,
+        desired: matches!(desired, CurrentState::Present(_)),
         inspect,
     })
 }
@@ -332,7 +381,7 @@ fn parse_local(parser: &mut Parser, kind: LocalKind) -> Result<CatalogCommand, C
             }
         }
     };
-    let inspect = format!("pactrun revision metadata show {}", exact_text(&revision));
+    let inspect = "pactrun revision metadata show <revision-reference>".into();
     Ok(CatalogCommand::Mutation {
         revision,
         operation,
@@ -345,12 +394,13 @@ fn exact_text(id: &RevisionIdentity) -> String {
 }
 fn selector(reference: RevisionReference) -> CatalogRevisionSelector {
     match reference {
+        RevisionReference::Prefix { .. } => unreachable!("resolved CLI selector"),
         RevisionReference::Exact(id) => CatalogRevisionSelector::Exact(id),
         RevisionReference::Alias(alias) => CatalogRevisionSelector::Alias(alias),
         RevisionReference::Label(label) => CatalogRevisionSelector::Label(label),
     }
 }
-fn safe(value: &str) -> String {
+pub(super) fn safe(value: &str) -> String {
     value.chars().flat_map(|c| {
         if c == '\\' || c == '"' || c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{2028}' | '\u{2029}') {
             c.escape_default().collect::<Vec<_>>()
@@ -408,6 +458,35 @@ pub(super) fn execute(
     out: &mut dyn Write,
     format: presentation::Format,
 ) -> Result<(), CliError> {
+    let command = match command {
+        CatalogCommand::AliasMutation {
+            target,
+            alias,
+            expected,
+            desired,
+            inspect,
+        } => {
+            let target = short_ids::exact(target);
+            let expected = match expected {
+                CurrentState::Absent => CurrentState::Absent,
+                CurrentState::Present(id) => CurrentState::Present(short_ids::exact(id)),
+            };
+            CatalogCommand::Mutation {
+                revision: RevisionReference::Exact(target.clone()),
+                operation: RevisionMetadataMutation::CompareAndSetLocalAlias {
+                    alias,
+                    expected,
+                    desired: if desired {
+                        CurrentState::Present(target)
+                    } else {
+                        CurrentState::Absent
+                    },
+                },
+                inspect,
+            }
+        }
+        other => other,
+    };
     let app = if matches!(command, CatalogCommand::Mutation { .. }) {
         // Validate an existing store before opening a writer; metadata is never an installer.
         drop(PactrunApplication::open_read_only(root).map_err(app_error)?);
@@ -417,16 +496,18 @@ pub(super) fn execute(
     }
     .map_err(app_error)?;
     match command {
+        CatalogCommand::AliasMutation { .. } => unreachable!("normalized alias mutation"),
         CatalogCommand::Revisions(options) => {
+            let after = options.after.clone().map(short_ids::exact);
             let page = app
-                .catalog_revisions(options.limit, options.after.as_ref())
+                .catalog_revisions(options.limit, after.as_ref())
                 .map_err(app_error)?;
             if format == presentation::Format::Json {
                 let result = catalog_presentation::Page {
                     items: page
                         .items
                         .iter()
-                        .map(|r| catalog_presentation::RevisionEntry::new(r, false))
+                        .map(|r| catalog_presentation::RevisionEntry::new(r, true))
                         .collect(),
                     next: page.next.as_ref().map(exact_text),
                 };
@@ -439,7 +520,27 @@ pub(super) fn execute(
                 );
             }
             writeln!(out, "PACKAGE ID  REVISION DIGEST  ALIASES  LABELS").map_err(io_operation)?;
-            for row in &page.items {
+            let labels = if options.no_trunc {
+                page.items
+                    .iter()
+                    .map(|r| {
+                        (
+                            r.identity.package_id.to_string(),
+                            r.identity.content_digest.to_string(),
+                        )
+                    })
+                    .collect()
+            } else {
+                app.revision_abbreviations(
+                    &page
+                        .items
+                        .iter()
+                        .map(|r| r.identity.clone())
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(app_error)?
+            };
+            for (row, (package, digest)) in page.items.iter().zip(labels) {
                 let aliases = row
                     .metadata
                     .items
@@ -467,8 +568,8 @@ pub(super) fn execute(
                 writeln!(
                     out,
                     "{}  {}  {}  {}",
-                    cell(&row.identity.package_id.to_string(), options.no_trunc),
-                    cell(&row.identity.content_digest.to_string(), options.no_trunc),
+                    package,
+                    digest,
                     summary(aliases, options.no_trunc),
                     summary(labels, options.no_trunc)
                 )
@@ -486,6 +587,20 @@ pub(super) fn execute(
             let row = app
                 .catalog_resolve_revision(&selector(reference))
                 .map_err(app_error)?;
+            let author =
+                capability_presentation::project(&row, &[&capability_presentation::Selection::All]);
+            if format == presentation::Format::Json && !metadata_only {
+                return presentation::render(
+                    format,
+                    "revision show",
+                    &capability_presentation::Presented {
+                        value: catalog_presentation::RevisionEntry::new(&row, true),
+                        presentation: author,
+                    },
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             if format == presentation::Format::Json {
                 return presentation::render(
                     format,
@@ -508,12 +623,42 @@ pub(super) fn execute(
             .map_err(io_operation)?;
             if !metadata_only {
                 declarations(out, &row.core)?;
+                capability_presentation::write(out, &author, false)?;
+                let mut remaining = row.metadata.clone();
+                remaining
+                    .items
+                    .retain(|item| !matches!(item, RevisionMetadataItem::Presentation(_)));
+                return metadata(out, &remaining);
             }
             metadata(out, &row.metadata)
         }
         CatalogCommand::History(options, deletions) => {
+            let after = options.after.clone().map(Selector::full);
+            if deletions && format == presentation::Format::Json {
+                let page = app
+                    .inspect_retirements(options.limit, after)
+                    .map_err(app_error)?;
+                let result = catalog_presentation::Page {
+                    items: page
+                        .items
+                        .iter()
+                        .map(|entry| catalog_presentation::Retirement {
+                            history: (&entry.history).into(),
+                            inspection: entry.into(),
+                        })
+                        .collect(),
+                    next: page.next.map(|id| id.to_string()),
+                };
+                return presentation::render(
+                    format,
+                    "instance deletion list",
+                    &result,
+                    out,
+                    |_, _| unreachable!(),
+                );
+            }
             let page = app
-                .catalog_history(options.limit, options.after, deletions)
+                .catalog_history(options.limit, after, deletions)
                 .map_err(app_error)?;
             if format == presentation::Format::Json {
                 let result = catalog_presentation::Page {
@@ -541,8 +686,14 @@ pub(super) fn execute(
                 "INSTANCE ID  CURRENT NAME  RECORDED NAME  MANAGEMENT  DELETION"
             )
             .map_err(io_operation)?;
-            for row in &page.items {
-                history_row(out, row, options.no_trunc)?;
+            let labels = short_ids::labels(
+                &app,
+                CatalogIdentityKind::Instance,
+                page.items.iter().map(|r| r.id.to_string()).collect(),
+                options.no_trunc,
+            )?;
+            for (row, label) in page.items.iter().zip(labels) {
+                history_row(out, row, options.no_trunc, &label)?;
             }
             continuation(
                 out,
@@ -557,6 +708,7 @@ pub(super) fn execute(
             )
         }
         CatalogCommand::Instance(id) => {
+            let id = id.full();
             let row = app.catalog_instance(id).map_err(app_error)?;
             if format == presentation::Format::Json {
                 return presentation::render(
@@ -572,7 +724,7 @@ pub(super) fn execute(
                 "INSTANCE ID  CURRENT NAME  RECORDED NAME  MANAGEMENT  DELETION"
             )
             .map_err(io_operation)?;
-            history_row(out, &row, true)?;
+            history_row(out, &row, true, &id.to_string())?;
             writeln!(out, "\nRuns: pactrun run list --instance-id {id}").map_err(io_operation)?;
             if row.retired || row.deletion_phase.is_some() {
                 writeln!(out, "Deletion: pactrun instance deletion show {id}")
@@ -581,29 +733,53 @@ pub(super) fn execute(
             Ok(())
         }
         CatalogCommand::Runs(selector, options) => {
-            let page = app
-                .catalog_runs(&selector, options.limit, options.after)
-                .map_err(app_error)?;
+            let selector = match selector {
+                RunSelector::All => CatalogRunSelector::All,
+                RunSelector::Name(n) => CatalogRunSelector::Name(n),
+                RunSelector::Identity(id) => CatalogRunSelector::Identity(id.full()),
+            };
+            let after = options.after.clone().map(Selector::full);
             if format == presentation::Format::Json {
-                let result = catalog_presentation::Page {
-                    items: page
-                        .items
+                let full = app
+                    .inspect_runs_complete(&selector, options.limit, after)
+                    .map_err(app_error)?;
+                let page = catalog_presentation::Page {
+                    items: full
+                        .inspections
                         .iter()
-                        .map(execution_presentation::Run::from)
+                        .map(|i| definitions::InspectedRun {
+                            value: execution_presentation::Run::from(&i.run),
+                            inspection: i.into(),
+                        })
                         .collect(),
-                    next: page.next.map(|id| id.to_string()),
+                    next: full.page.next.map(|id| id.to_string()),
                 };
                 return presentation::render(
                     format,
                     "run list",
-                    &result,
+                    &definitions::Related::new(page, &full.revisions, &full.unavailable_revisions),
                     out,
                     |_, _| unreachable!(),
                 );
             }
+            let page = app
+                .catalog_runs(&selector, options.limit, after)
+                .map_err(app_error)?;
             writeln!(out, "RUN ID  INSTANCE ID  OPERATION  PHASE  OUTCOME")
                 .map_err(io_operation)?;
-            for row in &page.items {
+            let runs = short_ids::labels(
+                &app,
+                CatalogIdentityKind::Run,
+                page.items.iter().map(|r| r.id.to_string()).collect(),
+                options.no_trunc,
+            )?;
+            let instances = short_ids::labels(
+                &app,
+                CatalogIdentityKind::Instance,
+                page.items.iter().map(|r| r.instance.to_string()).collect(),
+                options.no_trunc,
+            )?;
+            for ((row, run), instance) in page.items.iter().zip(runs).zip(instances) {
                 let operation = match &row.operation {
                     ManagedRunIdentity::Action(a) => safe(a.action.as_str()),
                     other => format!("{:?}", other.kind()),
@@ -615,8 +791,8 @@ pub(super) fn execute(
                 writeln!(
                     out,
                     "{}  {}  {}  {}  {}",
-                    cell(&row.id.to_string(), options.no_trunc),
-                    cell(&row.instance.to_string(), options.no_trunc),
+                    run,
+                    instance,
                     cell(&operation, options.no_trunc),
                     format_phase(row.state.phase()),
                     outcome
@@ -692,6 +868,7 @@ pub(super) fn execute(
             operation,
             inspect,
         } => {
+            let revision = short_ids::exact(revision);
             app.mutate_local_metadata(&revision, operation.clone()).map_err(|e| {
                 if matches!(e, ApplicationError::Persistence(crate::persistence::PersistenceError::MetadataConflict(_))) {
                     CliError::operation(format!("Metadata conflict: current state differs from expected. No changes applied.\nInspect: {inspect}"))
@@ -700,7 +877,7 @@ pub(super) fn execute(
             if format == presentation::Format::Json {
                 let command =
                     presentation::command_name(&Command::Catalog(CatalogCommand::Mutation {
-                        revision: revision.clone(),
+                        revision: RevisionReference::Exact(revision.clone()),
                         operation: operation.clone(),
                         inspect: inspect.clone(),
                     }));
@@ -742,7 +919,7 @@ pub(super) fn execute(
                 .map_err(io_operation),
                 RevisionMetadataMutation::CompareAndSetLocalTrust { desired, .. } => writeln!(
                     out,
-                    "Local trust: {} (descriptive assessment)",
+                    "Trust label: {}",
                     match desired {
                         CurrentState::Absent => "NoDecision".into(),
                         CurrentState::Present(v) => format!("{v:?}"),
@@ -759,11 +936,12 @@ fn history_row(
     out: &mut dyn Write,
     row: &InstanceHistoryEntry,
     full: bool,
+    id: &str,
 ) -> Result<(), CliError> {
     writeln!(
         out,
         "{}  {}  {}  {}  {}",
-        cell(&row.id.to_string(), full),
+        id,
         row.current_name
             .as_ref()
             .map(|n| cell(n.as_str(), full))
@@ -850,14 +1028,14 @@ fn local_metadata(
         ),
         LocalKind::Trust => writeln!(
             out,
-            "Local trust: {} (descriptive; not publisher verification or execution policy)",
+            "Trust label: {}",
             value.unwrap_or_else(|| "NoDecision".into())
         ),
     }
     .map_err(io_operation)
 }
 fn metadata(out: &mut dyn Write, view: &RevisionMetadataView) -> Result<(), CliError> {
-    writeln!(out, "\nMetadata (claims are not authentication)").map_err(io_operation)?;
+    writeln!(out, "\nMetadata").map_err(io_operation)?;
     for item in &view.items {
         match item {
             RevisionMetadataItem::ReferenceLabel(b) => {
@@ -921,7 +1099,7 @@ fn metadata(out: &mut dyn Write, view: &RevisionMetadataView) -> Result<(), CliE
     local_metadata(out, view, LocalKind::Trust)
 }
 
-fn presentation_target(target: &PresentationTargetV1) -> String {
+pub(super) fn presentation_target(target: &PresentationTargetV1) -> String {
     match target {
         PresentationTargetV1::Revision => "Revision".into(),
         PresentationTargetV1::Input(id) => format!("Input {}", safe(id.as_str())),

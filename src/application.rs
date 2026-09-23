@@ -622,6 +622,7 @@ impl PactrunApplication {
         Ok((instance, action))
     }
 
+    #[cfg(test)]
     pub(crate) fn list_action_definitions(
         &self,
         instance_name: &InstanceName,

@@ -1,6 +1,19 @@
 //! Read-only catalog results, independent of storage and presentation.
 use super::*;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CatalogIdentityKind {
+    Run,
+    Snapshot,
+    Instance,
+    Allocation,
+}
+
+pub(crate) struct IdentityMatches {
+    pub(crate) candidates: Vec<String>,
+    pub(crate) has_more: bool,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct CatalogPage<T, K> {
     pub(crate) items: Vec<T>,
@@ -12,6 +25,24 @@ pub(crate) struct RevisionCatalogEntry {
     pub(crate) identity: RevisionIdentity,
     pub(crate) core: RevisionCore,
     pub(crate) metadata: RevisionMetadataView,
+}
+
+pub(crate) struct InstanceCatalog {
+    pub(crate) items: Vec<InstanceView>,
+    pub(crate) revisions: Vec<RevisionCatalogEntry>,
+}
+pub(crate) struct RunCatalog {
+    pub(crate) page: CatalogPage<ManagedRunView, RunId>,
+    pub(crate) inspections: Vec<ManagedRunInspectionData>,
+    pub(crate) revisions: Vec<RevisionCatalogEntry>,
+    pub(crate) unavailable_revisions: Vec<RevisionIdentity>,
+}
+
+pub(crate) struct RetirementCatalogEntry {
+    pub(crate) history: InstanceHistoryEntry,
+    pub(crate) live: Option<InstanceView>,
+    pub(crate) obligation: Option<DeletionObligation>,
+    pub(crate) runs: Vec<ManagedRunView>,
 }
 
 #[derive(Clone, Debug)]

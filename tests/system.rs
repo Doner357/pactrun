@@ -5,6 +5,8 @@
 
 #[path = "system/common.rs"]
 mod common;
+#[path = "system/initialization.rs"]
+mod initialization;
 #[cfg(target_os = "linux")]
 #[path = "system/linux.rs"]
 mod linux;

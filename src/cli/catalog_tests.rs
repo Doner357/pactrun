@@ -75,7 +75,11 @@ fn catalog_pages_are_bounded_ordered_and_continue_after_deleted_cursors() {
     assert!(p.catalog_revisions(0, None).is_err());
     assert!(p.catalog_revisions(501, None).is_err());
     let short = ok(&root, &["revision", "list", "--limit", "1"]);
-    assert!(short.contains("..."));
+    let columns: Vec<_> = short.lines().nth(1).unwrap().split_whitespace().collect();
+    assert!(!columns[0].contains("..."));
+    assert!(!columns[1].contains("..."));
+    let reference = format!("exact:{}/{}", columns[0], columns[1]);
+    assert!(ok(&root, &["revision", "show", &reference]).contains("Core format: V2"));
     let show = ok(&root, &["revision", "show", &exact_text(&ids[0])]);
     assert!(show.contains("Core format: V2"));
     assert!(show.contains(&exact_text(&ids[0])));
@@ -301,7 +305,8 @@ fn catalog_metadata_preserves_claim_sources_and_refuses_ambiguous_resolution() {
     assert!(shown.contains("PublisherSourceUri"));
     assert!(shown.contains("tools"));
     assert!(shown.contains("https://example.invalid/releases"));
-    assert!(shown.contains("claims are not authentication"));
+    assert!(shown.contains("Metadata"));
+    assert!(!shown.contains("claims are not authentication"));
     let (code, _, err) = invoke(&root, &["revision", "show", "label:stable"]);
     assert_eq!(code, 1);
     assert!(err.contains("resolution.ambiguous_reference"));

@@ -3,15 +3,23 @@ use crate::domain::ManagedOutputIdentity;
 
 pub(super) enum ArtifactCommand {
     Export {
-        run: RunId,
+        run: Selector<RunId>,
         output: ManagedOutputIdentity,
         destination: PathBuf,
         authorized: bool,
     },
     Delete {
-        run: RunId,
+        run: Selector<RunId>,
         output: ManagedOutputIdentity,
     },
+}
+
+impl ArtifactCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        match self {
+            Self::Export { run, .. } | Self::Delete { run, .. } => run.resolve(r),
+        }
+    }
 }
 
 pub(super) fn parse(parser: &mut Parser) -> Result<ArtifactCommand, CliError> {
@@ -80,6 +88,7 @@ pub(super) fn execute(
             destination,
             authorized,
         } => {
+            let run = run.full();
             let staged = application
                 .export_run_artifact(run, &output, authorized)
                 .map_err(|error| match error {
@@ -116,6 +125,7 @@ pub(super) fn execute(
             )
         }
         ArtifactCommand::Delete { run, output } => {
+            let run = run.full();
             let deleted =
                 application
                     .delete_run_artifact(run, &output)

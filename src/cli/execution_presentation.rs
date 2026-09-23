@@ -7,6 +7,25 @@ use serde::Serialize;
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-ID: PR-TEST-0572
+    // Verifies: PR-REQ-0361, PR-REQ-0362
+    #[test]
+    fn initialization_details_are_safe_core_messages_only() {
+        let safe = "IPC initialization: permission denied; check execution-owner access to the temporary location.";
+        let mut record = crate::domain::RunFailureRecord {
+            error: crate::domain::PactrunErrorRefV1::new("execution", "ipc_initialization_failed")
+                .unwrap(),
+            message: safe.into(),
+        };
+        assert_eq!(Failure::new(&record, None).detail.as_deref(), Some(safe));
+        record.message = "private path or password".into();
+        assert!(Failure::new(&record, None).detail.is_none());
+        record.message = safe.into();
+        record.error =
+            crate::domain::PactrunErrorRefV1::new("execution", "protocol_transport_failed")
+                .unwrap();
+        assert!(Failure::new(&record, None).detail.is_none());
+    }
     // Test-ID: PR-TEST-0567
     // Verifies: PR-REQ-0359, PR-REQ-0360
     #[test]
@@ -69,6 +88,7 @@ mod tests {
 pub(super) struct Failure {
     reference: presentation::ErrorReference,
     explanation: &'static str,
+    detail: Option<String>,
     step: Option<String>,
 }
 
@@ -83,6 +103,7 @@ impl Failure {
                 code: record.error.code().into(),
             },
             explanation: failure_explanation(&record.error),
+            detail: failure_detail(record).map(str::to_owned),
             step: step.map(format_failed_step),
         }
     }
@@ -344,12 +365,15 @@ pub(super) struct Action {
     launch: Launch,
     parameters: Vec<Parameter>,
     output_ids: Vec<String>,
+    metadata: definitions::Text,
+    outputs: Vec<definitions::Output>,
+    hook: Option<definitions::Hook>,
 }
 
 #[derive(Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum Launch {
+pub(super) enum Launch {
     Direct {
         content_id: String,
     },
@@ -372,11 +396,24 @@ struct Parameter {
     parameter_type: &'static str,
     sensitive: bool,
     default_present: bool,
+    default_redacted: bool,
+    default_value: Option<definitions::DefaultValue>,
+    metadata: definitions::Text,
 }
 
 impl From<&ActionV1> for Action {
     fn from(action: &ActionV1) -> Self {
         Self {
+            metadata: definitions::Text::default(),
+            outputs: action
+                .outputs
+                .iter()
+                .map(|o| definitions::Output {
+                    output_id: o.id.as_str().into(),
+                    metadata: definitions::Text::default(),
+                })
+                .collect(),
+            hook: None,
             action_id: action.id.as_str().into(),
             access: access_name(action.access),
             terminal: terminal_name(action.hook.io.terminal),
@@ -413,6 +450,13 @@ impl From<&ActionV1> for Action {
                     parameter_type: parameter_type_name(p.parameter_type),
                     sensitive: p.sensitive,
                     default_present: p.default.is_some(),
+                    default_redacted: p.sensitive && p.default.is_some(),
+                    default_value: if p.sensitive {
+                        None
+                    } else {
+                        p.default.as_ref().map(Into::into)
+                    },
+                    metadata: definitions::Text::default(),
                 })
                 .collect(),
             output_ids: action
@@ -428,6 +472,65 @@ impl From<&ActionV1> for Action {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Actions {
     pub(super) items: Vec<Action>,
+}
+
+impl Action {
+    pub(super) fn defined(action: &ActionV1, row: &crate::domain::RevisionCatalogEntry) -> Self {
+        use crate::domain::{PresentationTargetV1 as T, ServiceHookSite};
+        let mut result = Self::from(action);
+        result.metadata = definitions::Text::new(&row.metadata, T::Action(action.id.clone()));
+        for (parameter, source) in result.parameters.iter_mut().zip(&action.parameters) {
+            parameter.metadata = definitions::Text::new(
+                &row.metadata,
+                T::ActionParameter {
+                    action: action.id.clone(),
+                    parameter: source.id.clone(),
+                },
+            );
+        }
+        for (output, source) in result.outputs.iter_mut().zip(&action.outputs) {
+            output.metadata = definitions::Text::new(
+                &row.metadata,
+                T::ManagedOutput {
+                    action: action.id.clone(),
+                    output: source.id.clone(),
+                },
+            );
+        }
+        result.hook = Some(definitions::Hook::new(
+            &action.hook,
+            &row.core,
+            ServiceHookSite::Action(action.id.clone()),
+        ));
+        result
+    }
+}
+impl From<&HookLaunchV1> for Launch {
+    fn from(h: &HookLaunchV1) -> Self {
+        match h {
+            HookLaunchV1::Direct { executable } => Self::Direct {
+                content_id: executable.as_str().into(),
+            },
+            HookLaunchV1::Interpreter {
+                command,
+                interpreter_args,
+                script,
+            } => Self::Interpreter {
+                command: command.as_str().into(),
+                interpreter_args_count: interpreter_args.len(),
+                script: script.as_str().into(),
+            },
+            HookLaunchV1::ShellLoader {
+                shell,
+                command,
+                script,
+            } => Self::ShellLoader {
+                shell: shell.as_str().into(),
+                command: command.as_str().into(),
+                script: script.as_str().into(),
+            },
+        }
+    }
 }
 
 #[derive(Serialize)]

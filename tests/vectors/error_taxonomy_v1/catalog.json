@@ -21,11 +21,13 @@
     {"owner":"admission","code":"recovery_guard_active","category":"admission","normative_sources":[{"kind":"requirement","id":"PR-REQ-0067"},{"kind":"requirement","id":"PR-REQ-0068"},{"kind":"requirement","id":"PR-REQ-0279"}]},
 
     {"owner":"execution","code":"hook_reported_protocol_error","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"}]},
+    {"owner":"execution","code":"ipc_initialization_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0361"}]},
     {"owner":"execution","code":"launch_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0007"},{"kind":"requirement","id":"PR-REQ-0194"}]},
     {"owner":"execution","code":"managed_output_publication_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0281"}]},
     {"owner":"execution","code":"migration_publication_rejected","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0313"}]},
     {"owner":"execution","code":"protocol_transport_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0172"},{"kind":"requirement","id":"PR-REQ-0280"}]},
     {"owner":"execution","code":"session_materialization_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0007"},{"kind":"requirement","id":"PR-REQ-0046"}]},
+    {"owner":"execution","code":"shell_loader_initialization_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0362"}]},
     {"owner":"execution","code":"workspace_cleanup_failed","category":"execution","normative_sources":[{"kind":"requirement","id":"PR-REQ-0282"}]},
 
     {"owner":"hook_protocol_v1","code":"completion_with_open_risk","category":"protocol","normative_sources":[{"kind":"requirement","id":"PR-REQ-0217"},{"kind":"frozen_vector","suite":"hook_protocol_v1","name":"success_with_open_risk"}]},

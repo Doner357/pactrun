@@ -125,13 +125,20 @@ fn operator_plan_never_opens_files_and_conflicts_are_checked_before_acquisition(
     let before = successful(&f.root, &["instance", "show", "demo"]);
     let paths = ids(&successful(
         &f.root,
-        &["instance", "migration-paths", "demo", "--to", &f.c],
+        &[
+            "instance",
+            "migration-paths",
+            "demo",
+            "--to",
+            &f.c,
+            "--no-trunc",
+        ],
     ));
     let path = paths.iter().max_by_key(|p| p.len()).unwrap();
     let absent = f.source.join("not-present=still not present");
     let input = format!(
         "{}/config={}",
-        f.b.rsplit('/').next().unwrap(),
+        &f.b.rsplit('/').next().unwrap()[..15],
         absent.display()
     );
     let plan = successful(
@@ -149,7 +156,7 @@ fn operator_plan_never_opens_files_and_conflicts_are_checked_before_acquisition(
             "--plan",
         ],
     );
-    assert!(plan.contains("operator_input: config (acquisition not performed)"));
+    assert!(plan.contains("input file: config"));
     assert!(!plan.contains("not-present"));
     assert_no_execution(&f.root, &before);
     let conflict = format!(
@@ -190,7 +197,14 @@ fn native_operator_file_paths_and_empty_values_survive_a_chained_migration() {
         let f = setup(false);
         let paths = ids(&successful(
             &f.root,
-            &["instance", "migration-paths", "demo", "--to", &f.c],
+            &[
+                "instance",
+                "migration-paths",
+                "demo",
+                "--to",
+                &f.c,
+                "--no-trunc",
+            ],
         ));
         let path = paths.iter().max_by_key(|p| p.len()).unwrap();
         let file = f.source.join("operator=bytes with spaces");
@@ -459,7 +473,7 @@ fn real_cli_lists_and_selects_direct_or_chained_paths_without_any_run() {
                 "instance", "migrate", "demo", "--to", &f.c, "--path", path, "--plan",
             ],
         );
-        assert!(plan.contains("no Run created"));
+        assert!(plan.contains("Mode: preview"));
         assert!(plan.contains(path));
         edge_counts.push(plan.lines().filter(|l| l.starts_with("edge ")).count());
     }
@@ -521,7 +535,7 @@ fn candidates_do_not_hide_unready_routes_and_ids_are_not_binding_state_tokens() 
         &f.root,
         &["instance", "migration-paths", "demo", "--to", &f.c],
     );
-    assert!(listed.contains("requirements, runtime and authorization not evaluated"));
+    assert!(listed.contains("Migration paths"));
     let choices = ids(&listed);
     assert_eq!(choices.len(), 2);
     let failures = choices
@@ -612,7 +626,14 @@ fn bad_selectors_obsolete_flags_and_missing_storage_fail_before_writes() {
     );
     let listed = successful(
         &f.root,
-        &["instance", "migration-paths", "demo", "--to", &f.c],
+        &[
+            "instance",
+            "migration-paths",
+            "demo",
+            "--to",
+            &f.c,
+            "--no-trunc",
+        ],
     );
     let path = ids(&listed).remove(0);
     let changed_target = command(
@@ -666,17 +687,15 @@ fn real_cli_executes_selected_direct_and_chained_paths_and_shows_durable_runs() 
                 "instance", "migrate", "demo", "--to", &f.c, "--path", &selected,
             ],
         );
-        assert!(result.contains("operation: migration"));
         assert!(result.contains("outcome: succeeded"));
-        assert!(result.contains(&format!("committed_edges: {edge_count}")));
         let run = result
             .lines()
             .find_map(|line| line.strip_prefix("run: "))
             .unwrap();
-        assert!(
-            successful(&f.root, &["run", "show", run])
-                .contains(&format!("last_committed_revision: {}", f.c))
-        );
+        let inspection = successful(&f.root, &["run", "show", run]);
+        assert!(inspection.contains("operation: migration"));
+        assert!(inspection.contains(&format!("committed_edges: {edge_count}")));
+        assert!(inspection.contains(&format!("last_committed_revision: {}", f.c)));
         assert!(successful(&f.root, &["instance", "show", "demo"]).contains(&f.c));
         assert!(successful(&f.root, &["run", "list", "demo"]).contains("Migration"));
         let db = rusqlite::Connection::open_with_flags(

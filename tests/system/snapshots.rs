@@ -385,7 +385,7 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
     for args in [
         vec!["snapshot", "show", &id],
         vec!["snapshot", "verify", &id],
-        vec!["snapshot", "list", "--instance", "service"],
+        vec!["snapshot", "list", "--instance", "service", "--no-trunc"],
     ] {
         let out = a.run(args);
         assert_success(&out);
@@ -421,13 +421,15 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
     let verified = b.run(["snapshot", "verify", &id]);
     assert_success(&verified);
     assert_eq!(field(&verified, "relational_verification"), "not_evaluated");
-    let show = b.run(["snapshot", "show", &id]);
+    let show = b.run(["--format", "json", "snapshot", "show", &id]);
+    assert_success(&show);
     safe(&show);
+    let show: Value = serde_json::from_slice(&show.stdout).unwrap();
     assert_eq!(
-        field(&show, "current_content_verification"),
+        show["result"]["current_content_verification"],
         "not_performed"
     );
-    assert_eq!(field(&show, "target_eligibility"), "target_not_specified");
+    assert_eq!(show["result"]["target_eligibility"], "target_not_specified");
     assert_success(&b.run(["snapshot", "import", bundle.to_str().unwrap()]));
     let installed = b.run(["pack", "install", a.source.to_str().unwrap()]);
     assert_success(&installed);
@@ -544,10 +546,10 @@ fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format(
         assert_success(&output);
         safe(&output);
     }
-    assert_eq!(
-        field(&s.run(["snapshot", "show", &id]), "integrity_format"),
-        "1"
-    );
+    let show = s.run(["--format", "json", "snapshot", "show", &id]);
+    assert_success(&show);
+    let show: Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(show["result"]["integrity_format"], 1);
     let output = s.path("v1-out.snapshot");
     assert_success(&export(&s, &id, &output));
     assert_eq!(manifest(&output), original);
@@ -727,7 +729,10 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     ]);
     assert_success(&restored);
     safe(&restored);
-    assert_eq!(field(&restored, "current_recovery_guard"), "none");
+    let run = field(&restored, "run");
+    let inspected = s.run(["run", "show", &run]);
+    assert_success(&inspected);
+    assert_eq!(field(&inspected, "current_recovery_guard"), "none");
     let actor = s.spawn(["snapshot", "capture", "service", "--param", "mode=hold"]);
     s.wait_for_marker("ready:hold");
     let live = s.run(["run", "list", "service", "--no-trunc"]);

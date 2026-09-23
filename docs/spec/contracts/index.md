@@ -8,6 +8,8 @@ title: Authoring and format contracts
 
 Authoring, normalized identity, wire, errors, and transport are distinct contracts. Their versions and stability statuses are independent.
 
+- [CLI object ID selectors](./cli-id-selectors.md): Resolve unique prefixes and display usable short object IDs while preserving full machine identities.
+
 - [Pack Distribution V1](./pack-distribution-v1.md): Source/distribution Pack directories and ZIP-based `.pack` files, exact Revision export, and transactional metadata conflict policies.
 
 - [Actions, Inputs, and Parameters](./actions-inputs-and-parameters.md): Read the author-facing declarations and the distinctions between managed bindings, invocation parameters, and future service-resource exposure.

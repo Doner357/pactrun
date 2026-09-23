@@ -741,6 +741,21 @@ impl HookWorker {
         let sensitive = parameters["sensitive_value"].as_str().unwrap().to_owned();
 
         match mode.as_str() {
+            "machine_stream" => {
+                let bytes: Vec<u8> = (0..512 * 1024).map(|n| (n % 256) as u8).collect();
+                io::stdout().write_all(&bytes).unwrap();
+                io::stdout().flush().unwrap();
+                io::stderr().write_all(&[0, 255, 13, 27, 123]).unwrap();
+                io::stderr().flush().unwrap();
+                write_frame(
+                    &mut self.stream,
+                    &json!({"type":"diagnostic","severity":"info","code":"live","message":"full-live-text".repeat(1024)}),
+                );
+                thread::sleep(Duration::from_millis(300));
+                fs::write(marker_variant(&marker, "done"), b"done").unwrap();
+                self.complete(json!({"status":"success","produced_outputs":[]}));
+                self.expect_accepted();
+            }
             "diagnostic_flood" => {
                 let message = "flood-evidence".repeat(4000);
                 for _ in 0..20000 {

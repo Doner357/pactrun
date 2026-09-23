@@ -21,9 +21,12 @@ Run-local sequence determines order; receipt time is not the Hook's internal
 occurrence time. Primary and secondary Pactrun failures, outcome, result references
 and the current Instance recovery guard MUST remain distinct.
 
-Only protocol/state-machine-accepted Hook messages qualify. Diagnostic error
-severity MUST NOT become a second Run failure rule. Invalid raw frames, terminal
-streams and Input/Secret values MUST NOT be collected. Hook authors remain
+Only protocol/state-machine-accepted Hook messages qualify for the historical
+journal. Diagnostic error severity MUST NOT become a second Run failure rule.
+Invalid raw frames, terminal streams and Input/Secret payloads MUST NOT enter
+that journal. CLI machine delivery may temporarily spool terminal streams and
+accepted live diagnostics under PR-REQ-0366/0367, independently of journal budgets.
+Hook authors remain
 responsible for sensitive text; escaping is not universal redaction or encryption.
 Default retention can put Hook-authored sensitive text into the store and backups.
 
@@ -38,7 +41,8 @@ Omitted sequence intervals and unknown tails MUST NOT be disguised as continuity
 All Hook execution command families MUST accept --no-retain-hook-text to suppress
 persistent Hook code/message text without disabling live display. Preview MUST NOT
 establish a collection. Run show MUST expose new retained explanations without
-another authorization flag; Run list MUST remain structural. Legacy free text
+another authorization flag; human Run list remains structural, while machine
+Run list includes available inspection data under PR-REQ-0365. Legacy free text
 MUST NOT be retroactively treated as newly collected evidence.
 
 Noninteractive live explanations use stderr. Interactive execution MUST defer

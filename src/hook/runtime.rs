@@ -185,14 +185,18 @@ pub(super) fn execute_materialized(
             false,
         );
     }
-    let listener = match ProtocolListener::bind() {
+    let listener = match ProtocolListener::for_execution(
+        materialized.program(),
+        materialized.arguments(),
+        materialized.execution_root(),
+    ) {
         Ok(listener) => listener,
-        Err(_) => {
+        Err(error) => {
             let (execution, outputs) = materialized.into_execution();
             return super::deletions::adapt_early(
                 ready_failure(
                     run,
-                    FailureKind::ProtocolTransport,
+                    FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
                     outputs,
                     Some(execution),
                 ),
@@ -201,13 +205,18 @@ pub(super) fn execute_materialized(
             );
         }
     };
-    let diagnostics = diagnostic_scope(risk_persistence, run, &materialized, &cancellation);
+    let delivery = cancellation.delivery.scope(run, materialized.session());
+    let mut diagnostics = diagnostic_scope(risk_persistence, run, &materialized, &cancellation);
+    if let Some(diagnostics) = &mut diagnostics {
+        diagnostics.delivery = delivery.clone();
+    }
     let supervisor = match cancellation.arbitrate_launch(|| {
-        ProcessSupervisor::spawn(
+        ProcessSupervisor::spawn_delivered(
             materialized.program(),
             materialized.arguments(),
             materialized.terminal(),
             &listener,
+            delivery.as_ref(),
         )
     }) {
         Ok(Some(supervisor)) => supervisor,
@@ -344,26 +353,35 @@ pub(super) fn execute_snapshot_with_risk(
             return run;
         }
     };
-    let listener = match ProtocolListener::bind() {
+    let listener = match ProtocolListener::for_execution(
+        materialized.program(),
+        materialized.arguments(),
+        materialized.execution_root(),
+    ) {
         Ok(listener) => listener,
-        Err(_) => {
+        Err(error) => {
             claim.replace(snapshot_before_launch(
                 run,
                 materialized,
-                FailureKind::ProtocolTransport,
+                FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
             ));
             return run;
         }
     };
-    let diagnostics = diagnostic_scope(risk, run, &materialized, &cancellation);
+    let delivery = cancellation.delivery.scope(run, materialized.session());
+    let mut diagnostics = diagnostic_scope(risk, run, &materialized, &cancellation);
+    if let Some(diagnostics) = &mut diagnostics {
+        diagnostics.delivery = delivery.clone();
+    }
     let mut pending_materialization = Some(materialized);
     match claim.launch_once(|_| {
         let mut materialized = pending_materialization.take().expect("one launch attempt");
-        match ProcessSupervisor::spawn(
+        match ProcessSupervisor::spawn_delivered(
             materialized.program(),
             materialized.arguments(),
             materialized.terminal(),
             &listener,
+            delivery.as_ref(),
         ) {
             Ok(supervisor) => {
                 let started = Instant::now();
@@ -875,6 +893,7 @@ fn terminate_for_failure(
     mut live: LiveExecution,
     failure: FailureKind,
 ) -> OwnerContinuation {
+    let failure = live.supervisor.startup_failure().unwrap_or(failure);
     live.winner.claim(OutcomeWinner::Failed(failure.clone()));
     if let LiveProtocol::Connected(connected) = &mut live.protocol {
         let code = match &failure {
@@ -941,6 +960,9 @@ fn finish_after_exit(
     mut live: LiveExecution,
 ) -> OwnerContinuation {
     debug_assert!(live.exit_status.is_some());
+    if let Some(failure) = live.supervisor.startup_failure() {
+        live.winner.claim(OutcomeWinner::Failed(failure));
+    }
     let quiet_until = Instant::now() + EXIT_DRAIN_WINDOW;
     while let Some(event) = next_drained_event(&live, quiet_until) {
         match handle_wire_event(risk_persistence, &mut live, event) {

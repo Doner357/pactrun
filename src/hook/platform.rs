@@ -37,6 +37,9 @@ pub(super) type ProtocolStream = std::os::unix::net::UnixStream;
 pub(super) struct ProtocolListener {
     endpoint: String,
     inner: PlatformProtocolListener,
+    startup: Option<std::sync::Arc<super::startup::Setup>>,
+    #[cfg(unix)]
+    directory: Option<super::startup::PrivateDirectory>,
 }
 
 impl fmt::Debug for ProtocolListener {
@@ -60,13 +63,20 @@ impl ProtocolListener {
         {
             return Err(io::Error::other("invalid shell IPC directory"));
         }
+        let owned = super::startup::PrivateDirectory::open(directory)?;
         let path = directory.join("helper.sock");
         let endpoint = path
             .to_str()
             .ok_or_else(|| io::Error::other("invalid IPC path"))?
             .to_owned();
         let inner = std::os::unix::net::UnixListener::bind(&path)?;
-        let listener = Self { endpoint, inner };
+        owned.qualify()?;
+        let listener = Self {
+            endpoint,
+            inner,
+            startup: None,
+            directory: Some(owned),
+        };
         listener.inner.set_nonblocking(true)?;
         fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
         Ok(listener)
@@ -74,6 +84,22 @@ impl ProtocolListener {
     /// Creates the one-connection owner-private listener before launch.
     pub(super) fn bind() -> io::Result<Self> {
         platform_listener()
+    }
+
+    pub(super) fn for_execution(
+        program: &Path,
+        arguments: &[String],
+        root: &Path,
+    ) -> io::Result<Self> {
+        let mut listener = Self::bind()?;
+        if arguments
+            .first()
+            .is_some_and(|a| a == "--pactrun-internal-shell-loader")
+            && program == std::env::current_exe()?
+        {
+            listener.startup = Some(std::sync::Arc::new(super::startup::Setup::new(root)?));
+        }
+        Ok(listener)
     }
 
     pub(super) fn bind_helpers() -> io::Result<Self> {
@@ -87,7 +113,11 @@ impl ProtocolListener {
             getrandom::fill(&mut random).map_err(io::Error::other)?;
             let endpoint = format!(r"\\.\pipe\pactrun-helper-{}", hex::encode(random));
             let inner = pactrun_windows_ntfs::NamedPipeListener::bind_reusable(&endpoint)?;
-            Ok(Self { endpoint, inner })
+            Ok(Self {
+                endpoint,
+                inner,
+                startup: None,
+            })
         }
     }
 
@@ -98,10 +128,14 @@ impl ProtocolListener {
         command.envs(self.environment());
     }
 
-    fn environment(&self) -> [(&str, &str); 2] {
+    fn environment(&self) -> [(&str, &str); 3] {
         [
             (TRANSPORT_ENVIRONMENT, platform_transport_name()),
             (ENDPOINT_ENVIRONMENT, &self.endpoint),
+            (
+                super::startup::STATUS_ENV,
+                self.startup.as_ref().map_or("", |s| s.status.as_str()),
+            ),
         ]
     }
 
@@ -117,6 +151,9 @@ impl ProtocolListener {
 #[cfg(unix)]
 impl Drop for ProtocolListener {
     fn drop(&mut self) {
+        if self.directory.is_some() {
+            return;
+        }
         let path = Path::new(&self.endpoint);
         let _ = fs::remove_file(path);
         if let Some(parent) = path.parent() {
@@ -139,6 +176,8 @@ pub(super) struct ProcessSupervisor {
     input_relay: Option<JoinHandle<()>>,
     #[cfg(windows)]
     child: pactrun_windows_ntfs::HookProcess,
+    #[cfg(windows)]
+    startup: Option<std::sync::Arc<super::startup::Setup>>,
 }
 
 impl ProcessSupervisor {
@@ -148,10 +187,24 @@ impl ProcessSupervisor {
         terminal: TerminalContractV1,
         listener: &ProtocolListener,
     ) -> io::Result<Self> {
+        Self::spawn_delivered(program, arguments, terminal, listener, None)
+    }
+    pub(super) fn spawn_delivered(
+        program: &Path,
+        arguments: &[String],
+        terminal: TerminalContractV1,
+        listener: &ProtocolListener,
+        delivery: Option<&super::delivery::Scope>,
+    ) -> io::Result<Self> {
+        let pipes = if terminal == TerminalContractV1::Output {
+            delivery.map(|d| d.pipes()).transpose()?
+        } else {
+            None
+        };
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
-            let helper_directory = HelperIpcDirectory::for_launch(program, arguments)?;
+            let helper_directory = listener.startup.clone().map(HelperIpcDirectory);
             if terminal == TerminalContractV1::Interactive {
                 return spawn_interactive_adapter(program, arguments, listener, helper_directory);
             }
@@ -160,6 +213,11 @@ impl ProcessSupervisor {
             listener.inject_environment(&mut command);
             HelperIpcDirectory::inject(&helper_directory, &mut command);
             configure_terminal(&mut command, terminal);
+            if let Some((stdout, stderr)) = pipes {
+                command
+                    .stdout(Stdio::from(stdout))
+                    .stderr(Stdio::from(stderr));
+            }
             command.process_group(0);
             Ok(Self {
                 _helper_directory: helper_directory,
@@ -219,7 +277,15 @@ impl ProcessSupervisor {
                 )
             };
             #[cfg(test)]
-            let child = if matches!(terminal, HookTerminal::Interactive) {
+            let child = if let Some((stdout, stderr)) = &pipes {
+                HookProcess::spawn_captured(
+                    &program,
+                    &arguments,
+                    listener.environment(),
+                    stdout,
+                    stderr,
+                )?
+            } else if matches!(terminal, HookTerminal::Interactive) {
                 HookProcess::spawn_with_extra_environment(
                     &program,
                     &arguments,
@@ -234,8 +300,32 @@ impl ProcessSupervisor {
                 HookProcess::spawn(&program, &arguments, terminal, listener.environment())?
             };
             #[cfg(not(test))]
-            let child = HookProcess::spawn(&program, &arguments, terminal, listener.environment())?;
-            Ok(Self { child })
+            let child = if let Some((stdout, stderr)) = &pipes {
+                HookProcess::spawn_captured(
+                    &program,
+                    &arguments,
+                    listener.environment(),
+                    stdout,
+                    stderr,
+                )?
+            } else {
+                HookProcess::spawn(&program, &arguments, terminal, listener.environment())?
+            };
+            Ok(Self {
+                child,
+                startup: listener.startup.clone(),
+            })
+        }
+    }
+
+    pub(super) fn startup_failure(&self) -> Option<super::FailureKind> {
+        #[cfg(unix)]
+        {
+            self._helper_directory.as_ref().and_then(|s| s.0.failure())
+        }
+        #[cfg(windows)]
+        {
+            self.startup.as_ref().and_then(|s| s.failure())
         }
     }
 
@@ -304,7 +394,7 @@ impl ProcessSupervisor {
 /// Core keeps this guard until process-tree supervision ends, so Loader loss
 /// cannot orphan its helper socket. The directory contains no authority data.
 #[cfg(unix)]
-struct HelperIpcDirectory(std::path::PathBuf);
+struct HelperIpcDirectory(std::sync::Arc<super::startup::Setup>);
 
 #[cfg(unix)]
 impl fmt::Debug for HelperIpcDirectory {
@@ -315,35 +405,14 @@ impl fmt::Debug for HelperIpcDirectory {
 
 #[cfg(unix)]
 impl HelperIpcDirectory {
-    fn for_launch(program: &Path, arguments: &[String]) -> io::Result<Option<Self>> {
-        use std::os::unix::fs::DirBuilderExt;
-        if arguments
-            .first()
-            .is_none_or(|a| a != "--pactrun-internal-shell-loader")
-            || program != std::env::current_exe()?
-        {
-            return Ok(None);
-        }
-        let mut bytes = [0; 16];
-        getrandom::fill(&mut bytes).map_err(io::Error::other)?;
-        let path = std::env::temp_dir().join(format!("pactrun-shell-{}", hex::encode(bytes)));
-        fs::DirBuilder::new().mode(0o700).create(&path)?;
-        Ok(Some(Self(path)))
-    }
-
     fn inject(directory: &Option<Self>, command: &mut Command) {
         command.env_remove("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY");
         if let Some(directory) = directory {
-            command.env("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY", &directory.0);
+            command.env(
+                "PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY",
+                &directory.0.helper.path,
+            );
         }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for HelperIpcDirectory {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(self.0.join("helper.sock"));
-        let _ = fs::remove_dir(&self.0);
     }
 }
 
@@ -994,7 +1063,11 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         .map_err(|error| io::Error::other(format!("generate named-pipe endpoint: {error}")))?;
     let endpoint = format!(r"\\.\pipe\pactrun-{}", hex::encode(random));
     let inner = pactrun_windows_ntfs::NamedPipeListener::bind(&endpoint)?;
-    Ok(ProtocolListener { endpoint, inner })
+    Ok(ProtocolListener {
+        endpoint,
+        inner,
+        startup: None,
+    })
 }
 
 /// `sun_path` is limited to roughly one hundred bytes, so the socket lives in
@@ -1002,37 +1075,30 @@ fn platform_listener() -> io::Result<ProtocolListener> {
 /// rather than beneath the (arbitrarily deep) execution tree.
 #[cfg(unix)]
 fn platform_listener() -> io::Result<ProtocolListener> {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-
-    let mut random = [0_u8; 16];
-    getrandom::fill(&mut random)
-        .map_err(|error| io::Error::other(format!("generate socket directory: {error}")))?;
-    let directory = std::env::temp_dir().join(format!("pactrun-{}", hex::encode(random)));
-    fs::DirBuilder::new().mode(0o700).create(&directory)?;
-    let path = directory.join("hook.sock");
+    use std::os::unix::fs::PermissionsExt;
+    let directory = super::startup::private_directory("pactrun-", "hook.sock")?;
+    let path = directory.path.join("hook.sock");
     let endpoint = match path.to_str() {
         Some(endpoint) => endpoint.to_owned(),
         None => {
-            let _ = fs::remove_dir(&directory);
             return Err(io::Error::other("socket path is not valid Unicode"));
         }
     };
-    let inner = match std::os::unix::net::UnixListener::bind(&path) {
-        Ok(inner) => inner,
-        Err(error) => {
-            let _ = fs::remove_dir(&directory);
-            return Err(error);
-        }
-    };
+    let inner = std::os::unix::net::UnixListener::bind(&path)?;
     if let Err(error) = inner
         .set_nonblocking(true)
         .and_then(|()| fs::set_permissions(&path, fs::Permissions::from_mode(0o600)))
     {
         let _ = fs::remove_file(&path);
-        let _ = fs::remove_dir(&directory);
         return Err(error);
     }
-    Ok(ProtocolListener { endpoint, inner })
+    directory.qualify()?;
+    Ok(ProtocolListener {
+        endpoint,
+        inner,
+        startup: None,
+        directory: Some(directory),
+    })
 }
 
 #[cfg(windows)]

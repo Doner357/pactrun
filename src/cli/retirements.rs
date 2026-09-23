@@ -17,14 +17,36 @@ pub(super) enum RetirementCommand {
         mode: DeletionMode,
         options: ExecutionOptions,
     },
-    Show(InstanceId),
-    Confirm(CleanupConfirmation),
-    DetachedList,
+    Show(Selector<InstanceId>),
+    Confirm(ConfirmationIntent),
+    DetachedList {
+        no_trunc: bool,
+    },
     DetachedShow {
-        id: ServiceAllocationId,
+        id: Selector<ServiceAllocationId>,
         reveal: bool,
     },
-    Discard(ServiceAllocationId),
+    Discard(Selector<ServiceAllocationId>),
+}
+
+pub(super) struct ConfirmationIntent {
+    instance: Selector<InstanceId>,
+    attempt: Selector<RunId>,
+    expected: InstanceStateVersion,
+}
+impl RetirementCommand {
+    pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
+        match self {
+            Self::Show(id) => id.resolve(r)?,
+            Self::Confirm(c) => {
+                c.instance.resolve(r)?;
+                c.attempt.resolve(r)?;
+            }
+            Self::DetachedShow { id, .. } | Self::Discard(id) => id.resolve(r)?,
+            _ => {}
+        }
+        Ok(())
+    }
 }
 
 fn identifier<T: FromStr>(parser: &mut Parser, name: &str) -> Result<T, CliError> {
@@ -84,7 +106,7 @@ pub(super) fn parse_deletion_operation(
             "requires --assert-cleanup-complete after external verification/repair",
         ));
     }
-    Ok(RetirementCommand::Confirm(CleanupConfirmation {
+    Ok(RetirementCommand::Confirm(ConfirmationIntent {
         instance,
         attempt: attempt.ok_or_else(|| CliError::usage("missing --attempt"))?,
         expected: expected.ok_or_else(|| CliError::usage("missing --if-version"))?,
@@ -96,6 +118,7 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     let mut expected = None;
     let mut options = ExecutionOptions {
         no_retain_hook_text: false,
+        cancel_on_output_close: false,
         parameters: vec![],
         plan: false,
         recovery_override: false,
@@ -105,6 +128,9 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     };
     while let Some(arg) = parser.next().map_err(lex_error)? {
         match arg {
+            Arg::Long("cancel-on-output-close") if !options.cancel_on_output_close => {
+                options.cancel_on_output_close = true
+            }
             Arg::Long("if-version") => set_once(
                 &mut expected,
                 parse_state_version(value_string(parser, "state version")?)?,
@@ -151,8 +177,15 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
 pub(super) fn parse_detached(parser: &mut Parser) -> Result<RetirementCommand, CliError> {
     let operation = required_value_string(parser, "detached command")?;
     if operation == "list" {
-        require_end(parser)?;
-        return Ok(RetirementCommand::DetachedList);
+        let no_trunc = match parser.next().map_err(lex_error)? {
+            None => false,
+            Some(Arg::Long("no-trunc")) => {
+                require_end(parser)?;
+                true
+            }
+            _ => return Err(CliError::usage("detached list supports --no-trunc")),
+        };
+        return Ok(RetirementCommand::DetachedList { no_trunc });
     }
     let id = identifier(parser, "AllocationId")?;
     match operation.as_str() {
@@ -198,7 +231,7 @@ pub(super) fn execute(
     let readonly = matches!(
         command,
         RetirementCommand::Show(_)
-            | RetirementCommand::DetachedList
+            | RetirementCommand::DetachedList { .. }
             | RetirementCommand::DetachedShow { .. }
             | RetirementCommand::Execute {
                 options: ExecutionOptions { plan: true, .. },
@@ -247,6 +280,17 @@ pub(super) fn execute(
                 require_json_terminal_free(cleanup.hook.io.terminal)?;
             }
             if options.plan {
+                let author = if matches!(&plan.work, DeletionWork::Cleanup(_)) {
+                    capability_presentation::load(
+                        &app,
+                        &[(
+                            plan.revision.clone(),
+                            capability_presentation::Selection::Cleanup,
+                        )],
+                    )?
+                } else {
+                    Vec::new()
+                };
                 if format == presentation::Format::Json {
                     let result = RetirementPlan {
                         instance_id: plan.instance.to_string(),
@@ -263,7 +307,10 @@ pub(super) fn execute(
                     return presentation::render(
                         format,
                         command_name,
-                        &result,
+                        &capability_presentation::Presented {
+                            value: result,
+                            presentation: author,
+                        },
                         stdout,
                         |_, _| unreachable!(),
                     );
@@ -274,7 +321,8 @@ pub(super) fn execute(
                     DeletionWork::FinalizationOnly { .. } => "finalization_only",
                     DeletionWork::Cleanup(_) => "cleanup_then_finalize",
                 };
-                return writeln!(stdout, "instance_id: {}\nexpected_state_version: {}\nrevision: {}\nwork: {work}\nadmission: not_attempted", plan.instance, plan.expected, format_revision(&plan.revision)).map_err(io_operation);
+                writeln!(stdout, "Mode: preview\ninstance_id: {}\nexpected_state_version: {}\nrevision: {}\nwork: {work}", plan.instance, plan.expected, format_revision(&plan.revision)).map_err(io_operation)?;
+                return capability_presentation::write(stdout, &author, false);
             }
             if cancellation.is_requested() {
                 return Err(CliError::operation(
@@ -282,9 +330,17 @@ pub(super) fn execute(
                 ));
             }
             if mode == DeletionMode::AbandonManagement {
-                writeln!(stderr, "Warning: Abandon skips Package Cleanup and preserves surviving service bytes. Already removed bytes cannot be restored; remaining data does not imply a coherent or running service. External processes are not stopped.").map_err(io_operation)?;
+                if format == presentation::Format::Human {
+                    writeln!(stderr, "Abandon will end management and preserve remaining service data. Stop external service processes separately.").map_err(io_operation)?;
+                }
             } else {
-                writeln!(stderr, "Warning: deletion runs declared Cleanup and irreversibly ends owned storage lifetimes. Ambiguous Cleanup requires inspection, not automatic replay.").map_err(io_operation)?;
+                if format == presentation::Format::Human {
+                    writeln!(
+                        stderr,
+                        "Deletion will permanently remove this Instance's owned storage."
+                    )
+                    .map_err(io_operation)?;
+                }
             }
             let acceptance = app.accept_deletion_plan(
                 plan,
@@ -349,7 +405,10 @@ pub(super) fn execute(
                 error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                 return Err(error);
             }
-            snapshots::write_run(stderr, &inspection)?;
+            if !matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
+            {
+                snapshots::write_run(stderr, &inspection)?;
+            }
             match inspection.run.state {
                 RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
                     writeln!(stdout, "retired_instance: {}\nrun: {run}", intent.instance)
@@ -366,52 +425,25 @@ pub(super) fn execute(
             }
         }
         RetirementCommand::Show(id) => {
-            let runs = app.list_managed_runs(id).map_err(safe_error)?;
-            let live = app.load_instance(id).map_err(safe_error)?;
-            if live.is_none() && runs.is_empty() {
-                return Err(CliError::operation("InstanceId has no recorded identity"));
-            }
+            let id = id.full();
+            let entry = app.inspect_retirement(id).map_err(safe_error)?;
             if format == presentation::Format::Json {
-                let result = RetirementInspection {
-                    instance_id: id.to_string(),
-                    managed: live.is_some(),
-                    state_version: live.as_ref().map(|v| v.state_version.to_string()),
-                    obligation: app
-                        .inspect_deletion(id)
-                        .map_err(safe_error)?
-                        .map(|o| Obligation {
-                            attempt_run_id: o.attempt.to_string(),
-                            phase: match o.phase {
-                                DeletionPhase::LaunchAuthorized => "launch_authorized",
-                                DeletionPhase::ResultUnresolved => "cleanup_unresolved",
-                                DeletionPhase::FinalizationAuthorized => "finalization_authorized",
-                            },
-                        }),
-                    runs: runs
-                        .iter()
-                        .filter(|r| {
-                            matches!(
-                                r.operation,
-                                crate::domain::ManagedRunIdentity::Deletion { .. }
-                            )
-                        })
-                        .map(Into::into)
-                        .collect(),
-                };
                 return presentation::render(
                     format,
                     "instance deletion show",
-                    &result,
+                    &RetirementInspection::from(&entry),
                     stdout,
                     |_, _| unreachable!(),
                 );
             }
+            let runs = entry.runs;
+            let live = entry.live;
             writeln!(stdout, "instance_id: {id}\nmanaged: {}", live.is_some())
                 .map_err(io_operation)?;
             if let Some(live) = live {
                 writeln!(stdout, "state_version: {}", live.state_version).map_err(io_operation)?;
             }
-            if let Some(obligation) = app.inspect_deletion(id).map_err(safe_error)? {
+            if let Some(obligation) = entry.obligation {
                 let phase = match obligation.phase {
                     DeletionPhase::LaunchAuthorized => "launch_authorized",
                     DeletionPhase::ResultUnresolved => "cleanup_unresolved",
@@ -437,6 +469,11 @@ pub(super) fn execute(
             Ok(())
         }
         RetirementCommand::Confirm(confirmation) => {
+            let confirmation = CleanupConfirmation {
+                instance: confirmation.instance.full(),
+                attempt: confirmation.attempt.full(),
+                expected: confirmation.expected,
+            };
             let version = app
                 .confirm_cleanup_completion(confirmation)
                 .map_err(safe_error)?;
@@ -454,7 +491,7 @@ pub(super) fn execute(
             }
             writeln!(stdout, "state_version: {version}\nauthority: operator_confirmed\nOnly finalization is authorized; the original Run outcome and trust guard are unchanged.").map_err(io_operation)
         }
-        RetirementCommand::DetachedList => {
+        RetirementCommand::DetachedList { no_trunc } => {
             let allocations = app.list_detached_allocations().map_err(safe_error)?;
             if format == presentation::Format::Json {
                 let result = DetachedList {
@@ -471,12 +508,22 @@ pub(super) fn execute(
             if allocations.is_empty() {
                 writeln!(stdout, "No detached allocations.").map_err(io_operation)?;
             }
-            for allocation in allocations {
-                write_detached(stdout, &allocation)?;
+            let ids = short_ids::labels(
+                &app,
+                crate::domain::CatalogIdentityKind::Allocation,
+                allocations
+                    .iter()
+                    .map(|a| a.allocation.to_string())
+                    .collect(),
+                no_trunc,
+            )?;
+            for (allocation, id) in allocations.into_iter().zip(ids) {
+                write_detached(stdout, &allocation, &id)?;
             }
             Ok(())
         }
         RetirementCommand::DetachedShow { id, reveal } => {
+            let id = id.full();
             let allocation = app
                 .detached_allocation(id)
                 .map_err(safe_error)?
@@ -510,11 +557,11 @@ pub(super) fn execute(
                     |_, _| unreachable!(),
                 );
             }
-            write_detached(stdout, &allocation)?;
+            write_detached(stdout, &allocation, &id.to_string())?;
             if reveal {
                 let locations = app.detached_handoff(id).map_err(safe_error)?;
                 if locations.len() > 1 {
-                    writeln!(stderr,"Warning: partial retirement left multiple data locations; original_relative_location identifies their former positions, not a coherent service or snapshot.").map_err(io_operation)?;
+                    writeln!(stderr,"Partial retirement left data in multiple locations. Review all listed locations before recovery or disposal.").map_err(io_operation)?;
                 }
                 for location in locations {
                     writeln!(
@@ -529,7 +576,10 @@ pub(super) fn execute(
             Ok(())
         }
         RetirementCommand::Discard(id) => {
-            writeln!(stderr, "Warning: discard irreversibly destroys this detached allocation. It does not stop service processes or clean external resources.").map_err(io_operation)?;
+            let id = id.full();
+            if format == presentation::Format::Human {
+                writeln!(stderr, "Discard will permanently delete this allocation. Stop any service using it first.").map_err(io_operation)?;
+            }
             let changed = app
                 .discard_detached_allocation(id, true)
                 .map_err(safe_error)?;
@@ -558,13 +608,14 @@ pub(super) fn execute(
 fn write_detached(
     out: &mut dyn Write,
     allocation: &DetachedAllocationView,
+    id: &str,
 ) -> Result<(), CliError> {
     let state = match allocation.state {
         DetachedAllocationState::Preserved => "preserved",
         DetachedAllocationState::DiscardPending => "discard_pending",
         DetachedAllocationState::Discarded => "discarded",
     };
-    writeln!(out, "allocation: {}\nformer_instance: {}\nstate: {state}\norigin_revision: {}\norigin_storage: {}", allocation.allocation, allocation.instance, format_revision(&allocation.origin_revision), allocation.origin_storage.as_str()).map_err(io_operation)
+    writeln!(out, "allocation: {id}\nformer_instance: {}\nstate: {state}\norigin_revision: {}\norigin_storage: {}", allocation.instance, format_revision(&allocation.origin_revision), allocation.origin_storage.as_str()).map_err(io_operation)
 }
 
 #[derive(serde::Serialize)]
@@ -590,6 +641,24 @@ pub(super) struct RetirementInspection {
     state_version: Option<String>,
     obligation: Option<Obligation>,
     runs: Vec<execution_presentation::Run>,
+}
+impl From<&crate::domain::RetirementCatalogEntry> for RetirementInspection {
+    fn from(entry: &crate::domain::RetirementCatalogEntry) -> Self {
+        Self {
+            instance_id: entry.history.id.to_string(),
+            managed: entry.live.is_some(),
+            state_version: entry.live.as_ref().map(|v| v.state_version.to_string()),
+            obligation: entry.obligation.as_ref().map(|o| Obligation {
+                attempt_run_id: o.attempt.to_string(),
+                phase: match o.phase {
+                    DeletionPhase::LaunchAuthorized => "launch_authorized",
+                    DeletionPhase::ResultUnresolved => "cleanup_unresolved",
+                    DeletionPhase::FinalizationAuthorized => "finalization_authorized",
+                },
+            }),
+            runs: entry.runs.iter().map(Into::into).collect(),
+        }
+    }
 }
 #[derive(serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -661,7 +730,7 @@ fn retry_or_fail(
     ) {
         let _ = writeln!(
             stderr,
-            "Run {run}: owner retained; retrying persistence without replaying Cleanup"
+            "Run {run}: saving execution state; retrying storage access"
         );
         thread::sleep(Duration::from_secs(1));
         Ok(())
