@@ -1995,7 +1995,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0001
-    // Verifies: PR-REQ-0182, PR-REQ-0184, PR-REQ-0189, PR-REQ-0192
+    // Verifies: PR-REQ-0017, PR-REQ-0182, PR-REQ-0184, PR-REQ-0189, PR-REQ-0192
     #[test]
     fn minimal_direct_vector_is_stable() {
         let vector = &manifest().valid[0];

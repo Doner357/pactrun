@@ -173,7 +173,7 @@ mod tests {
     use crate::{domain::*, revision_core_v2::encode_canonical_revision_core_v2};
 
     // Test-ID: PR-TEST-0494
-    // Verifies: PR-REQ-0350
+    // Verifies: PR-REQ-0016, PR-REQ-0018, PR-REQ-0350
     #[test]
     fn explicit_yaml_v3_preserves_closed_projection_and_rejects_implicit_fallback() {
         let text = "source_format: 3\npackage_id: 00000000000000000000000000000065\nrevision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: script}\n        args: []\n        io: {terminal: none}\nruntime_content:\n  files: [{id: script, source: script.sh, path: script.sh, executable: false}]\n";
@@ -208,7 +208,7 @@ mod tests {
     const BASIC: &str = "source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
 
     // Test-ID: PR-TEST-0336
-    // Verifies: PR-REQ-0320
+    // Verifies: PR-REQ-0124, PR-REQ-0320
     #[test]
     fn yaml_v2_defaults_are_typed_and_never_change_v1_projection() {
         let candidate = parse_pack_source_yaml_v2(BASIC.as_bytes()).unwrap();
@@ -269,7 +269,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0337
-    // Verifies: PR-REQ-0320, PR-REQ-0317
+    // Verifies: PR-REQ-0016, PR-REQ-0317, PR-REQ-0320
     #[test]
     fn yaml_v2_preserves_exact_numbers_and_supplies_only_declared_hook_defaults() {
         let actions = "  actions:\n    - id: inspect\n      access: observe\n      parameters: [{id: count, type: integer, sensitive: false, default: 9007199254740991}, {id: text, type: string, sensitive: false, default: null}]\n      hook:\n        protocol_version: 1\n        launch: {kind: direct, executable: tool}\n        args: []\n        io: {terminal: none}\n      outputs: []\n";

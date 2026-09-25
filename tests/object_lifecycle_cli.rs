@@ -26,7 +26,7 @@ fn success(root: &Path, args: &[&str]) -> String {
 fn hook_exit_without_protocol() {}
 
 // Test-ID: PR-TEST-0469
-// Verifies: PR-REQ-0076, PR-REQ-0341, PR-REQ-0343, PR-REQ-0344
+// Verifies: PR-REQ-0035, PR-REQ-0076, PR-REQ-0341, PR-REQ-0343, PR-REQ-0344
 #[test]
 fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/lifecycle-process-tests");

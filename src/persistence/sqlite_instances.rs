@@ -981,7 +981,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0075
-    // Verifies: PR-REQ-0264, PR-REQ-0269
+    // Verifies: PR-REQ-0028, PR-REQ-0128, PR-REQ-0264, PR-REQ-0269
     #[test]
     fn chunked_payloads_round_trip_and_corruption_is_rejected() {
         let (_temporary, root) = root();
@@ -1064,7 +1064,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0076
-    // Verifies: PR-REQ-0033, PR-REQ-0034, PR-REQ-0266, PR-REQ-0267, PR-REQ-0268
+    // Verifies: PR-REQ-0033, PR-REQ-0034, PR-REQ-0116, PR-REQ-0131, PR-REQ-0266, PR-REQ-0267, PR-REQ-0268
     #[test]
     fn strict_cas_required_delete_and_secret_authorization_hold() {
         let (_temporary, root) = root();
@@ -1148,6 +1148,203 @@ mod tests {
             persistence.delete_input(view.id, bound, &InputIdentity::parse("required").unwrap()),
             Err(PersistenceError::InvalidManagedInput(_))
         ));
+    }
+
+    // Test-ID: PR-TEST-0590
+    // Verifies: PR-REQ-0028, PR-REQ-0031, PR-REQ-0032, PR-REQ-0128, PR-REQ-0129, PR-REQ-0265
+    #[test]
+    fn initial_binding_failure_never_publishes_an_instance_or_partial_registry() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+        for invalid in ["short-read", "unknown-input", "duplicate-input"] {
+            let mut first = Cursor::new(vec![0, 255, 0, 13, 10]);
+            let mut second = Cursor::new(vec![0xff]);
+            let mut initial = [
+                ManagedInputWrite {
+                    input_id: InputIdentity::parse("required").unwrap(),
+                    byte_len: 5,
+                    reader: &mut first,
+                },
+                ManagedInputWrite {
+                    input_id: InputIdentity::parse(match invalid {
+                        "unknown-input" => "unknown",
+                        "duplicate-input" => "required",
+                        _ => "secret",
+                    })
+                    .unwrap(),
+                    byte_len: 2,
+                    reader: &mut second,
+                },
+            ];
+            assert!(
+                persistence
+                    .create_instance(
+                        InstanceName::parse(invalid).unwrap(),
+                        revision.clone(),
+                        &mut initial
+                    )
+                    .is_err()
+            );
+            assert!(persistence.list_instances().unwrap().is_empty());
+            let database = persistence.database.lock().unwrap();
+            for table in [
+                "instances",
+                "managed_input_bindings",
+                "managed_input_payloads",
+                "managed_input_payload_chunks",
+                "runs",
+            ] {
+                let count: i64 = database
+                    .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                        row.get(0)
+                    })
+                    .unwrap();
+                assert_eq!(count, 0, "{invalid}: partial publication in {table}");
+            }
+        }
+        let incomplete = persistence
+            .create_instance(
+                InstanceName::parse("incomplete").unwrap(),
+                revision.clone(),
+                &mut [],
+            )
+            .unwrap();
+        assert!(!incomplete.required_inputs_satisfied);
+        let mut empty = Cursor::new(Vec::new());
+        let mut initial = [ManagedInputWrite {
+            input_id: InputIdentity::parse("required").unwrap(),
+            byte_len: 0,
+            reader: &mut empty,
+        }];
+        let complete = persistence
+            .create_instance(
+                InstanceName::parse("empty-is-present").unwrap(),
+                revision,
+                &mut initial,
+            )
+            .unwrap();
+        assert!(complete.required_inputs_satisfied);
+        assert!(
+            complete
+                .bindings
+                .iter()
+                .any(|binding| binding.input_id.as_str() == "required" && binding.present)
+        );
+        let mut bytes = Vec::new();
+        persistence
+            .export_input(
+                complete.id,
+                &InputIdentity::parse("required").unwrap(),
+                false,
+                &mut bytes,
+            )
+            .unwrap();
+        assert!(bytes.is_empty());
+    }
+
+    // Test-ID: PR-TEST-0591
+    // Verifies: PR-REQ-0023, PR-REQ-0025, PR-REQ-0026, PR-REQ-0029, PR-REQ-0035, PR-REQ-0093
+    #[test]
+    fn binding_mutations_prevent_aba_without_changing_instance_identity_or_creating_runs() {
+        let (_temporary, root) = root();
+        let persistence = PactrunPersistence::open(&root).unwrap();
+        let revision = revision(&persistence);
+        let created = persistence
+            .create_instance(
+                InstanceName::parse("binding-tokens").unwrap(),
+                revision.clone(),
+                &mut [],
+            )
+            .unwrap();
+        let input = InputIdentity::parse("secret").unwrap();
+        let mut versions = std::collections::BTreeSet::new();
+        versions.insert(created.state_version.to_string());
+        let mut current = created.state_version;
+        for bytes in [
+            b"first".as_slice(),
+            b"second".as_slice(),
+            b"first".as_slice(),
+        ] {
+            let mut reader = Cursor::new(bytes);
+            let next = persistence
+                .set_input(
+                    created.id,
+                    current,
+                    &mut ManagedInputWrite {
+                        input_id: input.clone(),
+                        byte_len: bytes.len() as u64,
+                        reader: &mut reader,
+                    },
+                )
+                .unwrap();
+            assert_ne!(next, current);
+            assert!(versions.insert(next.to_string()));
+            let view = persistence
+                .load_instance_by_id(created.id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(view.id, created.id);
+            assert_eq!(view.active_revision, revision);
+            assert_eq!(view.state_version, next);
+            assert_eq!(
+                view.bindings
+                    .iter()
+                    .filter(|binding| binding.input_id == input)
+                    .count(),
+                1
+            );
+            let mut exported = Vec::new();
+            persistence
+                .export_input(created.id, &input, true, &mut exported)
+                .unwrap();
+            assert_eq!(exported, bytes);
+            assert_eq!(
+                persistence
+                    .load_instance_by_id(created.id)
+                    .unwrap()
+                    .unwrap()
+                    .state_version,
+                next
+            );
+            assert!(matches!(
+                persistence.delete_input(created.id, created.state_version, &input),
+                Err(PersistenceError::StaleInstanceState)
+            ));
+            current = next;
+        }
+        let removed = persistence
+            .delete_input(created.id, current, &input)
+            .unwrap();
+        assert!(versions.insert(removed.to_string()));
+        let view = persistence
+            .load_instance_by_id(created.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(view.id, created.id);
+        assert_eq!(view.state_version, removed);
+        assert!(
+            !view
+                .bindings
+                .iter()
+                .find(|binding| binding.input_id == input)
+                .unwrap()
+                .present
+        );
+        let database = persistence.database.lock().unwrap();
+        let bindings: i64 = database
+            .query_row(
+                "SELECT count(*) FROM managed_input_bindings WHERE instance_id=?1",
+                params![created.id.as_bytes().as_slice()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bindings, 0);
+        let runs: i64 = database
+            .query_row("SELECT count(*) FROM runs", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(runs, 0);
+        // No assertion promises physical erasure from SQLite pages, WAL or backups.
     }
 
     struct BlockingWriter {

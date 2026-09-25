@@ -348,7 +348,7 @@ fn binding(name: &str, value: u8, secret: bool) -> MigrationBinding {
 }
 
 // Test-ID: PR-TEST-0277
-// Verifies: PR-REQ-0303, PR-REQ-0153, PR-REQ-0165
+// Verifies: PR-REQ-0105, PR-REQ-0153, PR-REQ-0165, PR-REQ-0303
 #[test]
 fn migration_paths_are_exact_unique_and_independent_of_order() {
     let a = revision(1, vec![], vec![]);
@@ -394,7 +394,7 @@ fn migration_paths_are_exact_unique_and_independent_of_order() {
 }
 
 // Test-ID: PR-TEST-0278
-// Verifies: PR-REQ-0303, PR-REQ-0153
+// Verifies: PR-REQ-0105, PR-REQ-0153, PR-REQ-0303
 #[test]
 fn missing_invalid_and_cyclic_edges_do_not_become_executable() {
     let mut invalid = edge(1, vec![]);
@@ -470,7 +470,7 @@ fn absence_is_not_a_value_and_does_not_release_a_declared_writer() {
 }
 
 // Test-ID: PR-TEST-0280
-// Verifies: PR-REQ-0304, PR-REQ-0305, PR-REQ-0157, PR-REQ-0158, PR-REQ-0161
+// Verifies: PR-REQ-0029, PR-REQ-0108, PR-REQ-0116, PR-REQ-0157, PR-REQ-0158, PR-REQ-0161, PR-REQ-0304, PR-REQ-0305
 #[test]
 fn keep_discard_rename_and_retained_continuity_share_one_registry() {
     let a = revision(
@@ -517,7 +517,7 @@ fn keep_discard_rename_and_retained_continuity_share_one_registry() {
 }
 
 // Test-ID: PR-TEST-0281
-// Verifies: PR-REQ-0304, PR-REQ-0305, PR-REQ-0156, PR-REQ-0157, PR-REQ-0160
+// Verifies: PR-REQ-0108, PR-REQ-0132, PR-REQ-0156, PR-REQ-0157, PR-REQ-0160, PR-REQ-0304, PR-REQ-0305
 #[test]
 fn protection_requires_declared_and_authorized_declassification() {
     let a = revision(1, vec![input("old", false, true)], vec![]);

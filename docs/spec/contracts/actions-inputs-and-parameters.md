@@ -27,7 +27,7 @@ its stable identity, parameter schema, execution requirements, I/O contract,
 access requirement, implementation, and declared managed outputs as semantics;
 it MUST NOT infer service behavior from the Action's name.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0148, PR-TEST-0168, PR-TEST-0592.**
 
 ### PR-REQ-0126 - Action is not Hook
 
@@ -35,7 +35,7 @@ An Action MUST remain the user operation and a Hook MUST remain one possible
 implementation mechanism. Snapshot, Migration, and Cleanup MUST NOT be authored
 as Actions even when they ultimately launch Hooks.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0585, PR-TEST-0592.**
 
 ## Input declarations
 
@@ -47,7 +47,11 @@ Candidate `PackSourceYamlV1` supplies the fixed M2 authoring spelling while
 reusing the Frozen ASCII semantic grammar. Other future authoring frontends
 remain independently versioned.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0039, PR-TEST-0069.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0128 - Input payload opacity
 
@@ -57,7 +61,7 @@ inferring a type from file extensions. The payload is a detached,
 Pactrun-authoritative binding; this contract does not turn a service-owned live
 file into an Input or authorize implicit synchronization with one.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0075, PR-TEST-0147, PR-TEST-0346, PR-TEST-0590.**
 
 ### PR-REQ-0129 - Required declaration meaning
 
@@ -66,7 +70,7 @@ Capture needs a binding in its Instance context. It MUST NOT mean that an
 Instance without the binding is illegal, and it MUST NOT automatically become a
 Migration or Cleanup requirement.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0225, PR-TEST-0231, PR-TEST-0321, PR-TEST-0424, PR-TEST-0590.**
 
 ### PR-REQ-0130 - Active and retained contexts
 
@@ -75,11 +79,11 @@ use typed references to active and retained bindings under their own
 requirements. Authors SHOULD treat dependence on retained data as a visible
 compatibility or recovery smell, not as a prohibited capability.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0249, PR-TEST-0322, PR-TEST-0424, PR-TEST-0603.**
 
 ## ServiceStorage-backed service state is not an Input
 
-A Package MUST distinguish an Input from a future ServiceStorage-backed Managed
+A Package MUST distinguish an Input from a ServiceStorage-backed Managed
 Service Resource. An Input is a Pactrun-authoritative persistent binding. A
 ServiceStorage-backed Managed Service Resource is attached live state whose
 authoritative contents belong to the service even when Pactrun identifies or
@@ -96,7 +100,8 @@ and
 [PR-REQ-0236](../foundations/identity-and-state.md#pr-req-0236---managed-service-resource-declaration-and-existence).
 
 The authoring spelling for `ServiceStorage` and its Managed Service Resources is
-a future Revision Core format design gate and is not added by this page. This
+owned by [Core V2](./revision-core-format-v2.md) and
+[source V2](./pack-source-yaml-v2.md), not introduced by this page. This
 section does not decide whether another kind of service-owned resource uses the
 same abstraction.
 
@@ -132,7 +137,11 @@ separate evidence; destructive lifecycle operations remain M7 work.
 Authors and Hooks MUST NOT rely on Pactrun parsing the payload, providing a
 vault-grade guarantee, or securely erasing discarded bytes.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0076, PR-TEST-0147, PR-TEST-0346.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0132 - No implicit declassification
 
@@ -141,7 +150,7 @@ Migration must use explicit `Declassify`, and execution additionally requires
 operator authorization. A Hook MUST NOT declassify output by choosing its own
 protection metadata.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0281, PR-TEST-0311, PR-TEST-0313.**
 
 ## Invocation Parameters
 
@@ -151,7 +160,7 @@ Invocation Parameters MUST be typed, single-invocation values processed through
 parse, validation, normalization, and binding. They MUST NOT persist as Instance
 Inputs or become Managed Data.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0080, PR-TEST-0150, PR-TEST-0167, PR-TEST-0246, PR-TEST-0560, PR-TEST-0597, PR-TEST-0598.**
 
 ### PR-REQ-0134 - Initial parameter types
 
@@ -159,7 +168,7 @@ The initial parameter model MAY include integer, float, boolean, and string
 types and MAY mark parameters sensitive. Raw argument-vector passthrough MUST
 NOT be part of the initial contract.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0080, PR-TEST-0592, PR-TEST-0597, PR-TEST-0598.**
 
 ### PR-REQ-0135 - Sensitive parameter channel
 
@@ -177,7 +186,7 @@ arguments, such as prompt, file, or standard-input binding.
 Actions and Snapshot operations MAY reuse parameter parsing and binding
 machinery, but this MUST NOT turn them into the same domain operation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0231, PR-TEST-0246, PR-TEST-0258, PR-TEST-0270.**
 
 ### PR-REQ-0273 - Primitive invocation-text lexical profile
 

@@ -1,5 +1,5 @@
 // Test-ID: PR-TEST-0586
-// Verifies: PR-REQ-0369
+// Verifies: PR-REQ-0038, PR-REQ-0086, PR-REQ-0369
 #[test]
 fn short_id_grammar_preserves_full_tokens_names_and_preflight_ordering() {
     use short_ids::Selector;
@@ -29,7 +29,7 @@ fn short_id_grammar_preserves_full_tokens_names_and_preflight_ordering() {
 }
 
 // Test-ID: PR-TEST-0587
-// Verifies: PR-REQ-0369, PR-REQ-0370
+// Verifies: PR-REQ-0038, PR-REQ-0086, PR-REQ-0369, PR-REQ-0370
 #[test]
 fn short_id_resolution_and_display_cover_hidden_history_collisions_without_writes() {
     let (_temp,root,source)=cli_roots();let revision=json_install(&root,&source);

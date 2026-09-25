@@ -30,6 +30,77 @@ test('outside and duplicate definitions fail; reference links are allowed', () =
   assertSpecOnlyDefinitions([['development/a.md', '[PR-REQ-9999](../spec/a.md)']]);
 });
 
+export function assertBidirectionalVerification(documents, sources) {
+  const requirements = new Map();
+  for (const [name, body] of documents) {
+    if (!name.startsWith('spec/')) continue;
+    const sections = [...body.matchAll(/^### (PR-REQ-\d+)\b/gm)];
+    for (const [index, section] of sections.entries()) {
+      const id = section[1];
+      assert.ok(!requirements.has(id), 'Duplicate requirement: ' + id);
+      const text = body.slice(section.index, sections[index + 1]?.index ?? body.length);
+      const ids = new Set();
+      for (const match of text.matchAll(/^\*\*Verification: ([\s\S]*?)\*\*/gm)) {
+        for (const test of match[1].matchAll(/PR-TEST-\d+/g)) ids.add(test[0]);
+      }
+      // Some existing requirements use a bold label followed by a prose paragraph.
+      for (const match of text.matchAll(/^\*\*Verification:\*\*([^\n]*(?:\n(?!\n|#)[^\n]*)*)/gm)) {
+        for (const test of match[1].matchAll(/PR-TEST-\d+/g)) ids.add(test[0]);
+      }
+      requirements.set(id, ids);
+    }
+  }
+  const tests = new Map();
+  for (const [name, body] of sources) {
+    for (const match of body.matchAll(/^[ \t]*\/\/ Test-ID: (PR-TEST-\d+)\r?\n([^\n]*)/gm)) {
+      const id = match[1];
+      assert.ok(!tests.has(id), 'Duplicate test: ' + id);
+      assert.match(match[2], /^[ \t]*\/\/ Verifies: /, 'Missing Verifies metadata in ' + name);
+      const owners = new Set([...match[2].matchAll(/PR-REQ-\d+/g)].map(value => value[0]));
+      assert.ok(owners.size, 'No owner for ' + id);
+      tests.set(id, owners);
+    }
+  }
+  for (const [requirement, ids] of requirements) {
+    for (const id of ids) assert.ok(tests.get(id)?.has(requirement), requirement + ' has no reverse evidence link from ' + id);
+  }
+  for (const [id, owners] of tests) {
+    for (const requirement of owners) assert.ok(requirements.get(requirement)?.has(id), id + ' has no owning verification citation in ' + requirement);
+  }
+  return {requirements: requirements.size, tests: tests.size};
+}
+
+async function verificationSources(directory) {
+  const files = [];
+  for (const entry of await readdir(path.join(root, directory), {withFileTypes: true})) {
+    const name = path.posix.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await verificationSources(name));
+    else if (/\.(rs|mjs)$/.test(name)) files.push([name, await readFile(path.join(root, name), 'utf8')]);
+  }
+  return files;
+}
+
+test('verification citations and actual Rust/Node test declarations are bidirectional', async () => {
+  const sources = (await Promise.all(['src', 'tests', 'xtask/src'].map(verificationSources))).flat();
+  const result = assertBidirectionalVerification(docs, sources);
+  assert.ok(result.requirements > 0 && result.tests > 0);
+});
+
+test('traceability rejects missing links and duplicate IDs without requiring contiguous numbering', () => {
+  const document = '### PR-REQ-0001 - One\n\n**Verification: PR-TEST-0003.**\n\n### PR-REQ-0007 - Seven\n\n**Verification: Pending automated coverage.**\n';
+  const source = '// Test-ID: PR-TEST-0003\n// Verifies: PR-REQ-0001\n';
+  const documents = [['spec/example.md', document]];
+  const sources = [['src/example.rs', source]];
+  assert.deepEqual(assertBidirectionalVerification(documents, sources), {requirements: 2, tests: 1});
+  assert.throws(() => assertBidirectionalVerification(documents, []));
+  assert.throws(() => assertBidirectionalVerification([['spec/example.md', document.replace('**Verification: PR-TEST-0003.**', 'Historical mention: PR-TEST-0003.')]], sources));
+  assert.throws(() => assertBidirectionalVerification(documents, [['src/example.rs', source.replace('PR-REQ-0001', 'PR-REQ-0007')]]));
+  assert.throws(() => assertBidirectionalVerification(documents, [...sources, ['tests/duplicate.rs', source]]));
+  assert.throws(() => assertBidirectionalVerification([...documents, ['spec/duplicate.md', document]], sources));
+  const prose = document.replace('**Verification: PR-TEST-0003.**', '**Verification:** PR-TEST-0003 proves this case.\nNo new assertion is implied.\n');
+  assertBidirectionalVerification([['spec/example.md', prose]], sources);
+});
+
 test('catalog matches every requirement-bearing document and its original status', () => {
   const catalog = docs.find(([name]) => name === 'spec/catalog.md')[1];
   for (const [name, body] of docs) {

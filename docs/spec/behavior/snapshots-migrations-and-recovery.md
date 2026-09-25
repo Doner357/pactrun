@@ -88,7 +88,7 @@ NOT reveal Secret values or value-derived digests.
 Migration MUST follow exact inbound edges declared by target Revisions within
 the same Package lineage. Pactrun MUST NOT invent an undeclared direct edge.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0277, PR-TEST-0278, PR-TEST-0290.**
 
 ### PR-REQ-0106 - Chained progress
 
@@ -96,7 +96,7 @@ When a path contains multiple edges, each edge MUST be an independent durable
 commit boundary. If a later edge fails, the Instance MUST remain at the last
 successfully committed intermediate Revision.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0303, PR-TEST-0304, PR-TEST-0317.**
 
 ### PR-REQ-0107 - Incomplete Migration result
 
@@ -105,7 +105,7 @@ reported as configuration readiness, not failure or manual recovery. A chain
 MAY continue through an incomplete intermediate Revision when the next edge's
 own requirements are satisfied.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0301, PR-TEST-0321, PR-TEST-0604.**
 
 ### PR-REQ-0108 - Declassification authorization
 
@@ -113,7 +113,7 @@ A Secret-to-Normal transition MUST be explicitly declared by the Migration edge
 and explicitly authorized by the operator for that Migration. Users MAY instead
 retain or discard the old Secret and provide a new Normal binding.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0280, PR-TEST-0281, PR-TEST-0311.**
 
 ### ServiceStorage-backed resource continuity
 
@@ -155,7 +155,7 @@ management, explicit one-execution override, `ResolveManualRecovery`,
 exact-compatible Restore, and `AbandonManagement` according to their separate
 preconditions. Ordinary managed execution remains blocked by default.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0156, PR-TEST-0173, PR-TEST-0259, PR-TEST-0329, PR-TEST-0612.**
 
 ## Instance deletion
 

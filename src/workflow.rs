@@ -486,6 +486,8 @@ mod tests {
         (intent, repository)
     }
 
+    // Test-ID: PR-TEST-0596
+    // Verifies: PR-REQ-0038, PR-REQ-0040
     #[test]
     fn explicit_facts_produce_a_deterministic_plan_with_exact_references() {
         let (intent, repository) = setup(false);
@@ -511,7 +513,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0366
-    // Verifies: PR-REQ-0326
+    // Verifies: PR-REQ-0040, PR-REQ-0326
     #[test]
     fn action_compilation_preserves_v2_authority_and_prerequisites_without_observing_live_bytes() {
         use serde_json::json;
@@ -681,6 +683,8 @@ mod tests {
         }
     }
 
+    // Test-ID: PR-TEST-0595
+    // Verifies: PR-REQ-0008, PR-REQ-0040
     #[test]
     fn compiled_plan_is_detached_from_later_fact_changes() {
         let (intent, mut repository) = setup(false);

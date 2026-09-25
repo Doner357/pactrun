@@ -104,7 +104,7 @@ fn parse(session: &StagingSession, bytes: &[u8]) -> Result<ValidatedSnapshotBund
 }
 
 // Test-ID: PR-TEST-0206
-// Verifies: PR-REQ-0292, PR-REQ-0297
+// Verifies: PR-REQ-0085, PR-REQ-0292, PR-REQ-0297
 #[test]
 fn stored_bundle_preserves_v1_and_v2_and_verifies_exact_payload_closure() {
     let (_temp, s) = session();

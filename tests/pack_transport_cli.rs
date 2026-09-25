@@ -22,7 +22,7 @@ fn ok(root: &Path, args: &[&str]) -> String {
 }
 
 // Test-ID: PR-TEST-0545
-// Verifies: PR-REQ-0354, PR-REQ-0355, PR-REQ-0356, PR-REQ-0118
+// Verifies: PR-REQ-0035, PR-REQ-0118, PR-REQ-0354, PR-REQ-0355, PR-REQ-0356
 #[test]
 fn unified_pack_cli_exports_imports_and_reports_metadata_conflicts() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/pack-process-tests");

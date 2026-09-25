@@ -134,7 +134,11 @@ Carry for the same stable Input identity and Keep for a source-only Input.
 Normalization MUST materialize the explicit installed transition. Runtime
 execution MUST NOT guess authoring defaults again.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0608, PR-TEST-0611.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0124 - Separate authoring capabilities
 
@@ -142,7 +146,7 @@ Action, Snapshot, Migration, and Cleanup MUST have separate author-facing
 models. A frontend MUST NOT expose a catch-all operation type with optional
 fields for every capability. Low-level execution primitives MAY be shared.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0336, PR-TEST-0592.**
 
 ## Package quality
 

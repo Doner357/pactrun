@@ -131,9 +131,9 @@ pub(crate) fn calculate_revision_content_digest(
 mod tests {
     use super::*;
     // Test-ID: PR-TEST-0338
-    // Verifies: PR-REQ-0318
+    // Verifies: PR-REQ-0018, PR-REQ-0077, PR-REQ-0318
     #[test]
-    fn dispatch_is_explicit_and_preserves_v1_and_candidate_v2_bytes() {
+    fn dispatch_is_explicit_and_preserves_all_supported_core_bytes() {
         let runtime = br#"{"files":[]}"#;
         let v1_bytes = br#"{"actions":[],"format_version":1,"inputs":[],"migrations":[]}"#;
         let v2_bytes=br#"{"actions":[],"format_version":2,"inputs":[],"migrations":[],"service_resources":[],"service_storages":[]}"#;
@@ -155,7 +155,30 @@ mod tests {
         );
         assert!(core_format_version(br#"{"format_version":2,"format_version":1}"#).is_err());
         assert!(core_format_version(br#"{"format_version":2.000000000000001}"#).is_err());
-        assert!(core_format_version(br#"{"format_version":4}"#).is_err());
+        let v3_bytes = String::from_utf8(v2_bytes.to_vec())
+            .unwrap()
+            .replace("\"format_version\":2", "\"format_version\":3");
+        let third = decode_canonical_revision_content(v3_bytes.as_bytes(), runtime).unwrap();
+        assert_eq!(third.core.version(), 3);
+        assert_eq!(
+            encode_canonical_revision_core(&third.core).unwrap(),
+            v3_bytes.as_bytes()
+        );
+        for content in [&first, &second] {
+            assert_ne!(
+                calculate_revision_content_digest(content).unwrap(),
+                calculate_revision_content_digest(&third).unwrap()
+            );
+        }
+        for version in [0, 4, 255] {
+            let unknown = v3_bytes.replace(
+                "\"format_version\":3",
+                &format!("\"format_version\":{version}"),
+            );
+            assert!(core_format_version(unknown.as_bytes()).is_err());
+            assert!(decode_canonical_revision_core(unknown.as_bytes()).is_err());
+            assert!(decode_canonical_revision_content(unknown.as_bytes(), runtime).is_err());
+        }
         assert!(decode_canonical_revision_content(v2_bytes, br#"{"files":[],"extra":0}"#).is_err());
     }
 }

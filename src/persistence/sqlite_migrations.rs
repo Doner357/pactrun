@@ -123,7 +123,7 @@ mod tests {
     use std::{fs, io::Cursor, path::Path};
 
     // Test-ID: PR-TEST-0285
-    // Verifies: PR-REQ-0305
+    // Verifies: PR-REQ-0029, PR-REQ-0305
     #[test]
     fn migration_observation_is_read_only_and_includes_retained_bindings() {
         let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m5-observation-tests");

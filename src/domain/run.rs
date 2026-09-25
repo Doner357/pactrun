@@ -688,7 +688,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0104
-    // Verifies: PR-REQ-0275
+    // Verifies: PR-REQ-0175, PR-REQ-0275
     #[test]
     fn running_action_state_matrix_rejects_accepted_open_risk() {
         assert!(

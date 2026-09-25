@@ -75,7 +75,7 @@ fn diagnostic_write_failure_does_not_replay_or_change_the_run_outcome() {
 
 
 // Test-ID: PR-TEST-0525
-// Verifies: PR-REQ-0087, PR-REQ-0263
+// Verifies: PR-REQ-0031, PR-REQ-0087, PR-REQ-0115, PR-REQ-0263
 #[test]
 fn instance_completeness_and_guard_are_independent_of_historical_run_state() {
     let fixture=RuntimeFixture::new();

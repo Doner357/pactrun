@@ -298,7 +298,7 @@ fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
 }
 
 // Test-ID: PR-TEST-0301
-// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0158, PR-REQ-0165, PR-REQ-0347
+// Verifies: PR-REQ-0025, PR-REQ-0026, PR-REQ-0044, PR-REQ-0107, PR-REQ-0155, PR-REQ-0158, PR-REQ-0165, PR-REQ-0313, PR-REQ-0347
 #[test]
 fn declarative_chain_commits_incomplete_middle_then_atomic_success_and_copies_protection() {
     for external in [false, true] {
@@ -408,7 +408,7 @@ fn declarative_chain_commits_incomplete_middle_then_atomic_success_and_copies_pr
 }
 
 // Test-ID: PR-TEST-0302
-// Verifies: PR-REQ-0313, PR-REQ-0165
+// Verifies: PR-REQ-0007, PR-REQ-0165, PR-REQ-0313
 #[test]
 fn migration_admission_revalidates_source_serializes_mutators_and_does_not_launch() {
     let (_tmp, root) = root();
@@ -469,10 +469,21 @@ fn migration_admission_revalidates_source_serializes_mutators_and_does_not_launc
     ));
     assert_released(&p, stale);
     assert_released(&p, other);
+    let reopened = PactrunPersistence::open(&root).unwrap();
+    for refused in [stale, other] {
+        let RunState::Finished(outcome) =
+            reopened.load_managed_run(refused).unwrap().unwrap().state
+        else {
+            panic!("post-acceptance refusal was not durably terminal");
+        };
+        assert_eq!(outcome.outcome, RunOutcome::Failed);
+        assert_eq!(outcome.boundary, ActionRunBoundary::Accepted);
+        assert!(outcome.hook_completion.is_none());
+    }
 }
 
 // Test-ID: PR-TEST-0303
-// Verifies: PR-REQ-0313
+// Verifies: PR-REQ-0106, PR-REQ-0313
 #[test]
 fn later_cancellation_or_observe_consequence_preserves_the_committed_middle() {
     for cancellation in [true, false] {
@@ -523,7 +534,7 @@ fn later_cancellation_or_observe_consequence_preserves_the_committed_middle() {
 const WORKER: &str = "persistence::sqlite_migration_runs::tests::migration_worker";
 
 // Test-ID: PR-TEST-0305
-// Verifies: PR-REQ-0313, PR-REQ-0314
+// Verifies: PR-REQ-0044, PR-REQ-0313, PR-REQ-0314
 #[test]
 fn owner_continuation_retries_lost_commit_ack_without_repeating_an_edge() {
     for index in [0, 1] {
@@ -666,7 +677,7 @@ fn migration_worker() {
 }
 
 // Test-ID: PR-TEST-0304
-// Verifies: PR-REQ-0313, PR-REQ-0155, PR-REQ-0165, PR-REQ-0053, PR-REQ-0061, PR-REQ-0062
+// Verifies: PR-REQ-0053, PR-REQ-0061, PR-REQ-0062, PR-REQ-0106, PR-REQ-0155, PR-REQ-0165, PR-REQ-0308, PR-REQ-0313
 #[test]
 fn edge_crashes_reconcile_without_plan_or_replay_and_final_edge_has_no_running_window() {
     for (edge, point, committed, succeeded) in [

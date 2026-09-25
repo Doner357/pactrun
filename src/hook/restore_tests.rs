@@ -266,6 +266,83 @@ fn export(f: &RuntimeFixture, instance: InstanceId, input: &str) -> Vec<u8> {
     out
 }
 
+// Test-ID: PR-TEST-0611
+// Verifies: PR-REQ-0008, PR-REQ-0123
+#[test]
+fn snapshot_plans_execute_installed_contract_after_source_is_replaced() {
+    let f = fixture();
+    let marker=f.marker("detached-capture");
+    let plan=compile(&f, f.instance.id, SnapshotOperation::Capture, "success", &marker);
+    fs::write(f.temporary.path().join("source/pactrun.yaml"), b"not a source document: [").unwrap();
+    let run=f.application.accept_snapshot_plan(plan, AdmissionOptions::default(), without_hook_text()).unwrap();
+    assert!(!f.application.advance_owner_continuation(run).unwrap());
+    f.application.execute_admitted_capture(run, policy(Some(10_000),Some(10_000),Some(100))).unwrap();
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let snapshot=SnapshotId::from_bytes(db(&f).query_row("SELECT snapshot_id FROM run_capture_results WHERE run_id=?1",
+        [run.as_bytes().as_slice()],|r|r.get::<_,Vec<u8>>(0)).unwrap().try_into().unwrap());
+    let plan=compile(&f,f.instance.id,SnapshotOperation::Restore(snapshot),"success",&f.marker("detached-restore"));
+    fs::remove_file(f.temporary.path().join("source/pactrun.yaml")).unwrap();
+    let run=f.application.accept_snapshot_plan(plan,AdmissionOptions::default(),without_hook_text()).unwrap();
+    assert!(!f.application.advance_owner_continuation(run).unwrap());
+    run_restore(&f,run);
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    assert_eq!(export(&f,f.instance.id,"secret_config"),SECRET_BINDING);
+}
+
+// Test-ID: PR-TEST-0612
+// Verifies: PR-REQ-0007, PR-REQ-0030, PR-REQ-0110
+#[test]
+fn guarded_instance_options_preserve_state_until_explicit_resolution_restore_or_abandonment() {
+    for option in ["resolve", "restore", "abandon"] {
+        let f=fixture();
+        let snapshot=capture(&f);
+        open_consequence(&f);
+        let initial_guard=guard(&f).unwrap();
+        let before=count(&f,"runs");
+        assert!(view(&f).required_inputs_satisfied);
+        let intent=f.application.resolve_action(&InstanceName::parse("slice4").unwrap(),
+            &ActionIdentity::parse("direct").unwrap(),parameters("success",&f.marker("denied"))).unwrap();
+        let plan=f.application.compile_action(&intent,&[]).unwrap();
+        assert_eq!(count(&f,"runs"),before,"resolution/compilation is not acceptance");
+        assert!(f.application.accept_and_admit_action(&plan,AdmissionOptions::default()).is_err());
+        assert_eq!(count(&f,"runs"),before+1,"post-acceptance refusal must remain durable");
+        assert!(!f.marker("denied").exists());
+        assert_eq!(guard(&f),Some(initial_guard.clone()));
+        let before_management=count(&f,"runs");
+        f.application.set_input(f.instance.id,InputIdentity::parse("optional").unwrap(),view(&f).state_version,
+            Box::new(Cursor::new(b"managed while guarded".to_vec()))).unwrap();
+        assert_eq!(export(&f,f.instance.id,"optional"),b"managed while guarded");
+        f.application.delete_input(f.instance.id,&InputIdentity::parse("optional").unwrap(),view(&f).state_version).unwrap();
+        assert_eq!(count(&f,"runs"),before_management);
+        assert_eq!(guard(&f),Some(initial_guard));
+        match option {
+            "resolve" => {
+                f.application.resolve_manual_recovery(f.instance.id,view(&f).state_version).unwrap();
+                assert!(guard(&f).is_none());
+                assert_eq!(count(&f,"runs"),before_management);
+            }
+            "restore" => {
+                let run=admit(&f,f.instance.id,snapshot,"success",&f.marker("recovery-restore"),without_hook_text(),true);
+                run_restore(&f,run);
+                assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+                assert!(guard(&f).is_none());
+            }
+            _ => {
+                let intent=f.application.resolve_deletion(&InstanceName::parse("slice4").unwrap(),None,DeletionMode::AbandonManagement).unwrap();
+                let plan=f.application.compile_deletion(&intent,&[]).unwrap();
+                let run=f.application.accept_deletion_plan(plan,AdmissionOptions::default(),without_hook_text(),policy(None,None,None)).unwrap();
+                let until=Instant::now()+WAIT_LIMIT;
+                while !f.application.advance_owner_continuation(run).unwrap() {
+                    f.application.execute_ready_deletion(run).unwrap();
+                    assert!(Instant::now()<until);
+                }
+                assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
+                assert_eq!(count(&f,"managed_input_bindings"),0);
+            }
+        }
+    }
+}
+
 // Test-ID: PR-TEST-0257
 // Verifies: PR-REQ-0211, PR-REQ-0213, PR-REQ-0291
 #[test]
@@ -313,7 +390,7 @@ fn frozen_restore_completion_is_owner_selected_and_has_no_output_authority() {
 }
 
 // Test-ID: PR-TEST-0258
-// Verifies: PR-REQ-0291, PR-REQ-0211, PR-REQ-0213, PR-REQ-0298, PR-REQ-0191, PR-REQ-0102, PR-REQ-0151, PR-REQ-0200
+// Verifies: PR-REQ-0023, PR-REQ-0044, PR-REQ-0102, PR-REQ-0136, PR-REQ-0151, PR-REQ-0191, PR-REQ-0200, PR-REQ-0211, PR-REQ-0213, PR-REQ-0218, PR-REQ-0291, PR-REQ-0298
 #[test]
 fn real_capture_to_restore_exposes_selected_content_and_atomically_replaces_a_different_instance() {
     let f = fixture();
@@ -378,7 +455,7 @@ fn real_capture_to_restore_exposes_selected_content_and_atomically_replaces_a_di
 }
 
 // Test-ID: PR-TEST-0259
-// Verifies: PR-REQ-0291, PR-REQ-0298, PR-REQ-0070
+// Verifies: PR-REQ-0025, PR-REQ-0070, PR-REQ-0110, PR-REQ-0291, PR-REQ-0298
 #[test]
 fn restore_compares_both_tokens_and_success_alone_clears_the_existing_guard() {
     for mode in ["success", "state", "aba", "consequence"] {
@@ -741,7 +818,7 @@ fn restore_refuses_sticky_downgrade_and_required_removal_before_any_hook_launch(
 }
 
 // Test-ID: PR-TEST-0263
-// Verifies: PR-REQ-0291, PR-REQ-0298
+// Verifies: PR-REQ-0026, PR-REQ-0143, PR-REQ-0291, PR-REQ-0298
 #[test]
 fn restore_publication_rollback_preserves_guard_pins_and_target_until_a_single_success() {
     let f = fixture();

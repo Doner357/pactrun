@@ -21,7 +21,7 @@ fn project(value: &Value) -> Result<RevisionCoreV2, Error> {
 }
 
 // Test-ID: PR-TEST-0331
-// Verifies: PR-REQ-0317, PR-REQ-0318, PR-REQ-0240
+// Verifies: PR-REQ-0012, PR-REQ-0014, PR-REQ-0018, PR-REQ-0079, PR-REQ-0142, PR-REQ-0240, PR-REQ-0317, PR-REQ-0318
 #[test]
 fn checked_in_v2_vectors_match_canonical_components_frames_and_independent_digests() {
     for v in vectors()["valid"].as_array().unwrap() {
@@ -79,7 +79,7 @@ fn checked_in_v2_vectors_match_canonical_components_frames_and_independent_diges
 }
 
 // Test-ID: PR-TEST-0333
-// Verifies: PR-REQ-0317, PR-REQ-0318
+// Verifies: PR-REQ-0016, PR-REQ-0079, PR-REQ-0317, PR-REQ-0318
 #[test]
 fn v2_raw_input_preserves_exact_numeric_unicode_and_duplicate_validation() {
     let invalid: Value = serde_json::from_str(include_str!(

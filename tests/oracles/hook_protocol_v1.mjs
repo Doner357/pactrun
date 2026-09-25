@@ -140,7 +140,7 @@ function processValid(vector) {
 }
 
 // Test-ID: PR-TEST-0031
-// Verifies: PR-REQ-0204, PR-REQ-0205, PR-REQ-0213, PR-REQ-0218
+// Verifies: PR-REQ-0082, PR-REQ-0204, PR-REQ-0205, PR-REQ-0213, PR-REQ-0218
 const report = {
   preamble_hex: Buffer.concat([
     Buffer.from("pactrun.hook-protocol\0", "ascii"),

@@ -987,6 +987,58 @@ impl ProtocolState {
 mod tests {
     use super::*;
 
+    // Test-ID: PR-TEST-0601
+    // Verifies: PR-REQ-0175
+    #[test]
+    fn recovery_requests_have_no_nested_or_severity_taxonomy() {
+        for extra in [r#","severity":"high""#, r#","depth":2"#, r#","stack":[]"#] {
+            let message = format!(
+                r#"{{"type":"request","request_id":1,"request":{{"kind":"enter_recovery_risk"{extra}}}}}"#
+            );
+            serde_json::from_str::<serde_json::Value>(&message).unwrap();
+            assert_eq!(
+                parse_hook_message(message.as_bytes()).unwrap_err().code,
+                "unknown_field"
+            );
+        }
+        let id = "00000000000000000000000000000001".to_owned();
+        let mut state = ProtocolState::new(id.clone(), BTreeSet::new());
+        state
+            .accept(HookMessage::SessionReady {
+                protocol_version: 1,
+                session_id: id,
+            })
+            .unwrap();
+        state
+            .accept(HookMessage::Request {
+                request_id: 1,
+                requested: RecoveryRiskState::Open,
+            })
+            .unwrap();
+        assert_eq!(state.risk(), RecoveryRiskState::Clear);
+        state.acknowledge_request(1, RecoveryRiskState::Open);
+        assert_eq!(
+            state
+                .accept(HookMessage::Request {
+                    request_id: 2,
+                    requested: RecoveryRiskState::Open
+                })
+                .unwrap_err()
+                .code,
+            "invalid_recovery_transition"
+        );
+        assert_eq!(state.risk(), RecoveryRiskState::Open);
+        state
+            .accept(HookMessage::Request {
+                request_id: 3,
+                requested: RecoveryRiskState::Clear,
+            })
+            .unwrap();
+        assert_eq!(state.risk(), RecoveryRiskState::Open);
+        state.acknowledge_request(3, RecoveryRiskState::Clear);
+        assert_eq!(state.risk(), RecoveryRiskState::Clear);
+    }
+
     #[test]
     fn action_message_parser_is_strict_and_preserves_attributed_diagnostics() {
         assert!(matches!(

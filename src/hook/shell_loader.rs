@@ -774,7 +774,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0491
-    // Verifies: PR-REQ-0349
+    // Verifies: PR-REQ-0082, PR-REQ-0349
     #[test]
     fn helper_risk_returns_only_after_exact_ack_and_never_replays_uncertainty() {
         let (_listener, mut wire, mut peer) = pair();

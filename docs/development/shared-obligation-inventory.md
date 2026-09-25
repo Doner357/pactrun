@@ -8,6 +8,14 @@ Source inventory on 2026-09-19 for the approved A-E delivery order. This is an
 engineering ownership record, not additional product requirements or passing
 verification evidence. The owning Spec and real test declarations remain authoritative.
 
+**Historical snapshot:** Use the [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md)
+for current classification, evidence candidates, concrete acceptance follow-ups
+and the 17 subsequently added rules. A-D are now integrated. The original rows
+and quoted excerpts below retain their 2026-09-19 scope; their generic owner
+labels and cited-ID lists are not the current implementation or coverage status.
+The [verification follow-up](./verification-gap-closure.md) tracks subsequent
+test additions and actual evidence closure beyond that audit.
+
 ## Classification and acceptance
 
 - **Cited**: owning text cites concrete test IDs; this is linkage, not a new claim
@@ -406,7 +414,7 @@ core projections from attributed Hook text, without granting export authority or
 claiming universal redaction. The initial inventory rows above are not a substitute for those
 updated declarations or the source-qualified milestone validation record.
 
-## Cross-cutting handoffs
+## Original cross-cutting handoffs (2026-09-19)
 
 - A closes diagnostic delivery, opt-out, crash/omission reporting and Instance
   identity/completeness/guard presentation. Old non-retention restrictions are

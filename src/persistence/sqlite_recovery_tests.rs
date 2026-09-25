@@ -512,7 +512,7 @@ fn every_existing_operation_recovers_from_durable_writes_without_the_owner_plan(
 }
 
 // Test-ID: PR-TEST-0327
-// Verifies: PR-REQ-0053, PR-REQ-0058, PR-REQ-0065, PR-REQ-0067, PR-REQ-0069, PR-REQ-0071
+// Verifies: PR-REQ-0053, PR-REQ-0058, PR-REQ-0065, PR-REQ-0067, PR-REQ-0069, PR-REQ-0071, PR-REQ-0308
 #[test]
 fn unresolved_obligations_root_diagnostics_not_replayable_input_history() {
     for case in CASES {
@@ -601,7 +601,7 @@ fn unresolved_obligations_root_diagnostics_not_replayable_input_history() {
 }
 
 // Test-ID: PR-TEST-0330
-// Verifies: PR-REQ-0063, PR-REQ-0064, PR-REQ-0069, PR-REQ-0071
+// Verifies: PR-REQ-0025, PR-REQ-0026, PR-REQ-0063, PR-REQ-0064, PR-REQ-0069, PR-REQ-0071
 #[test]
 fn reconciliation_and_manual_resolution_publish_atomic_guard_boundaries() {
     for case in CASES {

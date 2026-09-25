@@ -1102,7 +1102,7 @@ fn partial_finalization_can_be_abandoned_and_only_explicit_discard_destroys_surv
 }
 
 // Test-ID: PR-TEST-0396
-// Verifies: PR-REQ-0036, PR-REQ-0037, PR-REQ-0177
+// Verifies: PR-REQ-0036, PR-REQ-0037, PR-REQ-0040, PR-REQ-0177
 #[test]
 fn deletion_compilation_is_read_only_and_no_hook_admission_ignores_ordinary_readiness() {
     let (_temp, p, instance) = fixture();
@@ -1148,7 +1148,7 @@ fn deletion_compilation_is_read_only_and_no_hook_admission_ignores_ordinary_read
 }
 
 // Test-ID: PR-TEST-0397
-// Verifies: PR-REQ-0036, PR-REQ-0334
+// Verifies: PR-REQ-0007, PR-REQ-0036, PR-REQ-0334
 #[test]
 fn deletion_refusal_is_durable_and_stale_compilation_never_launches() {
     let (_temp, p, instance) = fixture();

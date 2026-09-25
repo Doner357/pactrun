@@ -17,6 +17,10 @@ milestone scope.
 
 ## Start a development task
 
+The [pre-E readiness review](./pre-e-readiness.md) records prerequisite
+closure, source-qualified validation and local integration separately from
+E S0 approval and release readiness.
+
 1. Read [the Spec map](../spec/index.md) and, if needed, the
    [developer product overview](./product-overview.md).
 2. Choose a [task reading path](./reading-paths.md) rather than reading all files.
@@ -50,7 +54,7 @@ the separately approved design and all lifecycle slices on V9, with final
 acceptance passed and local develop integration completed. Snapshot Capacity and
 Restore Workflow is now [implemented, verified and integrated into local develop](./snapshot-capacity-and-restore-status.md);
 Shell Adapter / Loader is [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md).
-Its Hook diagnostic presentation gap is now assigned to A in the
+Its former Hook diagnostic presentation gap was closed by A in the
 [remaining capability plan approved on 2026-09-19](./remaining-capability-milestones.md).
 Execution diagnostics/Instance observability is integrated into local develop.
 [Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
@@ -58,6 +62,11 @@ also implemented, verified and integrated. [Portable Pack transport](./pack-tran
 is implemented, verified and integrated into local develop.
 Machine-readable output is implemented, verified and integrated into local develop under its [approved S0-S4 baseline](./design-notes/cli-presentation-baseline.md); see the [implementation record](./cli-presentation-status.md). E is the next design milestone and requires separate S0 approval. This excludes
 full usage-guide writing. No retired milestone number is reused.
+The [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md) classifies
+remaining traceability, acceptance, formal-baseline and conditional-scope work.
+It supplements the historical inventory without approving E design or runtime work.
+Its [verification follow-up](./verification-gap-closure.md) records actual added
+tests, clause-backed evidence repairs and the still-open acceptance work.
 The [format review](./design-notes/m6-5-format-activation-review.md)
 records the independent Core/Hook V2 Freeze gate.
 

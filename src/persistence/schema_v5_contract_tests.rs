@@ -97,7 +97,7 @@ fn approved_v5_ddl_adds_ten_strict_tables_without_changing_v4_tables() {
 }
 
 // Test-ID: PR-TEST-0183
-// Verifies: PR-REQ-0298
+// Verifies: PR-REQ-0077, PR-REQ-0298
 #[test]
 fn snapshot_schema_ownership_is_independent_and_capacity_is_not_a_sql_validity_rule() {
     let connection = v4();

@@ -137,7 +137,7 @@ fn v2_transform_worker() {
 }
 
 // Test-ID: PR-TEST-0369
-// Verifies: PR-REQ-0321, PR-REQ-0240
+// Verifies: PR-REQ-0077, PR-REQ-0173, PR-REQ-0240, PR-REQ-0321
 #[test]
 fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_risk_ordering() {
     let fixture = RuntimeFixture::with_source(|_, _, manifest| {
@@ -154,7 +154,7 @@ fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_ri
 }
 
 // Test-ID: PR-TEST-0385
-// Verifies: PR-REQ-0240, PR-REQ-0321
+// Verifies: PR-REQ-0077, PR-REQ-0240, PR-REQ-0321
 #[test]
 fn installed_core_v2_can_execute_unchanged_v1_hook_without_service_authority() {
     let fixture = RuntimeFixture::with_source(|_, _, manifest| {

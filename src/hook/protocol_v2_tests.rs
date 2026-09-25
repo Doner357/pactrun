@@ -180,7 +180,7 @@ fn target_proposal_requires_acknowledged_open_and_receipt_never_clears_risk_or_r
 }
 
 // Test-ID: PR-TEST-0362
-// Verifies: PR-REQ-0321
+// Verifies: PR-REQ-0082, PR-REQ-0321
 #[test]
 fn v2_framing_and_handshake_are_owner_selected_without_fallback() {
     // Literal contract bytes, independent of the implementation constant used

@@ -582,9 +582,11 @@ authorized completion submissions, request and recovery-state order, and the
 completion handshake. It does not cover real filesystem access or cleanup,
 Snapshot materialization, actual binding existence, production context
 construction, process isolation, runtime redaction, durable risk ACKs, or any
-Artifact, Snapshot, Migration, Restore, Run, or Instance commit. Those promises
-remain Pending automated coverage for M3 through M7 as owned by their canonical
-requirements.
+Artifact, Snapshot, Migration, Restore, Run, or Instance commit. The production
+materialization, context and commit evidence below comes from later runtime tests,
+not the M0-B verifier. Their owning requirements retain the operation-specific
+contracts. Process isolation remains conditional under PR-REQ-0171 and is not
+claimed by this coverage.
 
 The Rust verifier owns raw JSON, duplicate-property and Unicode rejection,
 closed schemas, authority and path validation, semantic-set normalization, and
@@ -593,4 +595,4 @@ fixtures and independently produces preamble bytes, frame bytes, and normalized
 valid-fixture state. It does not prove duplicate rejection and MUST NOT consume
 Rust-produced expected bytes as calculation input.
 
-**Verification: PR-TEST-0025, PR-TEST-0026, PR-TEST-0029, PR-TEST-0031, PR-TEST-0032.**
+**Verification: PR-TEST-0025, PR-TEST-0026, PR-TEST-0029, PR-TEST-0031, PR-TEST-0032, PR-TEST-0249, PR-TEST-0258, PR-TEST-0312, PR-TEST-0328, PR-TEST-0404.**

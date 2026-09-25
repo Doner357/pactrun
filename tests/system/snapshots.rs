@@ -529,7 +529,7 @@ fn v1_bundle(path: &Path, revision: &str) -> String {
 }
 
 // Test-ID: PR-TEST-0269
-// Verifies: PR-REQ-0301, PR-REQ-0302, PR-REQ-0291, PR-REQ-0213
+// Verifies: PR-REQ-0085, PR-REQ-0213, PR-REQ-0291, PR-REQ-0301, PR-REQ-0302
 #[test]
 fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format() {
     let s = Scenario::new(0x72, &source("mutate"));
@@ -561,7 +561,7 @@ fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format(
 }
 
 // Test-ID: PR-TEST-0270
-// Verifies: PR-REQ-0301, PR-REQ-0302, PR-REQ-0289, PR-REQ-0091, PR-REQ-0191
+// Verifies: PR-REQ-0091, PR-REQ-0119, PR-REQ-0136, PR-REQ-0191, PR-REQ-0289, PR-REQ-0301, PR-REQ-0302
 #[test]
 fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only() {
     for (n, access) in [(0x73, "observe"), (0x74, "mutate")] {

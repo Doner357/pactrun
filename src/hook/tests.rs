@@ -451,8 +451,90 @@ fn parameters(mode: &str, marker: &Path) -> Vec<RawParameterInput> {
     .collect()
 }
 
+// Test-ID: PR-TEST-0602
+// Verifies: PR-REQ-0027, PR-REQ-0170, PR-REQ-0174
+#[test]
+fn resolved_service_risk_can_finish_failed_without_rollback_or_a_recovery_guard() {
+    let fixture = RuntimeFixture::new();
+    let marker = fixture.marker("resolved-failure");
+    let admitted = fixture.admit("direct", "trusted_external_resolved_failure", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert_eq!(
+        running_risk(&fixture.storage, run),
+        RecoveryRiskState::Clear
+    );
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let p = persistence(&fixture.storage);
+    assert!(
+        matches!(p.load_managed_run(run).unwrap().unwrap().state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Failed && outcome.terminal_risk == RecoveryRiskState::Clear)
+    );
+    assert!(
+        p.load_instance_recovery_guard(fixture.instance.id)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        p.load_instance_by_id(fixture.instance.id)
+            .unwrap()
+            .unwrap()
+            .state_version,
+        fixture.instance.state_version
+    );
+    assert_eq!(
+        fs::read(marker_variant(&marker, "service")).unwrap(),
+        b"service-mutated-after-ack"
+    );
+}
+
+// Test-ID: PR-TEST-0603
+// Verifies: PR-REQ-0090, PR-REQ-0130
+#[test]
+fn ordinary_action_receives_active_bindings_without_retained_authority() {
+    let fixture = RuntimeFixture::new();
+    let database =
+        rusqlite::Connection::open(fixture.storage.join("database/pactrun.sqlite3")).unwrap();
+    // Seed valid pre-existing retained state; publication is covered by Migration tests.
+    database.execute("INSERT INTO managed_input_bindings(instance_id,input_identity,payload_id) SELECT instance_id,?2,payload_id FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?3", rusqlite::params![fixture.instance.id.as_bytes().as_slice(), b"legacy".as_slice(), b"secret_config".as_slice()]).unwrap();
+    drop(database);
+    let marker = fixture.marker("active-context");
+    let admitted = fixture.admit("direct", "success", &marker);
+    let run = admitted.run();
+    fixture.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert!(fixture.application.advance_owner_continuation(run).unwrap());
+    let session: Value =
+        serde_json::from_slice(&fs::read(marker_variant(&marker, "session")).unwrap()).unwrap();
+    let bindings = session["operation"]["bindings"].as_array().unwrap();
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0]["input_id"], "secret_config");
+    assert_eq!(bindings[0]["role"], "active");
+    let view = fixture
+        .application
+        .load_instance(fixture.instance.id)
+        .unwrap()
+        .unwrap();
+    assert!(
+        view.bindings
+            .iter()
+            .any(|binding| binding.input_id.as_str() == "legacy"
+                && binding.present
+                && binding.role == crate::domain::ManagedInputRole::Retained)
+    );
+    assert!(
+        matches!(persistence(&fixture.storage).load_managed_run(run).unwrap().unwrap().state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded)
+    );
+}
+
 // Test-ID: PR-TEST-0328
-// Verifies: PR-REQ-0057, PR-REQ-0058, PR-REQ-0059
+// Verifies: PR-REQ-0057, PR-REQ-0058, PR-REQ-0059, PR-REQ-0170, PR-REQ-0173, PR-REQ-0218
 #[test]
 fn trusted_hook_mutation_after_risk_ack_is_not_rolled_back_by_recovery() {
     let fixture = RuntimeFixture::new();
@@ -704,6 +786,16 @@ impl HookWorker {
             })
             .collect();
         let mode = parameters["mode"].as_str().unwrap().to_owned();
+        let mode = if let Some(mode) = mode.strip_prefix("workspace_") {
+            fs::write(
+                Path::new(session["workspace"]["root_path"].as_str().unwrap()).join("scratch-only"),
+                b"not committed managed data",
+            )
+            .unwrap();
+            mode.to_owned()
+        } else {
+            mode
+        };
         let marker = PathBuf::from(parameters["marker"].as_str().unwrap());
         let mut launches = fs::OpenOptions::new()
             .create(true)
@@ -814,9 +906,11 @@ impl HookWorker {
                 self.complete(json!({"status": "success", "produced_outputs": []}));
                 self.expect_accepted();
             }
-            "risk_open_failure" | "trusted_external_failure" => {
+            "risk_open_failure"
+            | "trusted_external_failure"
+            | "trusted_external_resolved_failure" => {
                 self.request(1, "enter_recovery_risk", "open");
-                if mode == "trusted_external_failure" {
+                if mode.starts_with("trusted_external") {
                     // Outside execution scratch, inside the test's isolated
                     // directory: trusted native Hooks are not OS-sandboxed.
                     fs::write(
@@ -824,6 +918,9 @@ impl HookWorker {
                         b"service-mutated-after-ack",
                     )
                     .unwrap();
+                }
+                if mode == "trusted_external_resolved_failure" {
+                    self.request(2, "resolve_recovery_risk", "clear");
                 }
                 self.complete(json!({
                     "status": "failure",
@@ -1696,7 +1793,7 @@ fn direct_and_interpreter_launches_use_exact_arguments_and_discovery_environment
 }
 
 // Test-ID: PR-TEST-0096
-// Verifies: PR-REQ-0055, PR-REQ-0056
+// Verifies: PR-REQ-0055, PR-REQ-0056, PR-REQ-0173
 #[test]
 fn durable_risk_failure_retains_retry_continuation_and_never_acks_first() {
     let fixture = RuntimeFixture::new();
@@ -2151,7 +2248,7 @@ fn production_finalization_separates_hook_evidence_from_structural_outcome() {
 }
 
 // Test-ID: PR-TEST-0100
-// Verifies: PR-REQ-0047, PR-REQ-0060
+// Verifies: PR-REQ-0047, PR-REQ-0060, PR-REQ-0143
 #[test]
 fn confirmed_owner_loss_cleanup_removes_execution_bytes_but_not_durable_run_state() {
     let fixture = RuntimeFixture::new();
@@ -2271,6 +2368,55 @@ fn confirmed_owner_loss_cleanup_removes_execution_bytes_but_not_durable_run_stat
         .unwrap()
         .unwrap();
     assert_eq!(guard.run, run);
+}
+
+// Test-ID: PR-TEST-0613
+// Verifies: PR-REQ-0143
+#[test]
+fn workspace_bytes_do_not_acquire_authority_on_success_rejection_or_timeout() {
+    for (mode, expected, artifacts) in [
+        ("workspace_output", RunOutcome::Succeeded, 1),
+        ("workspace_invalid_output", RunOutcome::Failed, 0),
+        ("workspace_hang_after_ready", RunOutcome::TimedOut, 0),
+    ] {
+        let f = RuntimeFixture::new();
+        let marker = f.marker("workspace-lifetime");
+        let admitted = f.admit("direct", mode, &marker);
+        let run = admitted.run();
+        f.application.execute_admitted_action(
+            admitted,
+            policy(Some(10_000), Some(2_000), Some(100)),
+            ActionCancellation::default(),
+        );
+        let session: Value =
+            serde_json::from_slice(&fs::read(marker_variant(&marker, "session")).unwrap()).unwrap();
+        let workspace = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+        assert_eq!(
+            fs::read(workspace.join("scratch-only")).unwrap(),
+            b"not committed managed data"
+        );
+        assert!(f.application.advance_owner_continuation(run).unwrap());
+        let RunState::Finished(outcome) = load_run(&f.storage, run).state else {
+            panic!("not terminal")
+        };
+        assert_eq!(outcome.outcome, expected, "{mode}");
+        assert_eq!(outcome.artifacts.len(), artifacts);
+        assert!(!workspace.parent().unwrap().exists());
+        assert_eq!(
+            f.application.load_instance(f.instance.id).unwrap().unwrap(),
+            f.instance
+        );
+        let db = rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM service_storage_allocations",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
 }
 
 // Test-ID: PR-TEST-0106
@@ -2399,7 +2545,7 @@ fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
 }
 
 // Test-ID: PR-TEST-0110
-// Verifies: PR-REQ-0051, PR-REQ-0073, PR-REQ-0282
+// Verifies: PR-REQ-0051, PR-REQ-0073, PR-REQ-0143, PR-REQ-0282
 #[test]
 fn cleanup_failure_leaves_residue_but_does_not_block_terminal_publication() {
     let fixture = RuntimeFixture::new();

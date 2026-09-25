@@ -60,7 +60,7 @@ fn directory(root: &Path, id: ServiceAllocationId) -> PathBuf {
 }
 
 // Test-ID: PR-TEST-0346
-// Verifies: PR-REQ-0323, PR-REQ-0324, PR-REQ-0235, PR-REQ-0236, PR-REQ-0242, PR-REQ-0241
+// Verifies: PR-REQ-0012, PR-REQ-0025, PR-REQ-0027, PR-REQ-0128, PR-REQ-0131, PR-REQ-0141, PR-REQ-0235, PR-REQ-0236, PR-REQ-0241, PR-REQ-0242, PR-REQ-0323, PR-REQ-0324
 #[test]
 fn eager_instance_storage_is_isolated_and_live_bytes_are_not_managed_inputs() {
     let (_temp, root) = root();
@@ -1376,7 +1376,7 @@ fn compatible_service_targets(p: &PactrunPersistence) -> [RevisionIdentity; 3] {
 }
 
 // Test-ID: PR-TEST-0374
-// Verifies: PR-REQ-0319, PR-REQ-0323, PR-REQ-0326, PR-REQ-0327, PR-REQ-0237, PR-REQ-0245
+// Verifies: PR-REQ-0166, PR-REQ-0237, PR-REQ-0245, PR-REQ-0319, PR-REQ-0323, PR-REQ-0326, PR-REQ-0327
 #[test]
 fn real_declarative_service_migrations_consume_renames_retain_unmapped_and_reattach_explicitly() {
     use crate::{
@@ -1396,7 +1396,11 @@ fn real_declarative_service_migrations_consume_renames_retain_unmapped_and_reatt
         .unwrap();
     let allocation = allocation(&p, instance.id);
     let live = directory(&root, allocation);
-    fs::write(live.join("config.json"), b"unchanged service config").unwrap();
+    fs::write(
+        live.join("config.json"),
+        b"not JSON: \0\xff unchanged service bytes",
+    )
+    .unwrap();
     fs::create_dir(live.join("db")).unwrap();
     fs::write(live.join("db/table"), b"unmapped source-only contents").unwrap();
     let migrate = |target: &RevisionIdentity| {
@@ -1417,6 +1421,10 @@ fn real_declarative_service_migrations_consume_renames_retain_unmapped_and_reatt
         )
         .unwrap();
         assert!(plan.edges()[0].service.is_some());
+        assert!(
+            plan.edges()[0].launch.is_none(),
+            "declarative service continuity must not launch a Hook"
+        );
         let run = app
             .accept_migration_inputs(
                 plan,
@@ -1478,7 +1486,7 @@ fn real_declarative_service_migrations_consume_renames_retain_unmapped_and_reatt
     );
     assert_eq!(
         fs::read(live.join("config.json")).unwrap(),
-        b"unchanged service config"
+        b"not JSON: \0\xff unchanged service bytes"
     );
     assert_eq!(
         fs::read(live.join("db/table")).unwrap(),
@@ -1758,7 +1766,7 @@ fn transform_target(
 }
 
 // Test-ID: PR-TEST-0377
-// Verifies: PR-REQ-0322, PR-REQ-0323, PR-REQ-0326, PR-REQ-0246
+// Verifies: PR-REQ-0026, PR-REQ-0246, PR-REQ-0322, PR-REQ-0323, PR-REQ-0326
 #[test]
 fn transform_receipt_keeps_open_risk_until_atomic_target_publication() {
     use crate::{
@@ -2391,7 +2399,7 @@ fn real_split_merge_chain_publishes_each_edge_and_preserves_a_failed_second_targ
 }
 
 // Test-ID: PR-TEST-0388
-// Verifies: PR-REQ-0319, PR-REQ-0326, PR-REQ-0242, PR-REQ-0245
+// Verifies: PR-REQ-0166, PR-REQ-0242, PR-REQ-0245, PR-REQ-0319, PR-REQ-0326
 #[test]
 fn declarative_resource_creation_checks_explicit_presence_without_adopting_or_copying_bytes() {
     use serde_json::json;

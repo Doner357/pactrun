@@ -39,7 +39,7 @@ Pactrun MUST NOT promise that the same Source produces the same Revision. It
 MUST guarantee that the same canonical Revision Core and the same owned runtime
 content produce the same `RevisionContentDigest`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0044, PR-TEST-0051, PR-TEST-0600.**
 
 ### PR-REQ-0139 - Recipe output boundary
 
@@ -73,7 +73,7 @@ For M2, `SourceRelativePathV1` acquisition and same-object staging are defined
 by PR-REQ-0259, and durable blob publication precedes the atomic installation
 reference boundary in PR-REQ-0261.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0143, PR-TEST-0346.**
 
 ### PR-REQ-0142 - Logical content roles
 
@@ -86,11 +86,12 @@ the identity-bearing logical `path`, `id`, and `executable` descriptor fields.
 
 This runtime-content closure does not content-address, copy, version, or
 automatically Snapshot service-owned live state. A formal identity-bearing
-ServiceStorage-backed Managed Service Resource declaration requires a future
-Revision Core format. This requirement does not classify other service-owned
+ServiceStorage-backed Managed Service Resource declaration is supplied by
+[Revision Core V2](./revision-core-format-v2.md) and retained by V3; it is not
+part of Frozen Core V1. This requirement does not classify other service-owned
 resource kinds.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0331, PR-TEST-0600.**
 
 ## Presentation and provenance
 

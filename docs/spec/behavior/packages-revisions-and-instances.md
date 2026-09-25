@@ -49,7 +49,7 @@ for one target remain one candidate. Deterministic candidate presentation MUST
 use the canonical typed Revision ordering in PR-REQ-0250 and MUST NOT depend on
 installation, insertion, timestamp, locale, or database query order.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0062, PR-TEST-0066, PR-TEST-0532, PR-TEST-0586, PR-TEST-0587, PR-TEST-0588.**
 
 ### PR-REQ-0087 - Instance presentation
 

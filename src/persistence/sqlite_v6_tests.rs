@@ -232,7 +232,7 @@ fn v6_schema_preserves_v5_payload_tables_and_adds_exact_migration_structure() {
 }
 
 // Test-ID: PR-TEST-0294
-// Verifies: PR-REQ-0312
+// Verifies: PR-REQ-0308, PR-REQ-0312
 #[test]
 fn only_exact_v5_upgrades_and_current_v6_is_a_read_only_noop() {
     let (_tmp, current) = root();
@@ -282,7 +282,7 @@ fn only_exact_v5_upgrades_and_current_v6_is_a_read_only_noop() {
 }
 
 // Test-ID: PR-TEST-0295
-// Verifies: PR-REQ-0312
+// Verifies: PR-REQ-0308, PR-REQ-0312
 #[test]
 fn admitted_live_and_unknown_owners_block_but_unadmitted_sessions_do_not() {
     let (_tmp, root) = root();
@@ -315,7 +315,7 @@ fn admitted_live_and_unknown_owners_block_but_unadmitted_sessions_do_not() {
 }
 
 // Test-ID: PR-TEST-0296
-// Verifies: PR-REQ-0312
+// Verifies: PR-REQ-0308, PR-REQ-0312
 #[test]
 fn late_v5_writer_cannot_write_after_atomic_upgrade() {
     let (_tmp, root) = root();
@@ -350,7 +350,7 @@ fn late_v5_writer_cannot_write_after_atomic_upgrade() {
 }
 
 // Test-ID: PR-TEST-0297
-// Verifies: PR-REQ-0311, PR-REQ-0312
+// Verifies: PR-REQ-0308, PR-REQ-0311, PR-REQ-0312
 #[test]
 fn upgrade_crashes_publish_only_complete_v5_or_v6_and_roll_back_failed_copy() {
     for (point, expected) in [
@@ -579,7 +579,7 @@ fn make_v5_fixture(root: &Path) {
 }
 
 // Test-ID: PR-TEST-0298
-// Verifies: PR-REQ-0311, PR-REQ-0312, PR-REQ-0325
+// Verifies: PR-REQ-0308, PR-REQ-0311, PR-REQ-0312, PR-REQ-0325
 #[test]
 fn populated_upgrade_preserves_all_old_rows_discriminators_orphans_and_bytes() {
     use sha2::{Digest, Sha256};
