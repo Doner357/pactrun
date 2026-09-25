@@ -4,7 +4,7 @@ title: Pre-E Readiness Review
 
 # Pre-E readiness review
 
-**Status: Implementation and review candidate; final validation and local integration pending.**
+**Status: Prerequisites verified and integrated into local develop; ready for separately approved E S0 design.**
 
 This 2026-09-25 follow-up implements the authorized pre-E closure plan on
 `feature/obligation-inventory`, starting at develop `f81c308`. It is an informative
@@ -13,6 +13,11 @@ integration into develop are authorized; push, deployment, publication and E
 implementation are not.
 
 ## Baseline and evidence audit
+
+The current census has 370 unique owning requirement definitions. All 17
+existing-contract follow-ups are closed with scoped evidence/review; the five
+E obligations and one conditional isolation obligation remain explicit.
+Readiness is based on those dispositions, not a target Pending-marker count.
 
 The prior [closure map](./verification-gap-closure.md#clause-backed-closure-map)
 contains 53 original Pending-block dispositions. The retained runtime manifest
@@ -176,7 +181,7 @@ paragraphs are qualified where later short-ID or machine-output contracts apply.
 | Pack source / Core | Explicit source V1/V2/V3 and corresponding Core dispatch; Core V1/V2/V3 Frozen. No unknown-version fallback. |
 | Hook | Independently Frozen V1/V2; Core and Hook numbers are not coupled |
 | Snapshots | Integrity V2 writer with specified V1 reading; Snapshot bundle V1 transport |
-| Revision transport | Pack bundle V1; preserve exact immutable identity and typed metadata |
+| Revision transport | Pack distribution V1; preserve exact immutable identity and typed metadata |
 | CLI | `pactrun.cli.v1` results and `pactrun.cli.events.v1` JSONL; human rendering is not a machine API |
 | Identity / errors | Existing Frozen canonicalization, lexical, error-identity and vector contracts remain binding |
 
@@ -196,6 +201,52 @@ mechanism acceptance remain pre-publication work, not invented pre-E gates.
 
 ## Validation and integration
 
-Final candidate checks, source hashes, ignored-test disposition and the authorized
-local integration result will be recorded here after they complete. No current
-candidate full-CI or integration pass is implied by earlier evidence above.
+| Check | Result and scope |
+| --- | --- |
+| Configured-remote `cargo xtask ci` | **Passed:** conformance, formatting, Clippy, workspace tests, documentation checks, site typecheck and production build on persistent ZFS. |
+| Product tests in that complete gate | **Passed:** library 529; actual system suite 74; other executable integration suites 28; xtask 40. Nested worker summaries and earlier smoke/conformance subsets are not counted twice. |
+| Windows focused gate | **Passed: 14 distinct tests** on final Rust/test inputs, covering all eleven new regressions and the three strengthened boundary tests. No local full product suite was run. |
+| Windows formatting / Clippy | **Passed:** format check and workspace/all-target/all-feature Clippy with warnings denied. |
+| Document/link/traceability checks | **Passed: 27** in the full gate; site typecheck/build produced 171 text-edition documents. |
+| Source and runner provenance | **Passed:** all 418 selected inputs matched SHA-256 before and after the remote gate and locally before integration; a real Hook and public CLI smoke passed, and an embedded source-path check identified the executable from the intended isolated workspace. |
+| Capacity/RSS cases | **Not run:** the four existing explicit ignores described below; no new ignore or reduced coverage was introduced. |
+
+Windows used Rust 1.98.1; the configured remote used Rust 1.98.0, Node 24.19.0
+and pnpm 11.21.0. The remote test profile used optimization level 1, debug info
+0, debug assertions and overflow checks enabled, and one test thread. Product
+timeouts were not changed. An initial dependency-only offline preflight found
+a missing locked Docusaurus package; normal frozen-lockfile restoration resolved
+it without a lockfile or dependency change before the complete gate began.
+
+The three ignored Snapshot small/medium/large capacity/RSS comparisons and the
+ignored large Pack transport acceptance remain unchanged. This work changes
+neither capacity, streaming algorithms nor RSS guarantees; the new scratch and
+binding tests exercise authority/lifetime at bounded sizes. Existing mandatory
+streaming and over-former-limit tests still ran in full CI. The very large
+Snapshot comparison also requires 160 GiB free; no such capacity pass is claimed.
+
+The complete-gate source-manifest SHA-256 is
+`94868720f158ef42da54cd5ad2916d088fe7474c24700111f384238c703aada2`.
+Evidence, manifests and commands are retained under `target/e-readiness/`
+locally and in the isolated persistent remote verification workspace. Main
+records are `evidence/full-ci.log`, `evidence/source-before.log`,
+`evidence/source-after.log`, `evidence/binary-source.log`,
+`windows-focused.log`, `windows-format.log` and `windows-clippy.log`.
+
+Implementation/evidence commit `71e843ed5b1c991127bd669b0b007fddf3a3e779`
+was merged without conflicts into local develop as
+`743303c047eece3d1162a38d3ca708838c680237`. The merge tree matches the topic
+commit. Its only difference from the full-gate snapshot is a removed extra
+blank line at the end of this informative review; runtime/test inputs are
+unchanged. The subsequent documentation-only closeout records these results,
+preserves the old follow-up anchor and the original prohibition against implicit
+command expansion, and updates the current handoff. It uses separate final
+document/traceability checks, site typecheck/build and source comparison before
+its own local merge. Runtime evidence is reused, not described as a second
+fresh full-CI run after documentation edits. No source build consumes Git HEAD.
+
+The completion review is self-review plus recorded automated evidence, not an
+independent-review claim. No pre-E blocker remains. E representations/runtime,
+push, deployment and publication have not been started or authorized by this
+work. Existing unrelated workflow/archive files remain untouched. Verification
+source, build caches and logs are retained; no preview service was started.

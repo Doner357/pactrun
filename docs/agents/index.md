@@ -43,9 +43,9 @@ requires separate S0 approval; integration does not authorize publication.
   E is the next design milestone and requires separate S0 approval.
   The [verification closure record](../development/verification-gap-closure.md)
   tracks subsequent tests, repaired evidence links and the bounded remaining gaps.
-  The [pre-E readiness review](../development/pre-e-readiness.md) owns the current
-  follow-up dispositions and final validation/integration gate; the earlier
-  closure count is historical. E S0 still needs separate approval.
+  The [pre-E readiness review](../development/pre-e-readiness.md) records verified
+  follow-up closure and local develop integration; the earlier closure count is
+  historical. The baseline is ready for E S0, which still needs separate approval.
   Consult the [current obligation audit](../development/obligation-audit-2026-09-23.md)
   for evidence gaps, concrete follow-ups and exclusions. The
   [original inventory](../development/shared-obligation-inventory.md) is a dated

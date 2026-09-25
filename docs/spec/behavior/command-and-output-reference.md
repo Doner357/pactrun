@@ -406,4 +406,5 @@ PR-REQ-0287; Instance deletion and `AbandonManagement` use the
 [Managed-object lifecycle](./managed-object-lifecycle.md) separately adds
 Snapshot deletion, and [Pack transport](../contracts/pack-distribution-v1.md)
 owns Revision import/export. These explicit later contracts preserve
-PR-REQ-0119; they do not implicitly expand the historical fixed M2/M4 boundaries.
+PR-REQ-0119. The fixed M2 profile MUST NOT be expanded implicitly to fill gaps
+outside these separately approved contracts.
