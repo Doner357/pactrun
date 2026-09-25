@@ -104,7 +104,11 @@ not operating-system confinement. A trusted native Hook may use its OS identity
 to access files, networks, processes, or another Pactrun CLI. Doing so outside
 the Session is a Package contract violation, not a sandbox escape.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0328, PR-TEST-0602.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0171 - Future isolation must be enforced
 
@@ -209,7 +213,7 @@ service-owned state, including a ServiceStorage-backed Managed Service Resource,
 incoherent, a Hook MUST request `EnterRecoveryRisk` and wait for Pactrun's
 durable acknowledgment.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0096, PR-TEST-0328, PR-TEST-0369.**
 
 ### PR-REQ-0174 - Risk-resolution request
 
@@ -217,7 +221,7 @@ After the Package has made service-owned state coherent for ordinary
 management, the Hook SHOULD request `ResolveRecoveryRisk`. Resolution does not
 mean rollback and does not require the overall operation to succeed.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0085, PR-TEST-0602.**
 
 ### PR-REQ-0175 - No nested risk taxonomy
 
@@ -225,7 +229,7 @@ The initial protocol MUST use a single `Clear | Open` risk state. Package
 authors MUST NOT depend on nested risk stacks or low, medium, and high risk
 levels.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0028, PR-TEST-0085, PR-TEST-0104, PR-TEST-0601.**
 
 ## Cleanup
 

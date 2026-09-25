@@ -43,8 +43,35 @@ fn finish(f: &RuntimeFixture, run: RunId) -> crate::domain::RunOutcomeView {
     }
 }
 
+// Test-ID: PR-TEST-0614
+// Verifies: PR-REQ-0008, PR-REQ-0030
+#[test]
+fn retirement_removes_retained_bindings_without_touching_another_instance_or_source() {
+    for mode in [DeletionMode::ManagedCleanup, DeletionMode::AbandonManagement] {
+        let f=fixture("success",1);
+        let other=f.application.create_instance(InstanceName::parse("other").unwrap(), f.instance.active_revision.clone(),
+            vec![InputAcquisition {input_id:InputIdentity::parse("secret_config").unwrap(), source:Box::new(Cursor::new(SECRET_BINDING.to_vec()))}]).unwrap();
+        let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+        db.execute("INSERT INTO managed_input_bindings(instance_id,input_identity,payload_id) SELECT instance_id,?2,payload_id FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?3",
+            rusqlite::params![f.instance.id.as_bytes().as_slice(),b"legacy".as_slice(),b"secret_config".as_slice()]).unwrap();
+        assert!(f.application.load_instance(f.instance.id).unwrap().unwrap().bindings.iter().any(|b|b.input_id.as_str()=="legacy" && b.role==ManagedInputRole::Retained));
+        let intent=f.application.resolve_deletion(&f.instance.name,None,mode).unwrap();
+        let plan=f.application.compile_deletion(&intent,&[]).unwrap();
+        fs::write(f.temporary.path().join("source/pactrun.yaml"),b"invalid source: [").unwrap();
+        let run=f.application.accept_deletion_plan(plan,AdmissionOptions::default(),ActionCancellation::default(),policy(Some(5000),Some(5000),Some(20))).unwrap();
+        assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+        assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
+        assert_eq!(db.query_row("SELECT count(*) FROM managed_input_bindings WHERE instance_id=?1",[f.instance.id.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
+        assert_eq!(f.application.load_instance(other.id).unwrap().unwrap(),other);
+        let mut bytes=Vec::new();
+        persistence(&f.storage).export_input(other.id,&InputIdentity::parse("secret_config").unwrap(),true,&mut bytes).unwrap();
+        assert_eq!(bytes,SECRET_BINDING);
+        assert_eq!(f.marker("cleanup-count").exists(),mode==DeletionMode::ManagedCleanup);
+    }
+}
+
 // Test-ID: PR-TEST-0404
-// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0334
+// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334
 #[test]
 fn real_cleanup_v1_and_v2_complete_before_instance_removal_with_retained_history() {
     for version in [1,2] {
@@ -62,7 +89,7 @@ fn real_cleanup_v1_and_v2_complete_before_instance_removal_with_retained_history
 }
 
 // Test-ID: PR-TEST-0424
-// Verifies: PR-REQ-0177, PR-REQ-0178
+// Verifies: PR-REQ-0090, PR-REQ-0129, PR-REQ-0130, PR-REQ-0177, PR-REQ-0178
 #[test]
 fn cleanup_receives_required_retained_secret_without_inheriting_active_readiness() {
     for version in [1, 2] {

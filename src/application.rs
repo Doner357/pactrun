@@ -1154,7 +1154,7 @@ mod action_tests {
     }
 
     // Test-ID: PR-TEST-0115
-    // Verifies: PR-REQ-0096
+    // Verifies: PR-REQ-0008, PR-REQ-0038, PR-REQ-0096
     #[test]
     fn application_resolves_exact_action_and_compilation_is_persistently_read_only() {
         let (_temporary, storage, source) = roots();
@@ -1281,7 +1281,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0088
-    // Verifies: PR-REQ-0069
+    // Verifies: PR-REQ-0035, PR-REQ-0069
     #[test]
     fn resolve_manual_recovery_is_a_guarded_no_run_management_mutation() {
         use std::{
@@ -1868,7 +1868,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0089
-    // Verifies: PR-REQ-0039, PR-REQ-0041, PR-REQ-0042, PR-REQ-0049
+    // Verifies: PR-REQ-0007, PR-REQ-0039, PR-REQ-0041, PR-REQ-0042, PR-REQ-0049
     #[test]
     fn run_acceptance_precedes_admission_and_both_are_durable_boundaries() {
         let fixture = fixture();
@@ -2028,7 +2028,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0090
-    // Verifies: PR-REQ-0043, PR-REQ-0194
+    // Verifies: PR-REQ-0008, PR-REQ-0043, PR-REQ-0091, PR-REQ-0194
     // Supporting coverage for the Action clause of PR-REQ-0091 (readiness at
     // Admission); the requirement itself remains Pending until its Capture,
     // Migration, Cleanup, and Restore clauses are implemented.

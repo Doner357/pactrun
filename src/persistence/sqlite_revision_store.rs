@@ -1528,7 +1528,7 @@ mod tests {
     const WORKER_TEST: &str = "persistence::sqlite_revision_store::tests::m1c_subprocess_worker";
 
     // Test-ID: PR-TEST-0339
-    // Verifies: PR-REQ-0318
+    // Verifies: PR-REQ-0018, PR-REQ-0318
     #[test]
     fn candidate_v2_cannot_be_interpreted_as_v1_inside_an_exact_v6_store() {
         let (_temporary, root) = test_root();
@@ -1959,7 +1959,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0053
-    // Verifies: PR-REQ-0232
+    // Verifies: PR-REQ-0013, PR-REQ-0232
     #[test]
     fn exact_revision_components_and_derived_references_round_trip() {
         let (_temporary, root) = test_root();
@@ -2028,7 +2028,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0054
-    // Verifies: PR-REQ-0232, PR-REQ-0234
+    // Verifies: PR-REQ-0013, PR-REQ-0232, PR-REQ-0234
     #[test]
     fn persisted_revision_records_are_immutable_and_exactly_idempotent() {
         let (_temporary, root) = test_root();

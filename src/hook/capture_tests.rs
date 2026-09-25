@@ -35,7 +35,7 @@ fn fixture(access: &str) -> RuntimeFixture {
 }
 
 // Test-ID: PR-TEST-0329
-// Verifies: PR-REQ-0067, PR-REQ-0068, PR-REQ-0070
+// Verifies: PR-REQ-0067, PR-REQ-0068, PR-REQ-0070, PR-REQ-0110
 #[test]
 fn successful_action_and_capture_overrides_preserve_the_existing_trust_guard() {
     let f = fixture("observe");
@@ -370,7 +370,7 @@ fn managed_retirement_preserves_real_capture_and_action_artifact_lifetimes() {
 }
 
 // Test-ID: PR-TEST-0246
-// Verifies: PR-REQ-0100, PR-REQ-0145, PR-REQ-0146, PR-REQ-0147, PR-REQ-0150, PR-REQ-0152, PR-REQ-0191, PR-REQ-0239, PR-REQ-0289, PR-REQ-0290, PR-REQ-0298
+// Verifies: PR-REQ-0027, PR-REQ-0100, PR-REQ-0133, PR-REQ-0136, PR-REQ-0145, PR-REQ-0146, PR-REQ-0147, PR-REQ-0150, PR-REQ-0152, PR-REQ-0191, PR-REQ-0239, PR-REQ-0289, PR-REQ-0290, PR-REQ-0298
 #[test]
 fn real_observe_and_mutate_capture_publish_v2_from_the_pinned_active_view() {
     for access in ["observe", "mutate"] {
@@ -749,7 +749,7 @@ fn failed_cancelled_timed_out_and_invalid_captures_never_publish_a_snapshot() {
 }
 
 // Test-ID: PR-TEST-0249
-// Verifies: PR-REQ-0091, PR-REQ-0100, PR-REQ-0150, PR-REQ-0289, PR-REQ-0290
+// Verifies: PR-REQ-0090, PR-REQ-0091, PR-REQ-0100, PR-REQ-0130, PR-REQ-0150, PR-REQ-0218, PR-REQ-0289, PR-REQ-0290
 #[test]
 fn capture_records_retained_secret_and_empty_required_payload_without_exposing_retained_to_hook() {
     let f = fixture("observe");
@@ -979,7 +979,7 @@ fn actor(f: &RuntimeFixture, marker: &Path, mode: &str, fault: Option<&str>, pau
 }
 
 // Test-ID: PR-TEST-0252
-// Verifies: PR-REQ-0290, PR-REQ-0298
+// Verifies: PR-REQ-0143, PR-REQ-0290, PR-REQ-0298
 #[test]
 fn capture_owner_loss_and_commit_crashes_never_salvage_unpublished_candidates() {
     for mode in ["success", "open_failure"] {
@@ -987,6 +987,10 @@ fn capture_owner_loss_and_commit_crashes_never_salvage_unpublished_candidates() 
         let marker = f.marker("owner-loss");
         let mut actor = actor(&f, &marker, mode, None, true);
         wait_for(&marker_variant(&marker, "before-publication"));
+        let session: Value = serde_json::from_slice(&fs::read(marker_variant(&marker, "session")).unwrap()).unwrap();
+        let scratch = PathBuf::from(session["workspace"]["root_path"].as_str().unwrap());
+        assert!(scratch.is_dir());
+        fs::write(scratch.join("uncommitted-sentinel"), b"not a Snapshot or ServiceStorage").unwrap();
         let run = fs::read_to_string(marker_variant(&marker, "run"))
             .unwrap()
             .parse::<RunId>()
@@ -999,6 +1003,9 @@ fn capture_owner_loss_and_commit_crashes_never_salvage_unpublished_candidates() 
         );
         actor.0.kill().unwrap();
         actor.0.wait().unwrap();
+        let reopened = PactrunApplication::open(&f.storage).unwrap();
+        assert!(!scratch.parent().unwrap().exists(), "confirmed-dead owner scratch must be collected");
+        assert_eq!(reopened.load_instance(f.instance.id).unwrap().unwrap().active_revision, f.instance.active_revision);
         assert_eq!(
             f.application.reconcile_lost_managed_owners().unwrap(),
             vec![run]

@@ -118,7 +118,7 @@ mod tests {
     use super::*;
 
     // Test-ID: PR-TEST-0039
-    // Verifies: PR-REQ-0225
+    // Verifies: PR-REQ-0127, PR-REQ-0225
     #[test]
     fn opaque_identity_spelling_and_structure_are_exact() {
         let package = PackageId::from_bytes([0xab; 16]);

@@ -3211,6 +3211,130 @@ mod tests {
     include!("cli/machine_delivery_tests.rs");
     include!("cli/short_id_tests.rs");
 
+    // Test-ID: PR-TEST-0593
+    // Verifies: PR-REQ-0038, PR-REQ-0116, PR-REQ-0119
+    #[test]
+    fn generic_confirmation_never_grants_disclosure_declassification_or_recovery_authority() {
+        let (temporary, _, _) = cli_roots();
+        let missing = temporary.path().join("must-not-open");
+        let id = "00000000000000000000000000000001";
+        let revision = "exact:00000000000000000000000000000001/sha256:0000000000000000000000000000000000000000000000000000000000000001";
+        let export = temporary.path().join("must-not-export");
+        for flag in ["--force", "--yes"] {
+            for mut args in [
+                vec!["input", "export", "node", "secret", "--output", "-"],
+                vec![
+                    "snapshot",
+                    "export",
+                    id,
+                    "--output",
+                    export.to_str().unwrap(),
+                ],
+                vec!["instance", "migrate", "node", "--to", revision],
+                vec!["invoke", "node", "recover"],
+                vec!["instance", "abandon", "node"],
+            ] {
+                assert!(
+                    parse_command(args.iter().map(OsString::from).collect()).is_ok(),
+                    "invalid test command: {args:?}"
+                );
+                args.push(flag);
+                let mut output = Vec::new();
+                let mut errors = Vec::new();
+                let code = run(
+                    args.iter().map(OsString::from).collect(),
+                    Some(missing.as_os_str().into()),
+                    &mut io::empty(),
+                    &mut output,
+                    &mut errors,
+                );
+                assert_eq!(code, 2, "{args:?}: {}", String::from_utf8_lossy(&errors));
+                assert!(!missing.exists());
+                assert!(!export.exists());
+                assert!(output.is_empty());
+            }
+        }
+        for flag in ["--secret", "--normal", "--protection"] {
+            let mut output = Vec::new();
+            let mut errors = Vec::new();
+            assert_eq!(
+                run(
+                    ["input", "set", "node", "secret", "--stdin", flag]
+                        .map(OsString::from)
+                        .to_vec(),
+                    Some(missing.as_os_str().into()),
+                    &mut io::empty(),
+                    &mut output,
+                    &mut errors
+                ),
+                2
+            );
+            assert!(!missing.exists());
+        }
+    }
+
+    // Test-ID: PR-TEST-0599
+    // Verifies: PR-REQ-0031, PR-REQ-0032, PR-REQ-0115, PR-REQ-0265
+    #[test]
+    fn initial_input_acquisition_failure_is_atomic_at_the_public_create_boundary() {
+        let (temporary, root, source) = cli_roots();
+        let manifest = source.join("pactrun.yaml");
+        let text = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            &manifest,
+            text.replace("    - id: config", "    - id: config\n      required: true"),
+        )
+        .unwrap();
+        let revision = json_install(&root, &source);
+        let good = temporary.path().join("opaque.json");
+        fs::write(&good, [0, 255, 13, 10]).unwrap();
+        let missing = temporary.path().join("missing-secret");
+        let args = vec![
+            "instance".into(),
+            "create".into(),
+            "atomic-create".into(),
+            "--revision".into(),
+            revision.clone().into(),
+            "--input-file".into(),
+            format!("config={}", good.display()).into(),
+            "--input-file".into(),
+            format!("secret={}", missing.display()).into(),
+        ];
+        let (code, _, _) = json_invoke(&root, args);
+        assert_eq!(code, 1);
+        assert!(
+            PactrunApplication::open(&root)
+                .unwrap()
+                .list_instances()
+                .unwrap()
+                .is_empty()
+        );
+        let database = rusqlite::Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        for table in [
+            "instances",
+            "managed_input_bindings",
+            "managed_input_payloads",
+            "runs",
+        ] {
+            let count: i64 = database
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            assert_eq!(count, 0, "partial create in {table}");
+        }
+        drop(database);
+        let incomplete = json_ok(
+            &root,
+            &["instance", "create", "incomplete", "--revision", &revision],
+        );
+        assert_eq!(incomplete["required_inputs_satisfied"], false);
+        assert_eq!(
+            json_ok(&root, &["instance", "show", "incomplete"])["instance_id"],
+            incomplete["instance_id"]
+        );
+    }
+
     struct FailingCancellationHandler;
 
     impl CancellationHandlerInstaller for FailingCancellationHandler {
@@ -4221,7 +4345,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0078
-    // Verifies: PR-REQ-0092, PR-REQ-0263, PR-REQ-0266, PR-REQ-0268, PR-REQ-0271
+    // Verifies: PR-REQ-0092, PR-REQ-0119, PR-REQ-0263, PR-REQ-0266, PR-REQ-0268, PR-REQ-0271
     #[test]
     fn cli_install_instance_secret_export_and_atomic_no_clobber_are_end_to_end() {
         let (_temporary, storage, source) = cli_roots();

@@ -16,8 +16,9 @@ records Migration runtime coverage and the remaining verification gates.
 <!-- spec-navigation:end -->
 
 V6 is the historical integrated M5/M6 schema. A V6 writer initializes V6 and
-accepts exact V5 for its explicit upgrade. The current M6.5 writer instead uses
-[V7](./persistence-schema-v7.md) and accepts exact V6; this page does not authorize
+accepts exact V5 for its explicit upgrade. The subsequent M6.5 writer introduced
+[V7](./persistence-schema-v7.md) and accepted exact V6. The current writer and
+supported predecessors are defined by [V11](./persistence-schema-v11.md); this page does not authorize
 an implicit multi-version upgrade. Declarative and Hook Migration execution and
 edge publication are implemented under PR-REQ-0313 and the M5 execution contract.
 
@@ -47,11 +48,14 @@ Snapshots, and Artifacts. It MUST NOT infer admission, replay, reconciliation,
 or terminal disposition. Removing proven-lost writer admission does not terminate
 its Running Run. Failure leaves exact V5, success publishes exact V6 atomically.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0294, PR-TEST-0295, PR-TEST-0296, PR-TEST-0297, PR-TEST-0298, PR-TEST-0304, PR-TEST-0327.**
 
-The broad execution and recovery promises above remain pending. The following
-requirements cover exact storage representation and upgrade, not completion of
-PR-REQ-0306 or the complete M5 runtime.
+The V5/V6 upgrade assertions use explicitly scoped historical schema fixtures;
+Migration commit/recovery assertions cover the associated durable obligations.
+They do not assert that the current binary initializes V6. Current writable
+admission and supported upgrades are owned by
+[V11](./persistence-schema-v11.md#pr-req-0352---run-evidence-persistence-and-compatibility).
+The following requirements retain the exact V6 representation/upgrade contract.
 
 ### PR-REQ-0311 - Exact PersistenceSchemaV6 representation
 

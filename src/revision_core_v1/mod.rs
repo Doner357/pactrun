@@ -825,7 +825,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0040
-    // Verifies: PR-REQ-0226, PR-REQ-0227
+    // Verifies: PR-REQ-0014, PR-REQ-0226, PR-REQ-0227
     #[test]
     fn revision_core_and_runtime_content_are_sibling_wire_components() {
         let vector = &manifest().valid[0];
@@ -858,7 +858,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0041
-    // Verifies: PR-REQ-0226
+    // Verifies: PR-REQ-0010, PR-REQ-0014, PR-REQ-0016, PR-REQ-0226
     #[test]
     fn internal_semantic_projection_matches_frozen_normalized_values() {
         for vector in manifest().valid {
@@ -988,7 +988,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0044
-    // Verifies: PR-REQ-0227
+    // Verifies: PR-REQ-0012, PR-REQ-0015, PR-REQ-0017, PR-REQ-0018, PR-REQ-0079, PR-REQ-0138, PR-REQ-0227
     #[test]
     fn production_codec_reproduces_all_frozen_bytes_frames_and_digests() {
         for vector in manifest().valid {
@@ -1035,7 +1035,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0045
-    // Verifies: PR-REQ-0227
+    // Verifies: PR-REQ-0015, PR-REQ-0016, PR-REQ-0017, PR-REQ-0079, PR-REQ-0227
     #[test]
     fn frozen_negative_vectors_reject_with_only_catalog_backed_stable_refs() {
         let catalog: Value = serde_json::from_str(ERROR_CATALOG).unwrap();

@@ -22,7 +22,7 @@ fn json_install(root: &Path, source: &Path) -> String {
 }
 
 // Test-ID: PR-TEST-0557
-// Verifies: PR-REQ-0358, PR-REQ-0359, PR-REQ-0083
+// Verifies: PR-REQ-0077, PR-REQ-0083, PR-REQ-0358, PR-REQ-0359
 #[test]
 fn json_selection_parse_and_startup_errors_precede_storage() {
     let (temp, _, _) = cli_roots();
@@ -45,7 +45,7 @@ fn json_selection_parse_and_startup_errors_precede_storage() {
 }
 
 // Test-ID: PR-TEST-0558
-// Verifies: PR-REQ-0358, PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
+// Verifies: PR-REQ-0007, PR-REQ-0027, PR-REQ-0035, PR-REQ-0116, PR-REQ-0120, PR-REQ-0358, PR-REQ-0359, PR-REQ-0360
 #[test]
 fn json_management_catalog_and_raw_input_share_backend_facts() {
     let (temp, root, source) = cli_roots();
@@ -67,6 +67,7 @@ fn json_management_catalog_and_raw_input_share_backend_facts() {
     assert_eq!(json_invoke(&root, vec!["input".into(),"export".into(),"node".into(),"config".into(),"--output".into(),exported.as_os_str().into()]).0,0);
     assert_eq!(fs::read(exported).unwrap(),out);
     json_ok(&root,&["input","list","node"]); json_ok(&root,&["input","delete","node","config"]);
+    let before_inspection = json_ok(&root, &["instance", "show", "node"]);
     for args in [vec!["revision","list"],vec!["revision","show",&revision],vec!["revision","metadata","show",&revision],vec!["instance","history","list"],vec!["instance","deletion","list"],vec!["run","list"],vec!["snapshot","list"],vec!["action","list","node"],vec!["storage","upgrade"],vec!["storage","gc","--plan"]] { json_ok(&root,&args); }
     for field in ["note","trust"] {
         let value = if field == "note" { "not absent\n\"text\"" } else { "trusted" };
@@ -82,6 +83,11 @@ fn json_management_catalog_and_raw_input_share_backend_facts() {
     let base = temp.path().join("transport");
     assert_eq!(json_invoke(&root,vec!["revision".into(),"export".into(),revision.into(),"--output".into(),base.as_os_str().into()]).0,0);
     assert!(temp.path().join("transport.pack").exists());
+    let after_inspection = json_ok(&root, &["instance", "show", "node"]);
+    assert_eq!(after_inspection["state_version"], before_inspection["state_version"]);
+    let database = rusqlite::Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    let runs: i64 = database.query_row("SELECT count(*) FROM runs", [], |row| row.get(0)).unwrap();
+    assert_eq!(runs, 0);
 }
 
 // Test-ID: PR-TEST-0559
@@ -119,10 +125,13 @@ fn json_raw_usage_errors_and_stable_error_references_are_not_inferred_from_text(
 }
 
 // Test-ID: PR-TEST-0560
-// Verifies: PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
+// Verifies: PR-REQ-0027, PR-REQ-0120, PR-REQ-0133, PR-REQ-0359, PR-REQ-0360
 #[test]
 fn json_real_execution_plan_and_run_inspection_are_structured_and_redacted() {
     let (temp,root,expected,sensitive)=prepared_cli_hook_instance();
+    let before_instance = json_ok(&root, &["instance", "show", "node"]);
+    assert!(before_instance["state_version"].is_string());
+    let before_inputs = json_ok(&root, &["input", "list", "node"]);
     let marker=temp.path().join("json-hook-marker");
     let mut args=successful_invoke_args(&marker,&expected,&sensitive); args.push("--plan".into());
     let (code,plan,_)=json_invoke(&root,args); assert_eq!(code,0,"{plan}"); assert_eq!(plan["result"]["preview"],"not_admitted"); assert!(!marker.exists());
@@ -139,7 +148,13 @@ fn json_real_execution_plan_and_run_inspection_are_structured_and_redacted() {
     let destination=temp.path().join("artifact");
     let (code,response,_)=json_invoke(&root,vec!["run".into(),"artifact".into(),"export".into(),id.into(),"report".into(),"--output".into(),destination.as_os_str().into(),"--authorize-sensitive-export".into()]);
     assert_eq!(code,0,"{response}"); assert!(destination.exists());
-    json_ok(&root,&["run","artifact","delete",id,"report"]); json_ok(&root,&["run","delete",id]);
+    json_ok(&root,&["run","artifact","delete",id,"report"]);
+    let after_instance = json_ok(&root, &["instance", "show", "node"]);
+    assert_eq!(after_instance["instance_id"], before_instance["instance_id"]);
+    assert_eq!(after_instance["state_version"], before_instance["state_version"]);
+    assert_eq!(json_ok(&root, &["input", "list", "node"]), before_inputs);
+    // Invocation parameters and Run/Artifact publication are not managed Input mutations.
+    json_ok(&root,&["run","delete",id]);
 }
 
 // Test-ID: PR-TEST-0561

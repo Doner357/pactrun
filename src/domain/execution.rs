@@ -617,7 +617,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0080
-    // Verifies: PR-REQ-0273
+    // Verifies: PR-REQ-0133, PR-REQ-0134, PR-REQ-0273
     #[test]
     fn primitive_invocation_text_profile_is_exact() {
         let integer_zero = InvocationParameterValue::Integer(SafeIntegerV1::new(0).unwrap());
@@ -717,6 +717,8 @@ mod tests {
         }
     }
 
+    // Test-ID: PR-TEST-0597
+    // Verifies: PR-REQ-0133, PR-REQ-0134
     #[test]
     fn binding_is_typed_ordered_and_redaction_only_becomes_stricter() {
         let declarations = action(vec![
@@ -772,6 +774,8 @@ mod tests {
         }
     }
 
+    // Test-ID: PR-TEST-0598
+    // Verifies: PR-REQ-0038, PR-REQ-0133, PR-REQ-0134
     #[test]
     fn binding_applies_defaults_and_rejects_unknown_duplicate_missing_and_invalid_values() {
         let mut defaulted = parameter("defaulted", ParameterTypeV1::Integer, false);

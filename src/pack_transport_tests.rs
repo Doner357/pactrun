@@ -67,8 +67,127 @@ fn install(app: &PactrunApplication, path: &Path) -> crate::application::Install
     .unwrap()
 }
 
+// Test-ID: PR-TEST-0594
+// Verifies: PR-REQ-0011, PR-REQ-0012, PR-REQ-0013, PR-REQ-0084
+#[test]
+fn transport_preserves_distinct_lineages_and_revisions_with_equal_or_changed_content() {
+    for version in [1, 2, 3] {
+        let temp = roots();
+        let a = store(temp.path(), "identity-source");
+        let b = store(temp.path(), "identity-destination");
+        let source = source(temp.path(), version);
+        let app = PactrunApplication::open(&a).unwrap();
+        let first = install(&app, &source).revision;
+        let manifest = source.join("pactrun.yaml");
+        let text = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            &manifest,
+            text.replace(
+                "00000000000000000000000000000011",
+                "00000000000000000000000000000012",
+            ),
+        )
+        .unwrap();
+        let fork = install(&app, &source).revision;
+        assert_ne!(first.package_id, fork.package_id);
+        assert_eq!(first.content_digest, fork.content_digest);
+        fs::write(
+            source.join("data.bin"),
+            b"changed opaque runtime bytes\0\xff",
+        )
+        .unwrap();
+        let changed = install(&app, &source).revision;
+        assert_eq!(fork.package_id, changed.package_id);
+        assert_ne!(fork.content_digest, changed.content_digest);
+        let destination = PactrunApplication::open(&b).unwrap();
+        for (index, expected) in [first, fork, changed].iter().enumerate() {
+            let bundle = temp.path().join(format!("identity-{index}.pack"));
+            app.export_revision_pack(expected, &bundle, false, &ActionCancellation::default())
+                .unwrap();
+            assert_eq!(install(&destination, &bundle).revision, *expected);
+            assert_eq!(install(&destination, &bundle).revision, *expected);
+            let before = PactrunPersistence::open(&a)
+                .unwrap()
+                .load_revision(expected)
+                .unwrap()
+                .unwrap();
+            let after = PactrunPersistence::open(&b)
+                .unwrap()
+                .load_revision(expected)
+                .unwrap()
+                .unwrap();
+            assert_eq!(before, after);
+        }
+    }
+}
+
+// Test-ID: PR-TEST-0600
+// Verifies: PR-REQ-0011, PR-REQ-0012, PR-REQ-0014, PR-REQ-0015, PR-REQ-0138, PR-REQ-0142
+#[test]
+fn installed_digest_tracks_logical_roles_not_source_paths_or_portable_metadata() {
+    for version in [1, 2, 3] {
+        let temp = roots();
+        let source = source(temp.path(), version);
+        let manifest = source.join("pactrun.yaml");
+        let original = fs::read_to_string(&manifest).unwrap();
+        fs::copy(source.join("data.bin"), source.join("renamed.bin")).unwrap();
+        let baseline = install(
+            &PactrunApplication::open(store(temp.path(), "baseline")).unwrap(),
+            &source,
+        )
+        .revision;
+        for (index, (text, identity_changes)) in [
+            (
+                original.replace("source: data.bin", "source: renamed.bin"),
+                false,
+            ),
+            (
+                original
+                    .replace("Published", "Different presentation")
+                    .replace("label: stable", "label: other")
+                    .replace(
+                        "https://example.test/source",
+                        "https://example.test/elsewhere",
+                    ),
+                false,
+            ),
+            (
+                original
+                    .split("portable_metadata:")
+                    .next()
+                    .unwrap()
+                    .to_owned(),
+                false,
+            ),
+            (
+                original.replace("path: lib/alpha.bin", "path: lib/different.bin"),
+                true,
+            ),
+            (original.replace("id: beta", "id: different_role"), true),
+            (
+                original.replace("executable: true", "executable: false"),
+                true,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            fs::write(&manifest, text).unwrap();
+            let app =
+                PactrunApplication::open(store(temp.path(), &format!("case-{index}"))).unwrap();
+            let actual = install(&app, &source).revision;
+            assert_eq!(actual.package_id, baseline.package_id);
+            assert_eq!(
+                actual.content_digest != baseline.content_digest,
+                identity_changes,
+                "Core {version} case {index}"
+            );
+        }
+    }
+}
+
 // Test-ID: PR-TEST-0538
-// Verifies: PR-REQ-0354, PR-REQ-0356, PR-REQ-0022, PR-REQ-0081, PR-REQ-0118
+// Verifies: PR-REQ-0022, PR-REQ-0077, PR-REQ-0081, PR-REQ-0084, PR-REQ-0118, PR-REQ-0354, PR-REQ-0356
 #[test]
 fn all_pack_forms_preserve_canonical_identity_without_original_source() {
     for version in [1, 2, 3] {
@@ -141,7 +260,7 @@ fn all_pack_forms_preserve_canonical_identity_without_original_source() {
 }
 
 // Test-ID: PR-TEST-0539
-// Verifies: PR-REQ-0355, PR-REQ-0021, PR-REQ-0022
+// Verifies: PR-REQ-0021, PR-REQ-0022, PR-REQ-0084, PR-REQ-0355
 #[test]
 fn portable_metadata_is_opt_in_and_conflicts_are_transactional() {
     let temp = roots();
@@ -244,7 +363,7 @@ fn portable_metadata_is_opt_in_and_conflicts_are_transactional() {
 }
 
 // Test-ID: PR-TEST-0540
-// Verifies: PR-REQ-0354, PR-REQ-0081, PR-REQ-0022
+// Verifies: PR-REQ-0022, PR-REQ-0081, PR-REQ-0084, PR-REQ-0354
 #[test]
 fn malformed_pack_never_bypasses_validation_on_repeat_install() {
     let temp = roots();
@@ -543,7 +662,7 @@ fn concurrent_metadata_import_and_precommit_cancellation_preserve_atomicity() {
 }
 
 // Test-ID: PR-TEST-0544
-// Verifies: PR-REQ-0354, PR-REQ-0356
+// Verifies: PR-REQ-0084, PR-REQ-0354, PR-REQ-0356
 #[test]
 fn pack_metadata_dto_roundtrips_every_portable_variant() {
     let label = ReferenceLabel::parse("release").unwrap();

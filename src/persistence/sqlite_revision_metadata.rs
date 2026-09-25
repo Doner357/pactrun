@@ -1908,7 +1908,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0062
-    // Verifies: PR-REQ-0020, PR-REQ-0250, PR-REQ-0252, PR-REQ-0255
+    // Verifies: PR-REQ-0020, PR-REQ-0086, PR-REQ-0250, PR-REQ-0252, PR-REQ-0255
     #[test]
     fn label_and_provenance_sets_are_idempotent_and_lookup_deduplicates_targets() {
         let (_temporary, root) = test_root();
@@ -2271,7 +2271,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0066
-    // Verifies: PR-REQ-0249, PR-REQ-0250, PR-REQ-0251, PR-REQ-0252, PR-REQ-0253, PR-REQ-0255
+    // Verifies: PR-REQ-0086, PR-REQ-0249, PR-REQ-0250, PR-REQ-0251, PR-REQ-0252, PR-REQ-0253, PR-REQ-0255
     #[test]
     fn sql_and_domain_order_are_parity_equivalent_and_insertion_independent() {
         let (_first_temporary, first_root) = test_root();
@@ -2313,7 +2313,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0067
-    // Verifies: PR-REQ-0248, PR-REQ-0255, PR-REQ-0256
+    // Verifies: PR-REQ-0011, PR-REQ-0012, PR-REQ-0248, PR-REQ-0255, PR-REQ-0256
     #[test]
     fn committed_retry_reload_cascade_and_identity_boundaries_hold() {
         let (_temporary, root) = test_root();

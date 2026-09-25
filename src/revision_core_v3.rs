@@ -57,7 +57,7 @@ mod tests {
     use serde_json::{Value, json};
 
     // Test-ID: PR-TEST-0493
-    // Verifies: PR-REQ-0348
+    // Verifies: PR-REQ-0012, PR-REQ-0014, PR-REQ-0018, PR-REQ-0079, PR-REQ-0348
     #[test]
     fn valid_shell_vectors_match_independent_node_components_frame_and_digest() {
         let fixture: Value = serde_json::from_str(include_str!(

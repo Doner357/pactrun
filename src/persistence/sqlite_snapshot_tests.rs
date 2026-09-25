@@ -82,7 +82,7 @@ fn prepared_fixture(
 }
 
 // Test-ID: PR-TEST-0208
-// Verifies: PR-REQ-0292, PR-REQ-0297, PR-REQ-0298
+// Verifies: PR-REQ-0035, PR-REQ-0085, PR-REQ-0292, PR-REQ-0297, PR-REQ-0298
 #[test]
 fn snapshot_storage_round_trips_both_versions_without_producer_or_origin_ownership() {
     for version in [1, 2] {
@@ -128,7 +128,7 @@ fn snapshot_storage_round_trips_both_versions_without_producer_or_origin_ownersh
 }
 
 // Test-ID: PR-TEST-0209
-// Verifies: PR-REQ-0292, PR-REQ-0298, PR-REQ-0302
+// Verifies: PR-REQ-0085, PR-REQ-0292, PR-REQ-0298, PR-REQ-0302
 #[test]
 fn corrupted_stored_bytes_are_not_repaired_by_idempotent_import_or_export() {
     let (_tmp, path) = root();
@@ -151,7 +151,7 @@ fn corrupted_stored_bytes_are_not_repaired_by_idempotent_import_or_export() {
 }
 
 // Test-ID: PR-TEST-0210
-// Verifies: PR-REQ-0292, PR-REQ-0298
+// Verifies: PR-REQ-0035, PR-REQ-0292, PR-REQ-0298
 #[test]
 fn import_rolls_back_all_rows_on_failure_and_never_creates_a_run() {
     let (_tmp, path) = root();
@@ -230,7 +230,7 @@ fn application_export_requires_one_shot_authorization_and_atomic_no_clobber() {
 }
 
 // Test-ID: PR-TEST-0213
-// Verifies: PR-REQ-0148, PR-REQ-0292, PR-REQ-0298
+// Verifies: PR-REQ-0085, PR-REQ-0148, PR-REQ-0292, PR-REQ-0298
 #[test]
 fn same_id_different_digest_is_a_collision_without_replacing_the_original() {
     let (_tmp, path) = root();

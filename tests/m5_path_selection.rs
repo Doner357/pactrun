@@ -68,6 +68,165 @@ fn setup(direct_requires_input: bool) -> Fixture {
     }
 }
 
+// Test-ID: PR-TEST-0606
+// Verifies: PR-REQ-0001
+#[test]
+fn excluded_product_commands_are_rejected_without_creating_storage() {
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/product-boundary-tests");
+    fs::create_dir_all(&parent).unwrap();
+    let temporary = tempfile::tempdir_in(parent).unwrap();
+    for verb in ["daemon", "serve", "schedule", "orchestrate", "vault"] {
+        let root = temporary.path().join(verb);
+        let output = command(&root, &[verb]);
+        assert!(!output.status.success(), "{verb}");
+        assert!(!root.exists(), "rejected command created storage: {verb}");
+    }
+}
+
+// Test-ID: PR-TEST-0607
+// Verifies: PR-REQ-0003, PR-REQ-0007
+#[test]
+fn uninstalled_revision_and_source_cannot_enter_managed_execution() {
+    let f = setup(false);
+    let database = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
+    let count = |table: &str| {
+        database
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap()
+    };
+    let before = (count("instances"), count("runs"), count("revisions"));
+    let missing = format!(
+        "{}/sha256:{}",
+        f.a.split('/').next().unwrap(),
+        "f".repeat(64)
+    );
+    for target in [missing.as_str(), f.source.to_str().unwrap()] {
+        for args in [
+            vec!["instance", "create", "uninstalled", "--revision", target],
+            vec!["instance", "migrate", "demo", "--to", target],
+        ] {
+            let output = command(&f.root, &args);
+            assert!(!output.status.success(), "{args:?}");
+            assert_eq!(
+                (count("instances"), count("runs"), count("revisions")),
+                before
+            );
+        }
+    }
+}
+
+// Test-ID: PR-TEST-0615
+// Verifies: PR-REQ-0007
+#[test]
+fn all_operation_families_refuse_resolution_before_durable_acceptance() {
+    let f = setup(false);
+    let missing = "ffffffffffffffffffffffffffffffff";
+    for args in [
+        vec!["invoke", "demo", "undeclared"],
+        vec!["snapshot", "capture", "demo"],
+        vec!["snapshot", "restore", "demo", missing],
+        vec!["instance", "migrate", "absent", "--to", &f.b],
+        vec!["instance", "delete", "absent"],
+    ] {
+        let output = command(&f.root, &args);
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "resolution, not syntax: {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let database = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
+        assert_eq!(
+            database
+                .query_row("SELECT count(*) FROM runs", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            database
+                .query_row("SELECT count(*) FROM instances", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+}
+
+// Test-ID: PR-TEST-0604
+// Verifies: PR-REQ-0023, PR-REQ-0107, PR-REQ-0115
+#[test]
+fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_output() {
+    for json in [false, true] {
+        let f = setup(false);
+        install(&f.root, &f.source, &[(&f.a, false)]);
+        let manifest = f.source.join("pactrun.yaml");
+        let source = fs::read_to_string(&manifest).unwrap();
+        fs::write(
+            &manifest,
+            source.replace("    - id: config", "    - id: config\n      required: true"),
+        )
+        .unwrap();
+        let installed: serde_json::Value = serde_json::from_str(&successful(
+            &f.root,
+            &[
+                "--format",
+                "json",
+                "pack",
+                "install",
+                f.source.to_str().unwrap(),
+            ],
+        ))
+        .unwrap();
+        let target = format!(
+            "exact:{}/{}",
+            installed["result"]["revision"]["package_id"]
+                .as_str()
+                .unwrap(),
+            installed["result"]["revision"]["content_digest"]
+                .as_str()
+                .unwrap()
+        );
+        let before: serde_json::Value = serde_json::from_str(&successful(
+            &f.root,
+            &["--format", "json", "instance", "show", "demo"],
+        ))
+        .unwrap();
+        let mut args = Vec::new();
+        if json {
+            args.extend(["--format", "json"]);
+        }
+        args.extend(["instance", "migrate", "demo", "--to", &target]);
+        let output = successful(&f.root, &args);
+        if json {
+            let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+            assert_eq!(
+                value["result"]["inspection"]["run"]["state"]["outcome"],
+                "succeeded"
+            );
+            assert_eq!(
+                value["result"]["current_instance"]["required_inputs_satisfied"],
+                false
+            );
+            assert!(value["result"]["current_instance"]["recovery_guard"].is_null());
+        } else {
+            assert!(output.contains("outcome: succeeded"));
+            assert!(output.contains("required_inputs_satisfied: false"));
+        }
+        let after: serde_json::Value = serde_json::from_str(&successful(
+            &f.root,
+            &["--format", "json", "instance", "show", "demo"],
+        ))
+        .unwrap();
+        assert_eq!(
+            after["result"]["instance_id"],
+            before["result"]["instance_id"]
+        );
+        assert_eq!(after["result"]["required_inputs_satisfied"], false);
+        assert!(after["result"]["recovery_guard"].is_null());
+    }
+}
+
 // Test-ID: PR-TEST-0565
 // Verifies: PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
 #[test]
@@ -454,7 +613,7 @@ fn assert_no_execution(root: &Path, before: &str) {
 }
 
 // Test-ID: PR-TEST-0290
-// Verifies: PR-REQ-0303, PR-REQ-0309, PR-REQ-0310
+// Verifies: PR-REQ-0105, PR-REQ-0303, PR-REQ-0309, PR-REQ-0310
 #[test]
 fn real_cli_lists_and_selects_direct_or_chained_paths_without_any_run() {
     let f = setup(false);
@@ -759,7 +918,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
 }
 
 // Test-ID: PR-TEST-0311
-// Verifies: PR-REQ-0313, PR-REQ-0314, PR-REQ-0160
+// Verifies: PR-REQ-0108, PR-REQ-0119, PR-REQ-0132, PR-REQ-0160, PR-REQ-0313, PR-REQ-0314
 #[test]
 fn real_cli_requires_declassification_authorization_and_releases_only_the_target_binding() {
     let f = setup(false);

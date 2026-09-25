@@ -121,9 +121,11 @@ show missing required Inputs and trust state. Deletion MUST provide an explicit
 AbandonManagement spelling rather than relying on a generic force flag.
 
 PR-REQ-0271 fixes only the M2 create, list, and show spelling; Migration and
-deletion remain later milestone commands.
+deletion have their own implemented command contracts in the
+[Migration reference](./m5-migration-command-reference.md) and
+[retirement reference](../execution/m7-instance-retirement.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0436, PR-TEST-0437, PR-TEST-0525, PR-TEST-0599, PR-TEST-0604.**
 
 ### PR-REQ-0116 - Input operations
 
@@ -137,7 +139,7 @@ PR-REQ-0271 fixes the M2 list, set, export, and delete spelling and delegates
 payload, retained, CAS, Secret, and output-publication semantics to
 PR-REQ-0266 through PR-REQ-0268.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0076, PR-TEST-0147, PR-TEST-0280, PR-TEST-0558, PR-TEST-0593.**
 
 ### PR-REQ-0117 - Snapshot operations
 
@@ -170,7 +172,7 @@ override, and `AbandonManagement` MUST each use explicit, purpose-specific
 authorization intent. A generic yes or force option MUST NOT silently authorize
 disclosure, declassification, recovery bypass, or abandonment.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0078, PR-TEST-0173, PR-TEST-0270, PR-TEST-0311, PR-TEST-0437, PR-TEST-0593.**
 
 ### PR-REQ-0120 - Structured output boundary
 
@@ -304,8 +306,10 @@ pactrun instance resolve-manual-recovery <instance> [--if-version <token>]
 ```
 
 Every exact Instance operand and Action/Parameter identity is resolved using
-the existing identity grammar. A RunId is a complete 32-character lowercase
-hexadecimal value. `action list/show` and `run list/show` are structural-only
+the existing identity grammar. RunId values are complete 32-character lowercase
+hexadecimal identities; accepted selector prefixes are separately owned by
+the [ID selector contract](../contracts/cli-id-selectors.md).
+`action list/show` and `run list/show` are structural-only
 inspection and MUST not reconcile, launch, compile, acquire a staging lease,
 or migrate storage. `--plan` uses the same read-only opening, displays the
 planned work and applicable warnings, labels the output as a preview,
@@ -318,7 +322,8 @@ readable with terminal escaping, while non-UTF-8 paths use an explicit
 platform-native code-unit or byte representation. This representation is a
 human projection, not a stable machine-readable envelope. No stable JSON envelope,
 raw inspection option, Artifact export/delete command, or public Rust API is
-added by this spelling.
+added by this historical spelling. Versioned machine output is now separately
+owned by the [CLI JSON contract](../contracts/cli-json-v1.md).
 
 The separately approved [managed-object lifecycle contract](./managed-object-lifecycle.md)
 adds Artifact export/delete without changing the existing Run inspection spelling
@@ -395,8 +400,10 @@ The approved [M4 Snapshot commands](./m4-snapshot-command-reference.md) now
 specify Snapshot and explicit storage-upgrade spelling, implemented and integrated
 into develop with M4. Snapshot deletion remains excluded from M4. The separately
 approved [M5 Migration commands](./m5-migration-command-reference.md) provide
-read-only path discovery and planning; execution remains pending. Exact
-subcommands and options for other recovery, Instance
-deletion, `AbandonManagement`, and other later milestones remain open. Their
-future security-sensitive spellings must preserve PR-REQ-0119. The fixed M2
-profile above MUST NOT be expanded implicitly to fill those later gaps.
+path discovery, planning and implemented execution. Recovery uses
+PR-REQ-0287; Instance deletion and `AbandonManagement` use the
+[retirement contract](../execution/m7-instance-retirement.md).
+[Managed-object lifecycle](./managed-object-lifecycle.md) separately adds
+Snapshot deletion, and [Pack transport](../contracts/pack-distribution-v1.md)
+owns Revision import/export. These explicit later contracts preserve
+PR-REQ-0119; they do not implicitly expand the historical fixed M2/M4 boundaries.

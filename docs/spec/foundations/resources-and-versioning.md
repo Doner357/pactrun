@@ -141,7 +141,7 @@ not require its introduction.
 internal version domains. Their `V1` and `V4` labels do not couple them to
 Revision Core, Hook Protocol, Snapshot Integrity, or a future CLI format.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0183, PR-TEST-0338, PR-TEST-0369, PR-TEST-0385, PR-TEST-0538, PR-TEST-0557.**
 
 ### PR-REQ-0078 - Persistence migrations
 
@@ -184,7 +184,7 @@ algorithm.
 The Frozen `RevisionCoreFormatV1` contract is defined by
 [Revision Core Format V1](../contracts/revision-core-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0044, PR-TEST-0045, PR-TEST-0331, PR-TEST-0333, PR-TEST-0493.**
 
 ### PR-REQ-0080 - Snapshot integrity format ownership
 
@@ -220,7 +220,7 @@ Session establishment, authority, I/O transitions, typed contexts and outputs,
 recovery-risk messages, cancellation, EOF, and protocol violations. SDKs and
 helpers MUST remain adapters to that protocol.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0020, PR-TEST-0022, PR-TEST-0023, PR-TEST-0026, PR-TEST-0028, PR-TEST-0030, PR-TEST-0031, PR-TEST-0032, PR-TEST-0362, PR-TEST-0491.**
 
 ### PR-REQ-0240 - Future ServiceStorage version gates
 
@@ -270,9 +270,11 @@ the bundle-defined portable non-identity metadata required by
 Pre-M1-D classifies portable-capable metadata but does not define an Export
 Bundle Format, require any metadata kind to be carried, or define application,
 conflict, replacement, or merge semantics for imported metadata. Those choices
-remain owned by the future bundle format and import design.
+are now owned by [Pack bundle V1](../contracts/pack-distribution-v1.md)
+and the [Pack transport contract](../contracts/pack-distribution-v1.md), not by the
+historical metadata classification alone.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0538, PR-TEST-0539, PR-TEST-0540, PR-TEST-0544, PR-TEST-0594.**
 
 ### PR-REQ-0254 - Non-identity metadata portability boundary
 
@@ -300,4 +302,4 @@ binding state, and service recovery content. The same Snapshot ID and digest
 MUST be idempotent; the same ID with a different digest MUST be rejected as an
 identity collision.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0206, PR-TEST-0208, PR-TEST-0209, PR-TEST-0213, PR-TEST-0269.**

@@ -63,7 +63,7 @@ fn parameter_arguments(file: &std::path::Path) -> Vec<OsString> {
 }
 
 // Test-ID: PR-TEST-0148
-// Verifies: PR-REQ-0039, PR-REQ-0095, PR-REQ-0284
+// Verifies: PR-REQ-0039, PR-REQ-0095, PR-REQ-0125, PR-REQ-0284
 #[test]
 fn action_inspection_and_plan_keep_parameterized_execution_read_only() {
     let scenario = ready_matrix_scenario(0x148);
@@ -229,7 +229,7 @@ fn pre_acceptance_ordering_rejects_interactive_stdin_and_shape_errors_before_sou
 }
 
 // Test-ID: PR-TEST-0150
-// Verifies: PR-REQ-0094, PR-REQ-0284, PR-REQ-0288
+// Verifies: PR-REQ-0094, PR-REQ-0133, PR-REQ-0284, PR-REQ-0288
 #[test]
 fn parameter_sources_reach_a_real_hook_without_text_rewriting() {
     let scenario = ready_matrix_scenario(0x150);
@@ -241,7 +241,7 @@ fn parameter_sources_reach_a_real_hook_without_text_rewriting() {
 }
 
 // Test-ID: PR-TEST-0167
-// Verifies: PR-REQ-0094, PR-REQ-0098, PR-REQ-0284, PR-REQ-0288
+// Verifies: PR-REQ-0094, PR-REQ-0098, PR-REQ-0133, PR-REQ-0284, PR-REQ-0288
 #[test]
 fn parameter_sources_preserve_empty_unicode_and_protected_values_exactly() {
     let scenario = ready_matrix_scenario(0x167);
@@ -273,7 +273,7 @@ fn parameter_sources_preserve_empty_unicode_and_protected_values_exactly() {
 }
 
 // Test-ID: PR-TEST-0168
-// Verifies: PR-REQ-0049, PR-REQ-0097, PR-REQ-0284
+// Verifies: PR-REQ-0049, PR-REQ-0097, PR-REQ-0125, PR-REQ-0284
 #[test]
 fn successful_observe_and_mutate_each_create_one_durable_terminal_run() {
     let scenario = ready_matrix_scenario(0x168);
@@ -648,7 +648,7 @@ fn terminal_contract_keeps_none_isolated_and_streams_output_terminal_channels() 
 }
 
 // Test-ID: PR-TEST-0156
-// Verifies: PR-REQ-0057, PR-REQ-0097, PR-REQ-0215, PR-REQ-0284, PR-REQ-0287
+// Verifies: PR-REQ-0057, PR-REQ-0097, PR-REQ-0110, PR-REQ-0215, PR-REQ-0284, PR-REQ-0287
 #[test]
 fn recovery_risk_blocks_ordinary_invocation_until_explicit_resolution() {
     let scenario = ready_matrix_scenario(0x156);
@@ -790,7 +790,7 @@ fn mutation_conflict_is_exact_instance_scoped_and_cannot_be_bypassed_by_recovery
 }
 
 // Test-ID: PR-TEST-0173
-// Verifies: PR-REQ-0057, PR-REQ-0215, PR-REQ-0284, PR-REQ-0287
+// Verifies: PR-REQ-0057, PR-REQ-0110, PR-REQ-0119, PR-REQ-0215, PR-REQ-0284, PR-REQ-0287
 #[test]
 fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_token_without_execution()
  {

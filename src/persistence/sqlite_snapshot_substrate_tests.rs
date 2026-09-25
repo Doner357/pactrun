@@ -100,7 +100,7 @@ fn absent(id: &str) -> SnapshotBinding {
 }
 
 // Test-ID: PR-TEST-0231
-// Verifies: PR-REQ-0289, PR-REQ-0091, PR-REQ-0191
+// Verifies: PR-REQ-0040, PR-REQ-0091, PR-REQ-0129, PR-REQ-0136, PR-REQ-0191, PR-REQ-0289
 #[test]
 fn snapshot_compiler_is_read_only_and_capture_readiness_precedes_acceptance() {
     let (_tmp, path) = root();
@@ -269,7 +269,7 @@ fn restore_admission_pins_selected_content_and_both_tokens_without_target_readin
 }
 
 // Test-ID: PR-TEST-0233
-// Verifies: PR-REQ-0289, PR-REQ-0291, PR-REQ-0298
+// Verifies: PR-REQ-0007, PR-REQ-0289, PR-REQ-0291, PR-REQ-0298
 #[test]
 fn restore_revalidates_transitions_stale_state_and_deleted_source_without_launch() {
     let (_tmp, path) = root();

@@ -82,7 +82,7 @@ fn fixture() -> Fixture {
 }
 
 // Test-ID: PR-TEST-0436
-// Verifies: PR-REQ-0036, PR-REQ-0336, PR-REQ-0338, PR-REQ-0340
+// Verifies: PR-REQ-0023, PR-REQ-0036, PR-REQ-0115, PR-REQ-0336, PR-REQ-0338, PR-REQ-0340
 #[test]
 fn actual_cli_plan_delete_and_old_identity_inspection_preserve_name_reuse_boundary() {
     let f = fixture();
@@ -121,7 +121,7 @@ fn actual_cli_plan_delete_and_old_identity_inspection_preserve_name_reuse_bounda
 }
 
 // Test-ID: PR-TEST-0437
-// Verifies: PR-REQ-0181, PR-REQ-0337, PR-REQ-0340
+// Verifies: PR-REQ-0115, PR-REQ-0119, PR-REQ-0181, PR-REQ-0337, PR-REQ-0340
 #[test]
 fn actual_cli_abandon_handoff_and_confirmed_discard_do_not_infer_destruction() {
     let f = fixture();

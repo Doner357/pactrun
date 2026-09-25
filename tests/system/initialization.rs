@@ -49,7 +49,7 @@ fn explain(target: Value, text: &str) -> Value {
 }
 
 // Test-ID: PR-TEST-0588
-// Verifies: PR-REQ-0369
+// Verifies: PR-REQ-0086, PR-REQ-0369
 #[test]
 fn short_ids_cover_snapshot_artifact_migration_and_retirement_operations() {
     let s = Scenario::new(819, &source(2));
@@ -237,7 +237,7 @@ fn short_ids_cover_snapshot_artifact_migration_and_retirement_operations() {
 }
 
 // Test-ID: PR-TEST-0585
-// Verifies: PR-REQ-0366, PR-REQ-0367
+// Verifies: PR-REQ-0006, PR-REQ-0126, PR-REQ-0366, PR-REQ-0367
 #[test]
 fn machine_delivery_covers_shell_loader_lifecycle_and_each_migration_hook() {
     use base64::Engine as _;

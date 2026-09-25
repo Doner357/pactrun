@@ -1661,7 +1661,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0020
-    // Verifies: PR-REQ-0204, PR-REQ-0205
+    // Verifies: PR-REQ-0082, PR-REQ-0204, PR-REQ-0205
     #[test]
     fn directional_preamble_and_frame_limit_are_exact() {
         assert_eq!(hex::encode(PREAMBLE), vectors().preamble_hex);
@@ -1683,7 +1683,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0022
-    // Verifies: PR-REQ-0207, PR-REQ-0209
+    // Verifies: PR-REQ-0082, PR-REQ-0207, PR-REQ-0209
     #[test]
     fn handshake_confirms_exact_version_without_features() {
         assert_eq!(
@@ -1694,7 +1694,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0023
-    // Verifies: PR-REQ-0208, PR-REQ-0217
+    // Verifies: PR-REQ-0082, PR-REQ-0208, PR-REQ-0217
     #[test]
     fn requests_serialize_while_cancellation_is_independent() {
         assert_eq!(
@@ -1744,7 +1744,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0026
-    // Verifies: PR-REQ-0211, PR-REQ-0218
+    // Verifies: PR-REQ-0082, PR-REQ-0211, PR-REQ-0218
     #[test]
     fn operation_contexts_encode_their_binding_visibility() {
         let vectors = vectors();
@@ -1808,7 +1808,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0028
-    // Verifies: PR-REQ-0215, PR-REQ-0216, PR-REQ-0217
+    // Verifies: PR-REQ-0082, PR-REQ-0175, PR-REQ-0215, PR-REQ-0216, PR-REQ-0217
     #[test]
     fn recovery_risk_changes_only_after_matching_ack() {
         assert_eq!(run_valid("recovery_risk_round_trip")["risk_state"], "clear");
@@ -1864,7 +1864,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0030
-    // Verifies: PR-REQ-0208, PR-REQ-0216, PR-REQ-0217
+    // Verifies: PR-REQ-0082, PR-REQ-0208, PR-REQ-0216, PR-REQ-0217
     #[test]
     fn completion_handshake_rejects_invalid_authority_and_state() {
         assert_eq!(
@@ -1883,7 +1883,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0032
-    // Verifies: PR-REQ-0204, PR-REQ-0218
+    // Verifies: PR-REQ-0082, PR-REQ-0204, PR-REQ-0218
     #[test]
     fn candidate_or_frozen_metadata_and_traceability_are_valid() {
         let vectors = vectors();

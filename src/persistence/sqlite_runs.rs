@@ -4281,7 +4281,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0085
-    // Verifies: PR-REQ-0054, PR-REQ-0063, PR-REQ-0065, PR-REQ-0071, PR-REQ-0109
+    // Verifies: PR-REQ-0054, PR-REQ-0063, PR-REQ-0065, PR-REQ-0071, PR-REQ-0109, PR-REQ-0174, PR-REQ-0175
     #[test]
     fn recovery_risk_is_durable_and_terminal_consequence_is_atomic() {
         let (temporary, root) = root();

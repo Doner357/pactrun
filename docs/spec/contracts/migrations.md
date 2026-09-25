@@ -98,7 +98,7 @@ payload transformation. Opaque Managed Input transformation belongs to a typed
 Migration Hook output. Service-owned transformation follows the separate
 future-version direction in PR-REQ-0237 and PR-REQ-0238.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0312, PR-TEST-0609.**
 
 ### PR-REQ-0160 - Declassification contract
 
@@ -173,7 +173,11 @@ not parse the payload or infer that a compatible transition requires byte
 copying. This requirement does not classify other kinds of service-owned
 resources.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0374, PR-TEST-0388, PR-TEST-0610.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ## ServiceStorage-backed resource continuity
 

@@ -1155,7 +1155,7 @@ mod tests {
     }
 
     // Test-ID: PR-TEST-0051
-    // Verifies: PR-REQ-0228, PR-REQ-0230
+    // Verifies: PR-REQ-0138, PR-REQ-0228, PR-REQ-0230
     #[test]
     fn semantic_identity_is_independent_from_deduplicated_physical_availability() {
         let bytes = b"one physical blob";

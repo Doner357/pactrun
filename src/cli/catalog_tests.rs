@@ -267,7 +267,7 @@ fn catalog_history_survives_retirement_and_name_reuse_without_rebinding_runs() {
 }
 
 // Test-ID: PR-TEST-0532
-// Verifies: PR-REQ-0353, PR-REQ-0089, PR-REQ-0019
+// Verifies: PR-REQ-0019, PR-REQ-0038, PR-REQ-0086, PR-REQ-0089, PR-REQ-0353
 #[test]
 fn catalog_metadata_preserves_claim_sources_and_refuses_ambiguous_resolution() {
     let (_temp, root, ids) = fixture(2);

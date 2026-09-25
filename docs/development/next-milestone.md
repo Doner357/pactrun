@@ -19,6 +19,16 @@ into local develop after authorized commit and merge; see its
 and requires separate S0 approval. This integration does not authorize E runtime
 work, push or publication.
 
+The [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md) records the
+current Pending-block census, concrete evidence follow-ups, later added rules
+and explicit exclusions. Completing that documentation inventory does not close
+the outstanding verification or approve E S0 representations/runtime work.
+The separately authorized [verification follow-up](./verification-gap-closure.md)
+records the subsequent closure work without starting E implementation.
+The [pre-E readiness review](./pre-e-readiness.md) records the next closure
+batch and its validation/integration gate. It does not approve E S0 or runtime
+work; its current status must be checked before declaring the baseline ready.
+
 The [M4 closeout](./m4-implementation-status.md) records integration through M4:
 installation and managed Instances, Action execution, Capture and exact-compatible
 Restore, Snapshot inspection/verification, bundle import/export, and explicit

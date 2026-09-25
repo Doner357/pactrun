@@ -76,8 +76,69 @@ fn finish(f: &RuntimeFixture, run: RunId) -> RunOutcomeView {
     }
 }
 
+// Test-ID: PR-TEST-0610
+// Verifies: PR-REQ-0008, PR-REQ-0030, PR-REQ-0166
+#[test]
+fn retained_bindings_reactivate_discard_and_delete_without_reinterpreting_source() {
+    let f = RuntimeFixture::with_source(|_, _, manifest| {
+        *manifest = manifest.replace("  actions:", "    - {id: spare, required: false, protection: normal}\n    - {id: untouched, required: false, protection: normal}\n  actions:");
+    });
+    f.application.set_input(f.instance.id, InputIdentity::parse("spare").unwrap(), f.instance.state_version,
+        Box::new(Cursor::new(b"opaque\0\xff".to_vec()))).unwrap();
+    let current=f.application.load_instance(f.instance.id).unwrap().unwrap();
+    f.application.set_input(current.id,InputIdentity::parse("untouched").unwrap(),current.state_version,
+        Box::new(Cursor::new(b"unrelated retention".to_vec()))).unwrap();
+    let a = f.instance.active_revision.clone();
+    let b = install_edge(&f, &a, vec![], vec![], false);
+    let c = install_edge(&f, &b, vec![declaration("secret_config", false, true)], vec![], false);
+    let d = install_edge(&f, &c, vec![], vec![], false);
+    let e = install_edge(&f, &d, vec![], vec![MigrationTransitionV1::Discard {
+        source: InputBindingRefV1 { role: InputBindingRoleV1::Retained, input_id: InputIdentity::parse("secret_config").unwrap() },
+    }], false);
+    let mut states = Vec::new();
+    for (index, pair) in [a,b,c,d,e].windows(2).enumerate() {
+        let current = f.application.load_instance(f.instance.id).unwrap().unwrap();
+        let plan = crate::workflow::compile_migration(&f.application, &crate::workflow::PlatformHostLauncherLookup,
+            &TransitionRevision {instance:current.id, expected_state_version:current.state_version,
+                source:pair[0].clone(), target:pair[1].clone(), path:MigrationPathSelection::Exact(pair.to_vec()),
+                operator_inputs:vec![], authorize_declassification:false}, &[]).unwrap();
+        assert!(plan.edges().iter().all(|edge| edge.launch.is_none()));
+        // Every later compilation/execution must continue to use installed facts.
+        fs::write(f.temporary.path().join("source/pactrun.yaml"), b"not valid authoring: [").unwrap();
+        let run = f.application.accept_migration_inputs(plan, false, ActionCancellation::default(),
+            Vec::<(MigrationTargetInput, fs::File)>::new(), policy(None,None,None)).unwrap();
+        assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
+        let p = persistence(&f.storage);
+        let current = p.load_instance_by_id(f.instance.id).unwrap().unwrap();
+        assert_eq!(current.active_revision, pair[1]);
+        states.push(current.state_version);
+        let secret = current.bindings.iter().find(|b| b.input_id.as_str()=="secret_config");
+        if index == 3 { assert!(secret.is_none()); }
+        else {
+            assert_eq!(secret.unwrap().role, if index==1 {ManagedInputRole::Active { required: false }} else {ManagedInputRole::Retained});
+            let mut bytes=Vec::new();
+            p.export_input(current.id, &InputIdentity::parse("secret_config").unwrap(), true, &mut bytes).unwrap();
+            assert_eq!(bytes, SECRET_BINDING);
+        }
+        let mut bytes=Vec::new();
+        p.export_input(current.id, &InputIdentity::parse("spare").unwrap(), false, &mut bytes).unwrap();
+        assert_eq!(bytes, b"opaque\0\xff");
+    }
+    assert_eq!(states.iter().collect::<std::collections::BTreeSet<_>>().len(), states.len());
+    let current=f.application.load_instance(f.instance.id).unwrap().unwrap();
+    f.application.delete_input(current.id, &InputIdentity::parse("spare").unwrap(), current.state_version).unwrap();
+    let current=persistence(&f.storage).load_instance_by_id(current.id).unwrap().unwrap();
+    assert_eq!(current.bindings.len(),1);
+    assert_eq!(current.bindings[0].input_id.as_str(),"untouched");
+    assert_eq!(current.bindings[0].role,ManagedInputRole::Retained);
+    let mut bytes=Vec::new();
+    persistence(&f.storage).export_input(current.id,&InputIdentity::parse("untouched").unwrap(),false,&mut bytes).unwrap();
+    assert_eq!(bytes,b"unrelated retention");
+    assert!(!f.marker("invoked").exists());
+}
+
 // Test-ID: PR-TEST-0312
-// Verifies: PR-REQ-0315, PR-REQ-0316, PR-REQ-0306, PR-REQ-0154, PR-REQ-0161
+// Verifies: PR-REQ-0090, PR-REQ-0154, PR-REQ-0159, PR-REQ-0161, PR-REQ-0218, PR-REQ-0306, PR-REQ-0315, PR-REQ-0316
 #[test]
 fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_outputs() {
     let f = RuntimeFixture::new();
@@ -98,7 +159,7 @@ fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_ou
 }
 
 // Test-ID: PR-TEST-0313
-// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0313, PR-REQ-0154, PR-REQ-0160, PR-REQ-0163
+// Verifies: PR-REQ-0132, PR-REQ-0143, PR-REQ-0154, PR-REQ-0160, PR-REQ-0163, PR-REQ-0306, PR-REQ-0313, PR-REQ-0316
 #[test]
 fn invalid_migration_completions_and_outputs_never_publish_the_hook_edge() {
     for mode in ["failure", "open_failure", "success_open", "missing", "duplicate", "undeclared", "failure_outputs", "protection", "oversize"] {
@@ -227,7 +288,7 @@ fn lost_hook_edge_commit_ack_is_not_a_second_hook_invocation() {
 const OWNER_WORKER: &str = "hook::tests::migration_runtime::migration_owner_worker";
 
 // Test-ID: PR-TEST-0321
-// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0154, PR-REQ-0155
+// Verifies: PR-REQ-0031, PR-REQ-0107, PR-REQ-0129, PR-REQ-0154, PR-REQ-0155, PR-REQ-0306, PR-REQ-0316
 #[test]
 fn final_hook_publishes_atomic_success_even_with_incomplete_target_readiness() {
     let f = RuntimeFixture::new();
@@ -244,7 +305,7 @@ fn final_hook_publishes_atomic_success_even_with_incomplete_target_readiness() {
 }
 
 // Test-ID: PR-TEST-0322
-// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0161
+// Verifies: PR-REQ-0090, PR-REQ-0130, PR-REQ-0161, PR-REQ-0306, PR-REQ-0316
 #[test]
 fn multiple_hook_edges_get_independent_sessions_and_full_active_and_retained_source_views() {
     let f = RuntimeFixture::new();
@@ -285,7 +346,7 @@ fn migration_owner_worker() {
 }
 
 // Test-ID: PR-TEST-0317
-// Verifies: PR-REQ-0316, PR-REQ-0306, PR-REQ-0313, PR-REQ-0155, PR-REQ-0165, PR-REQ-0053, PR-REQ-0061, PR-REQ-0062
+// Verifies: PR-REQ-0053, PR-REQ-0061, PR-REQ-0062, PR-REQ-0106, PR-REQ-0155, PR-REQ-0165, PR-REQ-0306, PR-REQ-0313, PR-REQ-0316
 #[test]
 fn mixed_chain_crashes_reconcile_in_a_new_process_without_files_or_hook_replay() {
     for (edge, fault, committed, open_risk) in [

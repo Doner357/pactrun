@@ -176,7 +176,7 @@ fn typed_acceptance_and_operation_aware_loading_preserve_action_ranks_and_cancel
 }
 
 // Test-ID: PR-TEST-0225
-// Verifies: PR-REQ-0289, PR-REQ-0091, PR-REQ-0191
+// Verifies: PR-REQ-0007, PR-REQ-0031, PR-REQ-0091, PR-REQ-0129, PR-REQ-0191, PR-REQ-0289
 #[test]
 fn capture_admission_rechecks_readiness_owner_and_exact_facts_without_caller_authority() {
     let (_tmp, path) = root();

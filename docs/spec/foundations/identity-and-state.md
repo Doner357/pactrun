@@ -34,7 +34,7 @@ For the closed M2 frontend, that declaration is the required exact
 `package_id` in `PackSourceYamlV1`; installation MUST NOT derive a lineage from
 source location or content. ID generation is a separate non-mutating operation.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0067, PR-TEST-0069, PR-TEST-0142, PR-TEST-0594, PR-TEST-0600.**
 
 ### PR-REQ-0012 - Operational content digest
 
@@ -45,7 +45,7 @@ and local trust decisions. A future Revision Core format may make a
 ServiceStorage-backed Managed Service Resource declaration identity-bearing,
 but the service-owned live bytes MUST remain outside the Revision digest.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0044, PR-TEST-0067, PR-TEST-0331, PR-TEST-0346, PR-TEST-0493, PR-TEST-0594, PR-TEST-0600.**
 
 ### PR-REQ-0013 - Exact Revision identity
 
@@ -53,7 +53,7 @@ An exact `RevisionIdentity` MUST be the pair of `PackageId` and
 `RevisionContentDigest`. Equal content digests under different Package IDs MUST
 remain distinct Revision identities.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0053, PR-TEST-0054, PR-TEST-0594.**
 
 ### PR-REQ-0014 - RevisionCore projection
 
@@ -74,7 +74,7 @@ architecture does not retroactively add those concepts to its closed schema.
 Candidate `PackSourceYamlV1` is an authoring projection into this unchanged
 format, not another Revision identity or a raw-Core authoring route.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0040, PR-TEST-0041, PR-TEST-0069, PR-TEST-0331, PR-TEST-0493, PR-TEST-0600.**
 
 ### PR-REQ-0015 - Runtime content closure identity
 
@@ -84,7 +84,7 @@ unordered set of blob digests is insufficient. Source-only paths, timestamps,
 inodes, and ownership metadata MUST NOT affect identity unless Pactrun
 explicitly defines them as runtime semantics.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0044, PR-TEST-0045, PR-TEST-0069, PR-TEST-0600.**
 
 ### PR-REQ-0016 - Semantic normalization
 
@@ -98,7 +98,7 @@ normalization. A YAML library's implicit resolver or eager Boolean, null, or
 numeric representation MUST NOT decide Revision meaning. Raw numeric source
 tokens remain available until the target Frozen semantic type is known.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0041, PR-TEST-0045, PR-TEST-0068, PR-TEST-0333, PR-TEST-0337, PR-TEST-0494.**
 
 ### PR-REQ-0017 - RevisionCoreFormatV1 hash contract
 
@@ -110,7 +110,7 @@ SHA-256 profile represented by a self-describing digest such as
 The exact Frozen contract is defined by
 [Revision Core Format V1](../contracts/revision-core-format-v1.md).
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0001, PR-TEST-0012, PR-TEST-0044, PR-TEST-0045.**
 
 ### PR-REQ-0018 - Stable published identity
 
@@ -118,7 +118,7 @@ Internal schema, type, serializer, library, and CLI changes MUST NOT alter the
 identity of an already published RevisionCore format. Unknown or unsupported
 format versions MUST be rejected instead of interpreted on a best-effort basis.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0044, PR-TEST-0331, PR-TEST-0338, PR-TEST-0339, PR-TEST-0493, PR-TEST-0494.**
 
 ## Production identity and Revision Core foundation
 
@@ -454,7 +454,7 @@ remain separate design work.
 non-reusable. Migration, Input mutation, and Snapshot Restore MUST NOT change
 it. Recreating a deleted Instance name MUST produce a new `InstanceId`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0258, PR-TEST-0436, PR-TEST-0591, PR-TEST-0604.**
 
 ### PR-REQ-0024 - Instance names and provenance
 
@@ -473,7 +473,7 @@ publication event. It MUST NOT be an external-service hash. A rollback or
 recovery that recreates earlier field values MUST publish a new token to prevent
 ABA behavior. Service-owned live bytes are not part of this token.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0259, PR-TEST-0301, PR-TEST-0330, PR-TEST-0346, PR-TEST-0591.**
 
 ### PR-REQ-0026 - State-version publication
 
@@ -485,7 +485,7 @@ edge commits, ManualRecoveryRequired transitions, and
 `ResolveManualRecovery`. It does not make service-owned live bytes part of the
 same publication.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0263, PR-TEST-0301, PR-TEST-0330, PR-TEST-0377, PR-TEST-0591.**
 
 ### PR-REQ-0027 - Non-versioned observations
 
@@ -496,7 +496,7 @@ an Instance's state version. Pactrun MUST NOT claim that
 `InstanceStateVersion` linearizes mutations that Pactrun does not
 authoritatively own or observe.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0246, PR-TEST-0346, PR-TEST-0558, PR-TEST-0560, PR-TEST-0602.**
 
 ## Managed Input state
 
@@ -507,7 +507,11 @@ same long-lived semantic Input and MUST NOT be reused for another meaning. Input
 payloads MUST be preserved byte-for-byte, including empty payloads; Pactrun MUST
 NOT infer format or semantics from content or filenames.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0075, PR-TEST-0147, PR-TEST-0590.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0029 - One managed binding registry
 
@@ -516,7 +520,7 @@ An Instance MUST have at most one binding for each `InputIdentity`. `Active` and
 stores or historical value logs. A binding declared by the active Revision is
 active; an existing undeclared binding is retained.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0280, PR-TEST-0285, PR-TEST-0591.**
 
 ### PR-REQ-0030 - Retained binding lifetime
 
@@ -525,7 +529,7 @@ discarded by Migration, is explicitly deleted by the operator, or the Instance
 is removed or abandoned. Historical Revision identity MAY be provenance but
 MUST NOT be part of binding identity.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0610, PR-TEST-0612, PR-TEST-0614.**
 
 ### PR-REQ-0031 - RequiredInputsSatisfied
 
@@ -534,7 +538,7 @@ active Revision and current managed bindings. Empty bindings count as present.
 Missing required bindings MUST NOT invalidate the Instance or create a separate
 lifecycle state.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0225, PR-TEST-0321, PR-TEST-0525, PR-TEST-0590, PR-TEST-0599.**
 
 ### PR-REQ-0032 - Initial binding acquisition and Instance publication
 
@@ -549,7 +553,7 @@ For M2, acquisition and bounded file-backed staging finish before the database
 transaction, and the exact atomic publication and cleanup contract is
 PR-REQ-0265.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0147, PR-TEST-0590, PR-TEST-0599.**
 
 ### PR-REQ-0033 - Binding mutation invariants
 

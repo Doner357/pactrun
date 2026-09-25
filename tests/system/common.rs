@@ -7,7 +7,7 @@ use super::support::{
 };
 
 // Test-ID: PR-TEST-0142
-// Verifies: PR-REQ-0284
+// Verifies: PR-REQ-0001, PR-REQ-0011, PR-REQ-0284
 #[test]
 fn cli_startup_commands_do_not_require_or_create_storage() {
     let temporary = tempfile::tempdir().unwrap();
@@ -34,7 +34,7 @@ fn cli_startup_commands_do_not_require_or_create_storage() {
 }
 
 // Test-ID: PR-TEST-0143
-// Verifies: PR-REQ-0004, PR-REQ-0005, PR-REQ-0094, PR-REQ-0097
+// Verifies: PR-REQ-0001, PR-REQ-0003, PR-REQ-0004, PR-REQ-0005, PR-REQ-0094, PR-REQ-0097, PR-REQ-0141
 #[test]
 fn installed_runtime_survives_source_removal_and_run_is_visible_to_a_new_process() {
     let source = basic_source().replace(
@@ -101,7 +101,7 @@ fn installed_runtime_survives_source_removal_and_run_is_visible_to_a_new_process
 }
 
 // Test-ID: PR-TEST-0147
-// Verifies: PR-REQ-0265, PR-REQ-0266, PR-REQ-0268, PR-REQ-0092
+// Verifies: PR-REQ-0028, PR-REQ-0032, PR-REQ-0092, PR-REQ-0093, PR-REQ-0116, PR-REQ-0128, PR-REQ-0131, PR-REQ-0265, PR-REQ-0266, PR-REQ-0268
 #[test]
 fn input_and_secret_management_preserve_bytes_and_disclosure_boundaries() {
     let source = basic_source().replace(

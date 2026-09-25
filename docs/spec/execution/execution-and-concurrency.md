@@ -33,7 +33,7 @@ Input export and list/show are Observe. Install publication uses its own
 Revision transaction and does not acquire an Instance guard. The exact CAS and
 Observe coexistence rules are PR-REQ-0267.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0088, PR-TEST-0208, PR-TEST-0210, PR-TEST-0469, PR-TEST-0545, PR-TEST-0558, PR-TEST-0591.**
 
 ### PR-REQ-0036 - Managed executions
 
@@ -63,7 +63,7 @@ exact identities, reject ambiguity, parse and normalize parameters, and parse
 explicit security-sensitive authorization intent. The Compiler MUST NOT depend
 on CLI spelling, tags, `latest`, or raw argument syntax.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0115, PR-TEST-0532, PR-TEST-0586, PR-TEST-0587, PR-TEST-0593, PR-TEST-0596, PR-TEST-0598.**
 
 ### PR-REQ-0039 - Side-effect-free compilation
 
@@ -82,10 +82,12 @@ exact managed references, Hook Session authority, steps, recovery directives,
 and commit semantics. The initial implementation MUST NOT introduce a generic
 DAG engine. This requirement fixes Pactrun-owned authoritative context; it MUST
 NOT be interpreted as an immutable snapshot or linearization claim over
-service-owned live bytes. Future ServiceStorage-backed Managed Service Resource
-planning representation remains a separate versioned design gate.
+service-owned live bytes. ServiceStorage-backed Managed Service Resource
+planning is owned by the separately approved
+[ServiceStorage execution contract](./m6-5-service-storage-execution.md),
+without reinterpreting the earlier Core V1 boundary.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0231, PR-TEST-0284, PR-TEST-0366, PR-TEST-0396, PR-TEST-0595, PR-TEST-0596.**
 
 ### PR-REQ-0041 - Plan references are not pins
 
@@ -123,7 +125,7 @@ or Restore advances Instance state. After initial admission, correctness MUST be
 maintained by pins, the mutation guard, and durable commit and recovery
 boundaries.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0258, PR-TEST-0301, PR-TEST-0305.**
 
 ## Concurrency and pins
 

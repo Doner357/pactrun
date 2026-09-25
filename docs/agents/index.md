@@ -4,7 +4,16 @@ This text interface currently serves specification lookup and development of
 Pactrun. User-operation, Pack-author, and Hook-integration usage guides remain
 placeholders; do not interpret them as completed tutorials.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) is implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. B (Object Catalog/History/Metadata) is next, beginning with its separate S0; integration does not authorize publication.
+Current integrated work: A-D are implemented, verified and integrated into local
+develop: [diagnostics](../development/execution-diagnostics-observability-status.md),
+[catalog/history/metadata](../development/object-catalog-history-metadata-status.md),
+[Revision transport](../development/pack-transport-status.md), and
+[CLI presentation](../development/cli-presentation-status.md). The
+[2026-09-23 short-ID integration](../development/short-id-selectors-status.md)
+also includes IPC hardening and subsequent CLI delivery work. The current
+persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade.
+E (Versioning and Baseline Consolidation) is the next design milestone and
+requires separate S0 approval; integration does not authorize publication.
 
 ## Establish authority and state
 
@@ -22,8 +31,8 @@ Current integrated work: [Execution Diagnostics and Instance Observability](../d
   and follow the [remaining A-E sequence approved on 2026-09-19](../development/remaining-capability-milestones.md).
   A is execution diagnostics/Instance observability; B is object catalog/history/metadata;
   C is Revision bundles; D is machine-readable output; E is final consolidation.
-  The original grouping approved planning; A received separate implementation
-  approval, while B-E retain their own S0 gates. Full usage guides
+  The original grouping approved planning; A-D subsequently received separate
+  approvals and are integrated. E retains its separate S0 gate. Full usage guides
   are excluded, while necessary Spec/help/acceptance work remains. Lifecycle/GC is already
   integrated, as is Snapshot Capacity and Restore Workflow. Shell Adapter / Loader
   is implemented, verified and integrated into local develop;
@@ -31,8 +40,16 @@ Current integrated work: [Execution Diagnostics and Instance Observability](../d
   Hook diagnostic presentation was unresolved at Loader closeout; protocol
   delivery alone did not establish usable display or history.
   The follow-up is implemented, verified and integrated by A into local develop.
-  B is next, with its own S0.
-  Consult the shared obligation inventory and A delivery record above. New
+  E is the next design milestone and requires separate S0 approval.
+  The [verification closure record](../development/verification-gap-closure.md)
+  tracks subsequent tests, repaired evidence links and the bounded remaining gaps.
+  The [pre-E readiness review](../development/pre-e-readiness.md) owns the current
+  follow-up dispositions and final validation/integration gate; the earlier
+  closure count is historical. E S0 still needs separate approval.
+  Consult the [current obligation audit](../development/obligation-audit-2026-09-23.md)
+  for evidence gaps, concrete follow-ups and exclusions. The
+  [original inventory](../development/shared-obligation-inventory.md) is a dated
+  snapshot, not the current implementation status. New
   functions/tests use product behavior names and no milestone markers. Record design rationale and
   choose Git Flow topic prefixes by intent; see the
   [contributor policy](../development/development-and-verification.md).

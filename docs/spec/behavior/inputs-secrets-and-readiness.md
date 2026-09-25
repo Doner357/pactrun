@@ -82,7 +82,7 @@ MAY receive typed active and retained contexts defined by their own contracts.
 PersistenceSchemaV3 stores only the one binding registry; these roles and any
 future execution context are derived from the strict active Revision.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0249, PR-TEST-0312, PR-TEST-0322, PR-TEST-0424, PR-TEST-0603.**
 
 ### PR-REQ-0091 - Readiness admission
 
@@ -95,7 +95,7 @@ state rather than target pre-restore completeness.
 M2 creation MAY commit this incomplete state and inspection MUST derive missing
 requirements without persisting a readiness flag, as specified by PR-REQ-0265.
 
-**Verification: PR-TEST-0225, PR-TEST-0231, PR-TEST-0232, PR-TEST-0234, PR-TEST-0238, PR-TEST-0249, PR-TEST-0261, PR-TEST-0270, PR-TEST-0274.**
+**Verification: PR-TEST-0090, PR-TEST-0225, PR-TEST-0231, PR-TEST-0232, PR-TEST-0234, PR-TEST-0238, PR-TEST-0249, PR-TEST-0261, PR-TEST-0270, PR-TEST-0274.**
 
 Partial M4 coverage: production Capture Admission independently refuses missing
 required bindings, accepts an empty bound payload, and records legal optional
@@ -208,7 +208,7 @@ Transient staging is not a persistent `ManagedInputPayload`, Workspace,
 ServiceStorage, Managed Service Resource, M3 durable pin, Run reference, GC
 root, M6 recovery state, or cross-crash retry log.
 
-**Verification: PR-TEST-0074, PR-TEST-0079, PR-TEST-0147.**
+**Verification: PR-TEST-0074, PR-TEST-0079, PR-TEST-0147, PR-TEST-0590, PR-TEST-0599.**
 
 ### PR-REQ-0266 - Managed Input mutation, export, and reclamation
 
@@ -335,7 +335,11 @@ This includes plaintext database, WAL/journal, backup, internal staging, and
 authorized export temporary bytes under the M2 negative guarantee in
 PR-REQ-0268.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0147, PR-TEST-0591.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ## UTF-8 and opaque Input data
 

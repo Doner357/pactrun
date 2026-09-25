@@ -197,6 +197,11 @@ complete command-coverage gate; no HTTP/MCP service is added.
 
 ## E. Versioning and Baseline Consolidation
 
+The [pre-E readiness review](./pre-e-readiness.md) records completion evidence
+for the prerequisite follow-ups separately from E design approval. Its final
+validation and local integration status determine readiness to start E S0;
+none of that evidence approves E representations or runtime implementation.
+
 Retain the [original final-baseline scope](./product-completion-milestones.md#5-versioning-and-baseline-consolidation)
 and [release-readiness policy](./release-readiness.md). Implement formal support
 and evolution mechanisms, consolidate current schema/formats/interfaces, separate
@@ -212,6 +217,11 @@ publication. Internal actual-use evaluation and release-mechanism acceptance rem
 separate pre-publication gates under release readiness.
 
 ## Shared obligation inventory and completion rules
+
+The [2026-09-23 audit](./obligation-audit-2026-09-23.md) supplies the current
+numbered-rule census, concrete owner/deliverable/acceptance rows and bounded
+exclusions. It supersedes the original inventory's generic audit assignments,
+not the owning Spec or the historical approval/evidence records.
 
 A's S0 establishes one complete delivery inventory. The 2026-09-18 read-only audit
 found 85 `Pending automated coverage` markers; this is a dated observation, not

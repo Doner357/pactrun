@@ -993,6 +993,115 @@ mod tests {
         )
     }
 
+    // Test-ID: PR-TEST-0608
+    // Verifies: PR-REQ-0123
+    #[test]
+    fn source_defaults_equal_explicit_values_without_inventing_input_transitions() {
+        for version in [1, 2, 3] {
+            let short = format!(
+                "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: config}}]\nruntime_content: {{}}\n"
+            );
+            let explicit = short
+                .replace(
+                    "{id: config}",
+                    "{id: config, required: false, protection: normal}",
+                )
+                .replace("runtime_content: {}", "runtime_content: {files: []}");
+            let a = parse_pack_source_yaml(short.as_bytes()).unwrap();
+            let b = parse_pack_source_yaml(explicit.as_bytes()).unwrap();
+            assert_eq!(a, b);
+            let with_edge = short.replace("runtime_content:", &format!("  migrations:\n    - source_revision_digest: sha256:{}\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []\nruntime_content:", "1".repeat(64)));
+            let candidate = parse_pack_source_yaml(with_edge.as_bytes()).unwrap();
+            assert!(
+                candidate.revision.common().migrations()[0]
+                    .transitions
+                    .is_empty()
+            );
+            assert!(
+                parse_pack_source_yaml(with_edge.replace("      transitions: []\n", "").as_bytes())
+                    .is_err(),
+                "the frontend must not invent source-dependent Carry/Keep shorthand"
+            );
+        }
+    }
+
+    // Test-ID: PR-TEST-0609
+    // Verifies: PR-REQ-0159
+    #[test]
+    fn declarative_input_authoring_rejects_split_merge_and_payload_transformations() {
+        for version in [1, 2, 3] {
+            let source = format!(
+                "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: a}}, {{id: b}}]\n  migrations:\n    - source_revision_digest: sha256:{}\n      transitions: [TRANSITIONS]\n      requires_source: []\n      requires_target: []\n      produces_target: []\nruntime_content: {{}}\n",
+                "1".repeat(64)
+            );
+            let carry = "{kind: carry, source: {role: active, input_id: old}, target_input_id: a}";
+            assert!(
+                parse_pack_source_yaml(source.replace("TRANSITIONS", carry).as_bytes()).is_ok()
+            );
+            for transitions in [
+                format!(
+                    "{carry}, {}",
+                    carry.replace("target_input_id: a", "target_input_id: b")
+                ),
+                format!(
+                    "{carry}, {}",
+                    carry.replace("input_id: old", "input_id: other")
+                ),
+                carry.replace("kind: carry", "kind: split"),
+                carry.replace("kind: carry", "kind: merge"),
+                carry.replace("kind: carry", "kind: transform"),
+                carry.replace(
+                    "target_input_id: a",
+                    "target_input_id: a, script: transform.sh",
+                ),
+            ] {
+                assert!(
+                    parse_pack_source_yaml(source.replace("TRANSITIONS", &transitions).as_bytes())
+                        .is_err(),
+                    "accepted unsupported V{version} transformation: {transitions}"
+                );
+            }
+        }
+    }
+
+    // Test-ID: PR-TEST-0592
+    // Verifies: PR-REQ-0002, PR-REQ-0006, PR-REQ-0124, PR-REQ-0125, PR-REQ-0126, PR-REQ-0134
+    #[test]
+    fn authoring_refuses_stack_catch_all_operations_and_raw_parameter_vectors() {
+        assert!(parse_pack_source_yaml_v1(minimal("").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml_v1(parameter_default("integer", "7").as_bytes()).is_ok());
+        for name in ["start", "stop", "cleanup", "capture", "migrate"] {
+            let text =
+                parameter_default("integer", "7").replace("id: inspect", &format!("id: {name}"));
+            let candidate = parse_pack_source_yaml_v1(text.as_bytes()).unwrap();
+            assert_eq!(candidate.revision.actions()[0].id.as_str(), name);
+            assert_eq!(
+                candidate.revision.actions()[0].access,
+                crate::domain::OperationAccessV1::Observe
+            );
+            assert!(candidate.revision.snapshot().is_none());
+            assert!(candidate.revision.migrations().is_empty());
+            assert!(candidate.revision.cleanup().is_none());
+        }
+        for invalid in [
+            minimal("kind: stack\n"),
+            minimal("stack: {members: []}\n"),
+            minimal("").replace("  actions: []", "  operations: []"),
+            parameter_default("integer", "7").replace(
+                "      access: observe",
+                "      kind: snapshot\n      access: observe",
+            ),
+            parameter_default("argv", "[]"),
+            parameter_default("string", "text")
+                .replace("      parameters:", "      argv: []\n      parameters:"),
+        ] {
+            assert!(
+                parse_pack_source_yaml_v1(invalid.as_bytes()).is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
+
     fn parameter_default(parameter_type: &str, default: &str) -> String {
         format!(
             r#"source_format: 1
@@ -1022,7 +1131,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0068
-    // Verifies: PR-REQ-0258
+    // Verifies: PR-REQ-0002, PR-REQ-0010, PR-REQ-0016, PR-REQ-0258
     #[test]
     fn schema_directed_scalars_and_forbidden_yaml_are_exact() {
         assert!(parse_pack_source_yaml_v1(minimal("").as_bytes()).is_ok());
@@ -1107,7 +1216,7 @@ runtime_content:
     }
 
     // Test-ID: PR-TEST-0069
-    // Verifies: PR-REQ-0121, PR-REQ-0122, PR-REQ-0258, PR-REQ-0260
+    // Verifies: PR-REQ-0006, PR-REQ-0011, PR-REQ-0014, PR-REQ-0015, PR-REQ-0121, PR-REQ-0122, PR-REQ-0124, PR-REQ-0125, PR-REQ-0126, PR-REQ-0127, PR-REQ-0136, PR-REQ-0142, PR-REQ-0258, PR-REQ-0260
     #[test]
     fn source_candidate_keeps_authored_content_identity_and_portable_metadata() {
         let yaml = r#"source_format: 1

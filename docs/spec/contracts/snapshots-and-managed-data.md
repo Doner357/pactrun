@@ -26,7 +26,7 @@ A Workspace MUST be execution-scoped staging and MUST NOT become committed
 managed content until the operation-specific validation and commit succeeds.
 It MUST NOT be used or reinterpreted as persistent `ServiceStorage`.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0100, PR-TEST-0110, PR-TEST-0252, PR-TEST-0263, PR-TEST-0313, PR-TEST-0613.**
 
 ### PR-REQ-0144 - Run Artifact
 

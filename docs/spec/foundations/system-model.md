@@ -50,7 +50,11 @@ single-executable modular monolith. It MUST NOT require a daemon and MUST NOT
 act as a scheduler, remote orchestrator, web platform, secret vault, or
 replacement for service-specific tools.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0142, PR-TEST-0143, PR-TEST-0606.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0002 - Package taxonomy
 
@@ -59,7 +63,7 @@ Package kind in the initial product scope. Pactrun MUST NOT infer Package,
 Revision, Instance, Action, Snapshot, Migration, persistence, compiler, or CLI
 semantics for a `Stack` concept.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0068, PR-TEST-0592.**
 
 ### PR-REQ-0003 - Source-to-Instance boundary
 
@@ -73,7 +77,7 @@ M2 closes one minimal source frontend and installation path in PR-REQ-0258
 through PR-REQ-0261. Its YAML is authoring input and MUST pass through this
 Candidate boundary rather than becoming an installed contract directly.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0072, PR-TEST-0143, PR-TEST-0607.**
 
 ### PR-REQ-0004 - Source independence
 
@@ -107,7 +111,7 @@ Action, Snapshot Capture, Snapshot Restore, Migration, and Cleanup MUST remain
 distinct domain concepts. Sharing compiler or execution primitives MUST NOT
 collapse them into a catch-all authoring-level `Operation` model.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0069, PR-TEST-0585, PR-TEST-0592.**
 
 ### PR-REQ-0007 - Managed execution pipeline
 
@@ -117,7 +121,7 @@ creation, Executor Admission, and execution. The Run MUST exist before an
 admission failure is published. Management operations that do not execute a
 workflow MUST NOT be forced through that pipeline.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0089, PR-TEST-0225, PR-TEST-0233, PR-TEST-0302, PR-TEST-0397, PR-TEST-0558, PR-TEST-0607, PR-TEST-0612, PR-TEST-0615.**
 
 ### PR-REQ-0008 - Compiler and Executor ownership
 
@@ -125,7 +129,11 @@ The Workflow Compiler MUST own interpretation of resolved domain semantics and
 production of a typed plan. The Executor MUST execute that plan without
 reinterpreting authoring files, CLI syntax, Action names, or workflow policy.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0090, PR-TEST-0115, PR-TEST-0595, PR-TEST-0610, PR-TEST-0611, PR-TEST-0614.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0009 - Modular-monolith dependency direction
 
@@ -135,7 +143,11 @@ third-party adapter types. Implementations MUST avoid global mutable state,
 implicit registration, service locators, untyped dynamic maps, and string-key
 plumbing for domain contracts.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0605.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ### PR-REQ-0010 - Policy and mechanism separation
 
@@ -143,7 +155,11 @@ Pactrun-specific semantics MUST be owned by Pactrun domain code. Stable
 third-party libraries MAY supply commodity mechanisms, but library behavior and
 types MUST NOT become the source of Pactrun policy or identity semantics.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0041, PR-TEST-0068, PR-TEST-0605.**
+
+The [pre-E review](../../development/pre-e-readiness.md) records the
+architecture, author-responsibility and evidence-scope review for this rule.
+Automated examples do not prove subjective quality or arbitrary author intent.
 
 ## Persistent and execution data ownership
 

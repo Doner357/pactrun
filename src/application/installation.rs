@@ -507,7 +507,7 @@ portable_metadata:
     }
 
     // Test-ID: PR-TEST-0072
-    // Verifies: PR-REQ-0260, PR-REQ-0261, PR-REQ-0262, PR-REQ-0153
+    // Verifies: PR-REQ-0003, PR-REQ-0153, PR-REQ-0260, PR-REQ-0261, PR-REQ-0262
     #[test]
     fn invalid_semantic_runtime_closure_creates_no_durable_blob() {
         let (_temporary, storage, source) = roots();

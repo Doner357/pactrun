@@ -106,7 +106,7 @@ fn setup(with_hook: bool) -> (TransitionRevision, Repository) {
 }
 
 // Test-ID: PR-TEST-0284
-// Verifies: PR-REQ-0305, PR-REQ-0156
+// Verifies: PR-REQ-0040, PR-REQ-0156, PR-REQ-0305
 #[test]
 fn later_hook_is_qualified_before_a_plan_is_returned() {
     let (intent, repo) = setup(true);
