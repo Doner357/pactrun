@@ -25,9 +25,9 @@ and explicit exclusions. Completing that documentation inventory does not close
 the outstanding verification or approve E S0 representations/runtime work.
 The separately authorized [verification follow-up](./verification-gap-closure.md)
 records the subsequent closure work without starting E implementation.
-The [pre-E readiness review](./pre-e-readiness.md) records the next closure
-batch and its validation/integration gate. It does not approve E S0 or runtime
-work; its current status must be checked before declaring the baseline ready.
+The [pre-E readiness review](./pre-e-readiness.md) records verified prerequisite
+closure and local develop integration. The baseline is ready to begin separately
+approved E S0 design; E representations and runtime work are not yet approved.
 
 The [M4 closeout](./m4-implementation-status.md) records integration through M4:
 installation and managed Instances, Action execution, Capture and exact-compatible

@@ -120,7 +120,7 @@ proof against every future code change or an independent review claim.
 | [PR-REQ-0218 - Authority is not isolation and verification is layered](../spec/contracts/hook-protocol-v1.md#pr-req-0218---authority-is-not-isolation-and-verification-is-layered) | PR-TEST-0025, PR-TEST-0026, PR-TEST-0029, PR-TEST-0031, PR-TEST-0032, PR-TEST-0249, PR-TEST-0258, PR-TEST-0312, PR-TEST-0404, PR-TEST-0328 | Preserve the original wire-only verifier scope while linking later real runtime/materialization/commit tests; native mediated authority is not confinement. |
 | [PR-REQ-0308 - V6 Migration persistence and upgrade boundary](../spec/persistence/persistence-schema-v6.md#pr-req-0308---v6-migration-persistence-and-upgrade-boundary) | PR-TEST-0294, PR-TEST-0295, PR-TEST-0296, PR-TEST-0297, PR-TEST-0298, PR-TEST-0304, PR-TEST-0327 | Historical V5/V6 fixtures prove exact upgrade/admission/crash preservation and Migration obligations; current ordinary V11 admission is not mislabeled as V6. |
 
-## Existing-contract follow-ups at the first-batch boundary
+## Existing-contract follow-ups at the first-batch boundary {#remaining-existing-contract-follow-ups}
 
 These 17 rows retain a real owner and completion condition. They do not authorize
 new features or relax the current Spec. A semantic ambiguity still returns to its
