@@ -178,7 +178,7 @@ pub fn verify(workspace_root: &Path) -> Result<(), String> {
     super::revision_reference::verify_traceability(workspace_root)?;
 
     eprintln!(
-        "PactrunErrorTaxonomyV1: {} owners, {} registered codes, {} reference fixtures, and {} single-fault catalog fixtures passed Rust and traceability",
+        "Pactrun error catalog: {} owners, {} registered codes, {} reference fixtures, and {} single-fault catalog fixtures passed Rust and traceability",
         catalog.owners.len(),
         catalog.codes.len(),
         fixtures.valid_references.len() + fixtures.invalid_references.len(),

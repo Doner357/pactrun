@@ -855,7 +855,10 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
     let manifest = fs::read_to_string(f.source.join("pactrun.yaml")).unwrap();
     fs::write(
         f.source.join("pactrun.yaml"),
-        manifest.replace("protocol_version: 1.0-alpha.1", "protocol_version: 3"),
+        manifest.replace(
+            "protocol_version: 1.0-alpha.1",
+            "protocol_version: 1.0-alpha.2",
+        ),
     )
     .unwrap();
     let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])

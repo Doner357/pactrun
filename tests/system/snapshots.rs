@@ -260,7 +260,7 @@ fn create_restore_missing_capability_and_timeout_keep_the_documented_boundaries(
     let s = Scenario::new(0x95, &text);
     let revision = s.install();
     let bundle = s.path("no-restore.zip");
-    let id = v1_bundle(&bundle, &revision);
+    let id = baseline_bundle(&bundle, &revision);
     assert_success(&s.run(["snapshot", "import", bundle.to_str().unwrap()]));
     assert_exit(
         &s.run([
@@ -485,7 +485,7 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
     assert!(markers.contains("restore-content-verified"));
 }
 
-fn v1_bundle(path: &Path, revision: &str) -> String {
+fn baseline_bundle(path: &Path, revision: &str) -> String {
     let (package, digest) = revision
         .strip_prefix("exact:")
         .unwrap()
@@ -498,11 +498,10 @@ fn v1_bundle(path: &Path, revision: &str) -> String {
     let canonical = serde_jcs::to_vec(&manifest).unwrap();
     let mut hash = Sha256::new();
     hash.update(b"pactrun.snapshot-integrity-digest\0");
-    hash.update(1u32.to_be_bytes());
     hash.update(b"snapshot-integrity-manifest\0");
     hash.update((canonical.len() as u64).to_be_bytes());
     hash.update(&canonical);
-    let envelope = json!({"kind":"pactrun_snapshot_bundle","bundle_version":1,"integrity_format":1,"integrity_digest":format!("sha256:{}",hex::encode(hash.finalize()))});
+    let envelope = json!({"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":"1.0-alpha.1","integrity_digest":format!("sha256:{}",hex::encode(hash.finalize()))});
     let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
     let options =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
@@ -531,11 +530,11 @@ fn v1_bundle(path: &Path, revision: &str) -> String {
 // Test-ID: PR-TEST-0269
 // Verifies: PR-REQ-0085, PR-REQ-0213, PR-REQ-0291, PR-REQ-0301, PR-REQ-0302
 #[test]
-fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format() {
+fn public_baseline_import_verify_export_and_restore_preserve_the_snapshot_format() {
     let s = Scenario::new(0x72, &source("mutate"));
     let revision = initialize(&s);
     let input = s.path("v1.zip");
-    let id = v1_bundle(&input, &revision);
+    let id = baseline_bundle(&input, &revision);
     let original = manifest(&input);
     for args in [
         vec!["snapshot", "import", input.to_str().unwrap()],
@@ -549,7 +548,7 @@ fn public_v1_import_verify_export_and_restore_never_upgrade_the_snapshot_format(
     let show = s.run(["--format", "json", "snapshot", "show", &id]);
     assert_success(&show);
     let show: Value = serde_json::from_slice(&show.stdout).unwrap();
-    assert_eq!(show["result"]["integrity_format"], 1);
+    assert_eq!(show["result"]["integrity_format"], "1.0-alpha.1");
     let output = s.path("v1-out.snapshot");
     assert_success(&export(&s, &id, &output));
     assert_eq!(manifest(&output), original);
@@ -829,7 +828,7 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
             .contains("parameter: mode\teffective_redaction: true")
     );
     let base = s.path("base.zip");
-    let id = v1_bundle(&base, &revision);
+    let id = baseline_bundle(&base, &revision);
     let mut archive = zip::ZipArchive::new(fs::File::open(&base).unwrap()).unwrap();
     let over = s.path("oversize.zip");
     let mut writer = zip::ZipWriter::new(fs::File::create(&over).unwrap());

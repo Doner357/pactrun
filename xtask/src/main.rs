@@ -114,7 +114,7 @@ fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
             "pactrun",
             "--lib",
             "--all-features",
-            "authoring::v2::tests",
+            "authoring::",
         ],
     )
 }
