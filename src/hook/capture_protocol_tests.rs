@@ -17,7 +17,7 @@ fn ready(state: &mut ProtocolState) {
         .accept(
             parse_capture_message(
                 &serde_json::to_vec(
-                    &json!({"type":"session_ready","protocol_version":1,"session_id":SESSION}),
+                    &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":SESSION}),
                 )
                 .unwrap(),
             )
@@ -35,7 +35,7 @@ fn corpus() -> Value {
     serde_json::from_slice(
         &fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/vectors/hook_protocol_v1/vectors.json"),
+                .join("tests/vectors/hook_protocol/vectors.json"),
         )
         .unwrap(),
     )
@@ -465,7 +465,7 @@ fn capture_wire_worker() {
     stream.write_all(PREAMBLE).unwrap();
     send(
         &mut stream,
-        json!({"type":"session_ready","protocol_version":1,"session_id":session["session_id"]}),
+        json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}),
     );
     send(
         &mut stream,

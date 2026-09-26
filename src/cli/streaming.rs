@@ -58,14 +58,14 @@ impl Write for ResultWriter<'_> {
         let result = (|| {
             if !self.started {
                 let mut header = serde_json::to_vec(
-                    &serde_json::json!({"format":"pactrun.cli.events.v1","sequence":"1","received_at_unix_ms":delivery::now(),"command":self.command,"type":"result"}),
+                    &serde_json::json!({"format":"pactrun.cli","format_version":presentation::FORMAT_VERSION,"sequence":"1","received_at_unix_ms":delivery::now(),"command":self.command,"type":"result"}),
                 )?;
                 header.pop();
                 header.extend_from_slice(b",\"response\":");
                 self.out.write_all(&header)?;
                 self.started = true;
             }
-            // V1 responses are compact UTF-8 documents with exactly one final LF.
+            // Responses are compact UTF-8 documents with exactly one final LF.
             // JSON string newlines are escaped and remain untouched.
             for part in bytes.split(|b| *b == b'\n') {
                 self.out.write_all(part)?;
@@ -89,6 +89,7 @@ impl Write for ResultWriter<'_> {
 #[derive(Serialize, Deserialize)]
 struct WireResponse {
     format: String,
+    format_version: String,
     command: Option<String>,
     status: String,
     result: Option<Box<serde_json::value::RawValue>>,
@@ -114,6 +115,7 @@ pub(super) struct DeliveryResult {
 #[derive(Serialize)]
 struct ResultEvent<'a> {
     format: &'static str,
+    format_version: &'static str,
     sequence: String,
     received_at_unix_ms: Option<String>,
     command: &'a str,
@@ -262,7 +264,7 @@ pub(super) fn execute_machine(
     let mut response: WireResponse = match serde_json::from_slice(&bytes) {
         Ok(response) => response,
         Err(_) => WireResponse {
-            format: presentation::FORMAT_V1.into(), command: Some(name.into()), status: "failure".into(),
+            format: presentation::FORMAT_KIND.into(), format_version: presentation::FORMAT_VERSION.into(), command: Some(name.into()), status: "failure".into(),
             result: delivery.known_run().map(|run| serde_json::value::to_raw_value(&serde_json::json!({"run_id":run})).expect("known Run projection")),
             error: Some(serde_json::value::to_raw_value(&serde_json::json!({"kind":"operation","message":"Execution response unavailable; inspect retained Runs","reference":null})).expect("fixed error")),
         },
@@ -296,7 +298,8 @@ pub(super) fn execute_machine(
         write_json(
             stdout,
             &ResultEvent {
-                format: "pactrun.cli.events.v1",
+                format: presentation::FORMAT_KIND,
+                format_version: presentation::FORMAT_VERSION,
                 sequence,
                 received_at_unix_ms: delivery::now(),
                 command: name,

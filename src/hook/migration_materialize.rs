@@ -87,13 +87,12 @@ impl MaterializedExecution {
                     path,
                 });
             }
-            let (program, mut arguments) =
-                launch_command(launch, &runtime, hook.protocol_version.get())?;
+            let (program, mut arguments) = launch_command(launch, &runtime, hook.protocol_version)?;
             arguments.extend(hook.args.iter().cloned());
             let session_id = random_handle()?;
             let revision = |r: &crate::domain::RevisionIdentity| json!({"package_id":r.package_id.to_string(),"revision_content_digest":r.content_digest.to_string()});
             let session = json!({
-                "type":"session_start", "protocol_version":hook.protocol_version.get(), "session_id":session_id,
+                "type":"session_start", "protocol_version":hook.protocol_version, "session_id":session_id,
                 "run_id":run.to_string(), "revision":revision(edge.target()), "parameters":[],
                 "workspace":{"handle":random_handle()?, "root_path":host_path(&workspace)?},
                 "io":{"terminal":terminal_name(hook.io.terminal)},
@@ -123,8 +122,8 @@ impl MaterializedExecution {
                     outputs: Vec::new(),
                     capture: None,
                     operation: super::super::protocol::SessionOperation::Migration,
-                    v2_state: None,
-                    v2_transport: None,
+                    protocol_state: None,
+                    protocol_transport: None,
                     _service_access: None,
                 };
                 let bindings = service
@@ -140,8 +139,7 @@ impl MaterializedExecution {
                         .hook
                         .as_ref()
                         .expect("Hook edge")
-                        .protocol_version
-                        .get(),
+                        .protocol_version,
                     &bindings,
                     service.is_some_and(|e| e.transform),
                 )

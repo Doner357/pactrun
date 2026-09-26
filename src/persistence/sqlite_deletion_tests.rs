@@ -29,7 +29,7 @@ fn fixture_with_cleanup(cleanup: bool) -> (tempfile::TempDir, PactrunPersistence
     } else {
         vec![]
     };
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs: vec![InputDeclarationV1 {
             id: InputIdentity::parse("required").unwrap(),
             required: true,
@@ -41,7 +41,7 @@ fn fixture_with_cleanup(cleanup: bool) -> (tempfile::TempDir, PactrunPersistence
         cleanup: cleanup.then(|| CleanupV1 {
             requires: vec![],
             hook: HookV1 {
-                protocol_version: PositiveVersion::new(1).unwrap(),
+                protocol_version: crate::domain::FormatVersion::BASELINE,
                 launch: HookLaunchV1::Direct {
                     executable: file.id.clone(),
                 },
@@ -57,7 +57,7 @@ fn fixture_with_cleanup(cleanup: bool) -> (tempfile::TempDir, PactrunPersistence
         files: if cleanup { vec![file] } else { vec![] },
     })
     .unwrap();
-    let content = validate_revision_content_v1(core, runtime).unwrap();
+    let content = validate_declaration_content(core, runtime).unwrap();
     let revision = p
         .persist_revision(PackageId::from_bytes([1; 16]), &content, &publications)
         .unwrap();
@@ -104,9 +104,9 @@ fn service_fixture() -> (
     Vec<(ServiceAllocationId, std::path::PathBuf)>,
 ) {
     let (temp, p, _) = fixture();
-    let core = crate::revision_core_v2::project_revision_core_source_v2(
+    let core = crate::revision_canonical::project_service_revision_source(
         br#"{
-        "format_version":2,"inputs":[],"actions":[],"migrations":[],
+        "format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],
         "service_storages":[{"id":"one"},{"id":"two"}],"service_resources":[]
     }"#,
     )
@@ -114,7 +114,8 @@ fn service_fixture() -> (
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v2::validate_revision_content_v2(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let revision = p
         .persist_revision_internal(PackageId::from_bytes([2; 16]), &content.into(), &[], None)
         .unwrap();

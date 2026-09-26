@@ -68,7 +68,7 @@ fn json_management_catalog_and_raw_input_share_backend_facts() {
     assert_eq!(fs::read(exported).unwrap(),out);
     json_ok(&root,&["input","list","node"]); json_ok(&root,&["input","delete","node","config"]);
     let before_inspection = json_ok(&root, &["instance", "show", "node"]);
-    for args in [vec!["revision","list"],vec!["revision","show",&revision],vec!["revision","metadata","show",&revision],vec!["instance","history","list"],vec!["instance","deletion","list"],vec!["run","list"],vec!["snapshot","list"],vec!["action","list","node"],vec!["storage","upgrade"],vec!["storage","gc","--plan"]] { json_ok(&root,&args); }
+    for args in [vec!["revision","list"],vec!["revision","show",&revision],vec!["revision","metadata","show",&revision],vec!["instance","history","list"],vec!["instance","deletion","list"],vec!["run","list"],vec!["snapshot","list"],vec!["action","list","node"],vec!["storage","gc","--plan"]] { json_ok(&root,&args); }
     for field in ["note","trust"] {
         let value = if field == "note" { "not absent\n\"text\"" } else { "trusted" };
         let mut args = vec!["revision",field,"set",&revision];
@@ -115,9 +115,9 @@ fn json_raw_usage_errors_and_stable_error_references_are_not_inferred_from_text(
     let code=run(["--format","json","input","export","node","config","--output","-","--bogus"].map(OsString::from).to_vec(),Some(root.as_os_str().into()),&mut io::empty(),&mut out,&mut err);
     assert_eq!(code,2); assert!(out.is_empty());
     let value:serde_json::Value=serde_json::from_slice(&err).unwrap(); schema_tests::assert_response(&value); assert!(!root.exists());
-    let error=app_error(ApplicationError::Revision(crate::domain::RevisionCoreV1Error::stable("duplicate_property","presentation only")));
-    let reference=error.reference.as_ref().unwrap(); assert_eq!(reference.owner,"revision_core_format_v1"); assert_eq!(reference.code,"duplicate_property");
-    let fake=CliError::operation("revision_core_format_v1.duplicate_property"); assert!(fake.reference.is_none());
+    let error=app_error(ApplicationError::Revision(crate::domain::RevisionError::stable("duplicate_property","presentation only")));
+    let reference=error.reference.as_ref().unwrap(); assert_eq!(reference.owner,"revision_core"); assert_eq!(reference.code,"duplicate_property");
+    let fake=CliError::operation("revision_core.duplicate_property"); assert!(fake.reference.is_none());
     let id=RunId::generate().unwrap(); let associated=fake.with_run_context(id); out.clear(); err.clear();
     assert_eq!(report_cli_failure(presentation::Format::Json,Some("invoke"),false,associated,&mut out,&mut err),1);
     let value:serde_json::Value=serde_json::from_slice(&out).unwrap(); schema_tests::assert_response(&value);
@@ -233,4 +233,26 @@ fn json_snapshot_transport_verification_and_plan_preserve_archive_bytes() {
     let (code,failed,_)=json_invoke(&root,["instance","create","node","--revision",&reference,"--restore-from",&id].map(OsString::from).to_vec()); assert_eq!(code,1,"{failed}");
     assert_eq!(json_ok(&root,&["instance","show","node"]),current);
     json_ok(&root,&["snapshot","delete",&id]);
+}
+
+// Test-ID: PR-TEST-0625
+// Verifies: PR-REQ-0077, PR-REQ-0331
+#[test]
+fn version_reports_the_eight_explicit_supported_contracts_without_storage_access() {
+    let (temp, _, _) = cli_roots();
+    let root = temp.path().join("version-must-not-initialize");
+    let mut out=Vec::new(); let mut err=Vec::new();
+    assert_eq!(run(["--format", "json", "--version"].into_iter().map(OsString::from).collect(), Some(root.as_os_str().to_owned()), &mut io::empty(), &mut out, &mut err), 0);
+    let result: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(result["result"]["product_version"], env!("CARGO_PKG_VERSION"));
+    let formats = result["result"]["supported_formats"].as_object().unwrap();
+    assert_eq!(formats.len(), 8);
+    for domain in crate::domain::VersionDomain::ALL {
+        assert_eq!(formats[domain.name()], serde_json::json!([domain.current_text()]));
+    }
+    assert_eq!(result["result"]["default_formats"].as_object().unwrap().len(), 8);
+    for domain in crate::domain::VersionDomain::ALL {
+        assert_eq!(result["result"]["default_formats"][domain.name()], domain.current_text());
+    }
+    assert!(!root.exists()); assert!(err.is_empty());
 }

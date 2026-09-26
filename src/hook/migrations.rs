@@ -309,7 +309,7 @@ pub(super) fn advance(
                     outcome: RunOutcome::Failed,
                     primary_failure: Some(RunPrimaryFailure {
                         failure: RunFailureRecord {
-                            error: PactrunErrorRefV1::new(
+                            error: PactrunErrorRef::new(
                                 "service_storage",
                                 "allocation_unavailable",
                             )
@@ -475,11 +475,8 @@ pub(super) fn advance(
                 outcome: RunOutcome::Failed,
                 primary_failure: Some(RunPrimaryFailure {
                     failure: RunFailureRecord {
-                        error: PactrunErrorRefV1::new(
-                            "execution",
-                            "migration_publication_rejected",
-                        )
-                        .expect("registered error"),
+                        error: PactrunErrorRef::new("execution", "migration_publication_rejected")
+                            .expect("registered error"),
                         message: String::new(),
                     },
                     step: RunFailedStep::MigrationPlan(MigrationPlanStep::PublishManagedResult),

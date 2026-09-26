@@ -6,16 +6,16 @@ const V2_WORKER: &str = "hook::tests::v2_runtime::v2_action_worker";
 fn v2_action_worker() {
     let Ok(transport) = env::var(TRANSPORT_ENVIRONMENT) else { return; };
     let mut stream = connect_hook(&transport, &env::var(ENDPOINT_ENVIRONMENT).unwrap());
-    let mut preamble = [0; protocol::v2::PREAMBLE_V2.len()];
+    let mut preamble = [0; protocol::authority::PREAMBLE_V2.len()];
     stream.read_exact(&mut preamble).unwrap();
-    assert_eq!(preamble, protocol::v2::PREAMBLE_V2);
+    assert_eq!(preamble, protocol::authority::PREAMBLE_V2);
     let session = read_frame(&mut stream).unwrap();
-    assert_eq!(session["protocol_version"], 2);
+    assert_eq!(session["protocol_version"], "1.0-alpha.1");
     assert_eq!(session["operation"]["kind"], "action");
     assert!(session.get("target_commit").is_none());
     let mode = session["parameters"].as_array().unwrap().iter().find(|p| p["parameter_id"] == "mode").unwrap()["value"].as_str().unwrap();
-    stream.write_all(protocol::v2::PREAMBLE_V2).unwrap();
-    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":2,"session_id":session["session_id"]}));
+    stream.write_all(protocol::authority::PREAMBLE_V2).unwrap();
+    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}));
     write_frame(&mut stream, &json!({"type":"request","request_id":1,"request":{"kind":"enter_recovery_risk"}}));
     assert_eq!(read_frame(&mut stream).unwrap(), json!({"type":"request_ack","request_id":1,"risk_state":"open"}));
     let outputs = if mode == "ordinary" {
@@ -47,18 +47,18 @@ fn v2_action_worker() {
 fn v2_snapshot_worker() {
     let Ok(transport) = env::var(TRANSPORT_ENVIRONMENT) else { return; };
     let mut stream = connect_hook(&transport, &env::var(ENDPOINT_ENVIRONMENT).unwrap());
-    let mut preamble = [0; protocol::v2::PREAMBLE_V2.len()];
+    let mut preamble = [0; protocol::authority::PREAMBLE_V2.len()];
     stream.read_exact(&mut preamble).unwrap();
-    assert_eq!(preamble, protocol::v2::PREAMBLE_V2);
+    assert_eq!(preamble, protocol::authority::PREAMBLE_V2);
     let session = read_frame(&mut stream).unwrap();
-    assert_eq!(session["protocol_version"], 2);
+    assert_eq!(session["protocol_version"], "1.0-alpha.1");
     assert!(session.get("target_commit").is_none());
     let operation = session["operation"]["kind"].as_str().unwrap();
     let grants = session["service_authorities"].as_array().unwrap();
     assert_eq!(grants.len(), 1);
     let live = Path::new(grants[0]["path"].as_str().unwrap());
-    stream.write_all(protocol::v2::PREAMBLE_V2).unwrap();
-    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":2,"session_id":session["session_id"]}));
+    stream.write_all(protocol::authority::PREAMBLE_V2).unwrap();
+    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}));
     if operation == "snapshot_capture" {
         assert_eq!(grants[0]["mode"], "read");
         let mut representation = b"snapshot-representation:".to_vec();
@@ -90,8 +90,8 @@ fn v2_transform_worker() {
     let Ok(transport)=env::var(TRANSPORT_ENVIRONMENT) else{return;};
     let mode=env::args().find_map(|arg|arg.strip_prefix("transform-mode:").map(str::to_owned)).unwrap_or_else(||"success".into());
     let mut stream=connect_hook(&transport,&env::var(ENDPOINT_ENVIRONMENT).unwrap());
-    let mut preamble=[0;protocol::v2::PREAMBLE_V2.len()];
-    stream.read_exact(&mut preamble).unwrap(); assert_eq!(preamble,protocol::v2::PREAMBLE_V2);
+    let mut preamble=[0;protocol::authority::PREAMBLE_V2.len()];
+    stream.read_exact(&mut preamble).unwrap(); assert_eq!(preamble,protocol::authority::PREAMBLE_V2);
     let session=read_frame(&mut stream).unwrap();
     assert_eq!(session["operation"]["kind"],"migration");
     let grants=session["service_authorities"].as_array().unwrap();
@@ -100,8 +100,8 @@ fn v2_transform_worker() {
     assert!(!sources.is_empty()); assert!(!targets.is_empty());
     for source in &sources { assert_eq!(source["mode"],"read"); }
     for target in &targets { assert_eq!(target["mode"],"write"); }
-    stream.write_all(protocol::v2::PREAMBLE_V2).unwrap();
-    write_frame(&mut stream,&json!({"type":"session_ready","protocol_version":2,"session_id":session["session_id"]}));
+    stream.write_all(protocol::authority::PREAMBLE_V2).unwrap();
+    write_frame(&mut stream,&json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}));
     write_frame(&mut stream,&json!({"type":"request","request_id":1,"request":{"kind":"enter_recovery_risk"}}));
     assert_eq!(read_frame(&mut stream).unwrap()["risk_state"],"open");
     let mut bytes=b"target:".to_vec();
@@ -141,7 +141,7 @@ fn v2_transform_worker() {
 #[test]
 fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_risk_ordering() {
     let fixture = RuntimeFixture::with_source(|_, _, manifest| {
-        *manifest = manifest.replace("protocol_version: 1", "protocol_version: 2").replace(WORKER_TEST, V2_WORKER);
+        *manifest = manifest.to_owned().replace(WORKER_TEST, V2_WORKER);
     });
     let admitted = fixture.admit("direct", "ordinary", &fixture.marker("unused"));
     let run = admitted.run();
@@ -149,7 +149,7 @@ fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_ri
     assert_eq!(running_risk(&fixture.storage, run), RecoveryRiskState::Clear);
     assert!(fixture.application.advance_owner_continuation(run).unwrap());
     assert!(matches!(load_run(&fixture.storage, run).state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded));
-    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), 1);
+    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::VersionDomain::Revision.current());
     assert!(!fixture.storage.join("service-storage").exists());
 }
 
@@ -158,13 +158,13 @@ fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_ri
 #[test]
 fn installed_core_v2_can_execute_unchanged_v1_hook_without_service_authority() {
     let fixture = RuntimeFixture::with_source(|_, _, manifest| {
-        *manifest = manifest.replace("source_format: 1", "source_format: 2");
+        *manifest = manifest.to_owned();
     });
     let admitted = fixture.admit("direct", "success", &fixture.marker("unused"));
     let run = admitted.run();
     fixture.application.execute_admitted_action(admitted, policy(None, None, None), ActionCancellation::default());
     assert!(fixture.application.advance_owner_continuation(run).unwrap());
     assert!(matches!(load_run(&fixture.storage, run).state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded));
-    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), 2);
+    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::VersionDomain::Revision.current());
     assert!(!fixture.storage.join("service-storage").exists());
 }

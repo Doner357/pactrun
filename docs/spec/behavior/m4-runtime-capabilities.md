@@ -77,7 +77,7 @@ Individual stored blob lengths must fit the backend's signed 64-bit length;
 aggregate accounting and ZIP offsets use checked unsigned 64-bit arithmetic.
 These representation constraints are not new integrity-format validity rules.
 No user quota, automatic rollback, resume or new Snapshot integrity/bundle format is introduced.
-The [V10 internal persistence activation](../persistence/persistence-schema-v10.md)
+The [V10 internal persistence activation](../persistence/persistence-baseline.md)
 moves new payload bytes out of SQLite WAL while retaining atomic reference publication.
 Existing transactional publication, pins and recovery behavior remain unchanged.
 

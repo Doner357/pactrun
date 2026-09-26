@@ -34,7 +34,6 @@ pactrun snapshot show <snapshot-id>
 pactrun snapshot verify <snapshot-id>
 pactrun snapshot import <bundle-path>
 pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export
-pactrun storage upgrade
 ```
 
 The later [specialized export naming rule](./command-and-output-reference.md#pr-req-0357---specialized-envelope-export-filenames)
@@ -74,11 +73,12 @@ no Run, reservation, lease, pin, schema upgrade, or implicit reconciliation.
 Success is exit 0, syntax failure 2, operation failure/cancellation 1.
 Capture/Restore return 0 only after durable Succeeded publication. Import and
 export accept filesystem paths only; '-' and force/overwrite/resume are not
-supported. storage upgrade obeys only PR-REQ-0300's supported version matrix.
+supported. The development-era storage upgrade command is retired by E; an
+unsupported persistence store is refused without an upgrade or data deletion.
 Delete, machine-output envelopes, raw manifest, payload preview, and stable
 public Rust APIs are outside M4.
 
-**Verification: PR-TEST-0205, PR-TEST-0268, PR-TEST-0269, PR-TEST-0270, PR-TEST-0271, PR-TEST-0272, PR-TEST-0273, PR-TEST-0274.**
+**Verification: PR-TEST-0268, PR-TEST-0269, PR-TEST-0270, PR-TEST-0271, PR-TEST-0272, PR-TEST-0273, PR-TEST-0274.**
 
 S7 implements the Snapshot commands through the existing typed Compiler,
 Admission, owner continuation and dedicated result publishers. Both V1 and V2

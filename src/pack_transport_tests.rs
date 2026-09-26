@@ -20,10 +20,10 @@ fn source(parent: &Path, version: u8) -> PathBuf {
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("data.bin"), b"exact runtime bytes\0\xff").unwrap();
     fs::write(root.join("empty.bin"), b"").unwrap();
-    fs::write(root.join("pactrun.yaml"),format!("source_format: {version}\npackage_id: 00000000000000000000000000000011\nrevision: {{}}\nruntime_content:\n  files:\n    - {{id: alpha, source: data.bin, path: lib/alpha.bin, executable: true}}\n    - {{id: beta, source: data.bin, path: lib/beta.bin}}\n    - {{id: empty, source: empty.bin, path: empty.bin}}\nportable_metadata:\n  reference_labels: [{{label: stable, source: {{kind: unattributed}}}}]\n  presentation: [{{target: {{kind: revision}}, field: display_name, value: Published}}]\n  provenance: [{{kind: source_uri, source_uri: 'https://example.test/source'}}]\n")).unwrap();
+    fs::write(root.join("pactrun.yaml"),"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content:\n  files:\n    - {id: alpha, source: data.bin, path: lib/alpha.bin, executable: true}\n    - {id: beta, source: data.bin, path: lib/beta.bin}\n    - {id: empty, source: empty.bin, path: empty.bin}\nportable_metadata:\n  reference_labels: [{label: stable, source: {kind: unattributed}}]\n  presentation: [{target: {kind: revision}, field: display_name, value: Published}]\n  provenance: [{kind: source_uri, source_uri: 'https://example.test/source'}]\n").unwrap();
     if version == 3 {
         let manifest = fs::read_to_string(root.join("pactrun.yaml")).unwrap();
-        fs::write(root.join("pactrun.yaml"),manifest.replace("revision: {}","revision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: alpha}\n        args: []\n        io: {terminal: none}")).unwrap();
+        fs::write(root.join("pactrun.yaml"),manifest.replace("revision: {}","revision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: alpha}\n        args: []\n        io: {terminal: none}")).unwrap();
     }
     root
 }
@@ -376,7 +376,7 @@ fn malformed_pack_never_bypasses_validation_on_repeat_install() {
         .unwrap();
     let unpacked = temp.path().join("unpacked");
     unpack(&distribution, &unpacked);
-    fs::write(unpacked.join("pactrun.yaml"), b"source_format: 1").unwrap();
+    fs::write(unpacked.join("pactrun.yaml"), b"source_format: 1.0-alpha.1").unwrap();
     assert!(
         app.install_pack(
             &unpacked,
@@ -1006,7 +1006,7 @@ fn pack_streaming_zip_descriptors_preserve_separate_compressed_lengths() {
     let temp = roots();
     let root = store(temp.path(), "store");
     let session = StagingSession::prepare(&root).unwrap();
-    let yaml=b"source_format: 1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n";
+    let yaml=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n";
     for method in [
         zip::CompressionMethod::Stored,
         zip::CompressionMethod::Deflated,
@@ -1043,7 +1043,7 @@ fn pack_manifest_sizes_and_implicit_directory_aliases_are_preflighted() {
     let root = store(temp.path(), "store");
     let session = StagingSession::prepare(&root).unwrap();
     let path = temp.path().join("hostile.pack");
-    let manifest=b"source_format: 1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n".to_vec();
+    let manifest=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n".to_vec();
     zip_files(
         &path,
         &[("pactrun.yaml".into(), manifest.clone())],

@@ -9,7 +9,7 @@ the historical exact-only operand spellings below with unique prefixes. State
 tokens and author-assigned names retain exact matching.
 
 Current author descriptions are presented at the capability query and plan
-boundaries specified by [PR-REQ-0363](../contracts/cli-json-v1.md#pr-req-0363---capability-presentation-at-inspection-boundaries).
+boundaries specified by [PR-REQ-0363](../contracts/cli-machine-interface.md#pr-req-0363---capability-presentation-at-inspection-boundaries).
 They are not verified prerequisites, execution eligibility, or historical facts.
 
 **Status: Normative product behavior specification. Exact option spelling
@@ -160,7 +160,7 @@ and ambiguity MUST fail.
 
 Lifecycle evidence covers deletion, exact-reference resolution and ambiguity
 refusal. Catalog evidence adds list/show; C adds export and unified Pack installation.
-The approved C [Pack contract](../contracts/pack-distribution-v1.md) provides
+The approved C [Pack contract](../contracts/pack-distribution.md) provides
 `revision export` and imports through `pack install`, without a second import
 command. Consult the [implementation record](../../development/pack-transport-status.md)
 for current verification and integration status.
@@ -181,7 +181,7 @@ output. Raw and interactive Hook terminal channels MUST remain direct streams
 and MUST NOT be embedded in a JSON-style wrapper.
 
 The historical M2 baseline added no machine-readable envelope. D defines the
-[versioned JSON interface](../contracts/cli-json-v1.md) selected by a leading
+[versioned JSON interface](../contracts/cli-machine-interface.md) selected by a leading
 `--format human|json|jsonl`; human is the default. Raw Input export to stdout
 retains the payload stream boundary in PR-REQ-0266 for human and JSON modes.
 JSONL requires a file destination for raw exports. Noninteractive terminal
@@ -323,7 +323,7 @@ platform-native code-unit or byte representation. This representation is a
 human projection, not a stable machine-readable envelope. No stable JSON envelope,
 raw inspection option, Artifact export/delete command, or public Rust API is
 added by this historical spelling. Versioned machine output is now separately
-owned by the [CLI JSON contract](../contracts/cli-json-v1.md).
+owned by the [CLI JSON contract](../contracts/cli-machine-interface.md).
 
 The separately approved [managed-object lifecycle contract](./managed-object-lifecycle.md)
 adds Artifact export/delete without changing the existing Run inspection spelling
@@ -404,7 +404,7 @@ path discovery, planning and implemented execution. Recovery uses
 PR-REQ-0287; Instance deletion and `AbandonManagement` use the
 [retirement contract](../execution/m7-instance-retirement.md).
 [Managed-object lifecycle](./managed-object-lifecycle.md) separately adds
-Snapshot deletion, and [Pack transport](../contracts/pack-distribution-v1.md)
+Snapshot deletion, and [Pack transport](../contracts/pack-distribution.md)
 owns Revision import/export. These explicit later contracts preserve
 PR-REQ-0119. The fixed M2 profile MUST NOT be expanded implicitly to fill gaps
 outside these separately approved contracts.

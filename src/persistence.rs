@@ -4,6 +4,8 @@
 // application caller.
 #![allow(dead_code)]
 
+#[cfg(test)]
+mod baseline_schema_tests;
 mod chunked_blob;
 mod immutable_data;
 #[cfg(test)]
@@ -11,7 +13,7 @@ mod object_lifecycle_tests;
 mod pack_publication;
 mod runtime_content_store;
 #[cfg(test)]
-mod schema_v5_contract_tests;
+mod schema_constraint_tests;
 mod sqlite_catalog;
 mod sqlite_deletions;
 mod sqlite_diagnostics;
@@ -32,20 +34,10 @@ mod sqlite_service_views;
 mod sqlite_snapshots;
 #[cfg(test)]
 pub(crate) use sqlite_snapshots::corrupt_snapshot_for_test;
-mod sqlite_v5;
-#[cfg(test)]
-mod sqlite_v6;
-#[cfg(test)]
-mod sqlite_v7;
-#[cfg(test)]
-mod sqlite_v8;
-mod sqlite_v9;
-pub(crate) use sqlite_revision_store::SCHEMA_VERSION;
+mod writer_admission;
 pub(crate) use sqlite_snapshots::{
     SnapshotImportReceipt, SnapshotInspection, SnapshotVerification,
 };
-#[cfg(test)]
-pub(crate) use sqlite_v9::current_to_v9_fixture;
 
 /// Orders an acceptance transaction against a foreground cancellation request.
 /// Implementations run the supplied commit while holding the acceptance

@@ -40,7 +40,7 @@ The [shared obligation inventory](./shared-obligation-inventory.md) enumerates
 unnumbered paragraphs remain owned by their enclosing rules. Cited tests are
 linkage, not independent proof of every possible behavior. A's actual verification
 is in the owning [diagnostic contract](../spec/behavior/execution-diagnostics.md),
-[V11 contract](../spec/persistence/persistence-schema-v11.md) and updated Instance,
+[V11 contract](../spec/persistence/persistence-baseline.md) and updated Instance,
 Run and protection rules. B-E retain their individually assigned follow-ups.
 
 ## Verification evidence

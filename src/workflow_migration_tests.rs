@@ -41,7 +41,7 @@ fn revision(number: u8, incoming: Option<u8>, with_hook: bool) -> MigrationRevis
         executable: false,
     };
     let hook = with_hook.then(|| HookV1 {
-        protocol_version: PositiveVersion::new(1).unwrap(),
+        protocol_version: crate::domain::FormatVersion::BASELINE,
         launch: HookLaunchV1::Interpreter {
             command: HostExecutableName::parse("interpreter").unwrap(),
             interpreter_args: vec![],
@@ -52,7 +52,7 @@ fn revision(number: u8, incoming: Option<u8>, with_hook: bool) -> MigrationRevis
             terminal: TerminalContractV1::None,
         },
     });
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs: vec![],
         actions: vec![],
         snapshot: None,
@@ -78,7 +78,7 @@ fn revision(number: u8, incoming: Option<u8>, with_hook: bool) -> MigrationRevis
             PackageId::from_bytes([1; 16]),
             RevisionContentDigest::from_bytes([number; 32]),
         ),
-        content: validate_revision_content_v1(core, closure).unwrap().into(),
+        content: validate_declaration_content(core, closure).unwrap().into(),
     }
 }
 fn setup(with_hook: bool) -> (TransitionRevision, Repository) {

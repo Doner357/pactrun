@@ -616,7 +616,7 @@ pub(super) fn execute(
             }
             writeln!(
                 out,
-                "Revision: {}\nCore format: V{}",
+                "Revision: {}\nCore format: {}",
                 exact_text(&row.identity),
                 row.core.version()
             )
@@ -969,10 +969,10 @@ fn declarations(out: &mut dyn Write, core: &RevisionCore) -> Result<(), CliError
     for action in core.actions() {
         writeln!(
             out,
-            "  Action: {} (access={}, Hook protocol=V{}, parameters={}, outputs={})",
+            "  Action: {} (access={}, Hook protocol={}, parameters={}, outputs={})",
             safe(action.id.as_str()),
             access_name(action.access),
-            action.hook.protocol_version.get(),
+            action.hook.protocol_version,
             action.parameters.len(),
             action.outputs.len()
         )

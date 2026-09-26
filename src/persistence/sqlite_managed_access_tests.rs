@@ -55,7 +55,7 @@ fn managed_revision_with_inputs(
         .put_runtime_content(&digest, &mut Cursor::new(TOOL_BYTES))
         .unwrap();
     let hook = HookV1 {
-        protocol_version: PositiveVersion::new(1).unwrap(),
+        protocol_version: crate::domain::FormatVersion::BASELINE,
         launch: HookLaunchV1::Direct {
             executable: ContentId::parse("tool").unwrap(),
         },
@@ -64,7 +64,7 @@ fn managed_revision_with_inputs(
             terminal: TerminalContractV1::None,
         },
     };
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs,
         actions: vec![ActionV1 {
             id: ActionIdentity::parse("deploy").unwrap(),
@@ -100,7 +100,7 @@ fn managed_revision_with_inputs(
     .unwrap();
     p.persist_revision(
         crate::domain::PackageId::from_bytes([31; 16]),
-        &validate_revision_content_v1(core, runtime).unwrap(),
+        &validate_declaration_content(core, runtime).unwrap(),
         &[publication],
     )
     .unwrap()
@@ -163,7 +163,7 @@ fn fixture_run(
             .unwrap();
         } else {
             let manifest = SnapshotManifest::new(SnapshotManifestParts {
-                version: SnapshotIntegrityVersion::V2,
+                version: SnapshotIntegrityVersion::BASELINE,
                 snapshot_id: snapshot,
                 producer: revision.clone(),
                 origin_instance_id: view.id,

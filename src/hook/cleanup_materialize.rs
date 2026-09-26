@@ -43,10 +43,10 @@ impl MaterializedExecution {
                     "readonly_path":host_path(&path)?}));
             }
             let (program, mut arguments) =
-                launch_command(&plan.launch, &runtime, plan.hook.protocol_version.get())?;
+                launch_command(&plan.launch, &runtime, plan.hook.protocol_version)?;
             arguments.extend(plan.hook.args.iter().cloned());
             let session_id = random_handle()?;
-            let session = json!({"type":"session_start","protocol_version":plan.hook.protocol_version.get(),
+            let session = json!({"type":"session_start","protocol_version":plan.hook.protocol_version,
                 "session_id":session_id,"run_id":run.to_string(),
                 "revision":{"package_id":revision.package_id.to_string(),"revision_content_digest":revision.content_digest.to_string()},
                 "parameters":[],"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},
@@ -66,15 +66,15 @@ impl MaterializedExecution {
                 terminal: plan.hook.io.terminal,
                 capture: None,
                 migration_outputs: Vec::new(),
-                v2_state: None,
-                v2_transport: None,
+                protocol_state: None,
+                protocol_transport: None,
                 _service_access: None,
             }
             .with_service(
                 p,
                 staging,
                 run,
-                plan.hook.protocol_version.get(),
+                plan.hook.protocol_version,
                 &plan.service_bindings,
             ),
             Err(error) => {

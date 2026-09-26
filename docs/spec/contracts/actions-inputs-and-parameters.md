@@ -100,8 +100,8 @@ and
 [PR-REQ-0236](../foundations/identity-and-state.md#pr-req-0236---managed-service-resource-declaration-and-existence).
 
 The authoring spelling for `ServiceStorage` and its Managed Service Resources is
-owned by [Core V2](./revision-core-format-v2.md) and
-[source V2](./pack-source-yaml-v2.md), not introduced by this page. This
+owned by [Core V2](./revision-canonical.md) and
+[source V2](./pack-source.md), not introduced by this page. This
 section does not decide whether another kind of service-owned resource uses the
 same abstraction.
 
@@ -111,7 +111,7 @@ A ServiceStorage-backed Managed Service Resource exposure contract MUST keep
 read exposure separate from its user mutation route. Read exposure is
 conceptually hidden or readable. User mutation is conceptually unavailable,
 direct, or mediated by a Pack operation. Their M6.5 representation is specified
-by [Core V2](./revision-core-format-v2.md).
+by [Core V2](./revision-canonical.md).
 
 Direct mutation MUST mean only that the user is authorized to modify the same
 service-authoritative live state. It MUST NOT imply that the service can safely

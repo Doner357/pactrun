@@ -1,6 +1,8 @@
 use super::*;
 use crate::persistence::ManagedInputWrite;
-use crate::revision_core_v2::{project_revision_core_source_v2, validate_revision_content_v2};
+use crate::revision_canonical::{
+    project_service_revision_source, validate_service_revision_content,
+};
 use std::{
     fs,
     io::Cursor,
@@ -21,8 +23,8 @@ fn root() -> (tempfile::TempDir, PathBuf) {
 fn fixture(p: &PactrunPersistence) -> RevisionIdentity {
     // Minimal no-runtime Revision fixture for storage-focused tests. Production
     // V2 source installation is exercised separately by the operation/CLI tests.
-    let core=project_revision_core_source_v2(br#"{
-      "format_version":2,"inputs":[],"actions":[],"migrations":[],
+    let core=project_service_revision_source(br#"{
+      "format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],
       "service_storages":[{"id":"state"}],
       "service_resources":[
         {"id":"config","storage_id":"state","locator":"config.json","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}},
@@ -31,7 +33,7 @@ fn fixture(p: &PactrunPersistence) -> RevisionIdentity {
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = validate_revision_content_v2(core, runtime).unwrap();
+    let content = validate_service_revision_content(core, runtime).unwrap();
     p.persist_revision_internal(PackageId::from_bytes([65; 16]), &content.into(), &[], None)
         .unwrap()
 }
@@ -327,7 +329,7 @@ fn retained_contracts_remain_validated_with_a_v1_current_revision() {
         )
         .unwrap();
     let old = p.load_revision(&revision).unwrap().unwrap();
-    let legacy = validate_revision_content_v1(
+    let legacy = validate_declaration_content(
         old.content.core.common().clone(),
         old.content.runtime_content.clone(),
     )
@@ -800,15 +802,15 @@ fn service_cli_preserves_operation_routes_missing_parents_and_broken_output_boun
     let publication = p
         .put_runtime_content(&digest, &mut Cursor::new(payload))
         .unwrap();
-    let core = project_revision_core_source_v2(br#"{
-      "format_version":2,"inputs":[],"migrations":[],
+    let core = project_service_revision_source(br#"{
+      "format_version":"1.0-alpha.1","inputs":[],"migrations":[],
       "service_storages":[{"id":"state"}],
       "service_resources":[
         {"id":"config","storage_id":"state","locator":"config.json","kind":"file","read_exposure":"readable","user_mutation":{"kind":"operation","action_id":"edit"}},
         {"id":"nested","storage_id":"state","locator":"parent/file","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}}
       ],
       "actions":[{"id":"edit","access":"mutate","parameters":[],"outputs":[],"hook":{
-        "protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},
+        "protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},
         "service_access":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"mode":"write"}],"service_requires":[]
       }}]
     }"#).unwrap();
@@ -822,7 +824,7 @@ fn service_cli_preserves_operation_routes_missing_parents_and_broken_output_boun
         }],
     })
     .unwrap();
-    let content = validate_revision_content_v2(core, runtime).unwrap();
+    let content = validate_service_revision_content(core, runtime).unwrap();
     let revision = p
         .persist_revision_internal(
             PackageId::from_bytes([65; 16]),
@@ -914,7 +916,7 @@ fn compiled_service_associations_are_revalidated_and_pins_are_atomic_and_owner_s
     let base = fixture(&p);
     let base = p.load_revision(&base).unwrap().unwrap();
     let mut source: serde_json::Value = serde_json::from_slice(
-        &crate::revision_core_v2::encode_canonical_revision_core_v2(
+        &crate::revision_canonical::encode_canonical_service_revision(
             base.content.core.service_core().unwrap(),
         )
         .unwrap(),
@@ -922,10 +924,10 @@ fn compiled_service_associations_are_revalidated_and_pins_are_atomic_and_owner_s
     .unwrap();
     let reference = json!({"view":"current","role":"active","kind":"resource","id":"config"});
     source["actions"] = json!([{"id":"inspect","access":"observe","parameters":[],"outputs":[],"hook":{
-        "protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},
+        "protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},
         "service_access":[{"reference":reference,"mode":"read"}],"service_requires":[{"reference":reference,"presence":"absent"}]
     }}]);
-    let core = project_revision_core_source_v2(&serde_json::to_vec(&source).unwrap()).unwrap();
+    let core = project_service_revision_source(&serde_json::to_vec(&source).unwrap()).unwrap();
     let bytes = b"metadata pin fixture; not executed";
     let digest = Sha256Digest::from_bytes(sha2::Sha256::digest(bytes).into());
     let publication = p
@@ -941,7 +943,7 @@ fn compiled_service_associations_are_revalidated_and_pins_are_atomic_and_owner_s
         }],
     })
     .unwrap();
-    let content = validate_revision_content_v2(core, runtime).unwrap();
+    let content = validate_service_revision_content(core, runtime).unwrap();
     let revision = p
         .persist_revision_internal(
             PackageId::from_bytes([65; 16]),
@@ -1148,28 +1150,28 @@ fn real_v2_service_operations_use_isolated_live_storage_and_preserve_recovery_bo
     let (_temp, root) = root();
     let p = PactrunPersistence::open(&root).unwrap();
     let executable = fs::read(std::env::current_exe().unwrap()).unwrap();
-    let core = project_revision_core_source_v2(br#"{
-      "format_version":2,"inputs":[],"migrations":[],"service_storages":[{"id":"state"}],
+    let core = project_service_revision_source(br#"{
+      "format_version":"1.0-alpha.1","inputs":[],"migrations":[],"service_storages":[{"id":"state"}],
       "service_resources":[{"id":"config","storage_id":"state","locator":"config.json","kind":"file","read_exposure":"hidden","user_mutation":{"kind":"unavailable"}}],
       "actions":[{"id":"initialize","access":"mutate","parameters":[{"id":"mode","type":"string","sensitive":false,"default":"storage"}],"outputs":[],"hook":{
-        "protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_action_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
+        "protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_action_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
         "service_access":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"mode":"write"}],
         "service_requires":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"presence":"absent"}]
       }}],
       "snapshot":{
         "capture":{"access":"observe","parameters":[],"hook":{
-          "protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_snapshot_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
+          "protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_snapshot_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
           "service_access":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"mode":"read"}],
           "service_requires":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"presence":"present"}]
         }},
         "restore":{"parameters":[],"hook":{
-          "protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_snapshot_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
+          "protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_snapshot_worker","--nocapture","--test-threads=1"],"io":{"terminal":"none"},
           "service_access":[{"reference":{"view":"current","role":"active","kind":"resource","id":"config"},"mode":"write"}],"service_requires":[]
         }}
       }
     }"#).unwrap();
     let mut definition: serde_json::Value = serde_json::from_slice(
-        &crate::revision_core_v2::encode_canonical_revision_core_v2(&core).unwrap(),
+        &crate::revision_canonical::encode_canonical_service_revision(&core).unwrap(),
     )
     .unwrap();
     definition.as_object_mut().unwrap().remove("format_version");
@@ -1177,7 +1179,7 @@ fn real_v2_service_operations_use_isolated_live_storage_and_preserve_recovery_bo
     fs::create_dir(&source).unwrap();
     fs::write(source.join("tool"), executable).unwrap();
     fs::write(source.join("pactrun.yaml"), format!(
-        "source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n"
+        "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n"
     )).unwrap();
     let app = PactrunApplication::open(&root).unwrap();
     let revision = app
@@ -1344,11 +1346,11 @@ fn compatible_service_targets(p: &PactrunPersistence) -> [RevisionIdentity; 3] {
                    storage_source: &str,
                    resources: Vec<Value>,
                    transitions: Value| {
-        let core = project_revision_core_source_v2(&serde_json::to_vec(&json!({"format_version":2,"inputs":[],"actions":[],
+        let core = project_service_revision_source(&serde_json::to_vec(&json!({"format_version":"1.0-alpha.1","inputs":[],"actions":[],
             "service_storages":[{"id":"data"}],"service_resources":resources,
             "migrations":[{"source_revision_digest":source.content_digest.to_string(),"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],
                 "storage_transitions":[{"kind":"reuse","source":{"role":"active","storage_id":storage_source},"target_storage_id":"data"}],"resource_transitions":transitions}]})).unwrap()).unwrap();
-        let content = validate_revision_content_v2(
+        let content = validate_service_revision_content(
             core,
             project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
                 .unwrap(),
@@ -1577,11 +1579,11 @@ fn new_target_storage_is_protected_before_publication_and_retry_keeps_its_select
     let (_temp, root) = root();
     let p = PactrunPersistence::open(&root).unwrap();
     let source = fixture(&p);
-    let core = project_revision_core_source_v2(&serde_json::to_vec(&json!({"format_version":2,"inputs":[],"actions":[],
+    let core = project_service_revision_source(&serde_json::to_vec(&json!({"format_version":"1.0-alpha.1","inputs":[],"actions":[],
         "service_storages":[{"id":"fresh"}],"service_resources":[{"id":"fresh_config","storage_id":"fresh","locator":"config.json","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}}],
         "migrations":[{"source_revision_digest":source.content_digest.to_string(),"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],
             "storage_transitions":[{"kind":"create","target_storage_id":"fresh"}],"resource_transitions":[{"kind":"create","target_resource_id":"fresh_config","presence":"absent"}]}]})).unwrap()).unwrap();
-    let content = validate_revision_content_v2(
+    let content = validate_service_revision_content(
         core,
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap(),
@@ -1724,12 +1726,12 @@ fn transform_target(
 ) -> RevisionIdentity {
     use serde_json::json;
     let bytes = fs::read(std::env::current_exe().unwrap()).unwrap();
-    let mut definition = json!({"format_version":2,"inputs":[],"actions":[],
+    let mut definition = json!({"format_version":"1.0-alpha.1","inputs":[],"actions":[],
         "service_storages":[{"id":"target_store"}],"service_resources":[{"id":"settings","storage_id":"target_store","locator":"settings.json","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}}],
         "migrations":[{"source_revision_digest":source.content_digest.to_string(),"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],
             "storage_transitions":[{"kind":"create","target_storage_id":"target_store"}],
             "resource_transitions":[{"kind":"transform","sources":[{"role":"active","resource_id":"config"}],"targets":["settings"]}],
-            "hook":{"protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_transform_worker","--nocapture","--test-threads=1","--skip",format!("transform-mode:{mode}")],"io":{"terminal":"none"},"service_requires":[],
+            "hook":{"protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":["--exact","hook::tests::v2_runtime::v2_transform_worker","--nocapture","--test-threads=1","--skip",format!("transform-mode:{mode}")],"io":{"terminal":"none"},"service_requires":[],
                 "service_access":[{"reference":{"view":"source","role":"active","kind":"resource","id":"config"},"mode":"read"},{"reference":{"view":"target","role":"active","kind":"resource","id":"settings"},"mode":"write"}]}}]});
     if matches!(mode, "outputs" | "bad_output") {
         definition["inputs"] = json!([{"id":"result","required":true,"protection":"normal"}]);
@@ -1753,7 +1755,7 @@ fn transform_target(
     let source_directory = tempfile::tempdir_in(root.parent().unwrap()).unwrap();
     fs::write(source_directory.path().join("tool"), bytes).unwrap();
     fs::write(source_directory.path().join("pactrun.yaml"), format!(
-        "source_format: 2\npackage_id: {}\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n", source.package_id
+        "source_format: 1.0-alpha.1\npackage_id: {}\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n", source.package_id
     )).unwrap();
     crate::application::PactrunApplication::open(root)
         .unwrap()
@@ -2008,13 +2010,13 @@ fn committed_transform_output_and_service_boundary_survive_a_later_edge_crash() 
     let p = PactrunPersistence::open(&root).unwrap();
     let source = fixture(&p);
     let intermediate = transform_target(&p, &source, "outputs");
-    let core=project_revision_core_source_v2(&serde_json::to_vec(&json!({"format_version":2,
+    let core=project_service_revision_source(&serde_json::to_vec(&json!({"format_version":"1.0-alpha.1",
         "inputs":[{"id":"final","required":true,"protection":"normal"}],"actions":[],
         "service_storages":[{"id":"target_store"}],"service_resources":[{"id":"settings","storage_id":"target_store","locator":"settings.json","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}}],
         "migrations":[{"source_revision_digest":intermediate.content_digest.to_string(),"transitions":[{"kind":"carry","source":{"role":"active","input_id":"result"},"target_input_id":"final"}],"requires_source":[],"requires_target":["final"],"produces_target":[],
         "storage_transitions":[{"kind":"reuse","source":{"role":"active","storage_id":"target_store"},"target_storage_id":"target_store"}],
         "resource_transitions":[{"kind":"reuse","source":{"role":"active","resource_id":"settings"},"target_resource_id":"settings"}]}]})).unwrap()).unwrap();
-    let content = validate_revision_content_v2(
+    let content = validate_service_revision_content(
         core,
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap(),
@@ -2245,7 +2247,7 @@ fn real_split_merge_chain_publishes_each_edge_and_preserves_a_failed_second_targ
         let template = transform_target(&p, &source, "success");
         let stored = p.load_revision(&template).unwrap().unwrap();
         let template_json: serde_json::Value = serde_json::from_slice(
-            &crate::revision_core_v2::encode_canonical_revision_core_v2(
+            &crate::revision_canonical::encode_canonical_service_revision(
                 stored.content.core.service_core().unwrap(),
             )
             .unwrap(),
@@ -2281,9 +2283,10 @@ fn real_split_merge_chain_publishes_each_edge_and_preserves_a_failed_second_targ
                 "reference":{"view":"target","role":"active","kind":"resource","id":id},"mode":"write"
             }))).collect::<Vec<_>>());
             let core =
-                project_revision_core_source_v2(&serde_json::to_vec(&definition).unwrap()).unwrap();
+                project_service_revision_source(&serde_json::to_vec(&definition).unwrap()).unwrap();
             let content =
-                validate_revision_content_v2(core, stored.content.runtime_content.clone()).unwrap();
+                validate_service_revision_content(core, stored.content.runtime_content.clone())
+                    .unwrap();
             let bytes = fs::read(std::env::current_exe().unwrap()).unwrap();
             let publication = p
                 .put_runtime_content(
@@ -2408,14 +2411,14 @@ fn declarative_resource_creation_checks_explicit_presence_without_adopting_or_co
             let (_temp, root) = root();
             let p = PactrunPersistence::open(&root).unwrap();
             let source = fixture(&p);
-            let core = project_revision_core_source_v2(&serde_json::to_vec(&json!({
-                "format_version":2,"inputs":[],"actions":[],"service_storages":[{"id":"state"}],
+            let core = project_service_revision_source(&serde_json::to_vec(&json!({
+                "format_version":"1.0-alpha.1","inputs":[],"actions":[],"service_storages":[{"id":"state"}],
                 "service_resources":[{"id":"imported","storage_id":"state","locator":"unmapped.bin","kind":"file","read_exposure":"readable","user_mutation":{"kind":"direct"}}],
                 "migrations":[{"source_revision_digest":source.content_digest.to_string(),"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],
                     "storage_transitions":[{"kind":"reuse","source":{"role":"active","storage_id":"state"},"target_storage_id":"state"}],
                     "resource_transitions":[{"kind":"create","target_resource_id":"imported","presence":predicate}]}]
             })).unwrap()).unwrap();
-            let content = validate_revision_content_v2(
+            let content = validate_service_revision_content(
                 core,
                 project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 {
                     files: vec![],
@@ -2560,14 +2563,17 @@ fn public_source_version_dispatch_rejects_invalid_v2_before_durable_blob_or_revi
         names
     };
     let before = blob_entries();
-    let valid = "source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\nruntime_content:\n  files: [{id: payload, source: payload.bin, path: payload.bin}]\n";
+    let valid = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\nruntime_content:\n  files: [{id: payload, source: payload.bin, path: payload.bin}]\n";
     for invalid in [
-        valid.replace("source_format: 2", "source_format: 1"),
-        valid.replace("source_format: 2", "source_format: 2.0"),
-        valid.replace("source_format: 2", "source_format: '2'"),
+        valid.replace("source_format: 1.0-alpha.1", "source_format: 1"),
+        valid.replace("source_format: 1.0-alpha.1", "source_format: 2.0"),
+        valid.replace("source_format: 1.0-alpha.1", "source_format: '2'"),
         // V3 is explicitly supported; V4 must still fail before publication.
-        valid.replace("source_format: 2", "source_format: 4"),
-        valid.replace("source_format: 2", "source_format: 2\nsource_format: 1"),
+        valid.replace("source_format: 1.0-alpha.1", "source_format: 4"),
+        valid.replace(
+            "source_format: 1.0-alpha.1",
+            "source_format: 1.0-alpha.1\nsource_format: 1.0-alpha.1",
+        ),
         valid.replace(
             "  service_storages:",
             "  unknown_field: true\n  service_storages:",

@@ -201,7 +201,7 @@ storage-lifetime finalization, and normal deletion MUST NOT succeed until the
 provided storage lifetime has ended.
 
 The Frozen completion rule in
-[PR-REQ-0216](../contracts/hook-protocol-v1.md#pr-req-0216---operation-completion-and-terminal-states)
+[PR-REQ-0216](../contracts/hook-protocol.md#pr-req-0216---operation-completion-and-terminal-states)
 remains authoritative: loss before accepted completion prevents protocol
 success, Pactrun MUST NOT infer replay or compensation, and
 `completion_accepted` does not itself imply a Run or Instance commit. Therefore,

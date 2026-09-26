@@ -64,7 +64,7 @@ content must not introduce the reverse content-lock acquisition order.
 
 Owning requirements: PR-REQ-0072 through PR-REQ-0076,
 [PR-REQ-0341 through PR-REQ-0344](../spec/behavior/managed-object-lifecycle.md), and
-[PR-REQ-0345](../spec/persistence/persistence-schema-v9.md).
+[PR-REQ-0345](../spec/persistence/persistence-baseline.md).
 
 Earlier Artifact acceptance is recorded below. Historical acceptance is not
 evidence for the subsequent whole-lifecycle changes. The separately authorized

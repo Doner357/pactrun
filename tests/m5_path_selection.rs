@@ -37,7 +37,7 @@ fn install(root: &Path, source: &Path, edges: &[(&str, bool)]) -> String {
             "    - source_revision_digest: {}\n      transitions: []\n      requires_source: {}\n      requires_target: []\n      produces_target: []\n",
             revision.rsplit('/').next().unwrap(), if *required { "[{role: active, input_id: config}]" } else { "[]" })).collect::<String>())
     };
-    fs::write(source.join("pactrun.yaml"), format!("source_format: 1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - id: config\n      protection: secret\n  actions: []\n{edges}runtime_content:\n  files: []\n")).unwrap();
+    fs::write(source.join("pactrun.yaml"), format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - id: config\n      protection: secret\n  actions: []\n{edges}runtime_content:\n  files: []\n")).unwrap();
     successful(root, &["pack", "install", source.to_str().unwrap()])
         .lines()
         .next()
@@ -233,7 +233,7 @@ fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_out
 fn json_migration_discovery_plan_and_execution_use_one_complete_response() {
     let f = setup(false);
     let schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../docs/spec/contracts/cli-json-v1.schema.json"
+        "../docs/spec/contracts/cli-machine.schema.json"
     ))
     .unwrap();
     let validator = jsonschema::validator_for(&schema).unwrap();
@@ -477,7 +477,7 @@ fn operator_acquisition_and_invalid_target_fail_without_acceptance() {
 // Test-ID: PR-TEST-0300
 // Verifies: PR-REQ-0309, PR-REQ-0345
 #[test]
-fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids() {
+fn real_cli_refuses_unsupported_storage_without_mutating_inputs_or_path_ids() {
     let f = setup(false);
     let input = f.source.join("upgrade-secret");
     fs::write(&input, b"preserved secret bytes").unwrap();
@@ -498,56 +498,11 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
         &["instance", "migration-paths", "demo", "--to", &f.c],
     ));
     {
-        // Build the exact predecessor without discarding any product object.
-        let mut db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
-        assert_eq!(
-            db.query_row("SELECT count(*) FROM writable_admissions", [], |r| r
-                .get::<_, i64>(0))
-                .unwrap(),
-            0
-        );
-        let tx = db.transaction().unwrap();
-        for table in ["run_diagnostic_events", "run_diagnostic_collections"] {
-            assert_eq!(
-                tx.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
-                    .get::<_, i64>(0))
-                    .unwrap(),
-                0
-            );
-        }
-        tx.execute_batch(
-            "DROP TABLE run_diagnostic_events; DROP TABLE run_diagnostic_collections;",
-        )
-        .unwrap();
-        assert_eq!(
-            tx.query_row::<i64, _, _>(
-                "SELECT count(*) FROM snapshot_blobs WHERE storage_kind=1",
-                [],
-                |r| r.get(0)
-            )
-            .unwrap(),
-            0
-        );
-        assert_eq!(
-            tx.query_row::<i64, _, _>(
-                "SELECT count(*) FROM managed_input_payloads WHERE content_digest IS NOT NULL",
-                [],
-                |r| r.get(0)
-            )
-            .unwrap(),
-            0
-        );
-        tx.execute_batch("ALTER TABLE snapshot_blobs DROP COLUMN storage_kind; ALTER TABLE managed_input_payloads DROP COLUMN content_digest;").unwrap();
-        tx.execute_batch(
-            include_str!("../src/persistence/persistence_schema_v8_additions.sql")
-                .split("CREATE TABLE instance_history_identities")
-                .next()
-                .unwrap(),
-        )
-        .unwrap();
-        tx.pragma_update(None, "user_version", 8).unwrap();
-        tx.commit().unwrap();
+        // Test-only unsupported marker; preserve all objects and schema bytes.
+        let db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
+        db.pragma_update(None, "user_version", 8).unwrap();
     }
+    let database_before = fs::read(f.root.join("database/pactrun.sqlite3")).unwrap();
     let rejected = command(
         &f.root,
         &["instance", "migration-paths", "demo", "--to", &f.c],
@@ -556,7 +511,7 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
     assert!(
         String::from_utf8(rejected.stderr)
             .unwrap()
-            .contains("explicit pactrun storage upgrade")
+            .contains("unsupported")
     );
     assert_eq!(
         command(&f.root, &["storage", "upgrade", "--force"])
@@ -564,9 +519,20 @@ fn real_cli_requires_explicit_predecessor_upgrade_preserving_inputs_and_path_ids
             .code(),
         Some(2)
     );
-    let first = successful(&f.root, &["storage", "upgrade"]);
-    assert!(first.contains("V11 (upgraded)"));
-    assert!(successful(&f.root, &["storage", "upgrade"]).contains("V11 (already current)"));
+    assert_eq!(
+        command(&f.root, &["storage", "upgrade"]).status.code(),
+        Some(2)
+    );
+    assert_eq!(
+        fs::read(f.root.join("database/pactrun.sqlite3")).unwrap(),
+        database_before
+    );
+    // Restore only the deliberately corrupted marker in this disposable fixture.
+    // This is not an upgrade mechanism and is never exposed by the product.
+    {
+        let db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
+        db.pragma_update(None, "user_version", 0).unwrap();
+    }
     assert_eq!(
         paths,
         ids(&successful(
@@ -609,7 +575,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 11);
+    assert_eq!(version, 0);
 }
 
 // Test-ID: PR-TEST-0290
@@ -885,11 +851,11 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
     let f = setup(false);
     let before = successful(&f.root, &["instance", "show", "demo"]);
     fs::write(f.source.join("tool"), b"must never be launched").unwrap();
-    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs: []\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []\n      hook:\n        protocol_version: 1\n        launch: {{ kind: direct, executable: tool }}\n        args: []\n        io: {{ terminal: none }}\nruntime_content:\n  files:\n    - {{ id: tool, source: tool, path: bin/tool, executable: true }}\n",f.c.rsplit('/').next().unwrap())).unwrap();
+    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs: []\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: []\n        io: {{ terminal: none }}\nruntime_content:\n  files:\n    - {{ id: tool, source: tool, path: bin/tool, executable: true }}\n",f.c.rsplit('/').next().unwrap())).unwrap();
     let manifest = fs::read_to_string(f.source.join("pactrun.yaml")).unwrap();
     fs::write(
         f.source.join("pactrun.yaml"),
-        manifest.replace("protocol_version: 1", "protocol_version: 3"),
+        manifest.replace("protocol_version: 1.0-alpha.1", "protocol_version: 3"),
     )
     .unwrap();
     let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])
@@ -935,7 +901,7 @@ fn real_cli_requires_declassification_authorization_and_releases_only_the_target
             data.to_str().unwrap(),
         ],
     );
-    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - {{ id: released, required: true }}\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions:\n        - {{ kind: declassify, source: {{ role: active, input_id: config }}, target_input_id: released }}\n      requires_source: [{{role: active, input_id: config}}]\n      requires_target: []\n      produces_target: []\nruntime_content:\n  files: []\n",f.a.rsplit('/').next().unwrap())).unwrap();
+    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - {{ id: released, required: true }}\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions:\n        - {{ kind: declassify, source: {{ role: active, input_id: config }}, target_input_id: released }}\n      requires_source: [{{role: active, input_id: config}}]\n      requires_target: []\n      produces_target: []\nruntime_content:\n  files: []\n",f.a.rsplit('/').next().unwrap())).unwrap();
     let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])
         .lines()
         .next()

@@ -20,7 +20,7 @@ the reconstructed Gitea trial.
 
 - [PR-REQ-0361/0362](../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0361---owner-private-ipc-initialization)
   own fallback, isolation, private Loader evidence and error-stage semantics.
-- [PR-REQ-0363](../spec/contracts/cli-json-v1.md#pr-req-0363---capability-presentation-at-inspection-boundaries)
+- [PR-REQ-0363](../spec/contracts/cli-machine-interface.md#pr-req-0363---capability-presentation-at-inspection-boundaries)
   owns current author information at existing query and plan boundaries.
 - The error catalog adds two execution identities; CLI JSON V1 adds presentation
   and nullable safe failure detail. No existing error code is repurposed, no

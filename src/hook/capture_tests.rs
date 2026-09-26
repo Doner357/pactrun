@@ -24,7 +24,7 @@ fn fixture(access: &str) -> RuntimeFixture {
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "{CAPTURE_WORKER}", "--nocapture"]
         io: {{ terminal: none }}
@@ -230,7 +230,7 @@ fn manifest(
             |r| r.get::<_, Vec<u8>>(0),
         )
         .unwrap();
-    crate::snapshot_integrity::decode_snapshot_manifest(SnapshotIntegrityVersion::V2, &raw, None)
+    crate::snapshot_integrity::decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, &raw, None)
         .unwrap()
 }
 
@@ -393,7 +393,7 @@ fn real_observe_and_mutate_capture_publish_v2_from_the_pinned_active_view() {
         assert_eq!(outcome.hook_completion.unwrap().message, None);
         let id = result_id(&f, run);
         let saved = manifest(&f, id);
-        assert_eq!(saved.manifest().version(), SnapshotIntegrityVersion::V2);
+        assert_eq!(saved.manifest().version(), SnapshotIntegrityVersion::BASELINE);
         let bindings = saved.manifest().managed_bindings();
         assert_eq!(bindings.len(), 2);
         assert!(
@@ -541,7 +541,7 @@ fn capture_hook_worker() {
     }
     write_frame(
         &mut stream,
-        &json!({"type":"session_ready","protocol_version":1,"session_id":session["session_id"]}),
+        &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}),
     );
     fs::write(marker_variant(&marker, "ready"), b"").unwrap();
     if mode == "hang" {

@@ -130,7 +130,6 @@ Usage:\n\
   pactrun snapshot import <bundle-path>\n\
   pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export\n\
     Always appends .snapshot: backup -> backup.snapshot; backup.snapshot -> backup.snapshot.snapshot.\n\
-  pactrun storage upgrade\n\
   pactrun storage gc [--plan]\n\
 \n\
 Hook execution options: --no-retain-hook-text omits saved Hook text; live output stays enabled.\n\
@@ -229,7 +228,6 @@ enum Command {
         run: Selector<RunId>,
     },
     ReconcileRuns,
-    UpgradeStorage,
 }
 
 #[derive(Clone)]
@@ -811,11 +809,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
                     plan,
                 }));
             }
-            if operation != "upgrade" {
-                return Err(CliError::usage("unknown storage command"));
-            }
-            require_end(&mut parser)?;
-            Ok(Command::UpgradeStorage)
+            Err(CliError::usage("unknown storage command"))
         }
         _ => Err(CliError::usage(format!("unknown command {first:?}"))),
     }
@@ -1242,6 +1236,18 @@ fn execute(
                 "version",
                 &presentation::Version {
                     product_version: env!("CARGO_PKG_VERSION"),
+                    build_target: env!("PACTRUN_BUILD_TARGET"),
+                    rustc: env!("PACTRUN_BUILD_RUSTC"),
+                    source_commit: option_env!("PACTRUN_BUILD_SOURCE_COMMIT"),
+                    source_manifest_sha256: option_env!("PACTRUN_BUILD_SOURCE_MANIFEST"),
+                    supported_formats: crate::domain::VersionDomain::ALL
+                        .into_iter()
+                        .map(|domain| (domain.name(), vec![domain.current_text()]))
+                        .collect(),
+                    default_formats: crate::domain::VersionDomain::ALL
+                        .into_iter()
+                        .map(|domain| (domain.name(), domain.current_text()))
+                        .collect(),
                 },
                 stdout,
                 |value, out| {
@@ -1323,35 +1329,6 @@ fn execute(
     }
     if let Command::ServiceStorage(command) = command {
         return service_storage::execute(command, &storage_root, stdout, format);
-    }
-    if matches!(command, Command::UpgradeStorage) {
-        if !storage_root.is_absolute() {
-            return Err(CliError::operation("PACTRUN_STORAGE_ROOT must be absolute"));
-        }
-        let upgraded = crate::persistence::PactrunPersistence::upgrade_storage(&storage_root)
-            .map_err(|error| CliError::operation(error.to_string()))?;
-        return render(
-            format,
-            "storage upgrade",
-            &presentation::StorageUpgrade {
-                schema_version: crate::persistence::SCHEMA_VERSION,
-                upgraded,
-            },
-            stdout,
-            |value, out| {
-                writeln!(
-                    out,
-                    "storage schema: V{} ({})",
-                    value.schema_version,
-                    if value.upgraded {
-                        "upgraded"
-                    } else {
-                        "already current"
-                    }
-                )
-                .map_err(io_operation)
-            },
-        );
     }
     if let Command::Catalog(command) = command {
         return catalog::execute(command, &storage_root, stdout, format);
@@ -1996,7 +1973,6 @@ fn execute(
         | Command::Catalog(_)
         | Command::Version
         | Command::GeneratePackageId
-        | Command::UpgradeStorage
         | Command::Artifact(_)
         | Command::Lifecycle(_)
         | Command::Migration(_)
@@ -3008,14 +2984,14 @@ fn preserve_error_facts(error: &ApplicationError, result: &mut CliError) {
     }
     let reference = match error {
         ApplicationError::Revision(e) => e.stable_ref(),
-        ApplicationError::RevisionContent(crate::revision_content::RevisionContentError::V1(e)) => {
-            e.stable_ref()
-        }
+        ApplicationError::RevisionContent(
+            crate::revision_content::RevisionContentError::Declarations(e),
+        ) => e.stable_ref(),
         _ => {
             let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
             let mut reference = None;
             while let Some(current) = source {
-                if let Some(core) = current.downcast_ref::<crate::domain::RevisionCoreV1Error>() {
+                if let Some(core) = current.downcast_ref::<crate::domain::RevisionError>() {
                     reference = core.stable_ref();
                     break;
                 }
@@ -3156,7 +3132,7 @@ fn failure_detail(record: &crate::domain::RunFailureRecord) -> Option<&str> {
     }
 }
 
-fn failure_explanation(error: &crate::domain::PactrunErrorRefV1) -> &'static str {
+fn failure_explanation(error: &crate::domain::PactrunErrorRef) -> &'static str {
     match (error.owner(), error.code()) {
         ("execution", "ipc_initialization_failed") => {
             "IPC could not be initialized before the user Hook started."
@@ -3183,13 +3159,13 @@ fn failure_explanation(error: &crate::domain::PactrunErrorRefV1) -> &'static str
         ("admission", "plan_invalidated") => {
             "The current state no longer satisfies the accepted plan's admission requirements."
         }
-        ("hook_protocol_v1" | "hook_protocol_v2", "unexpected_message") => {
+        ("hook_protocol", "unexpected_message") => {
             "A Hook message was not permitted at this protocol stage."
         }
-        ("hook_protocol_v1" | "hook_protocol_v2", "invalid_message") => {
+        ("hook_protocol", "invalid_message") => {
             "A Hook message did not satisfy the protocol contract; its raw content is not displayed."
         }
-        ("hook_protocol_v1" | "hook_protocol_v2", _) => {
+        ("hook_protocol", _) => {
             "Hook protocol validation failed; the exact taxonomy code identifies the violated rule."
         }
         ("service_storage", _) => {
@@ -3380,7 +3356,7 @@ mod tests {
         fs::create_dir(&source).unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000021
 revision:
   inputs:
@@ -3424,7 +3400,7 @@ portable_metadata:
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1
+                r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000036
 revision:
   inputs: []
@@ -3434,7 +3410,7 @@ revision:
       parameters:
         - {{ id: value, type: string, sensitive: false }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: []
         io: {{ terminal: none }}
@@ -3473,7 +3449,7 @@ runtime_content:
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1
+                r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000037
 revision:
   inputs:
@@ -3487,7 +3463,7 @@ revision:
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "hook::tests::m3_hook_worker", "--nocapture", "--test-threads=1", "slice4-argument-tail"]
         io: {{ terminal: none }}
@@ -3714,7 +3690,7 @@ runtime_content:
                     finished_at_unix_ms: 20,
                     primary_failure: Some(crate::domain::RunPrimaryFailure {
                         failure: crate::domain::RunFailureRecord {
-                            error: crate::domain::PactrunErrorRefV1::new(
+                            error: crate::domain::PactrunErrorRef::new(
                                 "execution",
                                 "launch_failed",
                             )
@@ -3724,7 +3700,7 @@ runtime_content:
                         step: crate::domain::RunFailedStep::Plan(ActionPlanStep::LaunchHook),
                     }),
                     secondary_failures: vec![crate::domain::RunFailureRecord {
-                        error: crate::domain::PactrunErrorRefV1::new(
+                        error: crate::domain::PactrunErrorRef::new(
                             "execution",
                             "workspace_cleanup_failed",
                         )

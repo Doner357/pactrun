@@ -115,7 +115,7 @@ installation context, not authoring content.
 In `RevisionCoreFormatV1`, capability-specific fixed prerequisites are
 semantics of the capability kind. They are not an author-configurable generic
 requirements block. The exact identity projection is defined by
-[Revision Core Format V1](./revision-core-format-v1.md).
+[Revision Core Format V1](./revision-canonical.md).
 
 The displayed normalized model reflects capabilities representable by the
 current Frozen format. The accepted future architecture requires a versioned

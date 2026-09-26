@@ -293,7 +293,7 @@ An error arising during cleanup or failure handling may be primary only when no
 earlier workflow-causal failure exists and that error itself prevents intended
 workflow completion. This ordering is cross-referenced with the Hook completion
 representation in [PR-REQ-0223](../contracts/error-taxonomy-v1.md#pr-req-0223---error-identity-is-not-outcome-or-precedence)
-and [PR-REQ-0212](../contracts/hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion).
+and [PR-REQ-0212](../contracts/hook-protocol.md#pr-req-0212---managed-output-authorities-and-completion).
 
 **Verification: PR-TEST-0107, PR-TEST-0110, PR-TEST-0152, PR-TEST-0170.**
 

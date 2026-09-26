@@ -229,8 +229,8 @@ automatic rollback or Revision-inclusive bundle is included.
 
 The design gates below are now closed by the approved
 [baseline](./design-notes/shell-adapter-loader-baseline.md), the owning
-[Core V3](../spec/contracts/revision-core-format-v3.md),
-[YAML V3](../spec/contracts/pack-source-yaml-v3.md) and
+[Core V3](../spec/contracts/revision-canonical.md),
+[YAML V3](../spec/contracts/pack-source.md) and
 [Loader](../spec/contracts/shell-loader.md) contracts. The
 [implementation record](./shell-adapter-loader-status.md) supplies actual evidence;
 the original purpose, rationale and acceptance criteria below are retained.
@@ -242,8 +242,8 @@ workflow engine. The [Hook contract](../spec/contracts/hooks-recovery-and-cleanu
 already allows wrappers and SDKs that preserve one canonical semantic protocol.
 The internal process adapter is not a public shell SDK.
 
-[Hook V1](../spec/contracts/hook-protocol-v1.md) and
-[Hook V2](../spec/contracts/hook-protocol-v2.md) provide the wire and state machines.
+[Hook V1](../spec/contracts/hook-protocol.md) and
+[Hook V2](../spec/contracts/hook-protocol.md) provide the wire and state machines.
 Framing uses a 4-byte U32BE length and a separate 16 MiB frame limit; this work
 does not replace it with another wire format.
 

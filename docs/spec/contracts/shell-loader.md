@@ -7,8 +7,8 @@ title: Shell Loader
 **Status: Implemented normative adapter contract; non-Frozen.**
 
 <!-- spec-navigation:start -->
-Read [Core V3](./revision-core-format-v3.md), [Hook V1](./hook-protocol-v1.md)
-and [Hook V2](./hook-protocol-v2.md). The
+Read [Core V3](./revision-canonical.md), [Hook V1](./hook-protocol.md)
+and [Hook V2](./hook-protocol.md). The
 [implementation record](../../development/shell-adapter-loader-status.md) separates
 implementation from acceptance and format Freeze.
 The [executable-lifetime fix](../../development/executable-lifetime-fix-status.md)

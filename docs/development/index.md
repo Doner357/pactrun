@@ -17,6 +17,20 @@ milestone scope.
 
 ## Start a development task
 
+E implementation is authorized and in progress. Use the
+[E implementation ledger](./e-implementation-status.md) before interpreting
+individual component passes as whole-milestone completion.
+
+The [E versioning redesign decisions](./design-notes/e-versioning-redesign-decisions.md)
+record the approved policy and closed version matrix, with remaining questions
+separated from settled direction. Detailed S0 representations and runtime work
+are not yet approved.
+
+The proposed [whole-milestone E S0 plan](./design-notes/e-versioning-s0-plan.md)
+collects concrete representations, the removal/preservation inventory, installer
+scope, remaining decisions, all implementation slices and acceptance evidence
+for one overall approval. It is not an approved specification or runtime work.
+
 The [pre-E readiness review](./pre-e-readiness.md) records prerequisite
 closure, source-qualified validation and local integration separately from
 E S0 approval and release readiness.
@@ -92,3 +106,5 @@ remain reserved for a later documentation phase.
 
 Repository instructions and the task determine execution permissions. Personal
 communication and machine preferences are not part of the Pactrun Spec.
+
+- [Native package engineering delivery](./native-package-delivery.md): local artifact and source tooling; publication remains excluded.

@@ -56,9 +56,11 @@ fn snapshot_staging_and_copy_preserve_resource_errors_and_do_not_publish() {
     ));
 }
 fn fixture(version: u32, name: &str) -> serde_json::Value {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "tests/vectors/snapshot_integrity_format_v{version}/vectors.json"
-    ));
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(if version == 1 {
+        "tests/vectors/snapshot_integrity/content.json"
+    } else {
+        "tests/vectors/snapshot_integrity/protection.json"
+    });
     let corpus: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     corpus["valid"]
         .as_array()
@@ -69,8 +71,8 @@ fn fixture(version: u32, name: &str) -> serde_json::Value {
         .clone()
 }
 fn bundle_bytes(f: &serde_json::Value) -> Vec<u8> {
-    let version = SnapshotIntegrityVersion::from_number(
-        f["normalized_manifest"]["format_version"].as_i64().unwrap(),
+    let version = SnapshotIntegrityVersion::from_text(
+        f["normalized_manifest"]["format_version"].as_str().unwrap(),
     )
     .unwrap();
     let manifest = snapshot_integrity::decode_snapshot_manifest(
@@ -79,7 +81,7 @@ fn bundle_bytes(f: &serde_json::Value) -> Vec<u8> {
         None,
     )
     .unwrap();
-    let envelope = serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":1,"integrity_format":version.number(),"integrity_digest":manifest.integrity_digest().as_str()});
+    let envelope = serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":version.as_str(),"integrity_digest":manifest.integrity_digest().as_str()});
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Stored)
@@ -117,7 +119,10 @@ fn stored_bundle_preserves_v1_and_v2_and_verifies_exact_payload_closure() {
         let f = fixture(version, name);
         let bytes = bundle_bytes(&f);
         let bundle = parse(&s, &bytes).unwrap();
-        assert_eq!(bundle.manifest().manifest().version().number(), version);
+        assert_eq!(
+            bundle.manifest().manifest().version().as_str(),
+            "1.0-alpha.1"
+        );
         assert_eq!(
             bundle.manifest().integrity_digest().as_str(),
             f["expected"]["digest"].as_str().unwrap()
@@ -200,7 +205,7 @@ fn zip64_entry_count_boundary_is_real_and_not_a_32_bit_mock() {
     }
     raw["service_content"] = serde_json::json!(descriptors);
     let manifest = snapshot_integrity::decode_snapshot_manifest(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         &serde_json::to_vec(&raw).unwrap(),
         None,
     )
@@ -355,12 +360,12 @@ fn parser_limits_and_data_descriptors_do_not_require_canonical_archive_bytes() {
     let (_temp, s) = session();
     let f = fixture(2, "v2_minimal_manifest");
     let manifest = snapshot_integrity::decode_snapshot_manifest(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         f["raw_manifest"].as_str().unwrap().as_bytes(),
         None,
     )
     .unwrap();
-    let base=serde_json::to_vec(&serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":1,"integrity_format":2,"integrity_digest":manifest.integrity_digest().as_str()})).unwrap();
+    let base=serde_json::to_vec(&serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":"1.0-alpha.1","integrity_digest":manifest.integrity_digest().as_str()})).unwrap();
     for extra in [0, 1] {
         let mut envelope = base.clone();
         envelope.resize(
@@ -592,5 +597,19 @@ fn envelope_and_exact_closure_are_checked_independently_of_valid_zip_crc() {
                 }))
             ));
         }
+    }
+}
+
+// Test-ID: PR-TEST-0634
+// Verifies: PR-REQ-0331
+#[test]
+fn bundle_refusal_preserves_outer_or_inner_contract_requirements_without_fallback() {
+    for (bytes, domain) in [
+        (&br#"{"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.2","future_body":{}}"#[..], crate::domain::VersionDomain::SnapshotBundle),
+        (&br#"{"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":"1.0-alpha.2","future_body":{}}"#[..], crate::domain::VersionDomain::Snapshot),
+    ] {
+        let error=decode_envelope(bytes).unwrap_err();
+        assert!(matches!(error, BundleError::UnsupportedVersion(actual,_) if actual==domain));
+        for part in [domain.name(), "1.0-alpha.2", "1.0-alpha.1", "supporting release"] { assert!(error.to_string().contains(part)); }
     }
 }

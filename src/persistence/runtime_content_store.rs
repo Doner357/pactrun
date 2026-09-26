@@ -780,13 +780,14 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            ContentId, RevisionCoreProjectionInputV1, RuntimeContentProjectionInputV1,
-            RuntimeFileKindV1, RuntimeFileV1, RuntimePath, Sha256Digest, project_revision_core_v1,
-            project_runtime_content_closure_v1, validate_revision_content_v1,
+            ContentId, RevisionDeclarationInput, RuntimeContentProjectionInputV1,
+            RuntimeFileKindV1, RuntimeFileV1, RuntimePath, Sha256Digest,
+            project_revision_declarations, project_runtime_content_closure_v1,
+            validate_declaration_content,
         },
-        revision_core_v1::{
-            calculate_revision_content_digest_v1, encode_canonical_revision_core_v1,
-            encode_canonical_runtime_content_v1,
+        revision_declarations::{
+            calculate_service_free_digest, encode_canonical_runtime_content,
+            encode_service_free_revision,
         },
     };
 
@@ -1161,7 +1162,7 @@ mod tests {
         let bytes = b"one physical blob";
         let shared_digest = digest(bytes);
         let closure = closure_with_shared_digest(&shared_digest);
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: Vec::new(),
             actions: Vec::new(),
             snapshot: None,
@@ -1169,10 +1170,10 @@ mod tests {
             cleanup: None,
         })
         .unwrap();
-        let content = validate_revision_content_v1(core, closure.clone()).unwrap();
-        let core_before = encode_canonical_revision_core_v1(&content.core).unwrap();
-        let runtime_before = encode_canonical_runtime_content_v1(&content.runtime_content).unwrap();
-        let digest_before = calculate_revision_content_digest_v1(&content).unwrap();
+        let content = validate_declaration_content(core, closure.clone()).unwrap();
+        let core_before = encode_service_free_revision(&content.core).unwrap();
+        let runtime_before = encode_canonical_runtime_content(&content.runtime_content).unwrap();
+        let digest_before = calculate_service_free_digest(&content).unwrap();
 
         let (_temporary, root) = test_root();
         let store = RuntimeContentStore::open(&root).unwrap();
@@ -1199,15 +1200,15 @@ mod tests {
         );
 
         assert_eq!(
-            encode_canonical_revision_core_v1(&content.core).unwrap(),
+            encode_service_free_revision(&content.core).unwrap(),
             core_before
         );
         assert_eq!(
-            encode_canonical_runtime_content_v1(&content.runtime_content).unwrap(),
+            encode_canonical_runtime_content(&content.runtime_content).unwrap(),
             runtime_before
         );
         assert_eq!(
-            calculate_revision_content_digest_v1(&content).unwrap(),
+            calculate_service_free_digest(&content).unwrap(),
             digest_before
         );
 

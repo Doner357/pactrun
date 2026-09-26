@@ -39,7 +39,7 @@ use crate::domain::{
     CompiledHookLaunch, ExecutionOwnerSession, HookCodeV1, HookCompletionRecord,
     HookCompletionStatus, InputIdentity, InstanceId, InstanceStateVersion,
     InterpreterLauncherObservation, ManagedInputPayloadId, ManagedOutputIdentity,
-    ManagedRunIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRefV1,
+    ManagedRunIdentity, ManualRecoveryTrigger, OperationAccessV1, PactrunErrorRef,
     RUN_ARTIFACT_MAX_BYTES_V1, RecoveryGuardView, RecoveryRiskState, RevisionIdentity,
     RunArtifactSummary, RunExecutionView, RunFailedStep, RunFailureRecord, RunFinish, RunId,
     RunInspectionData, RunOutcome, RunOutcomeView, RunPrimaryFailure, RunState, RunSummary,
@@ -161,7 +161,6 @@ impl PactrunPersistence {
         run: RunId,
         finish: &RunFinish,
     ) -> Result<RunFinishReceipt, PersistenceError> {
-        self.prepare_restore_payloads(run)?;
         let mut db = self
             .database
             .lock()
@@ -185,11 +184,12 @@ impl PactrunPersistence {
         let (state,consequence):(Vec<u8>,i64)=tx.query_row("SELECT admitted_state_version,admitted_consequence_version FROM run_restore_admissions WHERE run_id=?1",[run.as_bytes().as_slice()],|row|Ok((row.get(0)?,row.get(1)?))).map_err(|e|PersistenceError::sqlite("load Restore publication tokens",e))?;
         let (_, _, current) = instance_header(&tx, header.instance)?;
         let conflict = current != state_version(state)?
-            || consequence != super::sqlite_v5::load_consequence_version(&tx, header.instance)?;
+            || consequence
+                != super::writer_admission::load_consequence_version(&tx, header.instance)?;
         let mut finish = finish.clone();
         if conflict {
             finish.outcome = RunOutcome::Failed;
-            finish.primary_failure=Some(RunPrimaryFailure {failure:crate::domain::RunFailureRecord {error:crate::domain::PactrunErrorRefV1::new("execution","managed_output_publication_failed").expect("registered error"),message:"Restore publication conflicted with a changed Instance or recovery consequence".to_owned()},step:RunFailedStep::SnapshotPlan(crate::domain::SnapshotPlanStep::PublishManagedResult)});
+            finish.primary_failure=Some(RunPrimaryFailure {failure:crate::domain::RunFailureRecord {error:crate::domain::PactrunErrorRef::new("execution","managed_output_publication_failed").expect("registered error"),message:"Restore publication conflicted with a changed Instance or recovery consequence".to_owned()},step:RunFailedStep::SnapshotPlan(crate::domain::SnapshotPlanStep::PublishManagedResult)});
         }
         let next = if conflict {
             None
@@ -587,8 +587,10 @@ impl PactrunPersistence {
                         params![run.as_bytes().as_slice(),header.instance.as_bytes().as_slice()],
                     ).map_err(|error| PersistenceError::sqlite("pin complete Capture registry", error))?;
                 } else if let ManagedRunIdentity::Restore { snapshot, .. } = &operation {
-                    let consequence =
-                        super::sqlite_v5::load_consequence_version(&transaction, header.instance)?;
+                    let consequence = super::writer_admission::load_consequence_version(
+                        &transaction,
+                        header.instance,
+                    )?;
                     transaction.execute("INSERT INTO run_restore_admissions(run_id,snapshot_id,admitted_state_version,admitted_consequence_version) VALUES (?1,?2,?3,?4)",
                         params![run.as_bytes().as_slice(),snapshot.as_bytes().as_slice(),header.accepted_state_version.as_bytes().as_slice(),consequence])
                         .map_err(|error|PersistenceError::sqlite("establish Restore Snapshot pin and tokens",error))?;
@@ -1496,7 +1498,7 @@ fn admission_decision(
 
 fn validate_snapshot_plan_declaration(
     database: &Connection,
-    core: &crate::domain::RevisionCoreV1,
+    core: &crate::domain::RevisionDeclarations,
     plan: &crate::domain::SnapshotExecutionPlan,
 ) -> Result<Option<String>, PersistenceError> {
     use crate::domain::{
@@ -1518,7 +1520,7 @@ fn validate_snapshot_plan_declaration(
         .authoritative_access(core)
         .map_err(|error| PersistenceError::CorruptRun(error.to_string()))?;
     if hook != plan.hook()
-        || !matches!(hook.protocol_version.get(), 1 | 2)
+        || !crate::domain::VersionDomain::Hook.supports(hook.protocol_version)
         || access != plan.access()
         || parameters.len() != plan.parameters().len()
     {
@@ -1586,7 +1588,7 @@ fn validate_capture_facts(
     database: &Connection,
     instance: InstanceId,
     revision: &RevisionIdentity,
-    core: &crate::domain::RevisionCoreV1,
+    core: &crate::domain::RevisionDeclarations,
     facts: &AdmissionFacts<'_>,
 ) -> Result<Option<String>, PersistenceError> {
     use crate::domain::{
@@ -1636,7 +1638,9 @@ fn validate_capture_facts(
             }
             _ => false,
         };
-    if !launch_matches || !matches!(capture.hook.protocol_version.get(), 1 | 2) {
+    if !launch_matches
+        || !crate::domain::VersionDomain::Hook.supports(capture.hook.protocol_version)
+    {
         return Ok(Some(
             "Capture Hook launch or protocol is not supported by the exact compiled facts"
                 .to_owned(),
@@ -1777,7 +1781,7 @@ fn validate_capture_publication(
         )
     };
     let manifest = publication.manifest.manifest();
-    if manifest.version() != SnapshotIntegrityVersion::V2
+    if manifest.version() != SnapshotIntegrityVersion::BASELINE
         || manifest.producer() != revision
         || manifest.origin_instance_id() != header.instance
     {
@@ -2286,7 +2290,7 @@ fn finish_run_authorized(
     }
     let mut published_state_version = None;
     if trigger.is_some() {
-        super::sqlite_v5::advance_consequence_version(transaction, header.instance)?;
+        super::writer_admission::advance_consequence_version(transaction, header.instance)?;
     }
     if let Some(trigger) = trigger
         && guard_row(transaction, header.instance)?.is_none()
@@ -2426,7 +2430,7 @@ fn run_header(database: &Connection, run: RunId) -> Result<RunHeader, Persistenc
         .optional()
         .map_err(|error| PersistenceError::sqlite("load Run header", error))?
         .ok_or(PersistenceError::MissingRun(run))?;
-    super::sqlite_v5::validate_run_operation(database, run)?;
+    super::writer_admission::validate_run_operation(database, run)?;
     let instance = instance_id(row.0)?;
     let live: bool = database
         .query_row(
@@ -2436,7 +2440,7 @@ fn run_header(database: &Connection, run: RunId) -> Result<RunHeader, Persistenc
         )
         .map_err(|e| PersistenceError::sqlite("qualify historical Run Instance", e))?;
     if live {
-        super::sqlite_v5::load_consequence_version(database, instance)?;
+        super::writer_admission::load_consequence_version(database, instance)?;
     } else {
         let retired: bool = database.query_row(
             "SELECT EXISTS(SELECT 1 FROM instance_retirement_receipts t JOIN instance_history_identities h ON h.instance_id=t.instance_id JOIN runs r ON r.run_id=t.retirement_run_id JOIN run_outcomes o ON o.run_id=r.run_id JOIN run_deletion_invocations d ON d.run_id=r.run_id JOIN run_operation_kinds k ON k.run_id=r.run_id WHERE t.instance_id=?1 AND r.instance_id=t.instance_id AND o.outcome_rank=0 AND k.operation_kind=4 AND d.deletion_mode=t.retirement_mode)",
@@ -2494,7 +2498,7 @@ fn managed_invocation_row(
     run: RunId,
 ) -> Result<ManagedRunIdentity, PersistenceError> {
     use crate::domain::ManagedExecutionKind;
-    let kind = super::sqlite_v5::validate_run_operation(database, run)?;
+    let kind = super::writer_admission::validate_run_operation(database, run)?;
     if kind == ManagedExecutionKind::Deletion {
         let (package, digest, mode) = database.query_row(
             "SELECT package_id, revision_content_digest, deletion_mode FROM run_deletion_invocations WHERE run_id=?1",
@@ -2751,12 +2755,12 @@ pub(super) fn load_instance_recovery_guard_from(
     Ok(Some(guard))
 }
 
-fn error_ref(owner: Vec<u8>, code: Vec<u8>) -> Result<PactrunErrorRefV1, PersistenceError> {
+fn error_ref(owner: Vec<u8>, code: Vec<u8>) -> Result<PactrunErrorRef, PersistenceError> {
     let owner = String::from_utf8(owner)
         .map_err(|_| PersistenceError::CorruptRun("error owner is not UTF-8".to_owned()))?;
     let code = String::from_utf8(code)
         .map_err(|_| PersistenceError::CorruptRun("error code is not UTF-8".to_owned()))?;
-    PactrunErrorRefV1::new(owner, code).map_err(PersistenceError::CorruptRun)
+    PactrunErrorRef::new(owner, code).map_err(PersistenceError::CorruptRun)
 }
 
 fn utf8_message(bytes: Vec<u8>) -> Result<String, PersistenceError> {
@@ -2947,7 +2951,7 @@ fn validate_managed_run_links(
                 || state_version(token)? != header.accepted_state_version
                 || consequence < 0
                 || consequence
-                    > super::sqlite_v5::load_consequence_version(database, header.instance)?
+                    > super::writer_admission::load_consequence_version(database, header.instance)?
                 || &super::sqlite_snapshots::snapshot_producer(database, *snapshot).map_err(
                     |error| match error {
                         PersistenceError::MissingSnapshot(_) => invalid(),
@@ -3165,13 +3169,13 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            ActionV1, ActiveInstanceBindingReference, ContentId, HookLaunchV1, HookV1,
-            IOContractV1, InputDeclarationV1, InputIdentity, InputProtectionV1, InstanceName,
-            InstanceView, MANAGED_INPUT_CHUNK_BYTES_V1, PositiveVersion,
-            RevisionCoreProjectionInputV1, RevisionIdentity, RunPhase,
-            RuntimeContentProjectionInputV1, RuntimeFileKindV1, RuntimeFileV1, RuntimePath,
-            Sha256Digest, TerminalContractV1, ValidatedRevisionContentV1, project_revision_core_v1,
-            project_runtime_content_closure_v1, validate_revision_content_v1,
+            ActionV1, ActiveInstanceBindingReference, ContentId, DeclarationContent, HookLaunchV1,
+            HookV1, IOContractV1, InputDeclarationV1, InputIdentity, InputProtectionV1,
+            InstanceName, InstanceView, MANAGED_INPUT_CHUNK_BYTES_V1, RevisionDeclarationInput,
+            RevisionIdentity, RunPhase, RuntimeContentProjectionInputV1, RuntimeFileKindV1,
+            RuntimeFileV1, RuntimePath, Sha256Digest, TerminalContractV1,
+            project_revision_declarations, project_runtime_content_closure_v1,
+            validate_declaration_content,
         },
         hook::ActionCancellation,
         managed_data::{StagingSession, session_is_live},
@@ -3208,7 +3212,7 @@ mod tests {
         let publication = persistence
             .put_runtime_content(&blob_digest, &mut Cursor::new(TOOL_BYTES))
             .unwrap();
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![
                 InputDeclarationV1 {
                     id: InputIdentity::parse("required").unwrap(),
@@ -3226,7 +3230,7 @@ mod tests {
                 access: OperationAccessV1::Observe,
                 parameters: Vec::new(),
                 hook: HookV1 {
-                    protocol_version: PositiveVersion::new(1).unwrap(),
+                    protocol_version: crate::domain::FormatVersion::BASELINE,
                     launch: HookLaunchV1::Direct {
                         executable: ContentId::parse("tool").unwrap(),
                     },
@@ -3252,8 +3256,8 @@ mod tests {
             }],
         })
         .unwrap();
-        let content: ValidatedRevisionContentV1 =
-            validate_revision_content_v1(core, runtime_content).unwrap();
+        let content: DeclarationContent =
+            validate_declaration_content(core, runtime_content).unwrap();
         persistence
             .persist_revision(
                 crate::domain::PackageId::from_bytes([9; 16]),
@@ -3617,8 +3621,8 @@ mod tests {
         database.execute(sql, rusqlite::params_from_iter(parameters.iter()))
     }
 
-    fn error(owner: &str, code: &str) -> PactrunErrorRefV1 {
-        PactrunErrorRefV1::new(owner, code).unwrap()
+    fn error(owner: &str, code: &str) -> PactrunErrorRef {
+        PactrunErrorRef::new(owner, code).unwrap()
     }
 
     fn plain_finish(outcome: RunOutcome) -> RunFinish {

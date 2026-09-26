@@ -13,7 +13,7 @@ subsequently authorized commit and `develop` merge that includes this CLI work.
 
 The approved work separates concise human presentation from complete machine
 inspection, and adds ephemeral noninteractive Hook output delivery. The owning
-rules and schemas are in the [CLI contract](../spec/contracts/cli-json-v1.md).
+rules and schemas are in the [CLI contract](../spec/contracts/cli-machine-interface.md).
 [Design references](./design-references.md) record CLIG, GOV.UK, Git, Docker,
 Terraform and JSON Lines, including the specific principles adopted.
 

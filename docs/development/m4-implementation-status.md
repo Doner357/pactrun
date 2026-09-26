@@ -42,10 +42,10 @@ and final exact-tree validation results are reported with delivery.
 ## Canonical contract map
 
 - [M4 execution, Capture, Restore, and recovery](../spec/execution/m4-snapshot-lifecycle-approval-baseline.md): PR-REQ-0289 through PR-REQ-0291.
-- [Stored-ZIP transport](../spec/contracts/snapshot-bundle-v1.md): PR-REQ-0292.
+- [Stored-ZIP transport](../spec/contracts/snapshot-bundle.md): PR-REQ-0292.
 - [Separate inclusive capabilities and acquisition accounting](../spec/behavior/m4-runtime-capabilities.md): PR-REQ-0293 and PR-REQ-0294.
-- [Frozen integrity V2](../spec/contracts/snapshot-integrity-format-v2.md): PR-REQ-0295 through PR-REQ-0297.
-- [Exact V5, writable admission, and legacy bootstrap](../spec/persistence/persistence-schema-v5.md): PR-REQ-0298 through PR-REQ-0300.
+- [Frozen integrity V2](../spec/contracts/snapshot-integrity.md): PR-REQ-0295 through PR-REQ-0297.
+- [Exact V5, writable admission, and legacy bootstrap](../spec/persistence/persistence-baseline.md): PR-REQ-0298 through PR-REQ-0300.
 - [Human command and verification contract](../spec/behavior/m4-snapshot-command-reference.md): PR-REQ-0301 and PR-REQ-0302.
 
 ## Required runtime traceability (partially automated)

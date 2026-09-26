@@ -60,7 +60,7 @@ fn store(
         Vec::new()
     };
     let manifest = SnapshotManifest::new(SnapshotManifestParts {
-        version: SnapshotIntegrityVersion::V2,
+        version: SnapshotIntegrityVersion::BASELINE,
         snapshot_id: id,
         producer: view.active_revision.clone(),
         origin_instance_id: view.id,
@@ -442,7 +442,7 @@ fn specialized_revision(p: &PactrunPersistence, protocol: i64) -> RevisionIdenti
     let stored = p.load_revision(&base).unwrap().unwrap();
     let mut capability = stored.content.core.snapshot().unwrap().clone();
     capability.capture.as_mut().unwrap().hook.protocol_version =
-        PositiveVersion::new(protocol).unwrap();
+        (if protocol == 1 || protocol == 2 { "1.0-alpha.1" } else { "1.0-alpha.2" }).parse().unwrap();
     capability.capture.as_mut().unwrap().parameters = vec![
         ParameterV1 {
             id: ParameterIdentity::parse("count").unwrap(),
@@ -463,7 +463,7 @@ fn specialized_revision(p: &PactrunPersistence, protocol: i64) -> RevisionIdenti
         sensitive: false,
         default: Some(ParameterDefaultV1::Boolean(true)),
     }];
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs: Vec::new(),
         actions: stored.content.core.actions().to_vec(),
         snapshot: Some(capability),
@@ -479,7 +479,7 @@ fn specialized_revision(p: &PactrunPersistence, protocol: i64) -> RevisionIdenti
         .unwrap();
     p.persist_revision(
         base.package_id,
-        &validate_revision_content_v1(core, stored.content.runtime_content).unwrap(),
+        &validate_declaration_content(core, stored.content.runtime_content).unwrap(),
         &[publication],
     )
     .unwrap()
@@ -582,7 +582,7 @@ fn forged_compiler_observations_cannot_waive_access_or_readiness_at_admission() 
     let mut observed = p.observe_snapshot_compilation(&intent).unwrap();
     let mut capability = observed.revision.core.snapshot().unwrap().clone();
     capability.capture.as_mut().unwrap().access = OperationAccessV1::Observe;
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs: Vec::new(),
         actions: observed.revision.core.actions().to_vec(),
         snapshot: Some(capability),
@@ -591,7 +591,7 @@ fn forged_compiler_observations_cannot_waive_access_or_readiness_at_admission() 
     })
     .unwrap();
     observed.revision =
-        validate_revision_content_v1(core, observed.revision.runtime_content).unwrap().into();
+        validate_declaration_content(core, observed.revision.runtime_content).unwrap().into();
     let launch = CompiledHookLaunch::Direct {
         executable: observed.revision.runtime_content.files()[0].clone(),
     };
@@ -1031,7 +1031,7 @@ fn restore_sticky_protection_is_checked_independently_of_tokens_without_declassi
     // Optional deletion and retained omission do not acquire declassification
     // authority, but remain legal removals rather than blanket Secret failures.
     let manifest = SnapshotManifest::new(SnapshotManifestParts {
-        version: SnapshotIntegrityVersion::V2,
+        version: SnapshotIntegrityVersion::BASELINE,
         snapshot_id: SnapshotId::generate().unwrap(),
         producer: current.active_revision,
         origin_instance_id: view.id,

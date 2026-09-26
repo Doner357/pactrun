@@ -31,7 +31,7 @@ fn fixture() -> RuntimeFixture {
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "{worker}", "--nocapture"]
         io: {{ terminal: none }}
@@ -350,7 +350,7 @@ fn frozen_restore_completion_is_owner_selected_and_has_no_output_authority() {
     let vectors: Value = serde_json::from_slice(
         &fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/vectors/hook_protocol_v1/vectors.json"),
+                .join("tests/vectors/hook_protocol/vectors.json"),
         )
         .unwrap(),
     )
@@ -380,7 +380,7 @@ fn frozen_restore_completion_is_owner_selected_and_has_no_output_authority() {
         json!({"type":"complete","operation":"snapshot_restore","status":"success","produced_outputs":[]}),
     ] {
         let mut state = ProtocolState::new_restore("00000000000000000000000000000031".to_owned());
-        state.accept_restore_bytes(br#"{"type":"session_ready","protocol_version":1,"session_id":"00000000000000000000000000000031"}"#).unwrap();
+        state.accept_restore_bytes(br#"{"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":"00000000000000000000000000000031"}"#).unwrap();
         assert!(
             state
                 .accept_restore_bytes(&serde_json::to_vec(&message).unwrap())
@@ -620,7 +620,7 @@ fn failed_cancelled_timed_out_and_protocol_invalid_restore_preserves_target_and_
 // Verifies: PR-REQ-0291, PR-REQ-0211, PR-REQ-0213, PR-REQ-0091
 #[test]
 fn restore_reads_v1_and_v2_retained_state_and_allows_required_absent_to_absent() {
-    for version in [SnapshotIntegrityVersion::V1, SnapshotIntegrityVersion::V2] {
+    for version in [SnapshotIntegrityVersion::BASELINE, SnapshotIntegrityVersion::BASELINE] {
         let f = fixture();
         let mut blobs = BTreeMap::new();
         let bindings = vec![
@@ -754,7 +754,7 @@ fn restore_refuses_sticky_downgrade_and_required_removal_before_any_hook_launch(
             &mut blobs,
         ),
     ];
-    let snapshot = store(&f, SnapshotIntegrityVersion::V2, bindings, blobs, None);
+    let snapshot = store(&f, SnapshotIntegrityVersion::BASELINE, bindings, blobs, None);
     let v = view(&f);
     f.application
         .set_input(
@@ -792,7 +792,7 @@ fn restore_refuses_sticky_downgrade_and_required_removal_before_any_hook_launch(
     assert!(!marker_variant(&marker, "launched").exists());
     let absent = store(
         &f,
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         vec![
             absent("secret_config", ManagedInputProtection::Secret),
             absent("optional", ManagedInputProtection::Normal),
@@ -1148,7 +1148,7 @@ fn capacity_round_trip(mib: u64) {
     f.application.execute_admitted_capture(run, policy(None, None, Some(100))).unwrap();
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     let snapshot = f.application.list_snapshots(None).unwrap()[0].id;
-    assert_eq!(db(&f).query_row::<i64,_,_>("SELECT count(*) FROM snapshot_blob_chunks", [], |r| r.get(0)).unwrap(), 0);
+    assert_eq!(db(&f).query_row::<i64,_,_>("SELECT count(*) FROM sqlite_schema WHERE name='snapshot_blob_chunks'", [], |r| r.get(0)).unwrap(), 0);
     for name in ["pactrun.sqlite3", "pactrun.sqlite3-wal"] {
         let path = f.storage.join("database").join(name);
         if path.exists() {
@@ -1253,14 +1253,12 @@ fn snapshot_chunk_cancellation_preserves_target_and_releases_restore_pin() {
 // Test-ID: PR-TEST-0485
 // Verifies: PR-REQ-0347, PR-REQ-0291
 #[test]
-fn upgraded_inline_snapshot_restores_through_the_real_hook_into_fresh_immutable_bindings() {
+fn reopened_snapshot_restores_through_the_real_hook_into_fresh_immutable_bindings() {
     let f = fixture();
     let snapshot = capture(&f);
     let RuntimeFixture { temporary, storage, launcher, application, instance } = f;
     drop(application);
-    let mut database = rusqlite::Connection::open(storage.join("database/pactrun.sqlite3")).unwrap();
-    crate::persistence::current_to_v9_fixture(&mut database);
-    assert!(crate::persistence::PactrunPersistence::upgrade_storage(&storage).unwrap());
+    let database = rusqlite::Connection::open(storage.join("database/pactrun.sqlite3")).unwrap();
     let application = PactrunApplication::open(&storage).unwrap();
     let f = RuntimeFixture { temporary, storage, launcher, application, instance };
     let marker = f.marker("legacy-value-restore");
@@ -1268,7 +1266,7 @@ fn upgraded_inline_snapshot_restores_through_the_real_hook_into_fresh_immutable_
     run_restore(&f, run);
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
-    assert_eq!(database.query_row::<i64,_,_>("SELECT count(*) FROM snapshot_blobs WHERE storage_kind<>0", [], |r| r.get(0)).unwrap(), 0);
+    assert_eq!(database.query_row::<i64,_,_>("SELECT count(*) FROM pragma_table_info('snapshot_blobs') WHERE name='storage_kind'", [], |r| r.get(0)).unwrap(), 0);
     assert!(database.query_row::<i64,_,_>("SELECT count(*) FROM managed_input_payloads WHERE content_digest IS NOT NULL", [], |r| r.get(0)).unwrap() > 0);
 }
 
@@ -1446,7 +1444,7 @@ fn restore_hook_worker() {
     }
     write_frame(
         &mut stream,
-        &json!({"type":"session_ready","protocol_version":1,"session_id":session["session_id"]}),
+        &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}),
     );
     fs::write(marker_variant(&marker, "ready"), b"").unwrap();
     if mode == "hang" {

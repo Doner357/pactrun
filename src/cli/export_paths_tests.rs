@@ -106,7 +106,9 @@ fn revision_and_snapshot_exports_use_final_names_for_publication_and_import() {
     fs::create_dir(&source).unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        format!("source_format: 1\npackage_id: {ID}\nrevision: {{}}\nruntime_content: {{}}\n"),
+        format!(
+            "source_format: 1.0-alpha.1\npackage_id: {ID}\nrevision: {{}}\nruntime_content: {{}}\n"
+        ),
     )
     .unwrap();
     let (code, reference, error) = run(
@@ -115,9 +117,9 @@ fn revision_and_snapshot_exports_use_final_names_for_publication_and_import() {
     );
     assert_eq!(code, 0, "{error}");
     let reference = reference.trim();
-    let manifest = serde_json::json!({"format_version":2,"snapshot_id":ID,"producer":{"package_id":ID,"revision_content_digest":format!("sha256:{}","0".repeat(64))},"origin_instance_id":ID,"captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[]});
+    let manifest = serde_json::json!({"format_version":"1.0-alpha.1","snapshot_id":ID,"producer":{"package_id":ID,"revision_content_digest":format!("sha256:{}","0".repeat(64))},"origin_instance_id":ID,"captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[]});
     let verified = crate::snapshot_integrity::decode_snapshot_manifest(
-        crate::domain::SnapshotIntegrityVersion::V2,
+        crate::domain::SnapshotIntegrityVersion::BASELINE,
         &serde_json::to_vec(&manifest).unwrap(),
         None,
     )
@@ -127,7 +129,7 @@ fn revision_and_snapshot_exports_use_final_names_for_publication_and_import() {
     let options =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     writer.start_file("bundle.json", options).unwrap();
-    writer.write_all(&serde_json::to_vec(&serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":1,"integrity_format":2,"integrity_digest":verified.integrity_digest().as_str()})).unwrap()).unwrap();
+    writer.write_all(&serde_json::to_vec(&serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":"1.0-alpha.1","integrity_digest":verified.integrity_digest().as_str()})).unwrap()).unwrap();
     writer.start_file("manifest.json", options).unwrap();
     writer.write_all(verified.canonical_bytes()).unwrap();
     writer.finish().unwrap();

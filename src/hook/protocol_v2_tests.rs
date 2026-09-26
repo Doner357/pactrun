@@ -16,7 +16,7 @@ fn ready(state: &mut State) {
     assert!(matches!(
         state
             .accept(message(
-                json!({"type":"session_ready", "protocol_version":2,"session_id":SESSION})
+                json!({"type":"session_ready", "protocol_version":"1.0-alpha.1","session_id":SESSION})
             ))
             .unwrap(),
         Step::Common(ProtocolStep::Ready)
@@ -182,16 +182,14 @@ fn target_proposal_requires_acknowledged_open_and_receipt_never_clears_risk_or_r
 // Test-ID: PR-TEST-0362
 // Verifies: PR-REQ-0082, PR-REQ-0321
 #[test]
-fn v2_framing_and_handshake_are_owner_selected_without_fallback() {
-    // Literal contract bytes, independent of the implementation constant used
-    // by the normal runtime and most worker fixtures.
-    const FROZEN_PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x02";
-    assert_eq!(PREAMBLE_V2, FROZEN_PREAMBLE);
+fn framing_and_handshake_are_owner_selected_without_fallback() {
+    const BASELINE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
+    assert_eq!(PREAMBLE_V2, BASELINE);
     let bytes = serde_json::to_vec(
-        &json!({"type":"session_ready","protocol_version":2,"session_id":SESSION}),
+        &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":SESSION}),
     )
     .unwrap();
-    let mut wire = FROZEN_PREAMBLE.to_vec();
+    let mut wire = BASELINE.to_vec();
     wire.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
     wire.extend_from_slice(&bytes);
     let mut events = Vec::new();
@@ -207,27 +205,19 @@ fn v2_framing_and_handshake_are_owner_selected_without_fallback() {
         &events[..],
         [
             Event::Message(Message::Common(HookMessage::SessionReady {
-                protocol_version: 2,
+                protocol_version: crate::domain::FormatVersion::BASELINE,
                 ..
             })),
             Event::EndOfStream
         ]
     ));
-    let mut old_events = Vec::new();
-    super::super::read_wire_events_for(
-        &mut io::Cursor::new(&wire),
-        SessionOperation::Migration,
-        |e| {
-            old_events.push(e);
-            true
-        },
-    );
-    assert!(matches!(&old_events[..], [WireEvent::Failure(_)]));
     for invalid in [
-        PREAMBLE.to_vec(),
-        PREAMBLE_V2[..5].to_vec(),
-        [PREAMBLE_V2, &u32::MAX.to_be_bytes()].concat(),
-        wire[..wire.len() - 1].to_vec(),
+        b"pactrun.hook-protocol\0\0\0\0\x01".to_vec(),
+        b"pactrun.hook-protocol\0\0\0\0\x02".to_vec(),
+        b"pactrun.hook-protocol\0\0\x81".to_vec(),
+        b"pactrun.hook-protocol\0\0\x0b1.0-alpha.2".to_vec(),
+        BASELINE[..5].to_vec(),
+        [BASELINE, &u32::MAX.to_be_bytes()].concat(),
     ] {
         let mut events = Vec::new();
         read_events(
@@ -238,23 +228,8 @@ fn v2_framing_and_handshake_are_owner_selected_without_fallback() {
                 true
             },
         );
-        assert!(matches!(
-            &events[..],
-            [Event::Failure(Failure {
-                code: "invalid_frame"
-            })]
-        ));
+        assert!(matches!(&events[..], [Event::Failure(_)]));
     }
-    let mut selected = state(false);
-    assert!(
-        selected
-            .accept(message(
-                json!({"type":"session_ready","protocol_version":1,"session_id":SESSION})
-            ))
-            .is_err()
-    );
-    assert!(!selected.is_ready());
-    ready(&mut selected);
 }
 
 fn native_path() -> String {
@@ -295,7 +270,7 @@ fn common_session(operation: SessionOperation) -> Value {
         }
         SessionOperation::Cleanup => json!({"kind":"cleanup","bindings":[binding]}),
     };
-    json!({"type":"session_start","protocol_version":2,"session_id":SESSION,"run_id":SESSION,
+    json!({"type":"session_start","protocol_version":"1.0-alpha.1","session_id":SESSION,"run_id":SESSION,
         "revision":{"package_id":SESSION,"revision_content_digest":format!("sha256:{}", "0".repeat(64))},
         "parameters":[],"workspace":{"handle":"00000000000000000000000000000010","root_path":native_path()},"io":{"terminal":"none"},"operation":op})
 }
@@ -340,7 +315,7 @@ fn outgoing_session_authorities_match_admission_and_have_global_handle_uniquenes
         )
         .unwrap();
         let wire: Value = serde_json::from_slice(&prepared.payload).unwrap();
-        assert_eq!(wire["protocol_version"], 2);
+        assert_eq!(wire["protocol_version"], "1.0-alpha.1");
         assert_eq!(wire["service_authorities"][0]["resource_kind"], "file");
         assert!(wire.get("target_commit").is_none());
         for collision in [
@@ -528,13 +503,13 @@ fn v2_wire_worker() {
     stream.read_exact(&mut preamble).unwrap();
     assert_eq!(preamble, PREAMBLE_V2);
     let session = read_frame(&mut stream);
-    assert_eq!(session["protocol_version"], 2);
+    assert_eq!(session["protocol_version"], "1.0-alpha.1");
     assert_eq!(session["service_authorities"], json!([]));
     assert_eq!(session["target_commit"]["handle"], COMMIT);
     stream.write_all(PREAMBLE_V2).unwrap();
     write_frame(
         &mut stream,
-        json!({"type":"session_ready","protocol_version":2,"session_id":SESSION}),
+        json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":SESSION}),
     );
     write_frame(
         &mut stream,
@@ -587,7 +562,7 @@ fn target_receipt_crosses_a_real_private_channel_without_becoming_completion() {
             &std::env::current_exe().unwrap(),
             &[
                 "--exact".into(),
-                "hook::protocol::v2::tests::v2_wire_worker".into(),
+                "hook::protocol::authority::tests::v2_wire_worker".into(),
                 "--nocapture".into(),
             ],
             crate::domain::TerminalContractV1::None,

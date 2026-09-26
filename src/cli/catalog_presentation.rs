@@ -210,7 +210,7 @@ impl From<&RevisionMetadataItem> for Metadata {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct RevisionEntry {
     revision: presentation::Revision,
-    core_version: u8,
+    core_version: String,
     metadata: Vec<Metadata>,
     declarations: Option<Declarations>,
     metadata_scope: &'static str,
@@ -242,7 +242,7 @@ impl RevisionEntry {
         Self {
             revision: (&row.identity).into(),
             metadata_scope: "current",
-            core_version: row.core.version(),
+            core_version: row.core.version().to_string(),
             metadata: row.metadata.items.iter().map(Into::into).collect(),
             declarations: declarations.then(|| Declarations {
                 actions: row

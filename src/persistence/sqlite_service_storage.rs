@@ -335,12 +335,6 @@ pub(super) fn validate_current_service_associations(
     instance: InstanceId,
     revision: &RevisionIdentity,
 ) -> Result<(), PersistenceError> {
-    let schema: i64 = db
-        .pragma_query_value(None, "user_version", |r| r.get(0))
-        .map_err(|e| PersistenceError::sqlite("read service schema version", e))?;
-    if schema < 7 {
-        return Ok(());
-    }
     validate_all_service_associations(db, instance, revision)?;
     let stored = load_revision_from(db, revision)?
         .ok_or_else(|| PersistenceError::MissingRevision(revision.clone()))?;

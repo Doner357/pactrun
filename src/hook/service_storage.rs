@@ -1,7 +1,7 @@
 //! Pre-launch native service authority qualification. Paths stay outside the
 //! execution directory; presence is observed once per physical resource for
 //! this invocation, never cached as durable service state or readiness.
-use super::protocol::v2::{ExpectedAuthority, MaterializedAuthority};
+use super::protocol::authority::{ExpectedAuthority, MaterializedAuthority};
 use crate::{
     domain::*,
     persistence::{PactrunPersistence, PersistenceError},

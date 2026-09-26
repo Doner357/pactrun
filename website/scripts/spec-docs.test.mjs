@@ -115,9 +115,9 @@ test('catalog matches every requirement-bearing document and its original status
   }
 });
 
-test('Run evidence SQL remains identical to the owning V11 specification', async () => {
-  const spec = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v11.md')[1];
-  const sql = await readFile(path.join(root, 'src/persistence/persistence_schema_v11_additions.sql'), 'utf8');
+test('Complete baseline SQL remains identical to the owning Persistence specification', async () => {
+  const spec = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
+  const sql = await readFile(path.join(root, 'src/persistence/persistence_baseline.sql'), 'utf8');
   assert.equal(spec.split('```sql\n')[1].split('```')[0].trim(), sql.trim());
 });
 
@@ -234,25 +234,23 @@ test('current entries reflect V11 integration while preserving earlier milestone
 
 test('M6.5 design direction preserves the separate runtime and Freeze gates', async () => {
   const proposals = [
-    'contracts/revision-core-format-v2.md',
-    'contracts/pack-source-yaml-v2.md',
-    'contracts/hook-protocol-v2.md',
-    'persistence/persistence-schema-v7.md',
+    'contracts/revision-canonical.md',
+    'contracts/pack-source.md',
+    'contracts/hook-protocol.md',
+    'persistence/persistence-baseline.md',
     'execution/m6-5-service-storage-execution.md',
     'behavior/m6-5-service-storage-command-reference.md',
   ];
   const baseline = docs.find(([name]) => name === 'development/design-notes/m6-5-servicestorage-baseline.md')[1];
   assert.match(baseline.replace(/\s+/g, ' '), /S1-S7 may proceed/);
-  const core = docs.find(([file]) => file === 'spec/contracts/revision-core-format-v2.md')[1];
+  const core = docs.find(([file]) => file === 'spec/contracts/revision-canonical.md')[1];
   assert.match(core, /A source named by reuse, reattach or transform is consumed/);
   for (const name of proposals) {
     const body = docs.find(([file]) => file === 'spec/' + name)?.[1];
     assert.ok(body, 'Missing S0 proposal: ' + name);
-    if (name === 'contracts/revision-core-format-v2.md' || name === 'contracts/hook-protocol-v2.md') {
-      assert.match(body, /Status: Frozen normative Package contract specification/);
-      assert.match(body, /m6-5-format-activation-review\.md/);
-    } else if (name === 'contracts/pack-source-yaml-v2.md') {
-      assert.match(body, /Candidate normative Package authoring contract; versioned, non-Frozen/);
+    if (name.startsWith('contracts/') || name === 'persistence/persistence-baseline.md') {
+      assert.match(body, /Status: Approved E normative baseline, 1\.0-alpha\.1/);
+      if (name.startsWith('contracts/')) assert.match(body, /older contract pages are non-normative/);
     } else {
       assert.match(body, /Status: Implemented normative/);
     }
@@ -260,9 +258,9 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
     const rules = body.split(/^### PR-REQ-\d+/m).slice(1);
     assert.ok(rules.length > 0, 'No proposed requirements: ' + name);
     for (const rule of rules) assert.match(rule, /\*\*Verification:/);
-    if (name === 'contracts/hook-protocol-v2.md') {
-      assert.match(rules[0], /Codec, authority and ordinary-runtime evidence/);
-      assert.match(rules[1], /Protocol and target-runtime evidence/);
+    if (name === 'contracts/hook-protocol.md') {
+      assert.match(body, /Codec, authority and ordinary-runtime evidence/);
+      assert.match(body, /Protocol and target-runtime evidence/);
       assert.match(body, /no persisted proposal flag exists/);
       assert.match(body.replace(/\s+/g, ' '), /Codec tests alone are not completed Migration target-publication evidence/);
     }
@@ -280,19 +278,19 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
     }
   }
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
-  assert.match(current, /pub\(super\) const SCHEMA_V9_VERSION: i64 = 9;/);
-  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 11;/);
-  const capacity = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v10.md')[1];
-  assert.match(capacity.replace(/\s+/g, ' '), /Only explicit upgrade from exact V9 or the previously supported exact V8/);
-  assert.match(capacity, /Legacy rows and bytes remain inline without a bulk/);
-  const lifecycle = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v9.md')[1];
-  assert.match(lifecycle, /Only explicit exact-V8 to V9 upgrade is supported/);
+  assert.doesNotMatch(current, /SCHEMA_LADDER|SCHEMA_V9_VERSION|legacy_v4/);
+  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 0;/);
+  const capacity = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
+  assert.match(capacity, /Development-era stores are unsupported and are not upgraded/);
+  assert.match(capacity, /reopening MUST preserve exact Snapshot identities/);
+  const lifecycle = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
+  assert.match(lifecycle, /schemas are unsupported and no storage upgrade command remains/);
   const m7 = docs.find(([name]) => name === 'development/m7-implementation-status.md')[1];
   assert.match(m7, /Implemented, verified and integrated into local develop/);
   assert.match(m7, /513dbf3b7296f01fed2ae2fc4ddf1e4e9a36f4cec34b63122328d1b4e4af0647/);
   assert.match(m7.replace(/\s+/g, ' '), /Both original counterexamples now pass/);
-  const v8 = docs.find(([name]) => name === 'spec/persistence/persistence-schema-v8.md')[1];
-  assert.match(v8, /Approved M7 internal contract; non-Frozen/);
+  const v8 = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
+  assert.match(v8, /Approved E normative baseline/);
   const roadmap = docs.find(([name]) => name === 'development/implementation-roadmap.md')[1];
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
   const closeout = docs.find(([name]) => name === 'development/m6-5-implementation-status.md')[1];
@@ -325,7 +323,9 @@ test('release readiness separates work order from publication and implementation
   assert.deepEqual([...policy.matchAll(/^### (PR-REQ-\d+)/gm)].map(match => match[1]), [
     'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333',
   ]);
-  assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 5);
+  assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 3);
+  assert.match(normalizedPolicy, /Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634; operation-boundary coverage pending E integration/);
+  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636; remaining artifact\/promotion coverage pending E integration/);
   assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
   assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
   assert.match(normalizedPolicy, /Development iterations are not earlier formal product releases/);
@@ -336,8 +336,9 @@ test('release readiness separates work order from publication and implementation
   assert.match(normalizedPolicy, /shipping program MUST NOT retain readers, migration chains, version dispatch or special cases solely to support superseded development contracts/);
   assert.doesNotMatch(normalizedPolicy, /MUST distinguish old development data reliably/);
   assert.doesNotMatch(normalizedPlan, /explicit old-generation rejection/);
-  assert.match(normalizedPolicy, /MUST remain at product version 0\.1\.0/);
-  assert.match(normalizedPolicy, /MUST NOT automatically publish or label the product 1\.0\.0/);
+  assert.match(normalizedPolicy, /initial new product baseline MUST be 1\.0\.0-alpha\.1/);
+  assert.doesNotMatch(normalizedPolicy, /MUST remain at product version 0\.1\.0/);
+  assert.match(normalizedPolicy, /MUST NOT automatically publish, push or relabel a candidate as formal 1\.0\.0/);
   assert.match(normalizedPolicy, /MUST NOT perform another format reset/);
   const roadmap = document('development/implementation-roadmap.md').replace(/\s+/g, ' ');
   assert.match(roadmap, /Release-readiness prerequisites \(publication gates\)/);
@@ -460,7 +461,7 @@ test('approved remaining milestones assign gaps without silently implementing co
   assert.doesNotMatch(handoff, /Machine-readable CLI Output is the next separately planned capability/);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/remaining-capability-milestones/);
-  assert.match(sidebar, /spec\/contracts\/pack-distribution-v1/);
+  assert.match(sidebar, /spec\/contracts\/pack-distribution/);
   assert.match(sidebar, /development\/pack-transport-status/);
   const pack = document('development/pack-transport-status.md').replace(/\s+/g, ' ');
   assert.match(pack, /C S0-S3 implemented, verified and integrated into local develop/);

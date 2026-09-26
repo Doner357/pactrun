@@ -4,6 +4,13 @@ title: Release Readiness
 
 # Release readiness
 
+> **E redesign update:** The operator-approved
+> [versioning decisions and matrix](./design-notes/e-versioning-redesign-decisions.md)
+> replace conflicting future-planning assumptions below, notably the 0.1.0-only
+> evaluation workflow. Detailed release gates remain open. The earlier checklist
+> is retained for reconciliation, not as an override of the new direction.
+> No runtime change or publication is authorized by this documentation update.
+
 **Status: Approved pre-release work plan. Required before formal release; relative work order assigned, implementation pending.**
 
 The operator confirmed this direction on 2026-09-16. This is a readiness

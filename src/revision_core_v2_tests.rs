@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 
 fn vectors() -> Value {
     serde_json::from_str(include_str!(
-        "../tests/vectors/revision_core_format_v2/vectors.json"
+        "../tests/vectors/revision_canonical/services.json"
     ))
     .unwrap()
 }
@@ -16,8 +16,8 @@ fn example(name: &str) -> Value {
         .unwrap()["input_core"]
         .clone()
 }
-fn project(value: &Value) -> Result<RevisionCoreV2, Error> {
-    project_revision_core_source_v2(&serde_json::to_vec(value).unwrap())
+fn project(value: &Value) -> Result<ServiceRevision, Error> {
+    project_service_revision_source(&serde_json::to_vec(value).unwrap())
 }
 
 // Test-ID: PR-TEST-0331
@@ -26,30 +26,35 @@ fn project(value: &Value) -> Result<RevisionCoreV2, Error> {
 fn checked_in_v2_vectors_match_canonical_components_frames_and_independent_digests() {
     for v in vectors()["valid"].as_array().unwrap() {
         let core = project(&v["input_core"]).unwrap_or_else(|e| panic!("{}: {e}", v["name"]));
-        let bytes = encode_canonical_revision_core_v2(&core).unwrap();
+        let bytes = encode_canonical_service_revision(&core).unwrap();
         assert_eq!(
             serde_json::from_slice::<Value>(&bytes).unwrap(),
             v["normalized_core"]
         );
-        assert_eq!(decode_canonical_revision_core_v2(&bytes).unwrap(), core);
+        assert_eq!(decode_canonical_service_revision(&bytes).unwrap(), core);
         let content_bytes = serde_jcs::to_vec(&v["normalized_content"]).unwrap();
-        let content = decode_canonical_revision_content_v2(&bytes, &content_bytes).unwrap();
+        let content = decode_canonical_service_content(&bytes, &content_bytes).unwrap();
         let actual = json!({"core_jcs_hex":hex::encode(&bytes),"content_jcs_hex":hex::encode(&content_bytes),
-            "frame_hex":hex::encode(frame_revision_content_v2(&bytes,&content_bytes)),
-            "digest":calculate_revision_content_digest_v2(&content).unwrap().to_string()});
+            "frame_hex":hex::encode(frame_revision_content(&bytes,&content_bytes)),
+            "digest":calculate_service_revision_digest(&content).unwrap().to_string()});
         assert_eq!(actual, v["expected"], "{}", v["name"]);
-        assert!(revision_core_v1::decode_canonical_revision_core_v1(&bytes).is_err());
+        if !core.storages().is_empty() || !core.resources().is_empty() {
+            assert!(
+                revision_declarations::decode_service_free_revision(&bytes).is_err(),
+                "service authority must not be projected away"
+            );
+        }
         let mut spaced = vec![b' '];
         spaced.extend_from_slice(&bytes);
         assert_eq!(
-            decode_canonical_revision_core_v2(&spaced)
+            decode_canonical_service_revision(&spaced)
                 .unwrap_err()
                 .code(),
             "noncanonical_json"
         );
     }
     let original = example("full");
-    let canonical = encode_canonical_revision_core_v2(&project(&original).unwrap()).unwrap();
+    let canonical = encode_canonical_service_revision(&project(&original).unwrap()).unwrap();
     let mut reordered = original.clone();
     for field in [
         "inputs",
@@ -66,14 +71,14 @@ fn checked_in_v2_vectors_match_canonical_components_frames_and_independent_diges
         }
     }
     assert_eq!(
-        encode_canonical_revision_core_v2(&project(&reordered).unwrap()).unwrap(),
+        encode_canonical_service_revision(&project(&reordered).unwrap()).unwrap(),
         canonical
     );
     reordered["actions"][0]["hook"]["args"] = json!(["first", "second"]);
-    let ordered = encode_canonical_revision_core_v2(&project(&reordered).unwrap()).unwrap();
+    let ordered = encode_canonical_service_revision(&project(&reordered).unwrap()).unwrap();
     reordered["actions"][0]["hook"]["args"] = json!(["second", "first"]);
     assert_ne!(
-        encode_canonical_revision_core_v2(&project(&reordered).unwrap()).unwrap(),
+        encode_canonical_service_revision(&project(&reordered).unwrap()).unwrap(),
         ordered
     );
 }
@@ -83,13 +88,13 @@ fn checked_in_v2_vectors_match_canonical_components_frames_and_independent_diges
 #[test]
 fn v2_raw_input_preserves_exact_numeric_unicode_and_duplicate_validation() {
     let invalid: Value = serde_json::from_str(include_str!(
-        "../tests/vectors/revision_core_format_v2/invalid.json"
+        "../tests/vectors/revision_canonical/invalid-services.json"
     ))
     .unwrap();
     for vector in invalid["invalid"].as_array().unwrap() {
         let input = vector["raw_core"].as_str().unwrap();
         assert_eq!(
-            project_revision_core_source_v2(input.as_bytes())
+            project_service_revision_source(input.as_bytes())
                 .unwrap_err()
                 .code(),
             vector["error_code"].as_str().unwrap(),
@@ -101,27 +106,31 @@ fn v2_raw_input_preserves_exact_numeric_unicode_and_duplicate_validation() {
     for (input, expected) in [
         (
             minimal.replacen(
-                "\"format_version\":2",
-                "\"format_version\":2,\"format_version\":2",
+                "\"format_version\":\"1.0-alpha.1\"",
+                "\"format_version\":\"1.0-alpha.1\",\"format_version\":\"1.0-alpha.1\"",
                 1,
             ),
             "duplicate_property",
         ),
         (
             minimal.replacen(
-                "\"format_version\":2",
+                "\"format_version\":\"1.0-alpha.1\"",
                 "\"format_version\":2.00000000000000001",
                 1,
             ),
-            "invalid_number",
+            "unsupported_format_version",
         ),
         (
-            minimal.replacen("\"format_version\":2", "\"format_version\":1", 1),
+            minimal.replacen(
+                "\"format_version\":\"1.0-alpha.1\"",
+                "\"format_version\":\"1.0-alpha.2\"",
+                1,
+            ),
             "unsupported_format_version",
         ),
     ] {
         assert_eq!(
-            project_revision_core_source_v2(input.as_bytes())
+            project_service_revision_source(input.as_bytes())
                 .unwrap_err()
                 .code(),
             expected
@@ -131,26 +140,26 @@ fn v2_raw_input_preserves_exact_numeric_unicode_and_duplicate_validation() {
     full["actions"][0]["parameters"][2]["default"] = json!(9007199254740992_u64);
     // Reverse input order makes count the last parameter in this fixture.
     assert!(project(&full).is_err());
-    let bad=br#"{"actions":[],"format_version":2,"inputs":[],"migrations":[],"service_resources":[],"service_storages":[{"id":"\uD800"}]}"#;
+    let bad=br#"{"actions":[],"format_version":"1.0-alpha.1","inputs":[],"migrations":[],"service_resources":[],"service_storages":[{"id":"\uD800"}]}"#;
     assert_eq!(
-        project_revision_core_source_v2(bad).unwrap_err().code(),
+        project_service_revision_source(bad).unwrap_err().code(),
         "invalid_unicode_scalar"
     );
-    assert!(project_revision_core_source_v2(&[0xff]).is_err());
+    assert!(project_service_revision_source(&[0xff]).is_err());
     let canonical =
-        encode_canonical_revision_core_v2(&project(&example("empty")).unwrap()).unwrap();
+        encode_canonical_service_revision(&project(&example("empty")).unwrap()).unwrap();
     let content =
-        revision_core_v1::decode_canonical_runtime_content_v1(br#"{"files":[]}"#).unwrap();
+        revision_declarations::decode_canonical_runtime_content(br#"{"files":[]}"#).unwrap();
     let common = project(&example("empty")).unwrap().common().clone();
-    let legacy = validate_revision_content_v1(common, content.clone()).unwrap();
-    let v2 = validate_revision_content_v2(
-        decode_canonical_revision_core_v2(&canonical).unwrap(),
+    let legacy = validate_declaration_content(common, content.clone()).unwrap();
+    let v2 = validate_service_revision_content(
+        decode_canonical_service_revision(&canonical).unwrap(),
         content,
     )
     .unwrap();
-    assert_ne!(
-        calculate_revision_content_digest_v2(&v2).unwrap(),
-        revision_core_v1::calculate_revision_content_digest_v1(&legacy).unwrap()
+    assert_eq!(
+        calculate_service_revision_digest(&v2).unwrap(),
+        revision_declarations::calculate_service_free_digest(&legacy).unwrap()
     );
 }
 
@@ -224,7 +233,7 @@ fn v2_relational_checks_distinguish_explicit_rename_and_runtime_retained_facts()
     source_json["service_resources"][0]["id"] = json!("config");
     let source = project(&source_json).unwrap();
     let digest = Sha256Digest::parse(format!("sha256:{}", "1".repeat(64))).unwrap();
-    let context = BTreeMap::from([(digest.clone(), ServiceSourceCore::V2(&source))]);
+    let context = BTreeMap::from([(digest.clone(), ServiceSourceCore::Complete(&source))]);
     let target = project(&example("rename")).unwrap();
     assert_eq!(
         validate_service_sources_v2(&target, &BTreeMap::new()).unwrap(),
@@ -260,7 +269,7 @@ fn v2_relational_checks_distinguish_explicit_rename_and_runtime_retained_facts()
     );
     source_json["service_resources"] = json!([]);
     let no_active = project(&source_json).unwrap();
-    let context = BTreeMap::from([(digest, ServiceSourceCore::V2(&no_active))]);
+    let context = BTreeMap::from([(digest, ServiceSourceCore::Complete(&no_active))]);
     assert_eq!(
         validate_service_sources_v2(&retained, &context).unwrap(),
         RelationalValidationV1::Valid,

@@ -1,4 +1,4 @@
-//! Managed Hook materialization, process supervision, and Frozen V1 runtime.
+//! Managed Hook materialization, process supervision, and supported baseline runtime.
 
 #![allow(dead_code)]
 
@@ -12,13 +12,13 @@ mod materialize;
 mod migrations;
 mod platform;
 mod protocol;
+mod protocol_runtime;
 mod restore;
 mod runtime;
 pub(crate) mod service_storage;
 pub(crate) mod shell_loader;
 mod snapshots;
 pub(crate) mod startup;
-mod versioned_protocol;
 pub(crate) use deletions::{accept_deletion, execute_ready as execute_ready_deletion};
 pub(crate) use migrations::TargetCommitPermit;
 #[cfg(test)]
@@ -53,7 +53,7 @@ use std::sync::{Barrier, atomic::AtomicUsize};
 
 use crate::{
     domain::{
-        ActionPlanStep, HookCompletionRecord, ManagedOutputIdentity, PactrunErrorRefV1,
+        ActionPlanStep, HookCompletionRecord, ManagedOutputIdentity, PactrunErrorRef,
         RecoveryRiskState, RunFailedStep, RunFailureRecord, RunFinish, RunId, RunOutcome,
         RunPrimaryFailure,
     },
@@ -942,7 +942,7 @@ fn structural_hook_completion(completion: &HookCompletionRecord) -> HookCompleti
 
 fn safe_execution_failure(code: &'static str, message: &'static str) -> RunFailureRecord {
     RunFailureRecord {
-        error: PactrunErrorRefV1::new("execution", code)
+        error: PactrunErrorRef::new("execution", code)
             .expect("Slice 5 execution error identities are valid"),
         message: message.to_owned(),
     }
@@ -1016,7 +1016,7 @@ pub(super) fn outcome_and_failure(
                 RunOutcome::Failed,
                 Some(RunPrimaryFailure {
                     failure: RunFailureRecord {
-                        error: PactrunErrorRefV1::new(owner, code)
+                        error: PactrunErrorRef::new(owner, code)
                             .expect("execution diagnostics are valid stable names"),
                         message: message.to_owned(),
                     },
@@ -1038,7 +1038,7 @@ pub(super) enum FailureKind {
     HookReportedProtocol,
     HookFailure,
     Protocol(protocol::ProtocolFailure),
-    ProtocolV2(protocol::v2::Failure),
+    ProtocolV2(protocol::authority::Failure),
     ServiceAccess(&'static str),
     ServicePrerequisite,
 }
@@ -1065,7 +1065,7 @@ impl FailureKind {
     fn record(&self) -> (&'static str, &'static str, ActionPlanStep, &'static str) {
         match self {
             Self::ProtocolV2(error) => (
-                "hook_protocol_v2",
+                "hook_protocol",
                 error.code,
                 ActionPlanStep::AcceptCompletion,
                 "Hook V2 protocol failed",
@@ -1126,7 +1126,7 @@ impl FailureKind {
             ),
             Self::HookFailure => unreachable!("Hook failure is represented by Hook completion"),
             Self::Protocol(protocol) => (
-                "hook_protocol_v1",
+                "hook_protocol",
                 protocol.code,
                 ActionPlanStep::AcceptCompletion,
                 protocol.message,

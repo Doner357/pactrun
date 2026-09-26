@@ -5,12 +5,12 @@ const ERROR_NAME_MAX_BYTES: usize = 128;
 /// Presentation text and implementation error variants are deliberately not
 /// part of this value.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct PactrunErrorRefV1 {
+pub(crate) struct PactrunErrorRef {
     owner: String,
     code: String,
 }
 
-impl PactrunErrorRefV1 {
+impl PactrunErrorRef {
     pub(crate) fn new(owner: impl Into<String>, code: impl Into<String>) -> Result<Self, String> {
         let owner = owner.into();
         let code = code.into();

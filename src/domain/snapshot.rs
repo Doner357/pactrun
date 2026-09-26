@@ -11,29 +11,20 @@ use super::{
 pub(crate) const SNAPSHOT_TIMESTAMP_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SnapshotIntegrityVersion {
-    V1,
-    V2,
-}
-
+pub(crate) struct SnapshotIntegrityVersion;
 impl SnapshotIntegrityVersion {
-    pub(crate) fn from_number(value: i64) -> Result<Self, SnapshotValidationError> {
-        match value {
-            1 => Ok(Self::V1),
-            2 => Ok(Self::V2),
-            _ => Err(SnapshotValidationError::InvalidFormatVersion),
-        }
+    pub(crate) const BASELINE: Self = Self;
+    pub(crate) fn from_text(value: &str) -> Result<Self, SnapshotValidationError> {
+        super::VersionDomain::Snapshot
+            .require(value)
+            .map(|_| Self)
+            .map_err(|_| SnapshotValidationError::InvalidFormatVersion)
     }
-
-    pub(crate) const fn number(self) -> u32 {
-        match self {
-            Self::V1 => 1,
-            Self::V2 => 2,
-        }
+    pub(crate) const fn as_str(self) -> &'static str {
+        "1.0-alpha.1"
     }
-
     pub(crate) const fn current_writer() -> Self {
-        Self::V2
+        Self
     }
 }
 
@@ -341,8 +332,7 @@ impl SnapshotManifest {
                 InputProtectionV1::Normal => ManagedInputProtection::Normal,
                 InputProtectionV1::Secret => ManagedInputProtection::Secret,
             };
-            let sticky_v2 = self.version == SnapshotIntegrityVersion::V2
-                && matches!(binding.state, SnapshotBindingState::Bound(_))
+            let sticky_v2 = matches!(binding.state, SnapshotBindingState::Bound(_))
                 && declared == ManagedInputProtection::Normal
                 && binding.protection == ManagedInputProtection::Secret;
             if binding.protection != declared && !sticky_v2 {

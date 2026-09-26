@@ -175,9 +175,9 @@ Protocol completion_accepted is not a managed publication boundary.
 
 ## Scope, versions, and ownership
 
-Use [integrity V2](../contracts/snapshot-integrity-format-v2.md),
-[bundle V1](../contracts/snapshot-bundle-v1.md),
-[V5 persistence](../persistence/persistence-schema-v5.md), and
+Use [integrity V2](../contracts/snapshot-integrity.md),
+[bundle V1](../contracts/snapshot-bundle.md),
+[V5 persistence](../persistence/persistence-baseline.md), and
 [fixed capabilities](../behavior/m4-runtime-capabilities.md).
 Their versions remain independent of Frozen RevisionCoreFormatV1 and
 HookProtocolV1. Snapshot owns its payload closure independently of its origin,

@@ -163,7 +163,7 @@ fn compile_hook_launch<L: HostLauncherLookup>(
     runtime_content: &[RuntimeFileV1],
     launcher_search_directories: &[PathBuf],
 ) -> Result<CompiledHookLaunch, PlanCompilationError> {
-    if !matches!(hook.protocol_version.get(), 1 | 2) {
+    if !crate::domain::VersionDomain::Hook.supports(hook.protocol_version) {
         return Err(PlanCompilationError::UnsupportedHookProtocol(
             hook.protocol_version,
         ));
@@ -406,7 +406,7 @@ mod tests {
         )
     }
 
-    fn revision(interpreter: bool) -> ValidatedRevisionContentV1 {
+    fn revision(interpreter: bool) -> DeclarationContent {
         let file = RuntimeFileV1 {
             id: ContentId::parse("tool").unwrap(),
             path: RuntimePath::parse("bin/tool").unwrap(),
@@ -425,7 +425,7 @@ mod tests {
                 executable: file.id.clone(),
             }
         };
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![InputDeclarationV1 {
                 id: InputIdentity::parse("config").unwrap(),
                 required: true,
@@ -436,7 +436,7 @@ mod tests {
                 access: OperationAccessV1::Observe,
                 parameters: Vec::new(),
                 hook: HookV1 {
-                    protocol_version: PositiveVersion::new(1).unwrap(),
+                    protocol_version: crate::domain::FormatVersion::BASELINE,
                     launch,
                     args: vec!["tail".to_owned()],
                     io: IOContractV1 {
@@ -456,7 +456,7 @@ mod tests {
             files: vec![file],
         })
         .unwrap();
-        validate_revision_content_v1(core, runtime_content).unwrap()
+        validate_declaration_content(core, runtime_content).unwrap()
     }
 
     fn setup(interpreter: bool) -> (InvokeAction, FactsRepository) {
@@ -529,18 +529,18 @@ mod tests {
             json!([{"reference":reference,"mode":"read"}]);
         source["actions"][0]["hook"]["service_requires"] =
             json!([{"reference":reference,"presence":"present"}]);
-        let core = crate::revision_core_v2::project_revision_core_source_v2(
+        let core = crate::revision_canonical::project_service_revision_source(
             &serde_json::to_vec(&source).unwrap(),
         )
         .unwrap();
         let expected = core.hooks()[&ServiceHookSite::Action(intent.action.clone())].clone();
-        let content = crate::revision_core_v2::validate_revision_content_v2(
+        let content = crate::revision_canonical::validate_service_revision_content(
             core,
             repository.0.revision_content.runtime_content.clone(),
         )
         .unwrap();
         let digest =
-            crate::revision_core_v2::calculate_revision_content_digest_v2(&content).unwrap();
+            crate::revision_canonical::calculate_service_revision_digest(&content).unwrap();
         intent.active_revision.content_digest = digest;
         repository.0.active_revision = intent.active_revision.clone();
         repository.0.revision_content = content.into();
@@ -582,7 +582,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.service_hook(), &expected);
-        assert_eq!(plan.protocol_version().get(), 2);
+        assert_eq!(
+            plan.protocol_version(),
+            crate::domain::VersionDomain::Hook.current()
+        );
         assert_eq!(plan.service_hook().requires.len(), 1);
         assert_eq!(plan.service_bindings().grants[0].1.allocation(), allocation);
         repository.0.service_state = None;
@@ -607,23 +610,26 @@ mod tests {
         let (mut intent, mut repository) = setup(false);
         let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
         source["actions"][0]["hook"]["protocol_version"] = serde_json::json!(3);
-        let core = crate::revision_core_v1::project_revision_core_source_v1(
+        let core = crate::revision_declarations::project_service_free_revision_source(
             &serde_json::to_vec(&source).unwrap(),
         )
         .unwrap();
-        assert_eq!(core.actions()[0].hook.protocol_version.get(), 3);
-        let content = validate_revision_content_v1(
+        assert_eq!(
+            core.actions()[0].hook.protocol_version.to_string(),
+            "1.0-alpha.2"
+        );
+        let content = validate_declaration_content(
             core,
             repository.0.revision_content.runtime_content.clone(),
         )
         .unwrap();
         intent.active_revision.content_digest =
-            crate::revision_core_v1::calculate_revision_content_digest_v1(&content).unwrap();
+            crate::revision_declarations::calculate_service_free_digest(&content).unwrap();
         repository.0.active_revision = intent.active_revision.clone();
         repository.0.revision_content = content.into();
         assert!(
             matches!(compile_action(&repository, &FakeLauncherLookup(PathBuf::from("unused")), &intent, &[]),
-            Err(crate::application::ApplicationError::PlanCompilation(PlanCompilationError::UnsupportedHookProtocol(version))) if version.get() == 3)
+            Err(crate::application::ApplicationError::PlanCompilation(PlanCompilationError::UnsupportedHookProtocol(version))) if version.to_string() == "1.0-alpha.2")
         );
     }
 

@@ -12,12 +12,6 @@ pub(super) fn state_from(
     db: &Connection,
     instance: InstanceId,
 ) -> Result<Option<ServiceMigrationState>, PersistenceError> {
-    let version: i64 = db
-        .pragma_query_value(None, "user_version", |r| r.get(0))
-        .map_err(|e| PersistenceError::sqlite("read service migration schema", e))?;
-    if version < 7 {
-        return Ok(None);
-    }
     let state = super::sqlite_service_views::load_instance_service_state_from(db, instance)?
         .ok_or_else(|| PersistenceError::MissingInstance(instance.to_string()))?;
     ServiceMigrationState::from_observed(&state)

@@ -59,10 +59,8 @@ fn read_limited_frame(stream: &mut impl Read, limit: usize) -> io::Result<Value>
     // Preserve the raw-token integer rule before serde_json can round a
     // fractional token such as 1.000000000000000001 into binary64 1.0.
     for (key, value) in fields {
-        if matches!(
-            key.as_str(),
-            "protocol_version" | "request_id" | "control_id"
-        ) && crate::revision_core_v1::exact_integer(value).map_err(|_| failure())? <= 0
+        if matches!(key.as_str(), "request_id" | "control_id")
+            && crate::revision_declarations::exact_integer(value).map_err(|_| failure())? <= 0
         {
             return Err(failure());
         }
@@ -479,11 +477,10 @@ fn powershell_file_path(path: &OsString) -> io::Result<OsString> {
 }
 
 fn execution(args: &[OsString]) -> io::Result<i32> {
-    let version: u32 = match args.get(3).and_then(|v| v.to_str()) {
-        Some("1") => 1,
-        Some("2") => 2,
-        _ => return Err(failure()),
-    };
+    let version = args.get(3).and_then(|v| v.to_str()).ok_or_else(failure)?;
+    crate::domain::VersionDomain::Hook
+        .require(version)
+        .map_err(|_| failure())?;
     let expected_transport = if cfg!(windows) {
         "windows-named-pipe"
     } else {
@@ -494,19 +491,12 @@ fn execution(args: &[OsString]) -> io::Result<i32> {
     }
     let endpoint = env::var("PACTRUN_HOOK_PROTOCOL_ENDPOINT").map_err(|_| failure())?;
     let mut wire = connect(&endpoint)?;
-    let mut preamble = vec![0; protocol::PREAMBLE.len()];
-    wire.read_exact(&mut preamble)?;
-    let expected_preamble = if version == 1 {
-        protocol::PREAMBLE
-    } else {
-        protocol::v2::PREAMBLE_V2
-    };
-    if preamble != expected_preamble {
+    if !protocol::read_preamble(&mut wire)? {
         return Err(failure());
     }
     let session = read_frame(&mut wire)?;
     session::validate(&session, version)?;
-    wire.write_all(&preamble)?;
+    wire.write_all(protocol::PREAMBLE)?;
     #[cfg(unix)]
     let listener = ProtocolListener::bind_helpers_in(Path::new(
         &env::var_os("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY").ok_or_else(failure)?,
@@ -649,7 +639,7 @@ mod tests {
     use super::*;
 
     fn session() -> Value {
-        json!({"type":"session_start","protocol_version":1,"session_id":"1".repeat(32),"run_id":"2".repeat(32),
+        json!({"type":"session_start","protocol_version":"1.0-alpha.1","service_authorities":[],"session_id":"1".repeat(32),"run_id":"2".repeat(32),
             "revision":{"package_id":"3".repeat(32),"revision_content_digest":format!("sha256:{}", "4".repeat(64))},
             "parameters":[{"parameter_id":"flag","value":true}],"workspace":{"handle":"5".repeat(32),"root_path":env::current_dir().unwrap()},
             "io":{"terminal":"none"},"operation":{"kind":"action","action_id":"run","access":"mutate","bindings":[],"outputs":[]}})
@@ -687,7 +677,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn real_loader_reports_helper_bind_failure_before_ready_or_user_script() {
-        for version in [1, 2] {
+        for version in ["1.0-alpha.1"] {
             let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp");
             fs::create_dir_all(&parent).unwrap();
             let root = tempfile::tempdir_in(parent).unwrap();
@@ -728,15 +718,15 @@ mod tests {
             stream
                 .set_read_timeout(Some(Duration::from_secs(10)))
                 .unwrap();
-            let preamble = if version == 1 {
+            let preamble = if version == "1.0-alpha.1" {
                 protocol::PREAMBLE
             } else {
-                protocol::v2::PREAMBLE_V2
+                protocol::authority::PREAMBLE_V2
             };
             stream.write_all(preamble).unwrap();
             let mut value = session();
             value["protocol_version"] = json!(version);
-            if version == 2 {
+            if version == "1.0-alpha.1" {
                 value["service_authorities"] = json!([]);
             }
             write_frame(&mut stream, &value).unwrap();
@@ -812,10 +802,10 @@ mod tests {
     #[test]
     fn shell_session_and_frame_validation_reject_unknown_duplicate_and_foreign_data() {
         let good = session();
-        session::validate(&good, 1).unwrap();
+        session::validate(&good, "1.0-alpha.1").unwrap();
         let mut equivalent = good.clone();
         equivalent["protocol_version"] = json!(1.0);
-        session::validate(&equivalent, 1).unwrap();
+        assert!(session::validate(&equivalent, "1.0-alpha.1").is_err());
         session::cancel(&json!({"type":"cancel","control_id":1.0,"reason":"requested"})).unwrap();
         session::risk_ack(
             &json!({"type":"request_ack","request_id":1.0,"risk_state":"open"}),
@@ -830,11 +820,11 @@ mod tests {
         ] {
             let mut bad = good.clone();
             bad[field] = value;
-            assert!(session::validate(&bad, 1).is_err());
+            assert!(session::validate(&bad, "1.0-alpha.1").is_err());
         }
         let mut bad = good.clone();
         bad["operation"]["outputs"] = json!([{"handle":"5".repeat(32),"output_id":"out","staged_path":env::current_dir().unwrap()}]);
-        assert!(session::validate(&bad, 1).is_err());
+        assert!(session::validate(&bad, "1.0-alpha.1").is_err());
         for bytes in [
             b"{\"x\":1,\"x\":2}".as_slice(),
             b"\xff",

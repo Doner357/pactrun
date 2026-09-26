@@ -7,7 +7,7 @@ title: Pack Transport Status
 **Status: C S0-S3 implemented, verified and integrated into local develop,
 including the approved export naming follow-up.**
 
-The operator approved the [Pack contract](../spec/contracts/pack-distribution-v1.md)
+The operator approved the [Pack contract](../spec/contracts/pack-distribution.md)
 on 2026-09-22: directory/ZIP source and distribution installation, exact export,
 private typed common installation, optional portable metadata and overwrite/keep.
 The [approved baseline](./design-notes/pack-transport-baseline.md) records scope

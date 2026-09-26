@@ -53,7 +53,7 @@ backend memory and then declare the milestone complete.
 
 The original plan excluded schema changes. The operator subsequently authorized
 necessary adjustments while retaining the memory and safety goals. The
-[V10 contract](../spec/persistence/persistence-schema-v10.md) now reuses the
+[V10 contract](../spec/persistence/persistence-baseline.md) now reuses the
 existing immutable file store and its publication/GC guard. This avoids a new
 candidate-chunk engine and moves new service bytes out of SQLite WAL.
 

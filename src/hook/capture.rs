@@ -304,7 +304,7 @@ impl CapturePreparation {
             })
             .collect();
         let manifest = SnapshotManifest::new(SnapshotManifestParts {
-            version: SnapshotIntegrityVersion::V2,
+            version: SnapshotIntegrityVersion::BASELINE,
             snapshot_id: self.id,
             producer: self.revision.clone(),
             origin_instance_id: self.instance,

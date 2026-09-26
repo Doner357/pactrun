@@ -7,8 +7,8 @@ title: Execution Diagnostics
 **Status: Implemented and verified normative behavior; integration is tracked separately.**
 
 <!-- spec-navigation:start -->
-Read [Run behavior](./actions-plans-and-runs.md), [Hook Protocol](../contracts/hook-protocol-v1.md)
-and [V11 persistence](../persistence/persistence-schema-v11.md). Delivery is recorded
+Read [Run behavior](./actions-plans-and-runs.md), [Hook Protocol](../contracts/hook-protocol.md)
+and [V11 persistence](../persistence/persistence-baseline.md). Delivery is recorded
 in the [implementation status](../../development/execution-diagnostics-observability-status.md).
 <!-- spec-navigation:end -->
 

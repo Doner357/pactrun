@@ -41,10 +41,10 @@ silently promoted to approved or Frozen contracts by that confirmation.
 
 | Owning proposal | Exact deliverable | New proposed requirements |
 | --- | --- | --- |
-| [Revision Core V2](../../spec/contracts/revision-core-format-v2.md) | Closed V1-relative schema, typed identities, locator grammar, authority/prerequisites, normalization/frame and complete mapping predicates | PR-REQ-0317, PR-REQ-0318, PR-REQ-0319 |
-| [Pack Source YAML V2](../../spec/contracts/pack-source-yaml-v2.md) | Closed projection/defaults, positive authoring and Migration examples, rejection table and V1 preservation | PR-REQ-0320 |
-| [Hook Protocol V2](../../spec/contracts/hook-protocol-v2.md) | Exact framing/Session delta, persistent grants, target_ready and target_ready_received messages, termination/publication and failure ordering | PR-REQ-0321, PR-REQ-0322 |
-| [Persistence V7](../../spec/persistence/persistence-schema-v7.md) | Exact DDL proposal, logical invariants, preparation/protection, references, allocation layout and exact V6 upgrade/crash rules | PR-REQ-0323, PR-REQ-0324, PR-REQ-0325 |
+| [Revision Core V2](../../spec/contracts/revision-canonical.md) | Closed V1-relative schema, typed identities, locator grammar, authority/prerequisites, normalization/frame and complete mapping predicates | PR-REQ-0317, PR-REQ-0318, PR-REQ-0319 |
+| [Pack Source YAML V2](../../spec/contracts/pack-source.md) | Closed projection/defaults, positive authoring and Migration examples, rejection table and V1 preservation | PR-REQ-0320 |
+| [Hook Protocol V2](../../spec/contracts/hook-protocol.md) | Exact framing/Session delta, persistent grants, target_ready and target_ready_received messages, termination/publication and failure ordering | PR-REQ-0321, PR-REQ-0322 |
+| [Persistence V7](../../spec/persistence/persistence-baseline.md) | Exact DDL proposal, logical invariants, preparation/protection, references, allocation layout and exact V6 upgrade/crash rules | PR-REQ-0323, PR-REQ-0324, PR-REQ-0325 |
 | [Execution and M7 handoff](../../spec/execution/m6-5-service-storage-execution.md) | Whole-path compilation, edge admission, atomic target boundary, retained contracts versus failed allocations, M7 receipt/version boundary | PR-REQ-0326, PR-REQ-0327 |
 | [Human CLI](../../spec/behavior/m6-5-service-storage-command-reference.md) | Exact command/flag/role selection, output, refusal and exit semantics; proposed diagnostic owners/codes | PR-REQ-0328 |
 

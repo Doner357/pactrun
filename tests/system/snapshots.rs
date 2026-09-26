@@ -17,11 +17,11 @@ use std::{
 const SECRET: &[u8] = b"m4-managed-secret-bytes";
 const SERVICE: &[u8] = b"m4-captured-service-bytes";
 const PRIVATE: &str = "m4-sensitive-parameter";
-const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
+const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
 
 fn source(access: &str) -> String {
     let mut text = String::from(
-        "source_format: 1\npackage_id: {package_id}\nrevision:\n  inputs:\n    - { id: secret, required: true, protection: secret }\n    - { id: optional, required: false, protection: normal }\n  actions: []\n  snapshot:\n",
+        "source_format: 1.0-alpha.1\npackage_id: {package_id}\nrevision:\n  inputs:\n    - { id: secret, required: true, protection: secret }\n    - { id: optional, required: false, protection: normal }\n  actions: []\n  snapshot:\n",
     );
     for operation in ["capture", "restore"] {
         text.push_str(&format!("    {operation}:\n"));
@@ -35,7 +35,7 @@ fn source(access: &str) -> String {
         - { id: secret_text, type: string, sensitive: true, default: m4-sensitive-parameter }
         - { id: enabled, type: boolean, sensitive: false, default: true }
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: ["--exact", "snapshots::snapshot_hook_worker", "--nocapture"]
         io: { terminal: none }
@@ -494,7 +494,7 @@ fn v1_bundle(path: &Path, revision: &str) -> String {
     let id = "00000000000000000000000000000072";
     let secret = format!("sha256:{}", hex::encode(Sha256::digest(SECRET)));
     let service = format!("sha256:{}", hex::encode(Sha256::digest(SERVICE)));
-    let manifest = json!({"format_version":1,"snapshot_id":id,"producer":{"package_id":package,"revision_content_digest":digest},"origin_instance_id":"00000000000000000000000000000073","captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[{"input_id":"optional","role":"active","state":"absent","protection":"normal"},{"input_id":"secret","role":"active","state":"bound","protection":"secret","blob_digest":secret}],"service_content":[{"role":"database","path":"state/main","blob_digest":service}]});
+    let manifest = json!({"format_version":"1.0-alpha.1","snapshot_id":id,"producer":{"package_id":package,"revision_content_digest":digest},"origin_instance_id":"00000000000000000000000000000073","captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[{"input_id":"optional","role":"active","state":"absent","protection":"normal"},{"input_id":"secret","role":"active","state":"bound","protection":"secret","blob_digest":secret}],"service_content":[{"role":"database","path":"state/main","blob_digest":service}]});
     let canonical = serde_jcs::to_vec(&manifest).unwrap();
     let mut hash = Sha256::new();
     hash.update(b"pactrun.snapshot-integrity-digest\0");
@@ -960,7 +960,7 @@ fn snapshot_hook_worker() {
     }
     write_frame(
         &mut stream,
-        json!({"type":"session_ready","protocol_version":1,"session_id":session["session_id"]}),
+        json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}),
     );
     if mode == "hold" {
         append(marker, "ready:hold\n");

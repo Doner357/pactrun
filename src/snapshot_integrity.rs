@@ -25,6 +25,7 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SnapshotCodecError {
+    UnsupportedVersion(crate::domain::FormatVersion),
     Validation(SnapshotValidationError),
     Capability(CapabilityRefusal),
     ContentIo(io::ErrorKind),
@@ -44,6 +45,9 @@ impl From<CapabilityRefusal> for SnapshotCodecError {
 impl fmt::Display for SnapshotCodecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedVersion(version) => {
+                f.write_str(&crate::domain::VersionDomain::Snapshot.unsupported_message(*version))
+            }
             Self::Validation(error) => error.fmt(f),
             Self::Capability(error) => error.fmt(f),
             Self::ContentIo(_) => f.write_str("Snapshot content I/O failed"),
@@ -202,10 +206,21 @@ pub(crate) fn decode_snapshot_manifest(
         StrictJsonErrorKind::InvalidJson => SnapshotValidationError::InvalidJson,
     })?;
     let mut object = take_object(value)?;
+    let RawJsonValue::String(version) = take(&mut object, "format_version")? else {
+        return Err(SnapshotValidationError::InvalidFormatVersion.into());
+    };
+    let required = version
+        .parse::<crate::domain::FormatVersion>()
+        .map_err(|_| SnapshotValidationError::InvalidFormatVersion)?;
+    if !crate::domain::VersionDomain::Snapshot.supports(required) {
+        return Err(SnapshotCodecError::UnsupportedVersion(required));
+    }
+    if SnapshotIntegrityVersion::from_text(&version)? != selected {
+        return Err(SnapshotValidationError::InvalidFormatVersion.into());
+    }
     check_fields(
         &object,
         &[
-            "format_version",
             "snapshot_id",
             "producer",
             "origin_instance_id",
@@ -214,9 +229,6 @@ pub(crate) fn decode_snapshot_manifest(
             "service_content",
         ],
     )?;
-    if exact_integer(&take(&mut object, "format_version")?)? != i64::from(selected.number()) {
-        return Err(SnapshotValidationError::InvalidFormatVersion.into());
-    }
     let snapshot_id = take_string(&mut object, "snapshot_id")?
         .parse()
         .map_err(|_| SnapshotValidationError::InvalidResourceId)?;
@@ -285,7 +297,6 @@ pub(crate) fn encode_snapshot_manifest(
     SnapshotCapability::CanonicalManifest.check(canonical.len() as u64)?;
     let mut hasher = Sha256::new();
     hasher.update(b"pactrun.snapshot-integrity-digest\0");
-    hasher.update(manifest.version().number().to_be_bytes());
     hasher.update(b"snapshot-integrity-manifest\0");
     hasher.update((canonical.len() as u64).to_be_bytes());
     hasher.update(&canonical);
@@ -311,7 +322,7 @@ fn json_manifest(manifest: &SnapshotManifest) -> Value {
     }).collect();
     let content: Vec<_> = manifest.service_content().iter().map(|c| json!({ "role": c.role.as_str(), "path": c.path.as_str(), "blob_digest": c.blob_digest.as_str() })).collect();
     json!({
-        "format_version": manifest.version().number(), "snapshot_id": manifest.snapshot_id().to_string(),
+        "format_version": manifest.version().as_str(), "snapshot_id": manifest.snapshot_id().to_string(),
         "producer": { "package_id": manifest.producer().package_id.to_string(), "revision_content_digest": manifest.producer().content_digest.to_string() },
         "origin_instance_id": manifest.origin_instance_id().to_string(),
         "captured_at": { "unix_seconds": manifest.captured_at().unix_seconds(), "nanoseconds": manifest.captured_at().nanoseconds() },

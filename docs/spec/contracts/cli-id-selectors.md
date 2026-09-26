@@ -10,7 +10,7 @@ title: CLI Object ID Selectors
 ## Reading map (informative)
 
 This page owns abbreviated CLI object references and usable human list IDs.
-Read [CLI JSON V1](./cli-json-v1.md) for machine output and
+Read [CLI JSON V1](./cli-machine-interface.md) for machine output and
 [command behavior](../behavior/command-and-output-reference.md) for operations.
 The [implementation record](../../development/short-id-selectors-status.md)
 tracks verification and integration separately from this contract.
@@ -63,7 +63,7 @@ Names and authored IDs are not subject to prefix inference.
 
 **Verification: PR-TEST-0587, PR-TEST-0589.**
 
-The [CLI JSON contract](./cli-json-v1.md) and
+The [CLI JSON contract](./cli-machine-interface.md) and
 [command reference](../behavior/command-and-output-reference.md) retain ownership
 of response and operation semantics. This selector layer does not add authority.
 

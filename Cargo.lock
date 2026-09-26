@@ -593,7 +593,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
 name = "pactrun"
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 dependencies = [
  "base64",
  "crc32fast",
@@ -1237,6 +1237,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "fluent-uri",
  "hex",
  "serde",
  "serde_jcs",

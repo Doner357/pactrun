@@ -21,14 +21,14 @@ fn fixture_stream(reader: &mut dyn Read, byte_len: u64) -> (tempfile::TempDir, P
     let tool = b"fixture-tool";
     let digest = Sha256Digest::from_bytes(Sha256::digest(tool).into());
     let publication = p.put_runtime_content(&digest, &mut &tool[..]).unwrap();
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs: vec![],
         actions: vec![ActionV1 {
             id: ActionIdentity::parse("inspect").unwrap(),
             access: OperationAccessV1::Observe,
             parameters: vec![],
             hook: HookV1 {
-                protocol_version: PositiveVersion::new(1).unwrap(),
+                protocol_version: crate::domain::FormatVersion::BASELINE,
                 launch: HookLaunchV1::Direct {
                     executable: ContentId::parse("tool").unwrap(),
                 },
@@ -54,7 +54,7 @@ fn fixture_stream(reader: &mut dyn Read, byte_len: u64) -> (tempfile::TempDir, P
         }],
     })
     .unwrap();
-    let content = validate_revision_content_v1(core, runtime).unwrap();
+    let content = validate_declaration_content(core, runtime).unwrap();
     let revision = p
         .persist_revision(PackageId::from_bytes([81; 16]), &content, &[publication])
         .unwrap();

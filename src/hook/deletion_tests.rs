@@ -19,9 +19,9 @@ fn fixture(mode: &str, version: u8) -> RuntimeFixture {
             *manifest = manifest.replace("requires: [{ role: active, input_id: secret_config }]", "requires: [{ role: retained, input_id: legacy }]");
         }
         if mode == "service" {
-            *manifest = manifest.replace("source_format: 1", "source_format: 2")
+            *manifest = manifest.to_owned()
                 .replace("revision:\n", "revision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: config.json, kind: file}]\n")
-                .replace("protocol_version: 2\n      launch:", "protocol_version: 2\n      service_access: [{reference: {view: current, role: active, kind: resource, id: config}, mode: read}]\n      service_requires: [{reference: {view: current, role: active, kind: resource, id: config}, presence: present}]\n      launch:");
+                .replace("protocol_version: 1.0-alpha.1\n      launch:", "protocol_version: 1.0-alpha.1\n      service_access: [{reference: {view: current, role: active, kind: resource, id: config}, mode: read}]\n      service_requires: [{reference: {view: current, role: active, kind: resource, id: config}, presence: present}]\n      launch:");
         }
     })
 }

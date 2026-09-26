@@ -56,8 +56,8 @@ pub(super) struct MaterializedExecution {
     terminal: TerminalContractV1,
     capture: Option<super::capture::CapturePreparation>,
     migration_outputs: Vec<super::MigrationOutputSlot>,
-    v2_state: Option<super::protocol::v2::State>,
-    v2_transport: Option<super::protocol::v2::PreparedTransport>,
+    protocol_state: Option<super::protocol::authority::State>,
+    protocol_transport: Option<super::protocol::authority::PreparedTransport>,
     _service_access: Option<super::service_storage::PreparedServiceAccess>,
 }
 
@@ -140,7 +140,7 @@ impl MaterializedAction {
                 descriptors.push(json!({"role":descriptor.role.as_str(),"path":descriptor.path.as_str(),"blob_digest":descriptor.blob_digest.as_str(),"materialized_path":relative}));
             }
             let (program, mut arguments) =
-                launch_command(plan.launch(), &runtime, plan.hook().protocol_version.get())?;
+                launch_command(plan.launch(), &runtime, plan.hook().protocol_version)?;
             arguments.extend(plan.hook().args.iter().cloned());
             let session_id = random_handle()?;
             let parameters = plan
@@ -150,9 +150,9 @@ impl MaterializedAction {
                     Ok(json!({"parameter_id":p.id.as_str(),"value":parameter_value(p.value())?}))
                 })
                 .collect::<Result<Vec<_>, MaterializationError>>()?;
-            let session = json!({"type":"session_start","protocol_version":1,"session_id":session_id,"run_id":run.to_string(),"revision":{"package_id":manifest.producer().package_id.to_string(),"revision_content_digest":manifest.producer().content_digest.to_string()},"parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},"operation":{"kind":"snapshot_restore","snapshot_id":manifest.snapshot_id().to_string(),"bindings":bindings,"snapshot_content":{"handle":random_handle()?,"readonly_root_path":host_path(&content)?,"logical_descriptors":descriptors}}});
+            let session = json!({"type":"session_start","protocol_version":"1.0-alpha.1","session_id":session_id,"run_id":run.to_string(),"revision":{"package_id":manifest.producer().package_id.to_string(),"revision_content_digest":manifest.producer().content_digest.to_string()},"parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},"operation":{"kind":"snapshot_restore","snapshot_id":manifest.snapshot_id().to_string(),"bindings":bindings,"snapshot_content":{"handle":random_handle()?,"readonly_root_path":host_path(&content)?,"logical_descriptors":descriptors}}});
             let mut session = session;
-            session["protocol_version"] = json!(plan.hook().protocol_version.get());
+            session["protocol_version"] = json!(plan.hook().protocol_version);
             super::protocol::validate_session_frame(&session)?;
             Ok((program, arguments, session_id, session))
         })();
@@ -165,8 +165,8 @@ impl MaterializedAction {
                 session_id,
                 session,
                 operation: super::protocol::SessionOperation::Restore,
-                v2_state: None,
-                v2_transport: None,
+                protocol_state: None,
+                protocol_transport: None,
                 _service_access: None,
                 terminal: plan.hook().io.terminal,
                 capture: None,
@@ -176,7 +176,7 @@ impl MaterializedAction {
                 p,
                 staging,
                 run,
-                plan.hook().protocol_version.get(),
+                plan.hook().protocol_version,
                 plan.service_bindings(),
             ),
             Err(error) => {
@@ -247,7 +247,7 @@ impl MaterializedAction {
         let (program, mut arguments) = launch_command(
             admitted.plan().launch(),
             &runtime,
-            admitted.plan().protocol_version().get(),
+            admitted.plan().protocol_version(),
         )?;
         arguments.extend(admitted.plan().hook_args().iter().cloned());
         let session_id = random_handle()?;
@@ -269,7 +269,7 @@ impl MaterializedAction {
         });
         let session = json!({
             "type": "session_start",
-            "protocol_version": admitted.plan().protocol_version().get(),
+            "protocol_version": admitted.plan().protocol_version(),
             "session_id": session_id,
             "run_id": admitted.run().to_string(),
             "revision": {
@@ -300,8 +300,8 @@ impl MaterializedAction {
             session_id,
             session,
             operation: super::protocol::SessionOperation::Action,
-            v2_state: None,
-            v2_transport: None,
+            protocol_state: None,
+            protocol_transport: None,
             _service_access: None,
             terminal: admitted.plan().terminal(),
             capture: None,
@@ -311,7 +311,7 @@ impl MaterializedAction {
             persistence,
             staging,
             admitted.run(),
-            admitted.plan().protocol_version().get(),
+            admitted.plan().protocol_version(),
             admitted.plan().service_bindings(),
         )
     }
@@ -356,7 +356,7 @@ impl MaterializedAction {
                 bindings.push(json!({"handle":random_handle()?,"input_id":binding.input.as_str(),"role":"active","readonly_path":host_path(&path)?}));
             }
             let (program, mut arguments) =
-                launch_command(plan.launch(), &runtime, plan.hook().protocol_version.get())?;
+                launch_command(plan.launch(), &runtime, plan.hook().protocol_version)?;
             arguments.extend(plan.hook().args.iter().cloned());
             let session_id = random_handle()?;
             let parameters = plan
@@ -366,12 +366,12 @@ impl MaterializedAction {
                     Ok(json!({"parameter_id":p.id.as_str(),"value":parameter_value(p.value())?}))
                 })
                 .collect::<Result<Vec<_>, MaterializationError>>()?;
-            let session = json!({"type":"session_start","protocol_version":1,"session_id":session_id,"run_id":run.to_string(),
+            let session = json!({"type":"session_start","protocol_version":"1.0-alpha.1","session_id":session_id,"run_id":run.to_string(),
                 "revision":{"package_id":plan.operation().revision().package_id.to_string(),"revision_content_digest":plan.operation().revision().content_digest.to_string()},
                 "parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},
                 "operation":{"kind":"snapshot_capture","access":access_name(plan.access()),"bindings":bindings,"candidate":{"handle":random_handle()?,"root_path":host_path(&candidate)?}}});
             let mut session = session;
-            session["protocol_version"] = json!(plan.hook().protocol_version.get());
+            session["protocol_version"] = json!(plan.hook().protocol_version);
             super::protocol::validate_session_frame(&session)?;
             Ok((preparation, program, arguments, session_id, session))
         })();
@@ -384,8 +384,8 @@ impl MaterializedAction {
                 session_id,
                 session,
                 operation: super::protocol::SessionOperation::Capture,
-                v2_state: None,
-                v2_transport: None,
+                protocol_state: None,
+                protocol_transport: None,
                 _service_access: None,
                 terminal: plan.hook().io.terminal,
                 capture: Some(capture),
@@ -395,7 +395,7 @@ impl MaterializedAction {
                 p,
                 staging,
                 run,
-                plan.hook().protocol_version.get(),
+                plan.hook().protocol_version,
                 plan.service_bindings(),
             ),
             Err(error) => {
@@ -407,18 +407,20 @@ impl MaterializedAction {
     pub(super) fn operation(&self) -> super::protocol::SessionOperation {
         self.operation
     }
-    pub(super) fn take_v2_state(&mut self) -> Option<super::protocol::v2::State> {
-        self.v2_state.take()
+    pub(super) fn take_protocol_state(&mut self) -> Option<super::protocol::authority::State> {
+        self.protocol_state.take()
     }
-    pub(super) fn take_v2_transport(&mut self) -> Option<super::protocol::v2::PreparedTransport> {
-        self.v2_transport.take()
+    pub(super) fn take_protocol_transport(
+        &mut self,
+    ) -> Option<super::protocol::authority::PreparedTransport> {
+        self.protocol_transport.take()
     }
     fn with_service(
         self,
         p: &PactrunPersistence,
         staging: &StagingSession,
         run: crate::domain::RunId,
-        version: i64,
+        version: crate::domain::FormatVersion,
         bindings: &crate::domain::ServiceHookBindings,
     ) -> Result<Self, MaterializationError> {
         self.with_service_target(p, staging, run, version, bindings, false)
@@ -428,29 +430,17 @@ impl MaterializedAction {
         p: &PactrunPersistence,
         staging: &StagingSession,
         run: crate::domain::RunId,
-        version: i64,
+        version: crate::domain::FormatVersion,
         bindings: &crate::domain::ServiceHookBindings,
         transform: bool,
     ) -> Result<Self, MaterializationError> {
         let result = (|| {
-            if version == 1 {
-                if !bindings.grants.is_empty() || transform {
-                    return Err(MaterializationError::InvalidParameter);
-                }
-                // Core V2 create predicates are evaluated by Pactrun, even when
-                // the edge's Hook uses an unchanged V1 Session with no grants.
-                self._service_access = Some(
-                    super::service_storage::prepare(p, run, &staging.owner(), bindings)
-                        .map_err(MaterializationError::Service)?,
-                );
-                return Ok(());
-            }
-            if version != 2 {
+            if !crate::domain::VersionDomain::Hook.supports(version) {
                 return Err(MaterializationError::InvalidParameter);
             }
             let mut service = super::service_storage::prepare(p, run, &staging.owner(), bindings)
                 .map_err(MaterializationError::Service)?;
-            let prepared = super::protocol::v2::PreparedSession::new(
+            let prepared = super::protocol::authority::PreparedSession::new(
                 self.session.clone(),
                 self.operation,
                 &service.declarations(),
@@ -464,8 +454,8 @@ impl MaterializedAction {
             )
             .map_err(|_| MaterializationError::InvalidParameter)?;
             let (transport, state) = prepared.into_parts();
-            self.v2_state = Some(state);
-            self.v2_transport = Some(transport);
+            self.protocol_state = Some(state);
+            self.protocol_transport = Some(transport);
             self._service_access = Some(service);
             Ok(())
         })();
@@ -642,7 +632,7 @@ fn runtime_relative_path(file: &RuntimeFileV1) -> PathBuf {
 fn launch_command(
     launch: &CompiledHookLaunch,
     runtime: &Path,
-    protocol_version: i64,
+    protocol_version: crate::domain::FormatVersion,
 ) -> Result<(PathBuf, Vec<String>), MaterializationError> {
     Ok(match launch {
         CompiledHookLaunch::ShellLoader {

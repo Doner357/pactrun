@@ -73,7 +73,7 @@ impl From<&crate::application::InstallPackResult> for PackInstall {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Snapshot {
     snapshot_id: String,
-    integrity_format: u32,
+    integrity_format: String,
     producer_revision: presentation::Revision,
     origin_instance_id: String,
     captured_at: Timestamp,
@@ -93,7 +93,7 @@ impl From<&crate::persistence::SnapshotInspection> for Snapshot {
     fn from(v: &crate::persistence::SnapshotInspection) -> Self {
         Self {
             snapshot_id: v.id.to_string(),
-            integrity_format: v.version.number(),
+            integrity_format: v.version.as_str().into(),
             producer_revision: (&v.producer).into(),
             origin_instance_id: v.origin.to_string(),
             captured_at: Timestamp {
@@ -121,7 +121,7 @@ pub(super) struct Snapshots {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotVerified {
     pub(super) snapshot_id: String,
-    pub(super) integrity_format: u32,
+    pub(super) integrity_format: String,
     pub(super) intrinsic_verification: &'static str,
     pub(super) content_verification: &'static str,
     pub(super) relational_verification: &'static str,
@@ -158,7 +158,7 @@ pub(super) struct SnapshotPlan {
     expected_state_version: String,
     access: &'static str,
     terminal: &'static str,
-    protocol_version: i64,
+    protocol_version: String,
     parameters: Vec<execution_presentation::PlanParameter>,
     steps: Vec<String>,
     startup_timeout_ms: Option<String>,
@@ -201,7 +201,7 @@ impl SnapshotPlan {
             expected_state_version: plan.expected_state_version().to_string(),
             access: access_name(plan.access()),
             terminal: terminal_name(plan.hook().io.terminal),
-            protocol_version: plan.hook().protocol_version.get(),
+            protocol_version: plan.hook().protocol_version.to_string(),
             parameters: plan
                 .parameters()
                 .iter()

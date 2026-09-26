@@ -32,8 +32,8 @@ use super::{
     materialize::MaterializedAction,
     outcome_and_failure,
     platform::{ProcessSupervisor, ProtocolListener},
+    protocol_runtime::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
     ready_cancelled, ready_failure,
-    versioned_protocol::{ConnectedProtocol, ProtocolState, ProtocolStep, WireEvent},
 };
 
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
@@ -46,7 +46,7 @@ const EXIT_DRAIN_WINDOW: Duration = Duration::from_millis(250);
 
 pub(crate) struct TargetRuntimeFacts {
     pub(super) run: RunId,
-    pub(super) proposal: super::protocol::v2::AcceptedTargetProposal,
+    pub(super) proposal: super::protocol::authority::AcceptedTargetProposal,
     pub(super) execution: crate::managed_data::ExecutionDirectory,
     pub(super) outputs: Vec<super::MigrationOutputSlot>,
 }
@@ -90,7 +90,7 @@ pub(crate) struct LiveExecution {
     winner: OutcomeArbiter,
     hook_completion: Option<HookCompletionRecord>,
     completion_accepted: bool,
-    target_proposal: Option<super::protocol::v2::AcceptedTargetProposal>,
+    target_proposal: Option<super::protocol::authority::AcceptedTargetProposal>,
     protocol_eof: bool,
     submitted_handles: Vec<String>,
     captured_at: Option<crate::domain::SnapshotTimestamp>,
@@ -238,8 +238,8 @@ pub(super) fn execute_materialized(
         }
     };
     let started = Instant::now();
-    let state = if let Some(state) = materialized.take_v2_state() {
-        ProtocolState::V2(state)
+    let state = if let Some(state) = materialized.take_protocol_state() {
+        ProtocolState(state)
     } else if cleanup {
         ProtocolState::new_cleanup(materialized.session_id().to_owned())
     } else if materialized.operation() == super::protocol::SessionOperation::Migration {
@@ -385,8 +385,8 @@ pub(super) fn execute_snapshot_with_risk(
         ) {
             Ok(supervisor) => {
                 let started = Instant::now();
-                let state = if let Some(state) = materialized.take_v2_state() {
-                    ProtocolState::V2(state)
+                let state = if let Some(state) = materialized.take_protocol_state() {
+                    ProtocolState(state)
                 } else if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
                     ProtocolState::new_restore(materialized.session_id().to_owned())
                 } else {
@@ -511,39 +511,40 @@ fn drive_execution(
         if let LiveProtocol::Listening(listener) = &mut live.protocol {
             match listener.try_accept() {
                 Ok(Some(stream)) => {
-                    let connected = if let Some(transport) = live.materialized.take_v2_transport() {
-                        ConnectedProtocol::start_v2(stream, transport)
-                    } else {
-                        match live.materialized.operation() {
-                            super::protocol::SessionOperation::Action => {
-                                ConnectedProtocol::start(stream, live.materialized.session())
+                    let connected =
+                        if let Some(transport) = live.materialized.take_protocol_transport() {
+                            ConnectedProtocol::start_prepared(stream, transport)
+                        } else {
+                            match live.materialized.operation() {
+                                super::protocol::SessionOperation::Action => {
+                                    ConnectedProtocol::start(stream, live.materialized.session())
+                                }
+                                super::protocol::SessionOperation::Capture => {
+                                    ConnectedProtocol::start_capture(
+                                        stream,
+                                        live.materialized.session(),
+                                    )
+                                }
+                                super::protocol::SessionOperation::Restore => {
+                                    ConnectedProtocol::start_restore(
+                                        stream,
+                                        live.materialized.session(),
+                                    )
+                                }
+                                super::protocol::SessionOperation::Cleanup => {
+                                    ConnectedProtocol::start_cleanup(
+                                        stream,
+                                        live.materialized.session(),
+                                    )
+                                }
+                                super::protocol::SessionOperation::Migration => {
+                                    ConnectedProtocol::start_migration(
+                                        stream,
+                                        live.materialized.session(),
+                                    )
+                                }
                             }
-                            super::protocol::SessionOperation::Capture => {
-                                ConnectedProtocol::start_capture(
-                                    stream,
-                                    live.materialized.session(),
-                                )
-                            }
-                            super::protocol::SessionOperation::Restore => {
-                                ConnectedProtocol::start_restore(
-                                    stream,
-                                    live.materialized.session(),
-                                )
-                            }
-                            super::protocol::SessionOperation::Cleanup => {
-                                ConnectedProtocol::start_cleanup(
-                                    stream,
-                                    live.materialized.session(),
-                                )
-                            }
-                            super::protocol::SessionOperation::Migration => {
-                                ConnectedProtocol::start_migration(
-                                    stream,
-                                    live.materialized.session(),
-                                )
-                            }
-                        }
-                    };
+                        };
                     match connected {
                         Ok(connected) => live.protocol = LiveProtocol::Connected(connected),
                         Err(_) => {

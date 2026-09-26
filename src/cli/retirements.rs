@@ -758,9 +758,6 @@ fn safe_error(error: ApplicationError) -> CliError {
         ApplicationError::Persistence(PersistenceError::ServiceStorageUnavailable(reason)) => {
             reason
         }
-        ApplicationError::Persistence(PersistenceError::UpgradeRequired) => {
-            "storage upgrade required; M7 accepts exact V7 through storage upgrade"
-        }
         _ => {
             "retirement operation could not be completed safely; inspect Instance identity, state version, Run history and storage health before retrying"
         }

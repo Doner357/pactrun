@@ -4,6 +4,11 @@ title: Baseline and Managed Object Lifecycle Handoff
 
 # Current baseline and next milestone
 
+> **E implementation has started:** The operator authorized the complete milestone
+> and eventual local merge to develop. The [implementation ledger](./e-implementation-status.md)
+> separates staged work from remaining runtime conversion and final acceptance.
+> Historical baseline descriptions below do not mean the new E baseline is complete.
+
 **Status: Informative handoff derived from the roadmap and owning contracts.**
 Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
@@ -12,6 +17,17 @@ approval. Implementation evidence is recorded separately from design approval.
 Current integrated work: [Execution Diagnostics and Instance Observability](./execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](./object-catalog-history-metadata-status.md). The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C is implemented, verified and integrated into local develop; see the [C record](./pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
 
 ## What is already recorded as implemented
+
+For E planning, use the [versioning redesign decisions](./design-notes/e-versioning-redesign-decisions.md).
+The policy and version matrix are approved direction, not completed S0
+representations or runtime implementation; that record identifies the remaining
+decisions and superseded planning assumptions.
+
+The proposed [E S0 whole-milestone plan](./design-notes/e-versioning-s0-plan.md)
+now gathers the implementation design, retained safety boundaries, historical
+support removal, installer/release preparation, acceptance matrix and remaining
+scope choices. Review and approve the entire implementation package before
+runtime work; slices are internal sequencing, not separate approval gates.
 
 D (CLI presentation and versioned JSON) is implemented, verified and integrated
 into local develop after authorized commit and merge; see its
@@ -48,12 +64,12 @@ integrated into local develop, including V7, V2 installation and service
 execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
 and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V11](../spec/persistence/persistence-schema-v11.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
-- Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
-- Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
-- Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
-- Frozen [Core](../spec/contracts/revision-core-format-v1.md), [Hook protocol](../spec/contracts/hook-protocol-v1.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
-- [Core V2](../spec/contracts/revision-core-format-v2.md) and [Hook V2](../spec/contracts/hook-protocol-v2.md) are independently Frozen; their format numbers do not force one another.
+- Current integrated persistence: [V11](../spec/persistence/persistence-baseline.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
+- Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity.md).
+- Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity.md) remains Frozen and supported as specified.
+- Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source.md) or [Candidate V2](../spec/contracts/pack-source.md), not a public compatibility promise.
+- Frozen [Core](../spec/contracts/revision-canonical.md), [Hook protocol](../spec/contracts/hook-protocol.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
+- [Core V2](../spec/contracts/revision-canonical.md) and [Hook V2](../spec/contracts/hook-protocol.md) are independently Frozen; their format numbers do not force one another.
 
 ## M5 is implemented and integrated into develop
 
@@ -71,7 +87,7 @@ configured destination and a non-force branch-state check.
 - [Target-owned Migration edges and transitions](../spec/contracts/migrations.md), including source roles and single-writer rules.
 - [Intrinsic versus relational validation](../spec/behavior/packages-revisions-and-instances.md#pr-req-0262---migration-relational-installation-policy); installing a target is different from admitting an executable edge.
 - Managed Input transitions, staged targets, incomplete intermediate state, and per-edge commit behavior as bounded in the roadmap.
-- The shared [acceptance/concurrency](../spec/execution/execution-and-concurrency.md), [risk/recovery](../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../spec/contracts/hook-protocol-v1.md) contracts.
+- The shared [acceptance/concurrency](../spec/execution/execution-and-concurrency.md), [risk/recovery](../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../spec/contracts/hook-protocol.md) contracts.
 
 ### Handoff checks
 

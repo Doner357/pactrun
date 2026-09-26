@@ -10,7 +10,7 @@ fn create_restore_fixture() -> (
     fs::copy(env::current_exe().unwrap(), source.join("worker")).unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1
+        r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000094
 revision:
   inputs: []
@@ -19,7 +19,7 @@ revision:
     restore:
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: []
         io: { terminal: none }
@@ -36,12 +36,12 @@ runtime_content:
         .unwrap()
         .revision;
     let snapshot = SnapshotId::generate().unwrap();
-    let raw = serde_json::json!({"format_version":2,"snapshot_id":snapshot.to_string(),
+    let raw = serde_json::json!({"format_version":"1.0-alpha.1","snapshot_id":snapshot.to_string(),
         "producer":{"package_id":revision.package_id.to_string(),"revision_content_digest":revision.content_digest.to_string()},
         "origin_instance_id":InstanceId::generate().unwrap().to_string(),
         "captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[]});
     let manifest = crate::snapshot_integrity::decode_snapshot_manifest(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         &serde_json::to_vec(&raw).unwrap(),
         None,
     )

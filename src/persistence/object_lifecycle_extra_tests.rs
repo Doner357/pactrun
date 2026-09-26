@@ -53,17 +53,13 @@ fn collection_never_bootstraps_a_missing_reference_catalog() {
 // Test-ID: PR-TEST-0473
 // Verifies: PR-REQ-0345
 #[test]
-fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() {
+fn reopening_preserves_populated_objects_and_service_bytes_exactly() {
     fn rows(db: &Connection) -> std::collections::BTreeMap<String, Vec<String>> {
-        let names=db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'writable_admissions' AND name NOT IN ('run_diagnostic_collections','run_diagnostic_events') ORDER BY name").unwrap()
+        let names=db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name<>'writable_admissions' ORDER BY name").unwrap()
             .query_map([],|r|r.get::<_,String>(0)).unwrap().collect::<Result<Vec<_>,_>>().unwrap();
         let mut result = std::collections::BTreeMap::new();
         for name in names {
-            let projection = match name.as_str() {
-                "snapshot_blobs" => "snapshot_id,blob_digest,byte_length",
-                "managed_input_payloads" => "instance_id,payload_id,protection_rank,byte_length",
-                _ => "*",
-            };
+            let projection = "*";
             let mut query = db
                 .prepare(&format!("SELECT {projection} FROM {name}"))
                 .unwrap();
@@ -100,11 +96,12 @@ fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() 
         .unwrap(),
     )
     .unwrap();
-    let core=crate::revision_core_v2::project_revision_core_source_v2(br#"{"format_version":2,"inputs":[],"actions":[],"migrations":[],"service_storages":[{"id":"data"}],"service_resources":[]}"#).unwrap();
+    let core=crate::revision_canonical::project_service_revision_source(br#"{"format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],"service_storages":[{"id":"data"}],"service_resources":[]}"#).unwrap();
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v2::validate_revision_content_v2(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let service_rev = p
         .persist_versioned_revision_with_metadata(
             PackageId::from_bytes([32; 16]),
@@ -132,23 +129,10 @@ fn coordination_upgrade_preserves_populated_objects_and_service_bytes_exactly() 
         .join("live");
     fs::write(&live, b"service-owned-sentinel").unwrap();
     drop(p);
-    let mut db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-    super::super::sqlite_v9::current_to_v8_fixture(&mut db);
+    let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
     let before = rows(&db);
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
+    drop(PactrunPersistence::open_read_only(&root).unwrap());
     assert_eq!(rows(&db), before);
-    assert_eq!(
-        db.query_row("SELECT count(*) FROM run_diagnostic_collections", [], |r| r
-            .get::<_, i64>(0))
-            .unwrap(),
-        0
-    );
-    assert_eq!(
-        db.query_row("SELECT count(*) FROM run_diagnostic_events", [], |r| r
-            .get::<_, i64>(0))
-            .unwrap(),
-        0
-    );
     assert_eq!(fs::read(&live).unwrap(), b"service-owned-sentinel");
     assert_eq!(
         fs::read(
@@ -194,11 +178,12 @@ fn revision_guards_include_pins_and_retained_service_declarations() {
         p.delete_object(&ObjectDeletion::Revision(old)).unwrap(),
         ObjectDeletionResult::Deleted
     );
-    let core=crate::revision_core_v2::project_revision_core_source_v2(br#"{"format_version":2,"inputs":[],"actions":[],"migrations":[],"service_storages":[{"id":"data"}],"service_resources":[]}"#).unwrap();
+    let core=crate::revision_canonical::project_service_revision_source(br#"{"format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],"service_storages":[{"id":"data"}],"service_resources":[]}"#).unwrap();
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v2::validate_revision_content_v2(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let rev = p
         .persist_versioned_revision_with_metadata(
             PackageId::from_bytes([29; 16]),

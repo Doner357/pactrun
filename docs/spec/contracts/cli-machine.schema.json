@@ -1,0 +1,6012 @@
+{
+  "$defs": {
+    "Action": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "launch": {
+          "$ref": "#/$defs/Launch"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "type": "array"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "terminal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_id",
+        "access",
+        "terminal",
+        "protocol_version",
+        "hook_args_count",
+        "launch",
+        "parameters",
+        "output_ids",
+        "metadata",
+        "outputs",
+        "hook"
+      ],
+      "type": "object"
+    },
+    "Alias": {
+      "properties": {
+        "alias": {
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "alias",
+        "target"
+      ],
+      "type": "object"
+    },
+    "Artifact": {
+      "properties": {
+        "byte_length": {
+          "type": "string"
+        },
+        "output_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_id",
+        "byte_length"
+      ],
+      "type": "object"
+    },
+    "ArtifactResult": {
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "output_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "output_id",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "Candidate": {
+      "properties": {
+        "edge_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path_id": {
+          "type": "string"
+        },
+        "revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "path_id",
+        "revisions",
+        "edge_count"
+      ],
+      "type": "object"
+    },
+    "Candidates": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "selector_kind": {
+          "$ref": "#/$defs/SelectorKind"
+        }
+      },
+      "required": [
+        "selector_kind",
+        "prefix",
+        "candidates",
+        "has_more"
+      ],
+      "type": "object"
+    },
+    "Capabilities": {
+      "properties": {
+        "capture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cleanup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cleanup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/Input2"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "migrations": {
+          "items": {
+            "$ref": "#/$defs/Migration"
+          },
+          "type": "array"
+        },
+        "restore": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "service_resources": {
+          "items": {
+            "$ref": "#/$defs/Resource"
+          },
+          "type": "array"
+        },
+        "service_storages": {
+          "items": {
+            "$ref": "#/$defs/Storage"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "metadata",
+        "inputs",
+        "capture",
+        "restore",
+        "migrations",
+        "cleanup",
+        "service_storages",
+        "service_resources"
+      ],
+      "type": "object"
+    },
+    "Capability": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "hook": {
+          "$ref": "#/$defs/Hook"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter2"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "access",
+        "parameters",
+        "hook",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "Channel": {
+      "enum": [
+        "stdout",
+        "stderr"
+      ],
+      "type": "string"
+    },
+    "Cleanup": {
+      "properties": {
+        "hook": {
+          "$ref": "#/$defs/Hook"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "requires": {
+          "items": {
+            "$ref": "#/$defs/InputRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requires",
+        "hook",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "Collection": {
+      "properties": {
+        "candidates": {
+          "type": "string"
+        },
+        "failed": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "boolean"
+        },
+        "removed": {
+          "type": "string"
+        },
+        "retained": {
+          "type": "string"
+        },
+        "unsupported": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan",
+        "candidates",
+        "removed",
+        "retained",
+        "unsupported",
+        "failed"
+      ],
+      "type": "object"
+    },
+    "CompiledLaunch": {
+      "oneOf": [
+        {
+          "properties": {
+            "executable": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            },
+            "runtime_path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "runtime_path",
+            "executable"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "interpreter_args_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "interpreter",
+              "type": "string"
+            },
+            "resolved_path": {
+              "$ref": "#/$defs/NativePath"
+            },
+            "script": {
+              "type": "string"
+            },
+            "search_directory_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "command",
+            "resolved_path",
+            "search_directory_count",
+            "interpreter_args_count",
+            "script"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "shell_loader",
+              "type": "string"
+            },
+            "runtime_path": {
+              "type": "string"
+            },
+            "shell": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "shell",
+            "command",
+            "runtime_path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Completed": {
+      "properties": {
+        "current_instance": {
+          "$ref": "#/$defs/Instance"
+        },
+        "inspection": {
+          "$ref": "#/$defs/Inspection"
+        }
+      },
+      "required": [
+        "inspection",
+        "current_instance"
+      ],
+      "type": "object"
+    },
+    "Confirmation": {
+      "properties": {
+        "authority": {
+          "type": "string"
+        },
+        "state_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state_version",
+        "authority"
+      ],
+      "type": "object"
+    },
+    "Context": {
+      "properties": {
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hook_ordinal": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision2"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "source_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Revision2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Revision2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "hook_ordinal",
+        "operation",
+        "action_id",
+        "revision",
+        "source_revision",
+        "target_revision"
+      ],
+      "type": "object"
+    },
+    "CreatedResource": {
+      "properties": {
+        "presence": {
+          "type": "string"
+        },
+        "resource_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_id",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "CreatedRestore": {
+      "properties": {
+        "created_instance": {
+          "$ref": "#/$defs/Instance"
+        },
+        "restore": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Inspection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "restore_run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "created_instance",
+        "restore_run_id",
+        "restore"
+      ],
+      "type": "object"
+    },
+    "Declarations": {
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/Action"
+          },
+          "type": "array"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        },
+        "cleanup_declared": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/InputDeclaration"
+          },
+          "type": "array"
+        },
+        "migration_edge_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "service_resource_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "service_storage_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "snapshot_declared": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "actions",
+        "inputs",
+        "service_storage_count",
+        "service_resource_count",
+        "snapshot_declared",
+        "migration_edge_count",
+        "cleanup_declared",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "DefaultValue": {
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "integer",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "float",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "string",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Deletion": {
+      "properties": {
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "DeliveryResult": {
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "event_count": {
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Record"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/StreamSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "complete",
+        "error",
+        "event_count",
+        "streams"
+      ],
+      "type": "object"
+    },
+    "Detached": {
+      "properties": {
+        "allocation_id": {
+          "type": "string"
+        },
+        "former_instance_id": {
+          "type": "string"
+        },
+        "origin_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "origin_storage_id": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allocation_id",
+        "former_instance_id",
+        "state",
+        "origin_revision",
+        "origin_storage_id"
+      ],
+      "type": "object"
+    },
+    "DetachedInspection": {
+      "properties": {
+        "allocation": {
+          "$ref": "#/$defs/Detached"
+        },
+        "locations": {
+          "items": {
+            "$ref": "#/$defs/Location2"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "allocation",
+        "locations"
+      ],
+      "type": "object"
+    },
+    "DetachedList": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Detached"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "Diagnostics": {
+      "properties": {
+        "collection_closed": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/HookEvent"
+          },
+          "type": "array"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "persistence_failed": {
+          "type": "boolean"
+        },
+        "retain_text": {
+          "type": "boolean"
+        },
+        "started": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "retain_text",
+        "started",
+        "collection_closed",
+        "persistence_failed",
+        "observed",
+        "events"
+      ],
+      "type": "object"
+    },
+    "Discard": {
+      "properties": {
+        "allocation_id": {
+          "type": "string"
+        },
+        "new_completion": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allocation_id",
+        "state",
+        "new_completion"
+      ],
+      "type": "object"
+    },
+    "Edge": {
+      "properties": {
+        "hook_present": {
+          "type": "boolean"
+        },
+        "mandatory_hook_outputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operator_inputs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "predicted_required_inputs_satisfied": {
+          "type": "boolean"
+        },
+        "requires_source": {
+          "items": {
+            "$ref": "#/$defs/InputReference"
+          },
+          "type": "array"
+        },
+        "requires_target": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "service": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Service"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/Revision"
+        },
+        "target": {
+          "$ref": "#/$defs/Revision"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/Transition2"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "service",
+        "operator_inputs",
+        "requires_source",
+        "requires_target",
+        "transitions",
+        "mandatory_hook_outputs",
+        "hook_present",
+        "predicted_required_inputs_satisfied"
+      ],
+      "type": "object"
+    },
+    "Entry": {
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "target",
+        "display_name",
+        "summary",
+        "description",
+        "help"
+      ],
+      "type": "object"
+    },
+    "ErrorReference": {
+      "properties": {
+        "code": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "owner": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "code"
+      ],
+      "type": "object"
+    },
+    "Failure": {
+      "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/ErrorReference"
+        },
+        "step": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "reference",
+        "explanation",
+        "detail",
+        "step"
+      ],
+      "type": "object"
+    },
+    "Grant": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      },
+      "required": [
+        "reference",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "Group": {
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/Entry"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "Guard": {
+      "properties": {
+        "entered_at_unix_ms": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "trigger",
+        "run_id",
+        "entered_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "Help": {
+      "properties": {
+        "usage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "usage"
+      ],
+      "type": "object"
+    },
+    "History": {
+      "properties": {
+        "current_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deletion_phase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "recorded_name": {
+          "type": "string"
+        },
+        "retired": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instance_id",
+        "recorded_name",
+        "current_name",
+        "retired",
+        "deletion_phase"
+      ],
+      "type": "object"
+    },
+    "Hook": {
+      "properties": {
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "launch": {
+          "$ref": "#/$defs/Launch"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "service_access": {
+          "items": {
+            "$ref": "#/$defs/Grant"
+          },
+          "type": "array"
+        },
+        "service_requires": {
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "type": "array"
+        },
+        "terminal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol_version",
+        "terminal",
+        "launch",
+        "hook_args_count",
+        "service_access",
+        "service_requires"
+      ],
+      "type": "object"
+    },
+    "HookEvent": {
+      "properties": {
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completion_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "received_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "truncated_prefix_bytes": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "sequence",
+        "received_at_unix_ms",
+        "stage",
+        "kind",
+        "severity",
+        "completion_status",
+        "code",
+        "message",
+        "truncated",
+        "truncated_prefix_bytes"
+      ],
+      "type": "object"
+    },
+    "Input": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "protection": {
+          "type": "string"
+        },
+        "required": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input_id",
+        "role",
+        "required",
+        "present",
+        "protection"
+      ],
+      "type": "object"
+    },
+    "Input2": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "protection": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "input_id",
+        "required",
+        "protection",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "InputDeclaration": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "protection": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "input_id",
+        "required",
+        "protection"
+      ],
+      "type": "object"
+    },
+    "InputExport": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "state_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "input_id",
+        "state_version"
+      ],
+      "type": "object"
+    },
+    "InputRef": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "input_id"
+      ],
+      "type": "object"
+    },
+    "InputReference": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "input_id"
+      ],
+      "type": "object"
+    },
+    "InspectedRun": {
+      "properties": {
+        "accepted_at_unix_ms": {
+          "type": "string"
+        },
+        "accepted_state_version": {
+          "type": "string"
+        },
+        "inspection": {
+          "$ref": "#/$defs/Inspection"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        }
+      },
+      "required": [
+        "run_id",
+        "instance_id",
+        "revision",
+        "accepted_state_version",
+        "accepted_at_unix_ms",
+        "operation",
+        "state",
+        "inspection"
+      ],
+      "type": "object"
+    },
+    "Inspection": {
+      "properties": {
+        "capture_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Diagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "migration_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MigrationProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        }
+      },
+      "required": [
+        "run",
+        "current_recovery_guard",
+        "capture_result",
+        "migration_progress",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "Instance": {
+      "properties": {
+        "active_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "type": "array"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_inputs_satisfied": {
+          "type": "boolean"
+        },
+        "state_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "name",
+        "active_revision",
+        "state_version",
+        "required_inputs_satisfied",
+        "recovery_guard",
+        "inputs"
+      ],
+      "type": "object"
+    },
+    "KeptMetadata": {
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "target",
+        "field"
+      ],
+      "type": "object"
+    },
+    "KnownRun": {
+      "properties": {
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "Launch": {
+      "oneOf": [
+        {
+          "properties": {
+            "content_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "content_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "interpreter_args_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "interpreter",
+              "type": "string"
+            },
+            "script": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "command",
+            "interpreter_args_count",
+            "script"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "shell_loader",
+              "type": "string"
+            },
+            "script": {
+              "type": "string"
+            },
+            "shell": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "shell",
+            "command",
+            "script"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Local": {
+      "properties": {
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "trust": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "revision",
+        "note",
+        "trust"
+      ],
+      "type": "object"
+    },
+    "Location": {
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/NativePath"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "Location2": {
+      "properties": {
+        "native_location": {
+          "$ref": "#/$defs/NativePath"
+        },
+        "original_relative_location": {
+          "$ref": "#/$defs/NativePath"
+        }
+      },
+      "required": [
+        "native_location",
+        "original_relative_location"
+      ],
+      "type": "object"
+    },
+    "Metadata": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "reference_label",
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "namespace": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "publisher": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_uri": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "label",
+            "publisher",
+            "namespace",
+            "source_uri"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "presentation",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "field",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "source_uri",
+              "type": "string"
+            },
+            "source_uri": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_uri"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "publisher_attribution",
+              "type": "string"
+            },
+            "namespace": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "publisher": {
+              "type": "string"
+            },
+            "source_uri": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "publisher",
+            "namespace",
+            "source_uri"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "attribution",
+              "type": "string"
+            },
+            "source_uri": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "text",
+            "source_uri"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "local_alias",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "alias"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "local_note",
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "note"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "assessment": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "local_trust",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "assessment"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Migration": {
+      "properties": {
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "produces_target": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requires_source": {
+          "items": {
+            "$ref": "#/$defs/InputRef"
+          },
+          "type": "array"
+        },
+        "requires_target": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "resource_transitions": {
+          "items": {
+            "$ref": "#/$defs/ServiceTransition"
+          },
+          "type": "array"
+        },
+        "source_revision_digest": {
+          "type": "string"
+        },
+        "storage_transitions": {
+          "items": {
+            "$ref": "#/$defs/ServiceTransition"
+          },
+          "type": "array"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/Transition"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_revision_digest",
+        "transitions",
+        "requires_source",
+        "requires_target",
+        "produces_target",
+        "hook",
+        "storage_transitions",
+        "resource_transitions",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "MigrationProgress": {
+      "properties": {
+        "boundary_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "boundary_state_version": {
+          "type": "string"
+        },
+        "committed_edges": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "committed_edges",
+        "boundary_revision",
+        "boundary_state_version"
+      ],
+      "type": "object"
+    },
+    "Mutation": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "unavailable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "unavailable_until_reattachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "operation",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Mutation2": {
+      "properties": {
+        "desired": {
+          "$ref": "#/$defs/MutationValue"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "outcome",
+        "desired"
+      ],
+      "type": "object"
+    },
+    "MutationValue": {
+      "oneOf": [
+        {
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "field": {
+              "const": "alias",
+              "type": "string"
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Revision"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "field",
+            "alias",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "field": {
+              "const": "note",
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "field": {
+              "const": "trust",
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "field",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NativePath": {
+      "oneOf": [
+        {
+          "properties": {
+            "encoding": {
+              "const": "utf8",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "encoding",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "encoding": {
+              "const": "windows_wide",
+              "type": "string"
+            },
+            "units": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "encoding",
+            "units"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "bytes": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "encoding": {
+              "const": "unix_bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "encoding",
+            "bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Obligation": {
+      "properties": {
+        "attempt_run_id": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt_run_id",
+        "phase"
+      ],
+      "type": "object"
+    },
+    "Observation": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "kind_matches": {
+              "type": "boolean"
+            },
+            "state": {
+              "const": "present",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "kind",
+            "kind_matches"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "absent",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "cause": {
+              "type": "string"
+            },
+            "state": {
+              "const": "unknown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "cause"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Operation": {
+      "oneOf": [
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_capture",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_restore",
+              "type": "string"
+            },
+            "snapshot_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "edge_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "migration",
+              "type": "string"
+            },
+            "target_revision": {
+              "$ref": "#/$defs/Revision"
+            }
+          },
+          "required": [
+            "kind",
+            "target_revision",
+            "edge_count"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "instance_delete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "instance_abandon",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Output": {
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "output_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_id",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "PackExport": {
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/NativePath"
+        },
+        "portable_metadata_included": {
+          "type": "boolean"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "output",
+        "portable_metadata_included"
+      ],
+      "type": "object"
+    },
+    "PackInstall": {
+      "properties": {
+        "kept_metadata": {
+          "items": {
+            "$ref": "#/$defs/KeptMetadata"
+          },
+          "type": "array"
+        },
+        "migrations": {
+          "items": {
+            "$ref": "#/$defs/Relation"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "migrations",
+        "kept_metadata"
+      ],
+      "type": "object"
+    },
+    "Package": {
+      "properties": {
+        "package_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id"
+      ],
+      "type": "object"
+    },
+    "Page": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "next"
+      ],
+      "type": "object"
+    },
+    "Page2": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/History"
+          },
+          "type": "array"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "next"
+      ],
+      "type": "object"
+    },
+    "Page3": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Retirement"
+          },
+          "type": "array"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "next"
+      ],
+      "type": "object"
+    },
+    "Parameter": {
+      "properties": {
+        "default_present": {
+          "type": "boolean"
+        },
+        "default_redacted": {
+          "type": "boolean"
+        },
+        "default_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefaultValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "parameter_id": {
+          "type": "string"
+        },
+        "parameter_type": {
+          "type": "string"
+        },
+        "sensitive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "parameter_id",
+        "parameter_type",
+        "sensitive",
+        "default_present",
+        "default_redacted",
+        "default_value",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "Parameter2": {
+      "properties": {
+        "default_present": {
+          "type": "boolean"
+        },
+        "default_redacted": {
+          "type": "boolean"
+        },
+        "default_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefaultValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "parameter_id": {
+          "type": "string"
+        },
+        "parameter_type": {
+          "type": "string"
+        },
+        "sensitive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "parameter_id",
+        "parameter_type",
+        "sensitive",
+        "default_present",
+        "default_redacted",
+        "default_value",
+        "metadata"
+      ],
+      "type": "object"
+    },
+    "PartialResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Candidates"
+        },
+        {
+          "$ref": "#/$defs/Publication"
+        },
+        {
+          "$ref": "#/$defs/Collection"
+        },
+        {
+          "$ref": "#/$defs/KnownRun"
+        },
+        {
+          "$ref": "#/$defs/Inspection"
+        },
+        {
+          "$ref": "#/$defs/Observation"
+        },
+        {
+          "$ref": "#/$defs/CreatedRestore"
+        },
+        {
+          "$ref": "#/$defs/Paths"
+        }
+      ]
+    },
+    "Paths": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "type": "array"
+        },
+        "evaluation": {
+          "type": "string"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "candidates",
+        "has_more",
+        "next_after",
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "PlanParameter": {
+      "properties": {
+        "effective_redaction": {
+          "type": "boolean"
+        },
+        "parameter_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parameter_id",
+        "effective_redaction"
+      ],
+      "type": "object"
+    },
+    "Presented": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Action"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented2": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "hook": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hook"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "launch": {
+          "$ref": "#/$defs/Launch"
+        },
+        "metadata": {
+          "$ref": "#/$defs/Text"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "terminal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_id",
+        "access",
+        "terminal",
+        "protocol_version",
+        "hook_args_count",
+        "launch",
+        "parameters",
+        "output_ids",
+        "metadata",
+        "outputs",
+        "hook",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented3": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "execution_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "hook_args_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "launch": {
+          "$ref": "#/$defs/CompiledLaunch"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlanParameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "recovery_override": {
+          "type": "boolean"
+        },
+        "required_inputs_satisfied": {
+          "type": "boolean"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "startup_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "terminal": {
+          "type": "string"
+        },
+        "termination_grace_ms": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action_id",
+        "instance_id",
+        "revision",
+        "expected_state_version",
+        "access",
+        "required_inputs_satisfied",
+        "terminal",
+        "protocol_version",
+        "parameters",
+        "launch",
+        "hook_args_count",
+        "steps",
+        "output_ids",
+        "startup_timeout_ms",
+        "execution_timeout_ms",
+        "termination_grace_ms",
+        "recovery_override",
+        "preview",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented4": {
+      "properties": {
+        "core_version": {
+          "type": "string"
+        },
+        "declarations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Declarations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "items": {
+            "$ref": "#/$defs/Metadata"
+          },
+          "type": "array"
+        },
+        "metadata_scope": {
+          "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "core_version",
+        "metadata",
+        "declarations",
+        "metadata_scope",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented5": {
+      "properties": {
+        "admission": {
+          "type": "string"
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "work": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "expected_state_version",
+        "revision",
+        "work",
+        "admission",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented6": {
+      "properties": {
+        "access": {
+          "type": "string"
+        },
+        "eligibility": {
+          "$ref": "#/$defs/SnapshotPlanEligibility"
+        },
+        "execution_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlanParameter"
+          },
+          "type": "array"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "recovery_override": {
+          "type": "boolean"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "startup_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "terminal": {
+          "type": "string"
+        },
+        "termination_grace_ms": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "eligibility",
+        "instance_id",
+        "revision",
+        "expected_state_version",
+        "access",
+        "terminal",
+        "protocol_version",
+        "parameters",
+        "steps",
+        "startup_timeout_ms",
+        "execution_timeout_ms",
+        "termination_grace_ms",
+        "recovery_override",
+        "preview",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented7": {
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "type": "array"
+        },
+        "evaluation": {
+          "type": "string"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidates",
+        "has_more",
+        "next_after",
+        "evaluation",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Presented8": {
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/Edge"
+          },
+          "type": "array"
+        },
+        "execution_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_state_version": {
+          "type": "string"
+        },
+        "path_id": {
+          "type": "string"
+        },
+        "presentation": {
+          "items": {
+            "$ref": "#/$defs/Group"
+          },
+          "type": "array"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "startup_timeout_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "termination_grace_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path_id",
+        "expected_state_version",
+        "preview",
+        "startup_timeout_ms",
+        "execution_timeout_ms",
+        "termination_grace_ms",
+        "edges",
+        "presentation"
+      ],
+      "type": "object"
+    },
+    "Preserved": {
+      "properties": {
+        "allocation_id": {
+          "type": "string"
+        },
+        "origin_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "origin_run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin_storage_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allocation_id",
+        "origin_storage_id",
+        "origin_revision",
+        "origin_run_id"
+      ],
+      "type": "object"
+    },
+    "Publication": {
+      "properties": {
+        "destination": {
+          "$ref": "#/$defs/NativePath"
+        },
+        "destination_published": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "destination",
+        "destination_published"
+      ],
+      "type": "object"
+    },
+    "Reconciled": {
+      "properties": {
+        "run_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_ids"
+      ],
+      "type": "object"
+    },
+    "Record": {
+      "oneOf": [
+        {
+          "properties": {
+            "run_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "run_accepted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "byte_length": {
+              "type": "string"
+            },
+            "channel": {
+              "$ref": "#/$defs/Channel"
+            },
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "data": {
+              "maxLength": 87384,
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "encoding": {
+              "const": "base64"
+            },
+            "offset": {
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            "type": {
+              "const": "output",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context",
+            "channel",
+            "offset",
+            "encoding",
+            "data",
+            "byte_length"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "code": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "severity": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context",
+            "kind",
+            "severity",
+            "code",
+            "message"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "format": {
+          "const": "pactrun.cli"
+        },
+        "format_version": {
+          "const": "1.0-alpha.1"
+        },
+        "received_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "format_version",
+        "sequence",
+        "received_at_unix_ms",
+        "command"
+      ],
+      "type": "object"
+    },
+    "Reference": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "view",
+        "role",
+        "kind",
+        "id"
+      ],
+      "type": "object"
+    },
+    "Related": {
+      "properties": {
+        "active_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "type": "array"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "required_inputs_satisfied": {
+          "type": "boolean"
+        },
+        "state_version": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instance_id",
+        "name",
+        "active_revision",
+        "state_version",
+        "required_inputs_satisfied",
+        "recovery_guard",
+        "inputs",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related2": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Instance"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related3": {
+      "properties": {
+        "instance_id": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Input"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "state_version": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instance_id",
+        "state_version",
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related4": {
+      "properties": {
+        "capture_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Diagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "migration_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MigrationProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "run",
+        "current_recovery_guard",
+        "capture_result",
+        "migration_progress",
+        "diagnostics",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related5": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InspectedRun"
+          },
+          "type": "array"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "next",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related6": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Snapshot"
+          },
+          "type": "array"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Related7": {
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "current_content_verification": {
+          "type": "string"
+        },
+        "integrity_format": {
+          "type": "string"
+        },
+        "origin_instance_id": {
+          "type": "string"
+        },
+        "producer_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "publication_relational_verification": {
+          "type": "string"
+        },
+        "publication_verification": {
+          "type": "string"
+        },
+        "related_revisions": {
+          "items": {
+            "$ref": "#/$defs/RevisionEntry"
+          },
+          "type": "array"
+        },
+        "restore_capacity": {
+          "type": "string"
+        },
+        "snapshot_id": {
+          "type": "string"
+        },
+        "target_eligibility": {
+          "type": "string"
+        },
+        "unavailable_revisions": {
+          "items": {
+            "$ref": "#/$defs/Revision"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "integrity_format",
+        "producer_revision",
+        "origin_instance_id",
+        "captured_at",
+        "publication_verification",
+        "publication_relational_verification",
+        "current_content_verification",
+        "restore_capacity",
+        "target_eligibility",
+        "related_revisions",
+        "unavailable_revisions"
+      ],
+      "type": "object"
+    },
+    "Relation": {
+      "properties": {
+        "explanation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_digest": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_digest",
+        "state",
+        "explanation"
+      ],
+      "type": "object"
+    },
+    "Requirement": {
+      "properties": {
+        "presence": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/Reference"
+        }
+      },
+      "required": [
+        "reference",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "Requirement2": {
+      "properties": {
+        "presence": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "view",
+        "role",
+        "scope",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "Resource": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "locator": {
+          "type": "string"
+        },
+        "read_exposure": {
+          "type": "string"
+        },
+        "resource_id": {
+          "type": "string"
+        },
+        "storage_id": {
+          "type": "string"
+        },
+        "user_mutation": {
+          "$ref": "#/$defs/Mutation"
+        }
+      },
+      "required": [
+        "resource_id",
+        "storage_id",
+        "locator",
+        "kind",
+        "read_exposure",
+        "user_mutation"
+      ],
+      "type": "object"
+    },
+    "Resource2": {
+      "properties": {
+        "details": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceDetails"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_mutation": {
+          "$ref": "#/$defs/Mutation"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "read_exposure": {
+          "type": "string"
+        },
+        "resource_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "storage_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_id",
+        "storage_id",
+        "kind",
+        "role",
+        "read_exposure",
+        "effective_mutation",
+        "details"
+      ],
+      "type": "object"
+    },
+    "ResourceDetails": {
+      "properties": {
+        "declaration_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "locator": {
+          "type": "string"
+        },
+        "stored_mutation": {
+          "$ref": "#/$defs/Mutation"
+        }
+      },
+      "required": [
+        "locator",
+        "declaration_revision",
+        "stored_mutation"
+      ],
+      "type": "object"
+    },
+    "Resources": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Resource2"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "Retirement": {
+      "properties": {
+        "current_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deletion_phase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inspection": {
+          "$ref": "#/$defs/RetirementInspection"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "recorded_name": {
+          "type": "string"
+        },
+        "retired": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "instance_id",
+        "recorded_name",
+        "current_name",
+        "retired",
+        "deletion_phase",
+        "inspection"
+      ],
+      "type": "object"
+    },
+    "RetirementInspection": {
+      "properties": {
+        "instance_id": {
+          "type": "string"
+        },
+        "managed": {
+          "type": "boolean"
+        },
+        "obligation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Obligation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/Run"
+          },
+          "type": "array"
+        },
+        "state_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "instance_id",
+        "managed",
+        "state_version",
+        "obligation",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "Revision": {
+      "properties": {
+        "content_digest": {
+          "type": "string"
+        },
+        "package_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "content_digest"
+      ],
+      "type": "object"
+    },
+    "Revision2": {
+      "properties": {
+        "content_digest": {
+          "type": "string"
+        },
+        "package_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "content_digest"
+      ],
+      "type": "object"
+    },
+    "RevisionEntry": {
+      "properties": {
+        "core_version": {
+          "type": "string"
+        },
+        "declarations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Declarations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "items": {
+            "$ref": "#/$defs/Metadata"
+          },
+          "type": "array"
+        },
+        "metadata_scope": {
+          "type": "string"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision",
+        "core_version",
+        "metadata",
+        "declarations",
+        "metadata_scope"
+      ],
+      "type": "object"
+    },
+    "Run": {
+      "properties": {
+        "accepted_at_unix_ms": {
+          "type": "string"
+        },
+        "accepted_state_version": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        }
+      },
+      "required": [
+        "run_id",
+        "instance_id",
+        "revision",
+        "accepted_state_version",
+        "accepted_at_unix_ms",
+        "operation",
+        "state"
+      ],
+      "type": "object"
+    },
+    "Scope": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "resource",
+              "type": "string"
+            },
+            "resource_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "resource_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "storage",
+              "type": "string"
+            },
+            "storage_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "storage_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SelectorKind": {
+      "enum": [
+        "run",
+        "snapshot",
+        "instance",
+        "allocation",
+        "revision",
+        "revision_digest",
+        "migration_path"
+      ],
+      "type": "string"
+    },
+    "Service": {
+      "properties": {
+        "consumed_resources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "consumed_storages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "created_resources": {
+          "items": {
+            "$ref": "#/$defs/CreatedResource"
+          },
+          "type": "array"
+        },
+        "created_storages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "live_observation": {
+          "type": "string"
+        },
+        "requirements": {
+          "items": {
+            "$ref": "#/$defs/Requirement2"
+          },
+          "type": "array"
+        },
+        "transform": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "transform",
+        "live_observation",
+        "created_storages",
+        "consumed_storages",
+        "consumed_resources",
+        "created_resources",
+        "requirements"
+      ],
+      "type": "object"
+    },
+    "ServiceSource": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "id"
+      ],
+      "type": "object"
+    },
+    "ServiceTransition": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "presence": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ServiceSource"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "sources",
+        "targets",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "Snapshot": {
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "current_content_verification": {
+          "type": "string"
+        },
+        "integrity_format": {
+          "type": "string"
+        },
+        "origin_instance_id": {
+          "type": "string"
+        },
+        "producer_revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "publication_relational_verification": {
+          "type": "string"
+        },
+        "publication_verification": {
+          "type": "string"
+        },
+        "restore_capacity": {
+          "type": "string"
+        },
+        "snapshot_id": {
+          "type": "string"
+        },
+        "target_eligibility": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "integrity_format",
+        "producer_revision",
+        "origin_instance_id",
+        "captured_at",
+        "publication_verification",
+        "publication_relational_verification",
+        "current_content_verification",
+        "restore_capacity",
+        "target_eligibility"
+      ],
+      "type": "object"
+    },
+    "SnapshotExported": {
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/NativePath"
+        },
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "outcome",
+        "output"
+      ],
+      "type": "object"
+    },
+    "SnapshotImported": {
+      "properties": {
+        "outcome": {
+          "type": "string"
+        },
+        "relational_verification": {
+          "type": "string"
+        },
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "outcome",
+        "relational_verification"
+      ],
+      "type": "object"
+    },
+    "SnapshotPlanEligibility": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "capture",
+              "type": "string"
+            },
+            "required_inputs_satisfied": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "required_inputs_satisfied"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "restore",
+              "type": "string"
+            },
+            "target_eligibility": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "target_eligibility"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SnapshotVerified": {
+      "properties": {
+        "content_verification": {
+          "type": "string"
+        },
+        "integrity_format": {
+          "type": "string"
+        },
+        "intrinsic_verification": {
+          "type": "string"
+        },
+        "relational_verification": {
+          "type": "string"
+        },
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "integrity_format",
+        "intrinsic_verification",
+        "content_verification",
+        "relational_verification"
+      ],
+      "type": "object"
+    },
+    "State": {
+      "oneOf": [
+        {
+          "properties": {
+            "boundary": {
+              "type": "string"
+            },
+            "phase": {
+              "const": "running",
+              "type": "string"
+            },
+            "recovery_risk": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "phase",
+            "boundary",
+            "recovery_risk"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "artifacts": {
+              "items": {
+                "$ref": "#/$defs/Artifact"
+              },
+              "type": "array"
+            },
+            "boundary": {
+              "type": "string"
+            },
+            "finished_at_unix_ms": {
+              "type": "string"
+            },
+            "hook_completion_status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "legacy_hook_completion_text": {
+              "type": "string"
+            },
+            "outcome": {
+              "type": "string"
+            },
+            "phase": {
+              "const": "finished",
+              "type": "string"
+            },
+            "primary_failure": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Failure"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recovery_risk": {
+              "type": "string"
+            },
+            "secondary_failures": {
+              "items": {
+                "$ref": "#/$defs/Failure"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "phase",
+            "boundary",
+            "recovery_risk",
+            "outcome",
+            "finished_at_unix_ms",
+            "primary_failure",
+            "secondary_failures",
+            "hook_completion_status",
+            "legacy_hook_completion_text",
+            "artifacts"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "StateVersion": {
+      "properties": {
+        "state_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state_version"
+      ],
+      "type": "object"
+    },
+    "Storage": {
+      "properties": {
+        "storage_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_id"
+      ],
+      "type": "object"
+    },
+    "Storage2": {
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/Revision"
+        },
+        "role": {
+          "type": "string"
+        },
+        "storage_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_id",
+        "role",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "Storages": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Storage2"
+          },
+          "type": "array"
+        },
+        "preserved": {
+          "items": {
+            "$ref": "#/$defs/Preserved"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "preserved"
+      ],
+      "type": "object"
+    },
+    "StreamSummary": {
+      "properties": {
+        "byte_length": {
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "context": {
+          "$ref": "#/$defs/Context"
+        }
+      },
+      "required": [
+        "context",
+        "channel",
+        "byte_length"
+      ],
+      "type": "object"
+    },
+    "Target": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "revision",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "input_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "input",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "input_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "action_parameter",
+              "type": "string"
+            },
+            "parameter_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id",
+            "parameter_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "managed_output",
+              "type": "string"
+            },
+            "output_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id",
+            "output_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_capture",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_restore",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_capture_parameter",
+              "type": "string"
+            },
+            "parameter_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "parameter_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_restore_parameter",
+              "type": "string"
+            },
+            "parameter_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "parameter_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "migration_edge",
+              "type": "string"
+            },
+            "source_digest": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source_digest"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "cleanup",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Text": {
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "display_name",
+        "summary",
+        "description",
+        "help"
+      ],
+      "type": "object"
+    },
+    "Timestamp": {
+      "properties": {
+        "nanoseconds": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unix_seconds": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unix_seconds",
+        "nanoseconds"
+      ],
+      "type": "object"
+    },
+    "Transition": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/InputRef"
+        },
+        "target_input_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target_input_id"
+      ],
+      "type": "object"
+    },
+    "Transition2": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/InputReference"
+        },
+        "target_input_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target_input_id"
+      ],
+      "type": "object"
+    },
+    "Version": {
+      "properties": {
+        "build_target": {
+          "type": "string"
+        },
+        "default_formats": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "product_version": {
+          "type": "string"
+        },
+        "rustc": {
+          "type": "string"
+        },
+        "source_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_manifest_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "supported_formats": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "product_version",
+        "build_target",
+        "rustc",
+        "source_commit",
+        "source_manifest_sha256",
+        "supported_formats",
+        "default_formats"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "help"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Help"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "version"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Version"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "pack generate-id"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Package"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "pack install"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/PackInstall"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision export"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/PackExport"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance create"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Instance"
+              },
+              {
+                "$ref": "#/$defs/CreatedRestore"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance resolve-manual-recovery"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/StateVersion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input set"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/StateVersion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/StateVersion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related3"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input export"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/InputExport"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "action list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Presented"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "action show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Presented2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "invoke"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Inspection"
+              },
+              {
+                "$ref": "#/$defs/Presented3"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related4"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run reconcile"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Reconciled"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "storage gc"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Collection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Deletion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Deletion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Deletion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run artifact export"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/ArtifactResult"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run artifact delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/ArtifactResult"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Page"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Presented4"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision metadata show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/RevisionEntry"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance history list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Page2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Page3"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance history show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/History"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related5"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision alias show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Alias"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Local"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Local"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision alias set"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision alias clear"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note set"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note clear"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust set"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust clear"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Mutation2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Storages"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Resources"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Resource2"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource observe"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Observation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource locate"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Location"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance delete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Inspection"
+              },
+              {
+                "$ref": "#/$defs/Presented5"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance abandon"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Inspection"
+              },
+              {
+                "$ref": "#/$defs/Presented5"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/RetirementInspection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion confirm-complete"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Confirmation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/DetachedList"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/DetachedInspection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached discard"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Discard"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related6"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Related7"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot verify"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/SnapshotVerified"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot import"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/SnapshotImported"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot export"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/SnapshotExported"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot capture"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Inspection"
+              },
+              {
+                "$ref": "#/$defs/Presented6"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot restore"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Inspection"
+              },
+              {
+                "$ref": "#/$defs/Presented6"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance migration-paths"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Presented7"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance migrate"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Presented8"
+              },
+              {
+                "$ref": "#/$defs/Completed"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "oneOf": [
+    {
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "error": {
+          "type": "null"
+        },
+        "result": {
+          "type": "object"
+        },
+        "status": {
+          "const": "success"
+        }
+      }
+    },
+    {
+      "properties": {
+        "error": {
+          "type": "object"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialResult"
+            },
+            {
+              "$ref": "#/$defs/Completed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "const": "failure"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "command": {
+      "anyOf": [
+        {
+          "enum": [
+            "help",
+            "version",
+            "pack generate-id",
+            "pack install",
+            "revision export",
+            "instance create",
+            "instance show",
+            "instance list",
+            "instance resolve-manual-recovery",
+            "input set",
+            "input delete",
+            "input list",
+            "input export",
+            "action list",
+            "action show",
+            "invoke",
+            "run show",
+            "run reconcile",
+            "storage gc",
+            "run delete",
+            "revision delete",
+            "snapshot delete",
+            "run artifact export",
+            "run artifact delete",
+            "revision list",
+            "revision show",
+            "revision metadata show",
+            "instance history list",
+            "instance deletion list",
+            "instance history show",
+            "run list",
+            "revision alias show",
+            "revision note show",
+            "revision trust show",
+            "revision alias set",
+            "revision alias clear",
+            "revision note set",
+            "revision note clear",
+            "revision trust set",
+            "revision trust clear",
+            "service-storage list",
+            "resource list",
+            "resource show",
+            "resource observe",
+            "resource locate",
+            "instance delete",
+            "instance abandon",
+            "instance deletion show",
+            "instance deletion confirm-complete",
+            "service-storage detached list",
+            "service-storage detached show",
+            "service-storage detached discard",
+            "snapshot list",
+            "snapshot show",
+            "snapshot verify",
+            "snapshot import",
+            "snapshot export",
+            "snapshot capture",
+            "snapshot restore",
+            "instance migration-paths",
+            "instance migrate"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "delivery": {
+      "$ref": "#/$defs/DeliveryResult"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "properties": {
+            "kind": {
+              "enum": [
+                "usage",
+                "operation",
+                "output",
+                "startup"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "reference": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "message",
+            "reference"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "format": {
+      "const": "pactrun.cli"
+    },
+    "format_version": {
+      "const": "1.0-alpha.1"
+    },
+    "result": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "success",
+        "failure"
+      ]
+    }
+  },
+  "required": [
+    "format",
+    "format_version",
+    "command",
+    "status",
+    "result",
+    "error"
+  ],
+  "title": "Pactrun CLI machine interface 1.0-alpha.1",
+  "type": "object"
+}

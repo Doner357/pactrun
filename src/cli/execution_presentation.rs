@@ -13,7 +13,7 @@ mod tests {
     fn initialization_details_are_safe_core_messages_only() {
         let safe = "IPC initialization: permission denied; check execution-owner access to the temporary location.";
         let mut record = crate::domain::RunFailureRecord {
-            error: crate::domain::PactrunErrorRefV1::new("execution", "ipc_initialization_failed")
+            error: crate::domain::PactrunErrorRef::new("execution", "ipc_initialization_failed")
                 .unwrap(),
             message: safe.into(),
         };
@@ -22,8 +22,7 @@ mod tests {
         assert!(Failure::new(&record, None).detail.is_none());
         record.message = safe.into();
         record.error =
-            crate::domain::PactrunErrorRefV1::new("execution", "protocol_transport_failed")
-                .unwrap();
+            crate::domain::PactrunErrorRef::new("execution", "protocol_transport_failed").unwrap();
         assert!(Failure::new(&record, None).detail.is_none());
     }
     // Test-ID: PR-TEST-0567
@@ -38,7 +37,7 @@ mod tests {
             finished_at_unix_ms: u64::MAX,
             primary_failure: None,
             secondary_failures: vec![RunFailureRecord {
-                error: PactrunErrorRefV1::new("execution", "launch_failed").unwrap(),
+                error: PactrunErrorRef::new("execution", "launch_failed").unwrap(),
                 message: "legacy-secret-sentinel".into(),
             }],
             hook_completion: None,
@@ -360,7 +359,7 @@ pub(super) struct Action {
     action_id: String,
     access: &'static str,
     terminal: &'static str,
-    protocol_version: i64,
+    protocol_version: String,
     hook_args_count: usize,
     launch: Launch,
     parameters: Vec<Parameter>,
@@ -417,7 +416,7 @@ impl From<&ActionV1> for Action {
             action_id: action.id.as_str().into(),
             access: access_name(action.access),
             terminal: terminal_name(action.hook.io.terminal),
-            protocol_version: action.hook.protocol_version.get(),
+            protocol_version: action.hook.protocol_version.to_string(),
             hook_args_count: action.hook.args.len(),
             launch: match &action.hook.launch {
                 HookLaunchV1::Direct { executable } => Launch::Direct {
@@ -603,7 +602,7 @@ pub(super) struct Plan {
     access: &'static str,
     required_inputs_satisfied: bool,
     terminal: &'static str,
-    protocol_version: i64,
+    protocol_version: String,
     parameters: Vec<PlanParameter>,
     launch: CompiledLaunch,
     hook_args_count: usize,
@@ -632,7 +631,7 @@ impl Plan {
             access: access_name(plan.access()),
             required_inputs_satisfied: plan.required_inputs_satisfied(),
             terminal: terminal_name(plan.terminal()),
-            protocol_version: plan.protocol_version().get(),
+            protocol_version: plan.protocol_version().to_string(),
             parameters: plan
                 .parameters()
                 .iter()

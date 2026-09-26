@@ -24,12 +24,29 @@ production Resolver, Compiler, Admission path, Executor, persistence adapter,
 or recovery implementation exists. Freezing changes status and verification
 metadata only.
 
+## E baseline owner mapping
+
+The one-time E reset replaces development owner suffixes with semantic names.
+This is an explicit catalog reset, not an append-only change to a released formal
+Major. Subsequent formal same-Major contracts preserve their supported meanings.
+The catalog is a product-owned registry, not a ninth release/version domain.
+
+| Development owner | Baseline owner |
+| --- | --- |
+| hook_protocol_v1 | hook_protocol |
+| hook_protocol_v2 | hook_protocol |
+| revision_core_format_v1 | revision_core |
+| snapshot_integrity_format_v1 | snapshot_integrity |
+
+Common and authority Hook codes retain their meanings and owning requirements;
+overlapping owner/code entries are merged with both sets of normative sources.
+
 ### PR-REQ-0219 - Stable error reference
 
 A Pactrun-owned error identity is exactly:
 
 ```text
-PactrunErrorRefV1
+PactrunErrorRef
 |- owner: ErrorOwnerV1
 `- code: ErrorCodeV1
 ```
@@ -57,9 +74,9 @@ fallback, CLI envelope, transport envelope, or persistence representation.
 The initial owner registry is:
 
 ```text
-revision_core_format_v1
-snapshot_integrity_format_v1
-hook_protocol_v1
+revision_core
+snapshot_integrity
+hook_protocol
 domain_validation
 resolution
 compilation
@@ -94,7 +111,7 @@ execution order. An existing `(owner, code)` MUST NOT be reassigned to another
 category. An incompatible category-vocabulary change requires taxonomy version
 evolution.
 
-`PactrunErrorTaxonomyCatalogV1` has a closed JSON schema containing `format`,
+`PactrunErrorCatalog` has a closed JSON schema containing `format`,
 `status`, `owners`, and `codes`. Owner entries contain `owner` and non-empty
 `normative_sources`. Code entries contain `owner`, `code`, `category`, and
 non-empty `normative_sources`. Every code entry MUST refer to an owner present
@@ -122,7 +139,7 @@ normative specification
         -> verifier conformance
 ```
 
-The initial `revision_core_format_v1` entries are:
+The initial `revision_core` entries are:
 
 ```text
 duplicate_property
@@ -134,7 +151,7 @@ invalid_unicode_scalar
 unknown_field
 ```
 
-The initial `snapshot_integrity_format_v1` entries are:
+The initial `snapshot_integrity` entries are:
 
 ```text
 content_digest_mismatch
@@ -155,7 +172,7 @@ missing_field
 unknown_field
 ```
 
-The `hook_protocol_v1` entries are exactly the Pactrun-originated closed local
+The `hook_protocol` entries are exactly the Pactrun-originated closed local
 code registry in PR-REQ-0217:
 
 ```text
@@ -208,7 +225,7 @@ does not weaken the underlying Frozen validation rules and does not prevent a
 future separately approved normative source from registering a stable code.
 
 A Hook-authored `HookCodeV1` remains Hook- or Package-owned and MUST NOT be
-reclassified as a Pactrun error-taxonomy code. The `hook_protocol_v1` owner is
+reclassified as a Pactrun error-taxonomy code. The `hook_protocol` owner is
 only for Pactrun-originated PR-REQ-0217 protocol failures.
 
 **Verification: PR-TEST-0035, PR-TEST-0037.**
@@ -224,7 +241,7 @@ existing `(owner, code)` MUST NOT be removed, renamed, moved to another owner,
 reused, incompatibly broadened or narrowed, or assigned another category. A
 code that is no longer emitted remains registered and cannot be reused.
 
-A generic `PactrunErrorRefV1` decoder validates only the lexical profiles. A
+A generic `PactrunErrorRef` decoder validates only the lexical profiles. A
 syntactically valid reference whose owner and/or code is unknown to an older
 catalog MUST remain representable and preserve the exact spelling. It MUST NOT
 be treated as success, silently mapped to another identity, or rejected solely
@@ -234,7 +251,7 @@ presentation behavior is implied.
 Catalog conformance is different: a catalog code entry whose owner is not
 registered in that same catalog is invalid.
 
-An incompatible change to `PactrunErrorRefV1`, owner/code grammar, identity
+An incompatible change to `PactrunErrorRef`, owner/code grammar, identity
 meaning, the closed category vocabulary, or catalog structural semantics
 requires taxonomy version evolution. A new owner or code alone does not.
 
@@ -248,7 +265,7 @@ PR-REQ-0328. This is append-only registration, not a change to V1 reference
 encoding/categories and not evidence that every ServiceStorage runtime path is
 implemented.
 
-M6.5 also appends the independent `hook_protocol_v2` owner and its four protocol
+M6.5 also appends the independent `hook_protocol` owner and its four protocol
 codes under PR-REQ-0321/0322; V1 peer failures keep their original owner/codes.
 
 **Verification: PR-TEST-0034, PR-TEST-0036, PR-TEST-0356, PR-TEST-0363.**

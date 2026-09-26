@@ -405,11 +405,14 @@ mod tests {
     #[test]
     fn versioned_source_acquisition_and_publication_do_not_erase_core_identity() {
         let (_temporary, storage, source) = roots();
-        let yaml=b"source_format: 2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
+        let yaml=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
         fs::write(source.join("pactrun.yaml"), yaml).unwrap();
         let p = PactrunPersistence::open(&storage).unwrap();
         let candidate = crate::authoring::parse_pack_source_yaml(yaml).unwrap();
-        assert_eq!(candidate.revision.version(), 2);
+        assert_eq!(
+            candidate.revision.version(),
+            crate::domain::VersionDomain::Revision.current()
+        );
         let root = SecureSourceRoot::open(&source).unwrap();
         let staged = resolve_candidate(p.staging_session().unwrap(), &root, candidate).unwrap();
         let content = validate_revision_content(
@@ -429,7 +432,10 @@ mod tests {
             .unwrap();
         assert_eq!(installed.content_digest, digest);
         let loaded = p.load_revision(&installed).unwrap().unwrap();
-        assert_eq!(loaded.content.core.version(), 2);
+        assert_eq!(
+            loaded.content.core.version(),
+            crate::domain::VersionDomain::Revision.current()
+        );
         assert_eq!(
             loaded.content.core.service_core().unwrap().resources()[0]
                 .locator
@@ -439,18 +445,19 @@ mod tests {
         assert!(!storage.join("service-storage").exists()); // installation is not allocation
         // V3 is explicitly supported; V4 remains the unknown-version case.
         for token in ["2.0", "'2'", "4"] {
-            let invalid = String::from_utf8(yaml.to_vec())
-                .unwrap()
-                .replace("source_format: 2", &format!("source_format: {token}"));
+            let invalid = String::from_utf8(yaml.to_vec()).unwrap().replace(
+                "source_format: 1.0-alpha.1",
+                &format!("source_format: {token}"),
+            );
             assert!(crate::authoring::parse_pack_source_yaml(invalid.as_bytes()).is_err());
         }
-        let legacy=b"source_format: 1\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
+        let legacy=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
         assert_eq!(
             crate::authoring::parse_pack_source_yaml(legacy)
                 .unwrap()
                 .revision
                 .version(),
-            1
+            crate::domain::VersionDomain::Revision.current()
         );
     }
 
@@ -462,7 +469,7 @@ mod tests {
         fs::write(source.join("same.bin"), b"same bytes").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000011
 revision:
   inputs: []
@@ -515,7 +522,7 @@ portable_metadata:
         fs::write(source.join("two.bin"), b"two").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000012
 revision:
   inputs: []
@@ -539,7 +546,7 @@ runtime_content:
 
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000012
 revision:
   inputs: []
@@ -593,11 +600,11 @@ runtime_content:
         );
 
         let root = SecureSourceRoot::open(&source).unwrap();
-        let candidate = crate::authoring::parse_pack_source_yaml_v1(
+        let candidate = crate::authoring::parse_pack_source_yaml(
             &fs::read(source.join("pactrun.yaml")).unwrap(),
         )
         .unwrap();
-        let candidate = resolve_candidate(&staging, &root, candidate.into()).unwrap();
+        let candidate = resolve_candidate(&staging, &root, candidate).unwrap();
         let content = validate_revision_content(
             candidate.definition.revision,
             candidate.definition.runtime_content,
@@ -621,7 +628,7 @@ runtime_content:
         let (_relation_temporary, relation_storage, relation_source) = roots();
         fs::write(
             relation_source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000013
 revision:
   inputs: []
@@ -646,7 +653,7 @@ runtime_content:
             fs::write(
                 relation_source.join("pactrun.yaml"),
                 format!(
-                    r#"source_format: 1
+                    r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000013
 revision:
   inputs: []

@@ -1,7 +1,6 @@
 //! Snapshot-owned immutable content, independent of Instance/Run/producer lifetime.
 use super::{
     PactrunPersistence, PersistenceError, RuntimeContentStore, StoredRuntimeBlob,
-    chunked_blob::{ChunkedBlobTable, stream_chunks},
     sqlite_revision_store::{FaultPoint, fault, load_revision_from},
 };
 use crate::{
@@ -11,7 +10,6 @@ use crate::{
     snapshot_integrity::{SnapshotCodecError, VerifiedSnapshotManifest, decode_snapshot_manifest},
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
-use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     io::{self, Write},
@@ -32,15 +30,6 @@ impl From<CapabilityRefusal> for PersistenceError {
         Self::SnapshotCodec(SnapshotCodecError::Capability(e))
     }
 }
-pub(super) const CHUNKS: ChunkedBlobTable = ChunkedBlobTable {
-    representation_maximum: i64::MAX as u64,
-    insert_chunk_sql: "INSERT INTO snapshot_blob_chunks(snapshot_id,blob_digest,chunk_index,chunk_bytes) VALUES (?1,?2,?3,?4)",
-    select_chunks_sql: "SELECT chunk_index,chunk_bytes FROM snapshot_blob_chunks WHERE snapshot_id=?1 AND blob_digest=?2 ORDER BY chunk_index",
-    read_operation: "read Snapshot payload",
-    write_operation: "write Snapshot payload",
-    invalid: |_| PersistenceError::CorruptSnapshot("invalid staged payload length"),
-    corrupt: |_| PersistenceError::CorruptSnapshot("invalid payload chunks"),
-};
 #[derive(Debug)]
 pub(crate) struct SnapshotImportReceipt {
     pub(crate) id: SnapshotId,
@@ -151,13 +140,13 @@ pub(super) fn snapshot_producer(
 }
 
 fn load_snapshot(db: &Connection, id: SnapshotId) -> Result<StoredSnapshot, PersistenceError> {
-    let header:Option<(i64,Vec<u8>,i64)>=db.query_row("SELECT integrity_format,integrity_digest,length(canonical_manifest) FROM snapshots WHERE snapshot_id=?1",[id.as_bytes().as_slice()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(|e|PersistenceError::sqlite("load Snapshot header",e))?;
+    let header:Option<(String,Vec<u8>,i64)>=db.query_row("SELECT integrity_format,integrity_digest,length(canonical_manifest) FROM snapshots WHERE snapshot_id=?1",[id.as_bytes().as_slice()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional().map_err(|e|PersistenceError::sqlite("load Snapshot header",e))?;
     let (version, digest, length) = header.ok_or(PersistenceError::MissingSnapshot(id))?;
     fault(FaultPoint::AfterSnapshotReadEstablished);
     let length = u64::try_from(length)
         .map_err(|_| PersistenceError::CorruptSnapshot("invalid manifest length"))?;
     SnapshotCapability::CanonicalManifest.check(length)?;
-    let version = SnapshotIntegrityVersion::from_number(version)
+    let version = SnapshotIntegrityVersion::from_text(&version)
         .map_err(|_| PersistenceError::CorruptSnapshot("invalid integrity version"))?;
     let raw: Vec<u8> = db
         .query_row(
@@ -236,7 +225,6 @@ pub(super) fn validate_collection_catalog(db: &Connection) -> Result<(), Persist
         )?;
     }
     for sql in [
-        "SELECT EXISTS(SELECT 1 FROM snapshot_blobs b WHERE storage_kind NOT IN (0,1) OR (storage_kind=1 AND EXISTS(SELECT 1 FROM snapshot_blob_chunks c WHERE c.snapshot_id=b.snapshot_id AND c.blob_digest=b.blob_digest)) OR (storage_kind=0 AND byte_length != (SELECT coalesce(sum(length(chunk_bytes)),0) FROM snapshot_blob_chunks c WHERE c.snapshot_id=b.snapshot_id AND c.blob_digest=b.blob_digest)))",
         "SELECT EXISTS(SELECT 1 FROM managed_input_payloads p WHERE (content_digest IS NOT NULL AND EXISTS(SELECT 1 FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)) OR (content_digest IS NULL AND byte_length != (SELECT coalesce(sum(length(chunk_bytes)),0) FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)))",
     ] {
         if db
@@ -263,20 +251,6 @@ fn producer_verification(
         .validate_producer(context.as_ref())
         .map_err(|e| PersistenceError::SnapshotCodec(e.into()))
 }
-struct HashWriter<'a> {
-    target: &'a mut dyn Write,
-    hash: Sha256,
-}
-impl Write for HashWriter<'_> {
-    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
-        let n = self.target.write(b)?;
-        self.hash.update(&b[..n]);
-        Ok(n)
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        self.target.flush()
-    }
-}
 fn stream_blob(
     db: &Connection,
     content: &RuntimeContentStore,
@@ -286,42 +260,19 @@ fn stream_blob(
     target: &mut dyn Write,
 ) -> Result<(), PersistenceError> {
     SnapshotCapability::StoredBlob.check(length)?;
-    let kind: i64 = db
+    let recorded: i64 = db
         .query_row(
-            "SELECT storage_kind FROM snapshot_blobs WHERE snapshot_id=?1 AND blob_digest=?2",
+            "SELECT byte_length FROM snapshot_blobs WHERE snapshot_id=?1 AND blob_digest=?2",
             params![id.as_bytes().as_slice(), digest.to_bytes().as_slice()],
             |r| r.get(0),
         )
-        .map_err(|e| PersistenceError::sqlite("read Snapshot representation", e))?;
-    if kind == 1 {
-        let inline: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM snapshot_blob_chunks WHERE snapshot_id=?1 AND blob_digest=?2)", params![id.as_bytes().as_slice(),digest.to_bytes().as_slice()], |r| r.get(0)).map_err(|e| PersistenceError::sqlite("check Snapshot representation", e))?;
-        if inline {
-            return Err(PersistenceError::CorruptSnapshot(
-                "ambiguous Snapshot representation",
-            ));
-        }
-        return super::immutable_data::stream(content, digest, length, target);
-    }
-    if kind != 0 {
+        .map_err(|e| PersistenceError::sqlite("read immutable Snapshot reference", e))?;
+    if u64::try_from(recorded).ok() != Some(length) {
         return Err(PersistenceError::CorruptSnapshot(
-            "unknown Snapshot representation",
+            "immutable Snapshot length mismatch",
         ));
     }
-    let mut writer = HashWriter {
-        target,
-        hash: Sha256::new(),
-    };
-    stream_chunks(
-        db,
-        &CHUNKS,
-        [id.as_bytes(), &digest.to_bytes()],
-        length,
-        &mut writer,
-    )?;
-    if <[u8; 32]>::from(writer.hash.finalize()) != digest.to_bytes() {
-        return Err(PersistenceError::CorruptSnapshot("payload digest mismatch"));
-    };
-    Ok(())
+    super::immutable_data::stream(content, digest, length, target)
 }
 fn verify_stored(
     db: &Connection,
@@ -505,7 +456,7 @@ pub(super) fn insert_snapshot_manifest(
             .unwrap(),
     )
     .expect("typed digest");
-    tx.execute("INSERT INTO snapshots(snapshot_id,integrity_format,integrity_digest,canonical_manifest) VALUES (?1,?2,?3,?4)",params![manifest.manifest().snapshot_id().as_bytes().as_slice(),manifest.manifest().version().number(),digest,manifest.canonical_bytes()]).map_err(|e|PersistenceError::sqlite("publish Snapshot manifest",e))?;
+    tx.execute("INSERT INTO snapshots(snapshot_id,integrity_format,integrity_digest,canonical_manifest) VALUES (?1,?2,?3,?4)",params![manifest.manifest().snapshot_id().as_bytes().as_slice(),manifest.manifest().version().as_str(),digest,manifest.canonical_bytes()]).map_err(|e|PersistenceError::sqlite("publish Snapshot manifest",e))?;
     Ok(())
 }
 impl PactrunPersistence {
@@ -683,26 +634,19 @@ mod tests;
 #[cfg(test)]
 pub(crate) fn corrupt_snapshot_for_test(root: &std::path::Path, id: SnapshotId) {
     let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-    let mut q = db
-        .prepare("SELECT blob_digest,storage_kind FROM snapshot_blobs WHERE snapshot_id=?1")
+    let mut query = db
+        .prepare("SELECT blob_digest FROM snapshot_blobs WHERE snapshot_id=?1")
         .unwrap();
-    let rows = q
-        .query_map([id.as_bytes().as_slice()], |r| {
-            Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?))
-        })
+    let rows = query
+        .query_map([id.as_bytes().as_slice()], |r| r.get::<_, Vec<u8>>(0))
         .unwrap();
     for row in rows {
-        let (digest, kind) = row.unwrap();
-        if kind == 1 {
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(root.join("runtime-content").join(hex::encode(&digest)))
-                .unwrap()
-                .write_all(&[0])
-                .unwrap();
-        } else {
-            db.execute("UPDATE snapshot_blob_chunks SET chunk_bytes=zeroblob(length(chunk_bytes)) WHERE snapshot_id=?1 AND blob_digest=?2", params![id.as_bytes().as_slice(),digest]).unwrap();
-        }
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(root.join("runtime-content").join(hex::encode(row.unwrap())))
+            .unwrap()
+            .write_all(&[0])
+            .unwrap();
     }
 }
 
@@ -712,72 +656,14 @@ pub(super) fn insert_snapshot_file(
     file: &StoredRuntimeBlob,
 ) -> Result<(), PersistenceError> {
     SnapshotCapability::StoredBlob.check(file.byte_len())?;
-    tx.execute("INSERT INTO snapshot_blobs(snapshot_id,blob_digest,byte_length,storage_kind) VALUES (?1,?2,?3,1)", params![id.as_bytes().as_slice(),file.digest().to_bytes().as_slice(),file.byte_len() as i64]).map_err(|e| PersistenceError::sqlite("publish immutable Snapshot reference", e))?;
+    tx.execute(
+        "INSERT INTO snapshot_blobs(snapshot_id,blob_digest,byte_length) VALUES (?1,?2,?3)",
+        params![
+            id.as_bytes().as_slice(),
+            file.digest().to_bytes().as_slice(),
+            file.byte_len() as i64
+        ],
+    )
+    .map_err(|e| PersistenceError::sqlite("publish immutable Snapshot reference", e))?;
     Ok(())
-}
-
-impl PactrunPersistence {
-    /// Only legacy inline bound values need preparation. Service payloads never
-    /// enter the main database WAL; pins protect the selected Snapshot throughout.
-    pub(super) fn prepare_restore_payloads(&self, run: RunId) -> Result<(), PersistenceError> {
-        let db = self
-            .database
-            .lock()
-            .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
-        if matches!(
-            super::sqlite_runs::load_managed_run_from(&db, run)?.state,
-            RunState::Finished(_)
-        ) {
-            return Ok(());
-        }
-        let id = admitted_restore_snapshot(&db, run)?;
-        let stored = load_snapshot(&db, id)?;
-        inspection(&stored).restore_capability?;
-        let mut seen = std::collections::BTreeSet::new();
-        for binding in stored.manifest.manifest().managed_bindings() {
-            let SnapshotBindingState::Bound(digest) = &binding.state else {
-                continue;
-            };
-            if !seen.insert(digest) {
-                continue;
-            }
-            let kind: i64 = db.query_row("SELECT storage_kind FROM snapshot_blobs WHERE snapshot_id=?1 AND blob_digest=?2", params![id.as_bytes().as_slice(),digest.to_bytes().as_slice()], |r| r.get(0)).map_err(|e| PersistenceError::sqlite("qualify legacy Restore payload",e))?;
-            if kind == 1 {
-                continue;
-            }
-            let mut stage = self
-                .staging_session()
-                .ok_or(PersistenceError::WriterAdmissionRequired)?
-                .create_snapshot_stage()
-                .map_err(|_| PersistenceError::Io {
-                    operation: "stage legacy Restore payload",
-                    source: io::ErrorKind::Other.into(),
-                })?;
-            stream_blob(
-                &db,
-                &self.runtime_content,
-                id,
-                digest,
-                stored.lengths[digest],
-                stage.writer(),
-            )?;
-            stage
-                .finish_operation_file()
-                .map_err(|source| PersistenceError::Io {
-                    operation: "finish legacy Restore stage",
-                    source,
-                })?;
-            let mut reader = stage.try_clone_reader().map_err(|_| PersistenceError::Io {
-                operation: "read legacy Restore stage",
-                source: io::ErrorKind::Other.into(),
-            })?;
-            super::immutable_data::publish(
-                &self.runtime_content,
-                digest,
-                stored.lengths[digest],
-                &mut reader,
-            )?;
-        }
-        Ok(())
-    }
 }

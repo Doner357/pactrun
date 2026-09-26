@@ -9,7 +9,8 @@ workspace = true
 
 [dependencies]
 hex = "0.4"
+fluent-uri = "=0.4.1"
 serde = { version = "1", features = ["derive"] }
 serde_jcs = "=0.2.0"
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 sha2 = "0.10"

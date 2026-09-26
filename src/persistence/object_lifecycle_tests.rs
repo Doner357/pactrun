@@ -25,8 +25,8 @@ fn root() -> (tempfile::TempDir, PathBuf) {
 fn revision(p: &PactrunPersistence, package: u8, bytes: &[u8]) -> (RevisionIdentity, Sha256Digest) {
     let digest = Sha256Digest::from_bytes(Sha256::digest(bytes).into());
     let blob = p.put_runtime_content(&digest, &mut &bytes[..]).unwrap();
-    let core = crate::revision_core_v1::project_revision_core_source_v1(br#"{
-        "format_version":1,"inputs":[],"actions":[{"id":"inspect","access":"observe","parameters":[],"hook":{"protocol_version":1,"launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"}},"outputs":[]}],"migrations":[]
+    let core = crate::revision_declarations::project_service_free_revision_source(br#"{
+        "format_version":"1.0-alpha.1","inputs":[],"actions":[{"id":"inspect","access":"observe","parameters":[],"hook":{"protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"}},"outputs":[]}],"migrations":[]
     }"#).unwrap();
     let runtime = project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 {
         files: vec![RuntimeFileV1 {
@@ -38,7 +38,7 @@ fn revision(p: &PactrunPersistence, package: u8, bytes: &[u8]) -> (RevisionIdent
         }],
     })
     .unwrap();
-    let content = validate_revision_content_v1(core, runtime).unwrap();
+    let content = validate_declaration_content(core, runtime).unwrap();
     (
         p.persist_revision(PackageId::from_bytes([package; 16]), &content, &[blob])
             .unwrap(),
@@ -115,9 +115,9 @@ fn finish(p: &PactrunPersistence, id: RunId, outcome: RunOutcome) {
 fn snapshot(p: &PactrunPersistence, producer: &RevisionIdentity, origin: InstanceId) -> SnapshotId {
     let id = SnapshotId::generate().unwrap();
     let digest = Sha256Digest::from_bytes(Sha256::digest(b"payload").into());
-    let raw = serde_json::to_vec(&serde_json::json!({"format_version":1,"snapshot_id":id.to_string(),"producer":{"package_id":producer.package_id.to_string(),"revision_content_digest":producer.content_digest.to_string()},"origin_instance_id":origin.to_string(),"captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[{"role":"state","path":"state","blob_digest":digest.as_str()}]})).unwrap();
+    let raw = serde_json::to_vec(&serde_json::json!({"format_version":"1.0-alpha.1","snapshot_id":id.to_string(),"producer":{"package_id":producer.package_id.to_string(),"revision_content_digest":producer.content_digest.to_string()},"origin_instance_id":origin.to_string(),"captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[{"role":"state","path":"state","blob_digest":digest.as_str()}]})).unwrap();
     let manifest = crate::snapshot_integrity::decode_snapshot_manifest(
-        SnapshotIntegrityVersion::V1,
+        SnapshotIntegrityVersion::BASELINE,
         &raw,
         None,
     )
@@ -514,129 +514,44 @@ fn collection_namespace_replacement_cannot_delete_an_unrelated_file() {
 // Test-ID: PR-TEST-0468
 // Verifies: PR-REQ-0345
 #[test]
-fn coordination_upgrade_fences_live_writers_and_crash_boundaries() {
-    use super::sqlite_revision_store::*;
-    for point in [
-        "before_schema_migration_commit",
-        "after_schema_migration_commit",
-    ] {
-        let (_temp, root) = root();
-        let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        for (sql, _) in &SCHEMA_LADDER[..8] {
-            db.execute_batch(sql).unwrap();
-        }
-        db.pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        db.pragma_update(None, "user_version", 8).unwrap();
-        let session = crate::managed_data::StagingSession::prepare(&root).unwrap();
-        db.execute(
-            "INSERT INTO writable_admissions VALUES(?1,8)",
-            [session.owner().as_str().as_bytes()],
-        )
+fn revoked_admission_blocks_deletion_without_removing_revision() {
+    let (_temp, root) = root();
+    let p = PactrunPersistence::open(&root).unwrap();
+    let (rev, _) = revision(&p, 27, b"retained");
+    p.database
+        .lock()
+        .unwrap()
+        .execute("DELETE FROM writable_admissions", [])
         .unwrap();
-        assert!(matches!(
-            PactrunPersistence::upgrade_storage(&root),
-            Err(PersistenceError::ActiveWriters)
-        ));
-        drop(session);
-        drop(db);
-        let child = worker(&root, &["storage".to_owned(), "upgrade".to_owned()])
-            .env("PACTRUN_LIFECYCLE_FAULT", point)
-            .output()
-            .unwrap();
-        assert_eq!(child.status.code(), Some(87));
-        let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        let v = db
-            .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
-            .unwrap();
-        assert_eq!(
-            v,
-            if point.starts_with("before") {
-                8
-            } else {
-                super::SCHEMA_VERSION
-            }
-        );
-        validate_schema(&db, v).unwrap();
-        drop(db);
-        assert_eq!(PactrunPersistence::upgrade_storage(&root).unwrap(), v == 8);
-        let p = PactrunPersistence::open(&root).unwrap();
-        let (rev, _) = revision(&p, 27, b"retained");
-        p.database
-            .lock()
-            .unwrap()
-            .execute("DELETE FROM writable_admissions", [])
-            .unwrap();
-        assert!(matches!(
-            p.delete_object(&ObjectDeletion::Revision(rev.clone())),
-            Err(PersistenceError::WriterAdmissionRequired)
-        ));
-        assert!(p.load_revision(&rev).unwrap().is_some());
-    }
+    assert!(matches!(
+        p.delete_object(&ObjectDeletion::Revision(rev.clone())),
+        Err(PersistenceError::WriterAdmissionRequired)
+    ));
+    assert!(p.load_revision(&rev).unwrap().is_some());
 }
 
 // Test-ID: PR-TEST-0456
 // Verifies: PR-REQ-0345
 #[test]
-fn coordination_upgrade_accepts_only_exact_predecessor_and_preserves_data() {
-    use super::sqlite_revision_store::*;
-    let document =
-        include_str!("../../docs/spec/persistence/persistence-schema-v9.md").replace("\r\n", "\n");
-    assert_eq!(
-        document
-            .split("```sql\n")
-            .nth(1)
-            .unwrap()
-            .split("```")
-            .next()
-            .unwrap()
-            .trim(),
-        include_str!("persistence_schema_v9_additions.sql").trim()
-    );
-    for version in 1..=SCHEMA_VERSION as usize {
+fn coordination_refuses_development_stores_without_mutating_data() {
+    use super::sqlite_revision_store::APPLICATION_ID;
+    for version in 1..=11 {
         let (_temp, root) = root();
-        let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        for (sql, _) in &SCHEMA_LADDER[..version] {
-            db.execute_batch(sql).unwrap();
-        }
+        let path = root.join("database/pactrun.sqlite3");
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch(
+            "CREATE TABLE sentinel(value BLOB); INSERT INTO sentinel VALUES(x'010203');",
+        )
+        .unwrap();
         db.pragma_update(None, "application_id", APPLICATION_ID)
             .unwrap();
-        db.pragma_update(None, "user_version", version as i64)
-            .unwrap();
-        db.execute("INSERT INTO packages VALUES(?1)", [[9u8; 16].as_slice()])
-            .unwrap();
-        if version == 8 {
-            assert_eq!(cli(&root, &["storage", "gc", "--plan"]).0, 1);
-            assert!(!root.join("runtime-content/.collection.lock").exists());
-            assert_eq!(
-                db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
-                    .unwrap(),
-                8
-            );
-        }
-        let result = PactrunPersistence::upgrade_storage(&root);
-        match version {
-            8..=10 => assert!(result.unwrap()),
-            11 => assert!(!result.unwrap()),
-            _ => assert!(result.is_err()),
-        }
-        assert_eq!(
-            db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
-                .unwrap(),
-            if matches!(version, 8..=10) {
-                SCHEMA_VERSION
-            } else {
-                version as i64
-            }
-        );
-        assert_eq!(
-            db.query_row("SELECT count(*) FROM packages", [], |r| r.get::<_, i64>(0))
-                .unwrap(),
-            1
-        );
-        if version == 8 {
-            assert!(PactrunPersistence::open_read_only(&root).is_ok());
-        }
+        db.pragma_update(None, "user_version", version).unwrap();
+        drop(db);
+        let before = fs::read(&path).unwrap();
+        assert_eq!(cli(&root, &["storage", "gc", "--plan"]).0, 1);
+        assert!(!root.join("runtime-content/.collection.lock").exists());
+        assert!(PactrunPersistence::open_read_only(&root).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
     }
 }
 
@@ -837,7 +752,8 @@ fn snapshot_removal_is_atomic_and_rejects_an_accepted_restore() {
         ObjectDeletionResult::AlreadyAbsent
     );
     let db = p.database.lock().unwrap();
-    for table in ["snapshot_blobs", "snapshot_blob_chunks"] {
+    {
+        let table = "snapshot_blobs";
         assert_eq!(
             db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
                 .get::<_, i64>(0))

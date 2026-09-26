@@ -95,7 +95,7 @@ pub(super) struct Input {
 #[derive(Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Hook {
-    protocol_version: i64,
+    protocol_version: String,
     terminal: &'static str,
     launch: execution_presentation::Launch,
     hook_args_count: usize,
@@ -150,7 +150,7 @@ impl Hook {
     pub(super) fn new(h: &HookV1, core: &RevisionCore, site: ServiceHookSite) -> Self {
         let contract = core.service_hook(&site);
         Self {
-            protocol_version: h.protocol_version.get(),
+            protocol_version: h.protocol_version.to_string(),
             terminal: terminal_name(h.io.terminal),
             launch: execution_presentation::Launch::from(&h.launch),
             hook_args_count: h.args.len(),

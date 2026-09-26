@@ -74,7 +74,7 @@ fn shells() -> Vec<(&'static str, &'static str)> {
 
 fn source(shell: &str, executable: &str, args: &[String]) -> String {
     format!(
-        r#"source_format: 3
+        r#"source_format: 1.0-alpha.1
 package_id: '{{package_id}}'
 revision:
   actions:
@@ -82,7 +82,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}
         args: {}
         io: {{terminal: output}}
@@ -281,7 +281,7 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
     for (shell, executable) in shells() {
         let mut yaml = source(shell, executable, &[]);
         let hook = format!(
-            "        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n"
+            "        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n"
         );
         let capabilities = format!(
             "  snapshot:\n    capture:\n      parameters: []\n      access: observe\n      hook:\n{hook}    restore:\n      parameters: []\n      hook:\n{hook}  cleanup:\n    requires: []\n    hook:\n{}",
@@ -354,7 +354,7 @@ fn shell_loader_plain_migration_and_missing_target_output_are_distinct() {
             let base =
                 source(shell, executable, &[]).replace("{package_id}", &format!("{:032x}", 705));
             let migration = format!(
-                "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: {}\n      hook:\n        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n",
+                "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: {}\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n",
                 if missing { "[data]" } else { "[]" }
             );
             let mut target =
@@ -425,7 +425,7 @@ fn shell_loader_timeout_does_not_become_success() {
 fn shell_loader_capture_registered_binary_content_round_trips() {
     for (shell, executable) in shells() {
         let hook = format!(
-            "        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        io: {{terminal: none}}\n"
+            "        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        io: {{terminal: none}}\n"
         );
         let capabilities = format!(
             "  snapshot:\n    capture:\n      parameters: []\n      access: observe\n      hook:\n{hook}        args: [capture]\n    restore:\n      parameters: []\n      hook:\n{hook}        args: [restore]\n"
@@ -539,7 +539,7 @@ fn shell_loader_transform_proposal_receipt_and_exit_preserve_target_boundary() {
       resource_transitions:
         - {{kind: transform, sources: [{{role: active, resource_id: data}}], targets: [data]}}
       hook:
-        protocol_version: 2
+        protocol_version: 1.0-alpha.1
         launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}
         args: []
         io: {{terminal: none}}
@@ -926,7 +926,7 @@ fn shell_loader_migration_reads_pinned_source_and_explicitly_registers_target_by
         assert_success(&run_command(set));
         let digest = old.rsplit('/').next().unwrap();
         let migration = format!(
-            "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: [{{role: active, input_id: data}}]\n      requires_target: []\n      produces_target: [result]\n      hook:\n        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: output}}\n"
+            "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: [{{role: active, input_id: data}}]\n      requires_target: []\n      produces_target: [result]\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: output}}\n"
         );
         let target_source = base
             .replace("inputs: [{id: data,", "inputs: [{id: result,")

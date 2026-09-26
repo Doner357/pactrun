@@ -20,6 +20,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BundleError {
+    UnsupportedVersion(crate::domain::VersionDomain, crate::domain::FormatVersion),
     Profile(&'static str),
     Capability(CapabilityRefusal),
     Integrity(SnapshotCodecError),
@@ -55,6 +56,9 @@ impl From<zip::result::ZipError> for BundleError {
 impl std::fmt::Display for BundleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::UnsupportedVersion(domain, version) => {
+                f.write_str(&domain.unsupported_message(*version))
+            }
             Self::Profile(reason) => write!(f, "Snapshot bundle: {reason}"),
             Self::Capability(e) => e.fmt(f),
             Self::Integrity(e) => e.fmt(f),
@@ -704,24 +708,38 @@ fn decode_envelope(raw: &[u8]) -> Result<(SnapshotIntegrityVersion, String), Bun
         return invalid("envelope must be an object");
     };
     let mut fields: BTreeMap<_, _> = fields.into_iter().collect();
-    if fields.len() != 4 {
-        return invalid("invalid envelope fields");
-    };
     if fields.remove("kind") != Some(RawJsonValue::String("pactrun_snapshot_bundle".to_owned())) {
         return invalid("invalid bundle kind");
     };
-    let number = |v: Option<RawJsonValue>| -> Result<i64, BundleError> {
-        let Some(v) = v else {
-            return invalid("missing envelope version");
-        };
-        snapshot_integrity::exact_integer(&v)
-            .map_err(|_| BundleError::Profile("invalid envelope version"))
+    let Some(RawJsonValue::String(bundle)) = fields.remove("bundle_version") else {
+        return invalid("bundle version must be a string");
     };
-    if number(fields.remove("bundle_version"))? != 1 {
-        return invalid("unsupported bundle version");
+    let required = bundle
+        .parse::<crate::domain::FormatVersion>()
+        .map_err(|_| BundleError::Profile("invalid bundle version identifier"))?;
+    if !crate::domain::VersionDomain::SnapshotBundle.supports(required) {
+        return Err(BundleError::UnsupportedVersion(
+            crate::domain::VersionDomain::SnapshotBundle,
+            required,
+        ));
+    }
+    let Some(RawJsonValue::String(integrity)) = fields.remove("integrity_format") else {
+        return invalid("integrity version must be a string");
     };
-    let version = SnapshotIntegrityVersion::from_number(number(fields.remove("integrity_format"))?)
+    let required = integrity
+        .parse::<crate::domain::FormatVersion>()
+        .map_err(|_| BundleError::Profile("invalid integrity version identifier"))?;
+    if !crate::domain::VersionDomain::Snapshot.supports(required) {
+        return Err(BundleError::UnsupportedVersion(
+            crate::domain::VersionDomain::Snapshot,
+            required,
+        ));
+    }
+    let version = SnapshotIntegrityVersion::from_text(&integrity)
         .map_err(|_| BundleError::Profile("unsupported Snapshot integrity version"))?;
+    if fields.len() != 1 {
+        return invalid("invalid envelope fields");
+    }
     let Some(RawJsonValue::String(digest)) = fields.remove("integrity_digest") else {
         return invalid("invalid envelope digest");
     };
@@ -786,7 +804,7 @@ pub(crate) fn start_bundle<'a>(
         .compression_method(CompressionMethod::Stored)
         .unix_permissions(0o600);
     writer.start_file("bundle.json", options)?;
-    let envelope = serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":1,"integrity_format":manifest.manifest().version().number(),"integrity_digest":manifest.integrity_digest().as_str()});
+    let envelope = serde_json::json!({"kind":"pactrun_snapshot_bundle","bundle_version":"1.0-alpha.1","integrity_format":manifest.manifest().version().as_str(),"integrity_digest":manifest.integrity_digest().as_str()});
     writer.write_all(
         &serde_json::to_vec(&envelope)
             .map_err(|_| BundleError::Profile("envelope serialization failed"))?,

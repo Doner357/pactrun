@@ -87,7 +87,7 @@ the identity-bearing logical `path`, `id`, and `executable` descriptor fields.
 This runtime-content closure does not content-address, copy, version, or
 automatically Snapshot service-owned live state. A formal identity-bearing
 ServiceStorage-backed Managed Service Resource declaration is supplied by
-[Revision Core V2](./revision-core-format-v2.md) and retained by V3; it is not
+[Revision Core V2](./revision-canonical.md) and retained by V3; it is not
 part of Frozen Core V1. This requirement does not classify other service-owned
 resource kinds.
 
