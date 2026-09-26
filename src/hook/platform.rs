@@ -95,7 +95,7 @@ impl ProtocolListener {
         if arguments
             .first()
             .is_some_and(|a| a == "--pactrun-internal-shell-loader")
-            && program == std::env::current_exe()?
+            && program == super::executable::current()?
         {
             listener.startup = Some(std::sync::Arc::new(super::startup::Setup::new(root)?));
         }
@@ -266,7 +266,7 @@ impl ProcessSupervisor {
                     );
                     adapter_arguments
                 };
-                (std::env::current_exe()?, adapter_arguments)
+                (super::executable::current()?, adapter_arguments)
             } else {
                 (
                     program.to_path_buf(),
@@ -431,7 +431,7 @@ fn spawn_interactive_adapter(
     listener: &ProtocolListener,
     helper_directory: Option<HelperIpcDirectory>,
 ) -> io::Result<ProcessSupervisor> {
-    let mut command = Command::new(std::env::current_exe()?);
+    let mut command = Command::new(super::executable::current()?);
     #[cfg(test)]
     command.args([
         "--exact",

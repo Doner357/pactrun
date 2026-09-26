@@ -445,7 +445,7 @@ fn script_command(args: &[OsString], listener: &ProtocolListener) -> io::Result<
     }
     command.args(&args[4..]);
     command.env(HELPER_ENDPOINT, listener.endpoint());
-    command.env(EXECUTABLE, env::current_exe()?);
+    command.env(EXECUTABLE, super::executable::current()?);
     command.env_remove("PACTRUN_HOOK_PROTOCOL_ENDPOINT");
     command.env_remove("PACTRUN_HOOK_PROTOCOL_TRANSPORT");
     command.env_remove("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY");
