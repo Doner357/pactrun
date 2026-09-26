@@ -650,7 +650,7 @@ fn launch_command(
             launcher,
             script,
         } => (
-            std::env::current_exe()?,
+            super::executable::current()?,
             vec![
                 "--pactrun-internal-shell-loader".to_owned(),
                 shell.as_str().to_owned(),

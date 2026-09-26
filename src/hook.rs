@@ -7,6 +7,7 @@ mod deletions;
 pub(crate) mod delivery;
 mod diagnostic_scope;
 pub(crate) mod diagnostics;
+mod executable;
 mod materialize;
 mod migrations;
 mod platform;
