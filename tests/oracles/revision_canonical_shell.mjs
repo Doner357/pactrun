@@ -11,7 +11,7 @@ for (const entry of fixture.cases) {
   core.actions[0].hook.launch.shell = entry.shell;
   const a = Buffer.from(jcs(core)), b = Buffer.from(jcs(fixture.normalized_content));
   const length = bytes => { const out = Buffer.alloc(8); out.writeBigUInt64BE(BigInt(bytes.length)); return out; };
-  const frame = Buffer.concat([Buffer.from('pactrun.revision-content-digest\0'), 
+  const frame = Buffer.concat([Buffer.from('pactrun.revision-content-digest\0'),
     Buffer.from('revision-core\0'), length(a), a, Buffer.from('runtime-content-closure\0'), length(b), b]);
   const digest = 'sha256:' + createHash('sha256').update(frame).digest('hex');
   if (!process.argv.includes('--calculate') && digest !== entry.digest) throw new Error('Core V3 independent digest mismatch: ' + entry.shell);

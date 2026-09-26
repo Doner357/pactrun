@@ -74,7 +74,7 @@ function canonicalize(value) {
 function makeFrame(coreJcs, contentJcs) {
   return Buffer.concat([
     Buffer.from('pactrun.revision-content-digest\0', 'ascii'),
-    
+
     Buffer.from('revision-core\0', 'ascii'),
     u64be(coreJcs.length),
     coreJcs,
