@@ -28,15 +28,16 @@ for example `pactrun run show 6fb391d6`. Human lists display usable short IDs;
 `--no-trunc` shows full IDs. See [ID selectors](./docs/spec/contracts/cli-id-selectors.md)
 for Revision and Migration forms.
 
-- `--format json` returns one `pactrun.cli.v1` response.
-- `--format jsonl` streams `pactrun.cli.events.v1` events and ends with a result.
+- `--format json` returns one complete response.
+- `--format jsonl` streams events and ends with a result.
+- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.1"`.
 - Noninteractive Hook output is delivered as Base64 byte chunks in machine modes.
   Human mode keeps the Hook's stdout and stderr streams.
 - `--cancel-on-output-close` requests cancellation when a JSONL execution's
   receiver disconnects. By default, Pactrun continues managing the operation.
 
 See the [command reference](./docs/spec/behavior/command-and-output-reference.md)
-and [machine-output contract](./docs/spec/contracts/cli-json-v1.md).
+and [machine-output contract](./docs/spec/contracts/cli-machine-interface.md).
 
 ## Documentation
 

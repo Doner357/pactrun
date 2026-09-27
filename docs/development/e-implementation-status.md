@@ -29,6 +29,22 @@ No future codec or implicit cross-Major compatibility is invented. An unsupporte
 contract remains an actionable refusal, not authorization for conversion, data
 cleanup, guessed support or interference with services.
 
+## Same-version help/README correction
+
+The post-delivery display correction derives the help banner from Cargo's product
+version and aligns README's format identifiers and contract link with the actual
+schemas. Product 1.0.0-alpha.1, all eight 1.0-alpha.1 contracts, Cargo.lock and
+persisted representations are unchanged. Supporting PR-TEST-0625 coverage checks
+human/JSON/JSONL help and refusal to initialize storage; documentation checks now
+include repository README links and the machine-format declarations.
+
+The original E qualification inputs below remain historical evidence. The current
+local delivery receipt at target/e-delivery/delivery.json identifies any refreshed
+same-version binaries, their actual source and their targeted archive checks.
+Earlier native-manager lifecycle results are not claimed as a fresh run against
+those rebuilt payloads. Original artifacts/receipts are retained outside the
+shipping payload; public immutable release records are not overwritten.
+
 ## Qualified inputs and evidence reuse
 
 - Runtime/artifact source: c673c0cf7c162aef785d31cbbdad5d358a65e83d.

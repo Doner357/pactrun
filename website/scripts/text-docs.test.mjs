@@ -80,3 +80,21 @@ test('agent source files are excluded from human document generation', async () 
   assert.match(config, /exclude: \['agents\/\*\*'/);
   assert.doesNotMatch(sidebar, /['"]agents\//);
 });
+
+test('repository README links and machine-format descriptions follow current contracts', async () => {
+  const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+  const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8');
+  const documents = await readDocuments(path.join(root, 'docs'));
+  validateLinks([
+    ['README.md', readme],
+    ['CONTRIBUTING.md', contributing],
+    ...documents.map(([name]) => ['docs/' + name, '']),
+  ]);
+  for (const file of ['cli-machine.schema.json', 'cli-events.schema.json']) {
+    const schema = JSON.parse(await readFile(path.join(root, 'docs/spec/contracts', file), 'utf8'));
+    for (const field of ['format', 'format_version']) {
+      const declaration = field + ': ' + JSON.stringify(schema.properties[field].const);
+      assert.ok(readme.includes('`' + declaration + '`'), file + ': README must describe ' + declaration);
+    }
+  }
+});
