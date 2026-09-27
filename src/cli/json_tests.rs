@@ -285,3 +285,40 @@ fn unsupported_pack_contract_refuses_public_install_without_changing_existing_ob
         assert_eq!(fs::read(&service).unwrap(), b"not managed by installation");
     }
 }
+
+// Supporting regression coverage for PR-TEST-0625.
+#[test]
+fn help_uses_the_product_version_in_every_format_without_storage_access() {
+    let (temp, _, _) = cli_roots();
+    let root = temp.path().join("help-must-not-initialize");
+    let version = json_ok(&root, &["--version"])["product_version"]
+        .as_str().unwrap().to_owned();
+    assert_eq!(version, env!("CARGO_PKG_VERSION"));
+    let heading = format!("Pactrun {version}");
+    for format in ["human", "json", "jsonl"] {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        assert_eq!(run(["--format", format, "--help"].into_iter().map(OsString::from).collect(), Some(root.as_os_str().to_owned()), &mut io::empty(), &mut out, &mut err), 0);
+        let text = String::from_utf8(out).unwrap();
+        let usage = match format {
+            "human" => text,
+            "json" => {
+                let response: serde_json::Value = serde_json::from_str(&text).unwrap();
+                schema_tests::assert_response(&response);
+                response["result"]["usage"].as_str().unwrap().to_owned()
+            }
+            "jsonl" => {
+                assert_eq!(text.lines().count(), 1);
+                let event: serde_json::Value = serde_json::from_str(&text).unwrap();
+                assert_eq!(event["type"], "result");
+                schema_tests::assert_response(&event["response"]);
+                event["response"]["result"]["usage"].as_str().unwrap().to_owned()
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(usage.lines().next(), Some(heading.as_str()), "{format}");
+        assert_eq!(usage, HELP, "{format}");
+        assert!(err.is_empty(), "{format}");
+        assert!(!root.exists(), "{format}");
+    }
+}

@@ -60,7 +60,10 @@ use crate::{
 use crate::domain::RevisionMetadataMutationBatch;
 
 const STORAGE_ROOT_ENV: &str = "PACTRUN_STORAGE_ROOT";
-const HELP: &str = "Pactrun 0.1.0\n\
+const HELP: &str = concat!(
+    "Pactrun ",
+    env!("CARGO_PKG_VERSION"),
+    "\n\
 Usage:\n\
   pactrun [--format human|json|jsonl] <command> [options]\n\
   human: readable output (default). json: complete response. jsonl: live events.\n\
@@ -146,7 +149,8 @@ Abandon ends Pactrun management and preserves remaining service data.\n\
 Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n\
 Object IDs accept unique lowercase hex prefixes of at least 8 digits.\n\
 Human lists use unique short IDs; --no-trunc and machine formats show full IDs.\n\
-State-version tokens and authored names require their complete values.\n";
+State-version tokens and authored names require their complete values.\n"
+);
 
 mod short_ids;
 use short_ids::Selector;
