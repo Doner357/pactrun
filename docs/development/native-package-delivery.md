@@ -132,3 +132,68 @@ selection and promotion gates. PR-TEST-0635 checks archive reproducibility and
 source refusal; PR-TEST-0636 checks actual local ref immutability and monotonic
 channel publication. Native Scoop/Homebrew acceptance and full E CI are still
 tracked in [the E implementation ledger](./e-implementation-status.md).
+
+## Local qualification and future publication procedure
+
+PR-TEST-0637 is opt-in because a real manager is an external prerequisite.
+Supply PACTRUN_NATIVE_ACCEPTANCE_ARGS as a JSON string array containing --root
+(a new owned directory), --manager (the pinned manager source), --xtask (a
+source-verified publisher executable), and --parts (both platforms for alpha.1
+and the isolated software-only alpha.2 fixture). Then run:
+
+```text
+cargo test --locked --test native_package_acceptance --all-features -- --ignored --nocapture
+```
+
+Windows additionally requires explicit approval of the transient user PATH
+change and PACTRUN_NATIVE_ACCEPTANCE_ALLOW_USER_PATH=1. The runner checks the
+registry PATH fingerprint after removing only its own shim directory and sends
+an environment-change notification. It never uninstalls or reconfigures the
+operator's existing Scoop. Homebrew runs in an owned prefix; default cleanup
+remains enabled. An owned local mirror holds Homebrew's main branch at the
+qualified commit during a real brew update, rather than updating manager code
+mid-test. Normal/test sources are separate Git clones and native metadata
+refresh must preserve their saved preview/exact selections.
+
+The test alpha.2 is not a releasable candidate. Its committed source differs
+from the alpha.1 source only in Cargo.toml/Cargo.lock product versions; the
+source-manifest diff must prove this before building. The same format defaults,
+existing Revision bytes, Instance identity and state version must survive both
+native upgrade and explicit switch. The runner also keeps a service-file handle
+open and samples independent path reads during manager operations. This is a
+native resource-access witness, not certification of every third-party daemon.
+All fixture HTTP servers and Hook processes must end; test data/evidence may
+remain in their explicitly isolated roots.
+
+Before a separately authorized publication:
+
+1. Freeze a reviewed commit and capture its clean source. Build both target
+   artifacts from that same snapshot and retain actual compiler/probe records.
+   Do not reuse an xtask binary with another compiled-in workspace root. Use
+   isolated build directories, verify its embedded source path and run a new
+   source-specific smoke test before the full gate.
+2. Complete the declared minimum-environment, filesystem, trust/license and
+   actual-use gates. The local E builds do not certify them. In particular, do
+   not advertise all accepted filesystems merely because the adapter recognizes
+   their identifiers.
+3. Choose final HTTPS asset locations, upload the exact qualified archives under
+   the approved release identity, and independently check the downloaded bytes
+   against the retained SHA-256/length records. Never publish the alpha.2 fixture
+   or relabel alpha binaries as a formal release.
+4. Replace rehearsal loopback URLs with those final locations before generating
+   immutable source records. Validate all four normal/test platform artifacts,
+   supported/default contracts and provenance, then use release-publish-local
+   against a new owned bare staging source. Review generated Scoop/Homebrew
+   definitions, exact refs and Major stable/preview refs.
+5. Only after explicit publication approval, push the reviewed source refs to
+   the intended public repository and verify native acquisition from that public
+   origin. E intentionally implements no push/upload automation. Preserve exact
+   ref immutability, monotonic channels and an empty formal-only channel until
+   an eligible formal product actually exists.
+
+At that future point, users add the published Scoop bucket or Homebrew tap,
+install the qualified package name with their native manager, and provision a
+new trusted management root explicitly. They use the installed source helper
+only to change eligibility, followed by a separate native update/reinstall.
+Normal/test commands and roots remain distinct. Existing incompatible
+management data is neither converted nor removed by these commands.

@@ -174,7 +174,9 @@ Admission order:
 
 1. Validate the supplied root and supported filesystem without creating paths.
    Existing roots are inspected read-only, including schema/format, before
-   journal changes, staging directories, owner leases or cleanup. Trace callers
+   Pactrun staging directories, owner leases or cleanup. The approved read-only
+   SQLite coordination exception does not permit changing existing database/WAL
+   content or ignoring committed WAL data. Trace callers
    of StagingSession::prepare, not just SQLite opening: the current adapter can
    receive an already-created Session.
 2. For supported writable admission, acquire existing content/collection
@@ -385,7 +387,7 @@ The matrix defines evidence targets, not tests claimed implemented today.
 | Parsing/support | Eight exact baselines; numeric ordering including alpha.9/alpha.10 and later-Minor prerelease; reject numeric fields, overflow, malformed/unknown identifiers, missing declarations; no guessed codec | Unit/property cases and public CLI fixtures |
 | Identity | Rust/independent Node agree on bytes, frame and digest; source defaults normalize identically; format label changes alter identity; exact import/export preserves original bytes/digests; payload hashes unchanged | Golden cross-language vectors plus persistence round trips |
 | Hook | All five operation families, direct/shell launch, service authority, ACK/recovery; wrong version/session, truncated preamble, unknown required fields, cancellation and output failure; no negotiation | Codec, subprocess and real CLI/Hook tests |
-| Persistence | Pristine bootstrap, concurrent bootstrap, exact baseline reopening/read-only inspection; old/foreign/malformed schema refusal with unchanged database/tree; no hidden WAL/staging/lease creation before support | Real SQLite/filesystem tests and fault injection |
+| Persistence | Pristine bootstrap, concurrent bootstrap, exact baseline reopening/read-only inspection; old/foreign/malformed schema refusal with unchanged database/committed WAL content; only SQLite read-coordination sidecars allowed, no Pactrun staging/lease creation before support | Real SQLite/filesystem tests and fault injection |
 | Continuity/ownership | Two processes using same baseline; live/unknown owner, process crash and recovery; switch while Hook and native service continue; data remains accessible at the same path/handle and permissions; no forced unlock/restart/rebind | Deterministic process barriers, crash tests and native service witness on both platforms |
 | Snapshot/Pack | Current managed/service content and metadata; wrong inner/outer version, forged digest, missing/extra/duplicate member, zip-slip, hostile size, cancellation; no partial publication | Transport/adversarial fixtures and real import/export |
 | CLI | JSON and JSONL share version; preserve typed errors, partial outcomes, terminal event, raw payload stdout and broken-pipe behavior; no duplicate output or prose contamination | Unit plus CLI process tests |
@@ -425,3 +427,14 @@ It allocates no PR-REQ/PR-TEST IDs and does not change executable inputs, fixtur
 canonical DDL or active normative requirements. Verification results for this
 draft are recorded in the task report; no E runtime test is claimed by writing
 this plan. Existing unrelated dirty files, workflow and archives are preserved.
+
+## Approved read-coordination clarification (2026-09-27)
+
+The operator approved ordinary SQLite read coordination when inspecting and
+refusing an unsupported store. New SQLite sidecars are not Pactrun migration,
+object rewriting or deletion. The owning PR-REQ-0078 contract preserves existing
+database and committed WAL bytes and prohibits ignoring WAL frames, deleting
+sidecars as "temporary", creating Pactrun sessions/content guards before support,
+or affecting services. PR-TEST-0623 retains unsupported-store coverage including
+WAL mode; PR-TEST-0639 additionally preserves an existing committed WAL and a
+live writer. No obsolete format reader or automatic conversion is introduced.

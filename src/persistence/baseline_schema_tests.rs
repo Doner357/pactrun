@@ -163,7 +163,7 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
         sqlite_revision_store::{APPLICATION_ID, BASELINE_SQL},
     };
     use crate::managed_data::StagingSession;
-    for case in 0..19 {
+    for case in 0..21 {
         let temp = root();
         let path = temp.path().join("database/pactrun.sqlite3");
         let db = Connection::open(&path).unwrap();
@@ -217,7 +217,23 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
                     )
                     .unwrap();
                 }
+                19 => {
+                    db.execute(
+                        "UPDATE pactrun_metadata SET format_version='1.0-alpha.2'",
+                        [],
+                    )
+                    .unwrap();
+                }
+                20 => {
+                    db.pragma_update(None, "user_version", 11).unwrap();
+                }
                 _ => unreachable!(),
+            }
+            if case >= 19 {
+                let mode: String = db
+                    .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+                    .unwrap();
+                assert_eq!(mode, "wal");
             }
         }
         drop(db);
@@ -246,11 +262,75 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
                 .count(),
             0
         );
-        assert_eq!(
-            std::fs::read_dir(temp.path().join("database"))
-                .unwrap()
-                .count(),
-            1
-        );
+        for entry in std::fs::read_dir(temp.path().join("database")).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name();
+            let allowed = name == "pactrun.sqlite3"
+                || (case >= 19 && (name == "pactrun.sqlite3-wal" || name == "pactrun.sqlite3-shm"));
+            assert!(allowed, "case {case}: unexpected database entry {name:?}");
+            assert!(entry.file_type().unwrap().is_file());
+            if name == "pactrun.sqlite3-wal" {
+                assert!(std::fs::read(entry.path()).unwrap().is_empty());
+            }
+        }
     }
+}
+
+// Test-ID: PR-TEST-0639
+// Verifies: PR-REQ-0078, PR-REQ-0299
+#[test]
+fn unsupported_wal_inspection_preserves_committed_frames_and_the_live_writer() {
+    use super::{
+        PactrunPersistence,
+        sqlite_revision_store::{APPLICATION_ID, BASELINE_SQL},
+    };
+    use crate::managed_data::StagingSession;
+    let temp = root();
+    let database_path = temp.path().join("database/pactrun.sqlite3");
+    let wal_path = temp.path().join("database/pactrun.sqlite3-wal");
+    let writer = Connection::open(&database_path).unwrap();
+    writer.execute_batch(BASELINE_SQL).unwrap();
+    writer
+        .pragma_update(None, "application_id", APPLICATION_ID)
+        .unwrap();
+    writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    let main_before = std::fs::read(&database_path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE; UPDATE pactrun_metadata SET format_version='1.0-alpha.2'; INSERT INTO packages VALUES(zeroblob(16)); COMMIT;").unwrap();
+    let committed_wal = std::fs::read(&wal_path).unwrap();
+    assert!(!committed_wal.is_empty());
+    assert_eq!(std::fs::read(&database_path).unwrap(), main_before);
+    // The main file still describes the supported baseline. The committed WAL
+    // must be read, not ignored through immutable mode or removed as temporary.
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+    assert!(StagingSession::prepare(temp.path()).is_err());
+    assert!(PactrunPersistence::open(temp.path()).is_err());
+    assert!(PactrunPersistence::open_read_only(temp.path()).is_err());
+    assert!(PactrunPersistence::open_for_collection(temp.path()).is_err());
+    assert_eq!(std::fs::read(&database_path).unwrap(), main_before);
+    assert_eq!(std::fs::read(&wal_path).unwrap(), committed_wal);
+    assert!(!temp.path().join("staging").exists());
+    assert_eq!(
+        std::fs::read_dir(temp.path().join("runtime-content"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        writer
+            .query_row("SELECT count(*) FROM packages", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    writer
+        .execute("INSERT INTO packages VALUES(?1)", [[1_u8; 16].as_slice()])
+        .unwrap();
+    writer.execute_batch("COMMIT").unwrap();
+    assert_eq!(
+        writer
+            .query_row("SELECT count(*) FROM packages", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
 }

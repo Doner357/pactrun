@@ -164,7 +164,13 @@ index manifest, column declarations, constraints, keys and references. Pristine
 means zero ownership markers and no non-SQLite objects. Partial, foreign,
 unmarked non-empty and unsupported stores MUST be refused without repair.
 
-Support inspection precedes staging/session and coordination creation. Writer
+Support inspection precedes Pactrun staging/session and content-coordination
+creation. SQLite MAY create or update its own read-coordination sidecars while
+performing ordinary read-only inspection. This exception MUST NOT change existing
+database or committed WAL content, ignore committed WAL frames, grant write
+admission, rewrite objects, run cleanup, or interfere with service resources.
+An existing WAL can contain committed data and MUST NOT be discarded as a
+"temporary" file. This is read coordination, not a format conversion. Writer
 admission MUST repeat qualification after acquiring the serialized transaction;
 preflight is advisory only. Fresh bootstrap publishes the complete schema and
 admission atomically. Interrupted bootstrap cannot expose a partially admitted
@@ -175,7 +181,7 @@ non-terminal Runs and unresolved recovery obligations without reconciliation.
 Any future internal migration requires an explicit supported contract and must
 preserve those same obligations; E does not invent a future codec or migration.
 
-**Verification: PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0344.**
+**Verification: PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 

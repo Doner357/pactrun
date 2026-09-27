@@ -104,6 +104,10 @@ diagnostic about the known requirement. The tool MUST NOT guess another
 format, ignore required new content and continue, or invent a minimum product
 version that the available declaration does not establish.
 
+The narrow SQLite read-coordination allowance in
+[PR-REQ-0078](./resources-and-versioning.md#pr-req-0078---persistence-migrations)
+permits inspection only, not operation admission or mutation of existing data.
+
 For example, a tool in product Major 1 may report that a Pack requires a later
 1.x capability. That is not an unbounded promise that Major 2 will accept it.
 This example defines no literal manifest field, version-range syntax, capability
@@ -180,8 +184,11 @@ executable and validating its data compatibility remain separate responsibilitie
 
 ## Verification status
 
-The requirements above are approved design, not implemented release governance.
-Documentation checks only establish placement, scope, links and honest status.
-Existing V1/V2 dispatch and V7 upgrade tests do not certify these future release
-commitments. The versioning and consolidation work must add direct automated
-evidence before claiming their implementation complete.
+E implements the alpha baseline and the automated mappings above; actual
+source-qualified execution and its remaining gates are recorded in the
+[E implementation ledger](../../development/e-implementation-status.md).
+Documentation checks establish placement and bidirectional traceability, not a
+runtime pass. The opt-in native matrix is required separately from ordinary CI.
+Future formal same-Major releases must retain this regression matrix and add
+explicit acceptance evidence for every newly supported representation; current
+alpha evidence does not invent a future codec or certify formal promotion.

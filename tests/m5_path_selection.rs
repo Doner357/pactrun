@@ -878,11 +878,10 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
         ],
     );
     assert_eq!(refused.status.code(), Some(1));
-    assert!(
-        String::from_utf8(refused.stderr)
-            .unwrap()
-            .contains("protocol is unsupported")
-    );
+    let diagnostic = String::from_utf8(refused.stderr).unwrap();
+    for expected in ["hook_protocol", "1.0-alpha.2", "1.0-alpha.1"] {
+        assert!(diagnostic.contains(expected), "{diagnostic}");
+    }
     assert_no_execution(&f.root, &before);
 }
 

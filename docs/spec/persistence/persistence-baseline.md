@@ -16,8 +16,13 @@ The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
 integer are private bootstrap marker 0, not a second public format version.
 Only pristine storage or the exact supported metadata and schema may be admitted.
-Existing populated files without supported metadata are refused before staging,
-journal changes, coordination creation or cleanup. Admission repeats the checks
+Existing populated files without supported metadata are refused before Pactrun
+staging, admission/content-coordination creation, conversion or cleanup. Ordinary
+read-only SQLite inspection MAY create or update its own read-coordination
+sidecars. It MUST NOT change existing database or committed WAL content, ignore
+committed WAL frames, rewrite identities or remove data. WAL files may contain
+committed data; they are not disposable merely because they are sidecars.
+Admission repeats the checks
 under its serialized write transaction. No product update relabels data or
 rewrites identities, bindings, non-terminal Runs or recovery obligations.
 
@@ -1672,7 +1677,7 @@ An orphan Run does not require a fabricated writer admission. Removing stale
 writer qualification MUST NOT reconcile or infer any Run outcome.
 
 **Verification: PR-TEST-0195, PR-TEST-0196, PR-TEST-0197, PR-TEST-0198,
-PR-TEST-0201, PR-TEST-0622, PR-TEST-0623.**
+PR-TEST-0201, PR-TEST-0622, PR-TEST-0623, PR-TEST-0639.**
 
 ### PR-REQ-0300 - Exact V4 to V5 legacy bootstrap
 
@@ -2053,15 +2058,16 @@ store openings against exclusive collection. It is non-authoritative OS
 coordination, not an object, retention pin, saved Plan or GC work queue. Writable
 bootstrap durably establishes it before use; read-only opening never
 creates it. A read-only schema preflight rejects unsupported stores before
-coordination creation; SQL admission revalidates under the content guard. Bootstrap
+Pactrun content-coordination creation; SQLite's own read-coordination exception
+is defined above. SQL admission revalidates under the content guard. Bootstrap
 establishes the durable guard before publishing the baseline. Content coordination always
 precedes SQL transactions, including writer admission.
 
 Ordinary commands and read-only preview MUST NOT upgrade storage. Writable
 admissions are bound to the exact supported contract and revalidated inside
 each write transaction; a prepared session cannot write after the contract
-changes. Unsupported or drifted sources fail without conversion or coordination
-creation. Reopening preserves objects, bytes, references, receipts and service
+changes. Unsupported or drifted sources fail without conversion or Pactrun
+coordination creation. Reopening preserves objects, bytes, references, receipts and service
 resources; it does not fabricate missing evidence or reconcile Runs.
 
 **Verification: PR-TEST-0300, PR-TEST-0456, PR-TEST-0457, PR-TEST-0468, PR-TEST-0473.**
