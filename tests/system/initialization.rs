@@ -6,15 +6,15 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::{fs, process::Output};
 
-fn source(version: u8) -> String {
+fn source() -> String {
     let (shell, command) = if cfg!(windows) {
         ("powershell_7", "pwsh.exe")
     } else {
         ("sh", "sh")
     };
-    let hook = json!({"protocol_version":version,"launch":{"kind":"shell_loader","shell":shell,"command":command,"script":"script"},"args":[],"io":{"terminal":"none"}});
+    let hook = json!({"protocol_version":"1.0-alpha.1","launch":{"kind":"shell_loader","shell":shell,"command":command,"script":"script"},"args":[],"io":{"terminal":"none"}});
     let parameter = json!({"id":"note","type":"string","sensitive":false,"default":"default"});
-    json!({"source_format":3,"package_id":"{package_id}","revision":{
+    json!({"source_format":"1.0-alpha.1","package_id":"{package_id}","revision":{
         "actions":[{"id":"inspect","access":"observe","parameters":[parameter.clone()],"outputs":[{"id":"report"}],"hook":hook.clone()}],
         "snapshot":{"capture":{"access":"observe","parameters":[parameter.clone()],"hook":hook.clone()},"restore":{"parameters":[parameter],"hook":hook.clone()}},
         "cleanup":{"requires":[],"hook":hook}},
@@ -52,7 +52,7 @@ fn explain(target: Value, text: &str) -> Value {
 // Verifies: PR-REQ-0086, PR-REQ-0369
 #[test]
 fn short_ids_cover_snapshot_artifact_migration_and_retirement_operations() {
-    let s = Scenario::new(819, &source(2));
+    let s = Scenario::new(819, &source());
     fs::write(s.source.join("script.txt"), "exit 0\n").unwrap();
     let first = s.install_and_create("sample");
     let invoked = query(&s, &["invoke", "sample", "inspect"]);
@@ -151,7 +151,7 @@ fn short_ids_cover_snapshot_artifact_migration_and_retirement_operations() {
     query(&s, &["snapshot", "delete", short]);
 
     // Failed Cleanup retains its original attempt; short selectors still require exact CAS.
-    let t = Scenario::new(820, &source(2));
+    let t = Scenario::new(820, &source());
     fs::write(
         t.source.join("script.txt"),
         if cfg!(windows) {
@@ -197,7 +197,7 @@ fn short_ids_cover_snapshot_artifact_migration_and_retirement_operations() {
         "timed_out"
     );
 
-    let a = Scenario::new(821, &source(2));
+    let a = Scenario::new(821, &source());
     fs::write(a.source.join("script.txt"), "exit 0\n").unwrap();
     let path = a.source.join("pactrun.yaml");
     let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
@@ -243,7 +243,7 @@ fn machine_delivery_covers_shell_loader_lifecycle_and_each_migration_hook() {
     use base64::Engine as _;
     let s = Scenario::new(
         815,
-        &source(2).replace("\"terminal\":\"none\"", "\"terminal\":\"output\""),
+        &source().replace("\"terminal\":\"none\"", "\"terminal\":\"output\""),
     );
     fs::write(
         s.source.join("script.txt"),
@@ -352,7 +352,7 @@ fn machine_delivery_covers_shell_loader_lifecycle_and_each_migration_hook() {
 // Verifies: PR-REQ-0363
 #[test]
 fn capability_metadata_follows_exact_revisions_without_execution_or_history_mutation() {
-    let s = Scenario::new(811, &source(2));
+    let s = Scenario::new(811, &source());
     fs::write(s.source.join("script.txt"), "exit 0\n").unwrap();
     let file = s.source.join("pactrun.yaml");
     let mut manifest: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
@@ -514,89 +514,87 @@ fn long_tmpdir_fallback_preserves_child_environment_and_initialization_step_for_
         .tempdir_in("/tmp")
         .unwrap();
     fs::set_permissions(tmp.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    for version in [1, 2] {
-        let s = Scenario::new(812 + u16::from(version), &source(version));
-        fs::write(
-            s.source.join("script.txt"),
-            format!(
-                "printf '%s' \"$TMPDIR\" > '{}'\nexit 0\n",
-                s.path("marker").display()
-            ),
-        )
-        .unwrap();
-        let first = s.install_and_create("sample");
-        let invoke = |args: &[&str], path: &Path| {
-            let mut cmd = command(&s.storage, &s.path(""), args.iter().copied());
-            cmd.env("TMPDIR", path);
-            run_command(cmd)
-        };
-        for length in [32usize, 47, 48, 49, 55, 56, 57, 68, 96] {
-            let path = tmp
-                .path()
-                .join("x".repeat(length - tmp.path().as_os_str().len() - 1));
-            if !path.exists() {
-                fs::create_dir(&path).unwrap();
-                fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
-            }
-            assert_success(&invoke(&["invoke", "sample", "inspect"], &path));
-            assert_eq!(
-                fs::read(s.path("marker")).unwrap(),
-                path.as_os_str().as_encoded_bytes()
-            );
-            assert_eq!(fs::read_dir(&path).unwrap().count(), 0);
-        }
-        let opaque = tmp
+    let s = Scenario::new(813, &source());
+    fs::write(
+        s.source.join("script.txt"),
+        format!(
+            "printf '%s' \"$TMPDIR\" > '{}'\nexit 0\n",
+            s.path("marker").display()
+        ),
+    )
+    .unwrap();
+    let first = s.install_and_create("sample");
+    let invoke = |args: &[&str], path: &Path| {
+        let mut cmd = command(&s.storage, &s.path(""), args.iter().copied());
+        cmd.env("TMPDIR", path);
+        run_command(cmd)
+    };
+    for length in [32usize, 47, 48, 49, 55, 56, 57, 68, 96] {
+        let path = tmp
             .path()
-            .join(std::ffi::OsString::from_vec(vec![b'x', 255]));
-        if !opaque.exists() {
-            fs::create_dir(&opaque).unwrap();
+            .join("x".repeat(length - tmp.path().as_os_str().len() - 1));
+        if !path.exists() {
+            fs::create_dir(&path).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
         }
-        assert_success(&invoke(&["invoke", "sample", "inspect"], &opaque));
+        assert_success(&invoke(&["invoke", "sample", "inspect"], &path));
         assert_eq!(
             fs::read(s.path("marker")).unwrap(),
-            opaque.as_os_str().as_encoded_bytes()
+            path.as_os_str().as_encoded_bytes()
         );
-        let captured = invoke(&["snapshot", "capture", "sample"], tmp.path());
-        assert_success(&captured);
-        let snapshot = field(&captured, "snapshot");
-        let missing = tmp.path().join("missing");
-        let mut yaml: Value =
-            serde_json::from_slice(&fs::read(s.source.join("pactrun.yaml")).unwrap()).unwrap();
-        let digest = first.split('/').next_back().unwrap();
-        yaml["revision"]["migrations"] = json!([{"source_revision_digest":digest,"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],"hook":yaml["revision"]["actions"][0]["hook"].clone()}]);
-        fs::write(s.source.join("pactrun.yaml"), yaml.to_string()).unwrap();
-        let target = s.install();
-        for args in [
-            vec!["invoke", "sample", "inspect"],
-            vec!["snapshot", "capture", "sample"],
-            vec!["snapshot", "restore", "sample", &snapshot],
-            vec!["instance", "migrate", "sample", "--to", &target],
-            vec!["instance", "delete", "sample"],
-        ] {
-            fs::remove_file(s.path("marker")).unwrap_or(());
-            let failed = invoke(&args, &missing);
-            assert!(!failed.status.success());
-            let text = format!(
-                "{}{}",
-                String::from_utf8_lossy(&failed.stdout),
-                String::from_utf8_lossy(&failed.stderr)
-            );
-            assert!(
-                text.contains("ipc_initialization_failed") && text.contains("establish_session"),
-                "{text}"
-            );
-            assert!(!s.path("marker").exists());
-            let inspected = query(&s, &["run", "show", &field(&failed, "run")]);
-            assert_eq!(
-                inspected["run"]["state"]["primary_failure"]["step"],
-                "establish_session"
-            );
-            assert!(
-                inspected["run"]["state"]["primary_failure"]["detail"]
-                    .as_str()
-                    .unwrap()
-                    .contains("temporary location unavailable")
-            );
-        }
+        assert_eq!(fs::read_dir(&path).unwrap().count(), 0);
+    }
+    let opaque = tmp
+        .path()
+        .join(std::ffi::OsString::from_vec(vec![b'x', 255]));
+    if !opaque.exists() {
+        fs::create_dir(&opaque).unwrap();
+    }
+    assert_success(&invoke(&["invoke", "sample", "inspect"], &opaque));
+    assert_eq!(
+        fs::read(s.path("marker")).unwrap(),
+        opaque.as_os_str().as_encoded_bytes()
+    );
+    let captured = invoke(&["snapshot", "capture", "sample"], tmp.path());
+    assert_success(&captured);
+    let snapshot = field(&captured, "snapshot");
+    let missing = tmp.path().join("missing");
+    let mut yaml: Value =
+        serde_json::from_slice(&fs::read(s.source.join("pactrun.yaml")).unwrap()).unwrap();
+    let digest = first.split('/').next_back().unwrap();
+    yaml["revision"]["migrations"] = json!([{"source_revision_digest":digest,"transitions":[],"requires_source":[],"requires_target":[],"produces_target":[],"hook":yaml["revision"]["actions"][0]["hook"].clone()}]);
+    fs::write(s.source.join("pactrun.yaml"), yaml.to_string()).unwrap();
+    let target = s.install();
+    for args in [
+        vec!["invoke", "sample", "inspect"],
+        vec!["snapshot", "capture", "sample"],
+        vec!["snapshot", "restore", "sample", &snapshot],
+        vec!["instance", "migrate", "sample", "--to", &target],
+        vec!["instance", "delete", "sample"],
+    ] {
+        fs::remove_file(s.path("marker")).unwrap_or(());
+        let failed = invoke(&args, &missing);
+        assert!(!failed.status.success());
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&failed.stdout),
+            String::from_utf8_lossy(&failed.stderr)
+        );
+        assert!(
+            text.contains("ipc_initialization_failed") && text.contains("establish_session"),
+            "{text}"
+        );
+        assert!(!s.path("marker").exists());
+        let inspected = query(&s, &["run", "show", &field(&failed, "run")]);
+        assert_eq!(
+            inspected["run"]["state"]["primary_failure"]["step"],
+            "establish_session"
+        );
+        assert!(
+            inspected["run"]["state"]["primary_failure"]["detail"]
+                .as_str()
+                .unwrap()
+                .contains("temporary location unavailable")
+        );
     }
 }
