@@ -535,7 +535,9 @@ test('embedded Markdown contracts use canonical Spec paths, not forwarding pages
   }
 });
 
-test('E consolidated owners preserve incoming lifecycle and reading-map anchors', () => {
+test('E consolidated owners preserve incoming lifecycle and reading-map anchors', async () => {
+  const config = await readFile(path.join(root, 'website/docusaurus.config.ts'), 'utf8');
+  assert.match(config, /onBrokenAnchors:\s*'throw'/);
   for (const [name, anchors] of [
     ['contracts/hook-protocol.md', ['reading-map-informative', 'protocol-lifecycle']],
     ['contracts/revision-canonical.md', ['format-lifecycle']],
@@ -543,6 +545,13 @@ test('E consolidated owners preserve incoming lifecycle and reading-map anchors'
   ]) {
     const body = docs.find(([file]) => file === 'spec/' + name)?.[1];
     assert.ok(body, name);
-    for (const anchor of anchors) assert.ok(body.includes('<a id="' + anchor + '" />'), name + '#' + anchor);
+    const heading = {
+      'reading-map-informative': 'Reading map (informative)',
+      'protocol-lifecycle': 'Protocol lifecycle',
+      'format-lifecycle': 'Format lifecycle',
+    };
+    // Real headings are registered by Docusaurus's broken-anchor checker;
+    // arbitrary JSX anchor elements are not a substitute for that metadata.
+    for (const anchor of anchors) assert.ok(body.includes('## ' + heading[anchor]), name + '#' + anchor);
   }
 });

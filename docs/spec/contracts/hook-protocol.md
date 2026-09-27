@@ -6,7 +6,7 @@ title: Hook Protocol Baseline
 
 **Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
 
-<a id="reading-map-informative" />
+## Reading map (informative)
 
 <!-- spec-navigation:start -->
 This is the current owning contract after the approved one-time E reset.
@@ -37,7 +37,7 @@ refusal does not authorize deleting real data or touching service resources.
 Stable requirement IDs and incoming heading anchors are retained below. Historical
 heading labels do not advertise support for retired numeric formats.
 
-<a id="protocol-lifecycle" />
+## Protocol lifecycle
 
 ### PR-REQ-0204 - Candidate and Frozen protocol contract
 

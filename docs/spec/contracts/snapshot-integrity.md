@@ -33,7 +33,7 @@ refusal does not authorize deleting real data or touching service resources.
 Stable requirement IDs and incoming heading anchors are retained below. Historical
 heading labels do not advertise support for retired numeric formats.
 
-<a id="format-lifecycle" />
+## Format lifecycle
 
 ### PR-REQ-0195 - Candidate and Frozen integrity contract
 
