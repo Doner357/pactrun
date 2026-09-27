@@ -691,7 +691,7 @@ mod tests {
                     "hook::shell_loader::tests::loader_startup_failure_worker",
                     "--nocapture",
                 ])
-                .env("PACTRUN_TEST_STARTUP_WORKER", version.to_string())
+                .env("PACTRUN_TEST_STARTUP_WORKER", version)
                 .env("PACTRUN_HOOK_PROTOCOL_TRANSPORT", "unix-domain-socket")
                 .env("PACTRUN_HOOK_PROTOCOL_ENDPOINT", listener.endpoint())
                 .env(super::super::startup::STATUS_ENV, &setup.status)
