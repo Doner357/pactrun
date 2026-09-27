@@ -4,7 +4,9 @@ title: Hook Protocol Baseline
 
 # Hook Protocol Baseline
 
-**Status: Approved E normative baseline, 1.0-alpha.1; integration verification in progress.**
+**Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
+
+<a id="reading-map-informative" />
 
 <!-- spec-navigation:start -->
 This is the current owning contract after the approved one-time E reset.
@@ -35,18 +37,21 @@ refusal does not authorize deleting real data or touching service resources.
 Stable requirement IDs and incoming heading anchors are retained below. Historical
 heading labels do not advertise support for retired numeric formats.
 
+<a id="protocol-lifecycle" />
+
 ### PR-REQ-0204 - Candidate and Frozen protocol contract
 
 Candidate and Frozen use the same message schema, framing, validation profile,
 state machine, and fixtures. Freezing is a status change only. An
-identity-bearing `HookV1.protocol_version = "1.0-alpha.1"` selects this exact protocol; a
+identity-bearing `hook.protocol_version = "1.0-alpha.1"` selects this exact protocol; a
 Candidate implementation MUST NOT be used to publish or execute a stable Pack
-contract as though Hook Protocol V1 were Frozen. After Freeze, an incompatible
+contract as though that protocol contract were Frozen. After Freeze, an incompatible
 wire or semantic change requires a new Hook Protocol version.
 
 Hook Protocol, Revision Core, Snapshot Integrity, persistence, bundle, and CLI
-output formats remain independent version domains. The value `1` in a
-`HookV1.protocol_version` does not become a Revision Core format marker.
+output formats remain independent version domains. The string `1.0-alpha.1` in
+`hook.protocol_version` does not select a Revision Core format merely because
+both domains currently use the same spelling.
 
 **Verification: PR-TEST-0020, PR-TEST-0031, PR-TEST-0032.**
 

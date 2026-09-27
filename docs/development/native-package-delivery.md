@@ -4,7 +4,7 @@ title: Native Package Engineering Delivery
 
 # Native package engineering delivery
 
-**Status: E implementation; actual-manager candidate acceptance remains required. No public publication is authorized.**
+**Status: E native candidate acceptance passed on the qualified Windows/Linux hosts. No public publication is authorized.**
 
 Scoop (Windows x86-64) and Homebrew (Linux x86-64) own download, checksum
 verification, extraction, installed inventory, activation, cleanup and uninstall.
@@ -130,8 +130,8 @@ PR-TEST-0626/0627 check launcher boundaries. PR-TEST-0628/0631 exercise source
 selection syntax and real Git tracking. PR-TEST-0629/0630 cover shared metadata
 selection and promotion gates. PR-TEST-0635 checks archive reproducibility and
 source refusal; PR-TEST-0636 checks actual local ref immutability and monotonic
-channel publication. Native Scoop/Homebrew acceptance and full E CI are still
-tracked in [the E implementation ledger](./e-implementation-status.md).
+channel publication. Native Scoop/Homebrew acceptance and source-matched gate completion are
+recorded in [the E implementation ledger](./e-implementation-status.md).
 
 ## Local qualification and future publication procedure
 

@@ -4,21 +4,20 @@ title: Product Versioning and Compatibility
 
 # Product versioning and compatibility
 
-> **Pending E policy revision:** The operator-approved
+> **E alpha policy:** The approved
 > [E redesign decisions](../../development/design-notes/e-versioning-redesign-decisions.md)
-> replace conflicting future-design assumptions here, including mandatory
-> user-driven same-Major storage upgrades and the 0.1.0-only evaluation workflow.
-> Numbered requirements remain below for explicit reconciliation before
-> implementation. Current runtime formats are unchanged; new compatibility
-> mechanisms are not claimed to be implemented.
+> are incorporated below. Development-only format dispatch and storage upgrades
+> are retired; the implemented alpha contracts are not a formal-publication claim.
+> Source-qualified results and release limits are recorded in the
+> [E implementation ledger](../../development/e-implementation-status.md).
 
-**Status: Approved formal-release compatibility design; implementation and baseline consolidation pending.**
+**Status: Approved formal-release compatibility policy; E alpha mechanisms implemented, final qualification tracked in the E ledger.**
 
-This page owns the approved versioning direction for the first formal release
-and its successors. It does not claim that release-version requirements or a
-SemVer compatibility mechanism are implemented today. Existing format
-dispatchers, codecs and storage upgrades remain governed by their current
-contracts until the separately implemented first-formal-baseline consolidation.
+This page owns the first formal release's compatibility policy and the current
+alpha baseline's explicit version/support rules. Formal promotion and future
+same-Major extensions require their own representation acceptance evidence.
+They do not authorize relabeling existing objects, implicit storage conversion,
+or reinstating development-only compatibility machinery.
 
 <!-- spec-navigation:start -->
 ## Reading map (informative)
@@ -111,8 +110,9 @@ permits inspection only, not operation admission or mutation of existing data.
 For example, a tool in product Major 1 may report that a Pack requires a later
 1.x capability. That is not an unbounded promise that Major 2 will accept it.
 This example defines no literal manifest field, version-range syntax, capability
-registry, implicit negotiation or introduced-version lookup table. Their exact
-representation and validation are pending versioning-mechanism design.
+registry, implicit negotiation or introduced-version lookup table. E implements the explicit per-domain format support and required/supported
+diagnostics. A future capability registry or software-requirement declaration
+needs its own approved contract; this example does not allocate such fields.
 
 **Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634, PR-TEST-0638.**
 
@@ -180,7 +180,7 @@ downgrade or cross Major. No formal candidate MUST NOT fall back to prerelease.
 Changing saved eligibility alone MUST NOT replace the executable. Switching an
 executable and validating its data compatibility remain separate responsibilities.
 
-**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; native matrix must be rerun for the final E candidate; formal promotion remains a separate future gate.**
+**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate.**
 
 ## Verification status
 

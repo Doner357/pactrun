@@ -4,7 +4,7 @@ title: Persistence Baseline 1.0-alpha.1
 
 # Persistence baseline 1.0-alpha.1
 
-**Status: Approved E normative baseline, 1.0-alpha.1; integration verification in progress.**
+**Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
 
 <!-- spec-navigation:start -->
 This page owns the complete fresh schema and the surviving persistence obligations

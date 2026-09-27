@@ -4,7 +4,7 @@ title: Revision Canonical Baseline
 
 # Revision Canonical Baseline
 
-**Status: Approved E normative baseline, 1.0-alpha.1; integration verification in progress.**
+**Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
 
 <!-- spec-navigation:start -->
 This is the current owning contract after the approved one-time E reset.
@@ -33,6 +33,8 @@ because the product is updated or later promoted. Unknown contracts are refused;
 refusal does not authorize deleting real data or touching service resources.
 Stable requirement IDs and incoming heading anchors are retained below. Historical
 heading labels do not advertise support for retired numeric formats.
+
+<a id="format-lifecycle" />
 
 ### PR-REQ-0182 - Candidate and Frozen identity
 

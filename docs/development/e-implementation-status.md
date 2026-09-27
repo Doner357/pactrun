@@ -2,194 +2,122 @@
 title: E Implementation Status
 ---
 
-# E implementation status
+# E local engineering delivery
 
-**Status: In progress; read-coordination clarification approved, final verification pending. NOT complete and NOT merged to develop.**
+**Status: E implementation and local engineering verification complete. Integration target: local develop. Public publication is not authorized.**
 
-The operator authorized the entire E milestone on 2026-09-26, including local
-implementation, all required verification and eventual merge to develop. There
-is no slice-by-slice approval gate. Publication/push, Pages/document restructuring
-and unscoped real data/resource deletion remain excluded. The confirmed plan is
-[E S0](./design-notes/e-versioning-s0-plan.md); the whole-milestone objective has
-not been reduced by recording intermediate evidence here.
+The operator authorized the whole E milestone, its local commits and integration,
+then approved the SQLite read-coordination clarification on 2026-09-27. The
+[approved S0 plan](./design-notes/e-versioning-s0-plan.md) defines the alpha
+engineering scope; beta, RC, formal publication and broader documentation/Pages
+reorganization remain separate work. This delivery does not clear real managed
+data or service resources, push Git, create public releases or modify Pages.
 
-## Current implementation inventory
+## Delivered scope
 
-| Area | Actual state |
+| Area | Delivered behavior |
 | --- | --- |
-| Product candidate | Product 1.0.0-alpha.1 is now the local qualification candidate; this is NOT a completion or publication claim. |
-| Version policy | Shared bounded product/format parsers, explicit eight-domain support, separate defaults, release precedence and no implicit downgrade/cross-Major implemented. |
-| Runtime contracts | Pack source, complete Revision canonical/service/shell model, Hook protocol, Snapshot integrity/bundle, Pack distribution, machine interface and Persistence use exact string baselines. Old numeric readers/dispatch are removed. |
-| Identity | Revision/Snapshot frames no longer carry the redundant integer version. Independent Node oracles calculate replacement baseline vectors; blob SHA-256 remains unchanged. |
-| Persistence | Complete 72-table DDL, metadata-first refusal and transactional admission are active. Historical ladders and inline Snapshot storage are removed; active Managed Input chunks, ownership, recovery, references and service custody remain. |
-| Native integration | Program-only normal/test launchers and a metadata-only source selector are implemented. Major-scoped clones, real Git tracking/origin-HEAD checks, immutable exact refs and monotonic local source publication have focused tests. The real Scoop/Homebrew matrix passed on the qualified Windows/Linux hosts; exact source and fixture identities are recorded below. |
-| Artifact tooling | Source-qualified build provenance, deterministic archives, platform/flavor manifests, explicit formal-default gates and local-only publication tooling implemented; six actual alpha.1 candidate archives and measured platform dependencies are recorded in the local delivery directory. |
-| Owning Specs | Current format requirements moved once to consolidated owners; old pages are non-normative explanations. Persistence obligations now have one owner. Bidirectional traceability and current document links have passed focused checks; final site and full-source checks remain. |
-| Full E CI and merge | NOT completed. No E completion or merge to develop is claimed. |
+| Product/version policy | Product 1.0.0-alpha.1; all eight domains 1.0-alpha.1. Bounded typed versions, exact support lists, independent explicit writer defaults and product-version precedence. |
+| Runtime contracts | One complete Pack source, Revision canonical, Hook, Snapshot integrity/bundle, Pack distribution, CLI machine and Persistence baseline. No retired numeric readers, historical schema ladders, storage-upgrade command or inline Snapshot conversion. |
+| Identity and existing objects | Canonical version strings bind identity; redundant integer digest prefixes are removed. Blob SHA-256 is unchanged. Product-only upgrades do not relabel canonical bytes, recompute identity or rebind existing objects. |
+| Persistence | Fresh 72-table schema, readonly qualification and serialized write revalidation. Ownership, non-terminal Runs, recovery, custody, pins, CAS and active Managed Input chunks remain. |
+| Native delivery | Scoop and Homebrew own install/activation/removal. Normal/test launchers use distinct external data roots; source helpers change Git eligibility only. Exact refs are immutable and Major channels do not roll backwards. |
+| Artifacts | Six source-qualified Windows/Linux normal/test/standalone archives, SHA-256/length records, actual binary/compiler provenance and platform dependency inspection. |
+| Specifications | One current owner per requirement, retired pages are non-normative explanations, stable IDs and incoming lifecycle anchors retained. The [retirement ledger](./e-persistence-retirement-ledger.md) records discarded upgrade-only obligations and preserved safety assertions. |
 
-## Focused evidence
+No future codec or implicit cross-Major compatibility is invented. An unsupported
+contract remains an actionable refusal, not authorization for conversion, data
+cleanup, guessed support or interference with services.
 
-- Version unit cases PR-TEST-0618, PR-TEST-0619 and PR-TEST-0620 passed.
-- CLI schema contract generation check passed after the interface reset.
-- The focused CLI library suite passed 63 tests, retaining redaction, raw payload,
-  partial result, cancellation, output-failure, ownership and delivery assertions.
-- Fresh DDL test PR-TEST-0621 passed: exact owning SQL, integrity, representative
-  tables, singleton/admission constraints and transactional bootstrap rollback.
-- Persistence activation checks passed: PR-TEST-0622/0623; admission suite 10
-  cases; retained SQL constraint suite 7 cases; reopening preservation 4 cases;
-  Revision persistence suite 8 cases; metadata suite 7 cases. The old-only test
-  IDs and surviving safety assertions are recorded in the retirement ledger.
-- CLI schema was regenerated after removing storage upgrade and its focused check
-  passed. The current CLI suite passed all 63 cases after replacing a fixed-sleep
-  test race with bounded observation while the writer stays blocked; product
-  timeout values and the independent-finalization assertion are unchanged.
-- Windows service-storage subset passed 27 cases. Remote Persistence verification
-  initially found 16 failures caused by retained pre-V7/pre-V8 numeric guards;
-  those guards and test-only table-presence fallbacks are now removed. The repaired
-  remote Persistence subset passed all 180 cases (670.90 seconds); the failed
-  attempt is retained separately, not relabeled as a pass.
-- Remote documentation tests passed 27 cases, typecheck and site build passed
-  without broken-link warnings. Source-qualified evidence is in the dedicated
-  e-persistence-baseline-20260926 workspace; these are not full product CI.
-- A subsequent bounded Persistence version-read change uses the shared exact
-  support selector and rejects malformed/oversized labels. Its three focused
-  Windows tests and current workspace/all-target/all-feature Clippy passed; this
-  delta is separate from the preceding 180-case remote source snapshot.
-- These tests are not a complete E integration or compatibility certification.
-  Evidence is under local target/e-implementation/evidence. Checks after later
-  changes must be tied to the actual affected inputs, not reused by filename.
+## Qualified inputs and evidence reuse
 
-## Remaining ordered work
+- Runtime/artifact source: c673c0cf7c162aef785d31cbbdad5d358a65e83d.
+  Source manifest: 549dfd5c717502c2fe71969483a8a14107357ad1781edfff90869ddebcae03e1.
+- Whole Rust/conformance gate source: 53a218ad93a74d342ab1f2ed18fa80ccd9f9b35f.
+  Source manifest: ceb9000c65eda1baf94eccf2015840fb7b2ef620c75df14b69c43e25d391842a.
+- Native upgrade fixture: 995b094494a33755febc700780d2544fced73875.
+  Source manifest: f29b0904a01ead9864395ab222f16d6051636367a7c27e66774d84cba8af122f.
+  Its source differs from the artifact candidate only in Cargo.toml/Cargo.lock
+  product versions. This alpha.2 is a private test fixture, not a publication.
+- Windows/Linux release artifacts both used Rust 1.98.1. Remote Rust CI used
+  Rust 1.98.0, optimization level 1, debug information disabled, debug assertions
+  and overflow checks enabled, one test thread, persistent ZFS data and short
+  temporary IPC paths. These are distinct recorded build profiles.
 
-1. Complete source-qualified integration/conformance validation of the new wire
-   baselines and owning Specs; repair all regressions without restoring old readers.
-2. Build actual candidate artifacts from reviewed committed inputs, inspect platform
-   dependencies, and exercise native Scoop/Homebrew install, update, exact selection,
-   explicit switch, normal/test coexistence, cleanup/uninstall and live-operation
-   continuity. Do not substitute earlier prototype evidence.
-3. Complete error/selector and promotion/continuity coverage and remaining traceability.
-4. Run full remote cargo xtask ci plus current Windows/platform checks. Record exact
-   source/binary/manager inputs, complete local engineering documentation and merge
-   the completed result to develop. No push or GitHub publication is authorized.
+Runtime, Cargo/build inputs and format vectors are unchanged between the artifact
+source and the gate source. Differences are documentation, test fixtures and the
+Linux-only native-harness mirror fix. The module baseline_schema_tests is cfg(test).
+The explicit comparison is target/e-qualification/runtime-evidence-reuse.json.
+Accordingly native/capacity evidence is reused for unchanged runtime inputs; it
+is not attributed to a newly built binary. Final closeout changes only documents
+and their checks; their actual source and build receipt are recorded separately.
 
-Existing development-era runtime acceptance must not be mistaken for compliance
-with the new Spec during this transition. Pending behavior is explicit, not
-permission to leave historical support or substitute safe refusal for future
-formal same-Major compatibility. No future codec is to be invented in advance.
+## Verification results
 
-## Wire/native-tooling continuation evidence
+| Check | Result and scope |
+| --- | --- |
+| Full Rust/conformance portion of cargo xtask ci | Passed at the gate source: independent Node/Rust parity, formatting, all-target/all-feature Clippy, 520 product library tests, all CLI/integration targets including 75 system tests, 48 xtask tests and doc-tests. |
+| Documentation | Link/traceability/catalog checks, typecheck and Docusaurus production build are required at the final document tree. The closeout build verifies all four repaired incoming lifecycle anchors; success receipts are retained with the local delivery. |
+| Windows affected checks | Passed baseline schema/refusal/live-WAL tests (four), Cleanup (13), workflow (eight), lifecycle/Snapshot/service repairs, public unsupported-version refusal, initialization journeys, CLI diagnostic refusal and Clippy. |
+| PR-TEST-0637 native matrix | Passed through the Rust opt-in test on both qualified platforms. Actual source refresh preserves preview/exact tracking; hold/pin, metadata-only selection, no formal fallback, no downgrade/cross-Major, normal/test isolation, wrong-hash refusal and native explicit switch are covered. |
+| Live native operations | Upgrade, cleanup, explicit switch and uninstall preserve the admitted Hook and service-file access witness. Deferred Scoop operations complete afterward. Existing Instance state and canonical Revision bytes remain unchanged. |
+| Capacity checks | Separately passed Pack >512 MiB and Snapshot 1 MiB/1 GiB. Ordinary suites also exercise real ZIP64 offsets beyond u32. The 17-GiB Snapshot/RSS case was not rerun; it requires at least 160 GiB free. |
 
-New-baseline focused checks passed: source authoring 11; canonical service/shell
-codec 6; shared declarations 8; Snapshot integrity 11; Hook common/authority 17;
-Shell Loader 6; Snapshot bundle 9; Pack transport 16 (the explicit >512 MiB case
-remains separately scheduled); machine/CLI 64. Later bounded-refusal and build
-provenance edits require their own affected rechecks. Reference verifier tests
-passed 40 cases; actual Revision/Snapshot/Hook/Error conformance commands have
-passed after retargeting baseline fixtures. Native launcher, real source-selection
-Git tracking, local immutable publication and artifact-assembly tests passed in
-workspace-local fixtures. These results are NOT the full E gate.
+The original full cargo xtask ci command completed every Rust component, then
+stopped because pnpm rejected a cross-workspace node_modules symlink. That run's
+exit status remains failed. Only the owned symlink was removed, dependencies were
+installed under the actual document workspace using the frozen lockfile, and
+typecheck/build were continued. This is source-matched gate completion with
+explicit reuse of the passed Rust components, not a fresh monolithic CI pass.
+The final document build must additionally contain no broken-link/anchor warning.
 
-Necessary native build/selection references are in
-[native package engineering delivery](./native-package-delivery.md).
+PR-TEST-0637 is intentionally opt-in in ordinary CI because it needs prepared
+artifacts and, on Windows, authorization for transient user PATH mutation. It
+was run separately on both platforms. Scoop PATH fingerprints match after removal
+of only the test shim entry. Fixture HTTP servers and Hook children were closed.
+A file/handle witness is not certification of every third-party daemon.
 
-## Source-qualified integration repair checkpoint (2026-09-27)
+## Approved SQLite read-coordination boundary
 
-The first Linux gate at 52ecd80 stopped at a redundant test-only allocation;
-513435a repairs that Clippy warning. Its full library run then reported 498
-passed, 20 failed and four explicitly ignored tests. That is a failed gate, not
-completion. Failures identified remaining numeric Cleanup/source and workflow
-fixtures, Snapshot producer/corruption fixtures, and a real retirement bug:
-parent cascades could reach payloads before bindings under the fresh DDL order.
-Retirement now explicitly removes its own bindings before the Instance cascade,
-in the existing authorized retirement transaction; no upgrade rewrites data.
-Existing lifecycle, service/resource preservation and crash assertions remain.
-Windows repair checks passed Cleanup 13, workflow eight and five individually
-selected lifecycle/Snapshot/service cases; source-refusal PR-TEST-0638 also passed.
+PR-TEST-0623 covers unsupported ownership, formats, shape and WAL-mode inspection.
+SQLite may create/update its own read-coordination sidecars; that does not admit
+Pactrun staging, leases, content coordination, conversion or cleanup. Database
+bytes, service sentinels and existing object identities remain protected.
+PR-TEST-0639 proves a committed WAL is neither changed nor ignored and its live
+writer can continue committing. Existing WAL files are not disposable merely
+because they are sidecars. No immutable-mode bypass or sidecar-deletion workaround
+was added. The owning rules are PR-REQ-0078 and PR-REQ-0299.
 
-Actual native rehearsals on the initial 52ecd80 product plus an isolated,
-software-version-only alpha.2 fixture passed Scoop and Homebrew installation,
-upgrade, hold/pin, exact downgrade, isolation, checksum refusal and live Hook
-update/cleanup/uninstall. They are preliminary evidence: the final input set and
-the expanded PR-TEST-0637 matrix still require qualification. The native failure
-history exposed Git archive inheriting host CRLF settings; source capture now
-pins Git's conversion configuration, SQL checkout has an LF attribute and a
-regression proves identical snapshots under LF/CRLF host settings. Failed
-CRLF-derived fixtures remain evidence, not qualified artifacts.
+## Repairs and failed-attempt history
 
-The reproducible opt-in runner is tools/native_package_acceptance.py, invoked by
-PR-TEST-0637. Its Windows gate requires explicit temporary user PATH permission;
-normal CI ignores this external-manager test, so it must be run separately on
-both platforms. The expanded gate verifies object bytes/identities, exact and
-preview selection after real manager metadata refresh, and live explicit switch.
-No final full-CI pass or merge is claimed at this checkpoint.
+Earlier failures are retained, not relabeled as passes: Linux test-only Clippy;
+remaining numeric Cleanup/source/workflow fixtures; a fresh-DDL cascade-order bug
+fixed by removing owned bindings before the Instance cascade; Snapshot producer
+and corruption fixtures; stale private-marker/diagnostic assertions; and Git
+archive inheriting host CRLF settings. Source capture now pins conversion policy,
+SQL checkout is LF, and regression tests prove host-independent snapshots.
 
-## Current acceptance and blocking counterexample
+An attempt sharing a Cargo target across source roots reused an xtask with an old
+compiled-in workspace. It was stopped and invalidated. Qualified gates use fresh
+targets, verify the runner source path and run source-specific smoke tests first.
+The native Homebrew refresh harness uses an owned main-branch mirror at its
+qualified commit; its first master-only mirror failure did not change product code.
 
-Candidate c673c0cf7c162aef785d31cbbdad5d358a65e83d has source-manifest
-549dfd5c717502c2fe71969483a8a14107357ad1781edfff90869ddebcae03e1.
-Its Windows/Linux release artifacts use Rust 1.98.1. The software-only alpha.2
-fixture is 995b094494a33755febc700780d2544fced73875; manifest
-f29b0904a01ead9864395ab222f16d6051636367a7c27e66774d84cba8af122f differs
-only in Cargo.toml and Cargo.lock. No alpha.2 publication is authorized.
+## Platform, delivery and publication limits
 
-- PR-TEST-0637 passed through the actual Rust opt-in entry point on Windows
-  (native-windows-c673c0c) and Linux (native-linux-refresh). Linux's isolated
-  Homebrew mirror needed the test-only main-branch correction in 1c4c43c;
-  no Pactrun runtime bytes changed. Both exercise real manager source refresh,
-  exact/preview persistence, pin/hold, default isolation, canonical/identity
-  preservation, checksum failure and active Hook update/cleanup/switch/uninstall.
-  Windows PATH fingerprints match after restoration.
-- The c673c0c isolated-target full gate passed conformance, formatting, Clippy
-  and all 519 active library tests (four ignored). It later stopped on one old
-  diagnostic-text expectation in m5_path_selection (14 pass, one fail). The
-  assertion now checks the Hook domain, required and supported versions; that
-  focused Windows case passed. Remaining full-gate targets and the final site
-  build have NOT been certified by this run.
-- The three separately selected capacity cases passed: Pack >512 MiB and
-  Snapshot 1 MiB/1 GiB. The 17-GiB Snapshot case still requires at least 160 GiB
-  free and was not run. There is no current-source beyond-16-GiB capacity claim.
-- An earlier attempt using a shared Cargo target embedded the prior xtask
-  workspace. It was stopped and invalidated, not counted as c673c0c evidence.
-  The qualified retry used test-target-c673c0c, verified the runner's source
-  path and ran the new refusal/retirement smoke tests before the full gate.
-- Windows imports contain OS DLLs, not an external MSVC runtime. The Linux
-  build was exercised on Debian 13, glibc 2.41, kernel 7.0.14-19-pve and ZFS;
-  the observed GNU symbol ceiling is GLIBC_2.39 (launcher GLIBC_2.34).
-  Windows host is build 26200 on NTFS. These are current-host observations,
-  not clean-OS/minimum-kernel/all-filesystem certification.
+Windows verification used Windows 11 build 26200 on NTFS and Scoop commit
+b588a06e41d920d2123ec70aee682bae14935939. PE imports are OS DLLs, without a separate
+MSVC runtime dependency. Linux used Debian 13, glibc 2.41, kernel 7.0.14-19-pve,
+ZFS and Homebrew commit 570982948a8a194f0f42f43f4a5bce2d1c9f64cb. Observed GNU
+symbol ceilings are GLIBC_2.39 (product/source helper) and GLIBC_2.34 (launcher).
+These are measured current-host facts, not clean-OS/minimum-kernel/all-filesystem
+qualification. No Windows 10, macOS, ARM64 or musl artifact is promised here.
 
-**Do not merge:** final safety review found that a read-only SQLite connection
-can create an empty -wal and a 32-KiB -shm while rejecting an unsupported WAL-mode
-database. The real candidate counterexample leaves the main database SHA-256
-unchanged, but violates this Spec's stronger requirement of no journal or
-coordination creation before refusal. No real operator data was used.
-PR-TEST-0623 now includes WAL-mode unsupported metadata/bootstrap cases; case
-19 reproduces the failure (database directory entries increase from one to three).
-This regression is intentionally not ignored or weakened. The approved normative
-rule has NOT been changed. Any proposed narrowly scoped allowance for SQLite's
-own read coordination needs explicit semantic approval; otherwise implementation
-must satisfy the existing zero-sidecar rule before completion.
-
-Evidence: target/e-qualification/unsupported-wal-counterexample.json and
-unsupported-wal-regression.log. Candidate artifacts are staged in target/e-delivery;
-they are engineering candidates, not a completed or published release. Uncommitted
-regression/assertion and documentation changes are retained for continuation.
-
-## Read-coordination decision accepted (2026-09-27)
-
-The operator approved the narrow SQLite read-coordination exception described
-above. The prior blocker is resolved by the owning-contract clarification, not
-by suppressing the counterexample or introducing an unsafe reader. PR-TEST-0623
-now allows only SQLite -wal/-shm additions for WAL-mode inspection while keeping
-main database bytes, service sentinels and absence of Pactrun staging/content
-coordination mandatory. A newly created WAL in that quiescent fixture must stay
-empty. PR-TEST-0639 separately verifies that an already committed WAL is not
-changed or ignored and that its existing writer retains control and can commit.
-The final gate and documentation closeout remain pending; no merge is claimed.
-
-The four Windows baseline-schema tests (including PR-TEST-0639) passed after the
-approved clarification, with main-file/committed-WAL byte preservation and a
-continuing live writer. Local documentation/link/traceability checks passed 27
-cases. The former migration refusal's stale prose assertion was also repaired
-without weakening its no-execution assertions. These focused results precede
-the final source-qualified full gate and are not a substitute for it.
+The local delivery is target/e-delivery: six alpha.1 assets, checked checksums,
+source capture, source-qualified test/platform evidence and a delivery index.
+Implementation/test snapshots remain in target/e-qualification. The documented
+[native engineering and publication procedure](./native-package-delivery.md)
+requires final hosted URLs and a separate trust/license/publication review;
+loopback test sources are not public download channels. Wider actual-use signoff,
+formal writer defaults, prerelease acceptance dispositions and declared minimum
+environments remain explicit later release gates, not an automatic continuation.

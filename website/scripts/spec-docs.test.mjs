@@ -307,7 +307,7 @@ test('release readiness separates work order from publication and implementation
   assert.ok(policy);
   const normalizedPlan = plan.replace(/\s+/g, ' ');
   const normalizedPolicy = policy.replace(/\s+/g, ' ');
-  assert.match(normalizedPlan, /Required before formal release; relative work order assigned, implementation pending/);
+  assert.match(normalizedPlan, /E alpha engineering implemented; formal-release readiness remains gated/);
   assert.match(normalizedPlan, /Retirement of M8 does not trigger these tasks or a release/);
   assert.match(normalizedPlan, /not a mandatory milestone-to-release chain/);
   for (const work of [
@@ -317,15 +317,15 @@ test('release readiness separates work order from publication and implementation
     'Release mechanism design and implementation',
   ]) assert.ok(plan.includes('| ' + work + ' |'), work);
   assert.match(normalizedPlan, /Formal publication is a separate controlled action/);
-  assert.match(normalizedPlan, /does not implement versioning, change Cargo's product version, reset data/);
+  assert.match(normalizedPlan, /E was subsequently authorized for local implementation, verification, commits and integration into develop/);
   assert.match(normalizedPlan, /no field name or version-range syntax has been approved yet/);
-  assert.match(normalizedPolicy, /Approved formal-release compatibility design; implementation and baseline consolidation pending/);
+  assert.match(normalizedPolicy, /Approved formal-release compatibility policy; E alpha mechanisms implemented/);
   assert.deepEqual([...policy.matchAll(/^### (PR-REQ-\d+)/gm)].map(match => match[1]), [
     'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333',
   ]);
   assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 0);
   assert.match(normalizedPolicy, /Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634, PR-TEST-0638/);
-  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; native matrix must be rerun for the final E candidate; formal promotion remains a separate future gate/);
+  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate/);
   assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
   assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
   assert.match(normalizedPolicy, /Development iterations are not earlier formal product releases/);
@@ -532,5 +532,17 @@ test('embedded Markdown contracts use canonical Spec paths, not forwarding pages
       const contract = await readFile(path.resolve(path.dirname(name), match[1]), 'utf8');
       assert.match(contract, /\*\*Status:/);
     }
+  }
+});
+
+test('E consolidated owners preserve incoming lifecycle and reading-map anchors', () => {
+  for (const [name, anchors] of [
+    ['contracts/hook-protocol.md', ['reading-map-informative', 'protocol-lifecycle']],
+    ['contracts/revision-canonical.md', ['format-lifecycle']],
+    ['contracts/snapshot-integrity.md', ['format-lifecycle']],
+  ]) {
+    const body = docs.find(([file]) => file === 'spec/' + name)?.[1];
+    assert.ok(body, name);
+    for (const anchor of anchors) assert.ok(body.includes('<a id="' + anchor + '" />'), name + '#' + anchor);
   }
 });

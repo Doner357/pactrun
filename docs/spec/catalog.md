@@ -12,16 +12,16 @@ website build. They do not constitute additional requirements.
 
 | Contract | Original status |
 | --- | --- |
-| [Persistence baseline](persistence/persistence-baseline.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Revision Canonical Baseline](contracts/revision-canonical.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Pack Source Baseline](contracts/pack-source.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Hook Protocol Baseline](contracts/hook-protocol.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Snapshot Integrity Baseline](contracts/snapshot-integrity.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Snapshot Bundle Baseline](contracts/snapshot-bundle.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
-| [Pack Distribution Baseline](contracts/pack-distribution.md) | Approved E normative baseline, 1.0-alpha.1; integration verification in progress. |
+| [Persistence baseline](persistence/persistence-baseline.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Revision Canonical Baseline](contracts/revision-canonical.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Pack Source Baseline](contracts/pack-source.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Hook Protocol Baseline](contracts/hook-protocol.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Snapshot Integrity Baseline](contracts/snapshot-integrity.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Snapshot Bundle Baseline](contracts/snapshot-bundle.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
+| [Pack Distribution Baseline](contracts/pack-distribution.md) | Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery. |
 | [Execution Diagnostics](behavior/execution-diagnostics.md) | Implemented and verified normative behavior; integration is tracked separately. |
 | [Shell Loader](contracts/shell-loader.md) | Implemented normative adapter contract; non-Frozen. |
-| [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility design; implementation and baseline consolidation pending. |
+| [Product Versioning and Compatibility](foundations/product-versioning-and-compatibility.md) | Approved formal-release compatibility policy; E alpha mechanisms implemented, final qualification tracked in the E ledger. |
 | [Actions, Plans, and Runs](behavior/actions-plans-and-runs.md) | Normative product behavior specification. |
 | [Command and Output Reference](behavior/command-and-output-reference.md) | Normative product behavior specification. Exact option spelling remains open specification work where explicitly noted. |
 | [Managed Object Lifecycle and GC](behavior/managed-object-lifecycle.md) | Implemented normative contract; verification and integration are tracked separately. |

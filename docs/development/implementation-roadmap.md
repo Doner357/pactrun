@@ -857,7 +857,7 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented, verified and integrated into local develop |
 | C | Portable Pack and Revision Export | S0-S3 and export naming [implemented, verified and integrated into local develop](./pack-transport-status.md) |
 | D | Machine-readable CLI Output | S0-S4 [implemented, verified and integrated into local develop](./cli-presentation-status.md) |
-| E | Versioning and Baseline Consolidation | Existing final milestone, after D |
+| E | Versioning and Baseline Consolidation | Local engineering delivery complete; [verification and integration scope](./e-implementation-status.md) |
 
 A-E are sequence labels, not M-series identifiers. The original approval recorded
 the grouping only; A subsequently received separate design/implementation approval

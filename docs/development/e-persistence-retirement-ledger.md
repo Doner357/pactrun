@@ -4,8 +4,8 @@ title: E Persistence Retirement Ledger
 
 # E Persistence retirement ledger
 
-In-progress engineering disposition for the authorized 2026-09-26 one-time
-reset. This is not a milestone completion record or evidence of full CI.
+Closed engineering disposition for the authorized 2026-09-26 one-time reset.
+Whole-E evidence and its exact scope are in the implementation ledger.
 Retired test and requirement IDs remain reserved and must not be reused.
 
 | Retired tests | Former obligation | Disposition |
@@ -23,13 +23,12 @@ with explicit retirement rather than pending runtime coverage.
 
 Mixed tests were rebased, not discarded: PR-TEST-0182/0183, PR-TEST-0195,
 PR-TEST-0201/0202, PR-TEST-0293/0299, PR-TEST-0340/0344, PR-TEST-0392/0400,
-PR-TEST-0456/0468/0473, PR-TEST-0483/0485 and PR-TEST-0524. Current safety
-coverage still needs source-qualified integration testing. Historical evidence
-must not be represented as a passing test of the new baseline.
+PR-TEST-0456/0468/0473, PR-TEST-0483/0485 and PR-TEST-0524. Current safety coverage passed the source-qualified E gate. Historical evidence
+is not represented as a passing test of the new baseline.
 
 No pre-existing managed database or service resources were deleted. Source code,
 SQL upgrade fragments and obsolete-only tests are the retirement targets.
-Remaining whole-E work and validation are tracked in
+Whole-E delivery and validation are tracked in
 [the implementation ledger](./e-implementation-status.md).
 
 Additional retained cases rebased during full E integration: PR-TEST-0404/0424

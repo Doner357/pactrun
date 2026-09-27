@@ -4,7 +4,7 @@ title: Snapshot Bundle Baseline
 
 # Snapshot Bundle Baseline
 
-**Status: Approved E normative baseline, 1.0-alpha.1; integration verification in progress.**
+**Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
 
 <!-- spec-navigation:start -->
 This is the current owning contract after the approved one-time E reset.

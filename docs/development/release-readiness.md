@@ -4,14 +4,15 @@ title: Release Readiness
 
 # Release readiness
 
-> **E redesign update:** The operator-approved
-> [versioning decisions and matrix](./design-notes/e-versioning-redesign-decisions.md)
-> replace conflicting future-planning assumptions below, notably the 0.1.0-only
-> evaluation workflow. Detailed release gates remain open. The earlier checklist
-> is retained for reconciliation, not as an override of the new direction.
-> No runtime change or publication is authorized by this documentation update.
+> **E engineering update:** Version domains, baseline consolidation and native
+> package engineering are implemented under the approved E scope. See the
+> [E ledger](./e-implementation-status.md) for actual qualification, artifacts and
+> Git status. Public publication, broader documentation/Pages reorganization,
+> minimum-environment qualification and actual-use signoff remain separate gates.
+> The earlier planning chronology below is historical, not a new implementation
+> request or permission to publish.
 
-**Status: Approved pre-release work plan. Required before formal release; relative work order assigned, implementation pending.**
+**Status: E alpha engineering implemented; formal-release readiness remains gated.**
 
 The operator confirmed this direction on 2026-09-16. This is a readiness
 checklist, not the next numbered milestone or a fixed post-milestone sequence.
@@ -57,8 +58,9 @@ Formal publication is a separate controlled action after readiness acceptance,
 not another prerequisite that must somehow be completed before publication.
 The publication step labels and validates the actual 1.0.0 artifact, then
 publishes the checked artifact rather than silently replacing it with an
-untested rebuild. The exact platforms, distribution channels, signing and
-pipeline implementation remain release-mechanism design work.
+untested rebuild. Windows x86-64/Scoop and Linux x86-64/Homebrew are the chosen engineering
+paths. Public hosting, trust/license review and qualification of declared minimum
+environments remain release gates; a local rehearsal does not discharge them.
 
 ## Dependencies, not an automatic schedule
 
@@ -113,11 +115,13 @@ dedicated consolidation design and implementation are ready.
 - Exact product-version requirements/capability declarations and how an older
   reader identifies an unsupported contract before acting; no field name or
   version-range syntax has been approved yet.
-- The final baseline's identifiers, encodings and full conformance checks;
-  there is no open requirement to distinguish or reject data solely by
-  development provenance, and no marker is added merely for that purpose.
-- The formal supported-format and persistence-upgrade matrices. Old-binary
-  access to newer data is not implied by new-binary backward compatibility.
+- Formal promotion of the implemented 1.0-alpha.1 contracts, including explicit
+  acceptance dispositions for conforming prerelease representations. E fixes the
+  alpha identifiers and encodings; it does not invent future formal codecs or
+  a development-provenance exclusion marker.
+- Future formal supported-format matrices and any separately designed internal
+  evolution. E's explicit baseline support has no development upgrade chain;
+  older-binary access to future data is not implied by newer-reader compatibility.
 - Release artifacts, target matrix, distribution/signing procedures and the
   explicit publication approval boundary.
 
@@ -128,17 +132,18 @@ or broad CMake-style OLD/NEW policy-switch framework is adopted.
 
 ## Evidence and current authorization
 
-This documentation task does not implement versioning, change Cargo's product
-version, reset data, remove codecs/migrations, start internal trials, create
-release workflows or publish anything. Documentation and regression CI results
-must be reported as such, not as proof that readiness work is already complete.
+The original readiness-planning task did not authorize runtime or publication
+changes. E was subsequently authorized for local implementation, verification,
+commits and integration into develop. Its product is 1.0.0-alpha.1 with all eight
+formats at 1.0-alpha.1. These local results do not certify formal promotion or
+public distribution; the E ledger separates actual passes from future gates.
 Once implementation is scheduled, keep stable requirement/test traceability and
 follow the [risk-based validation policy](./development-and-verification.md#risk-based-validation-scope).
 Focused iteration does not remove its full-CI integration and formal-release
 gates; documentation-only updates do not trigger the full product suite.
 
-Commit/merge/push and actual public publication remain separately controlled
-actions. The unrelated existing publication workflow is not adopted or modified
+The authorized local E commit/merge does not authorize push or public publication.
+Those remain separately controlled actions. The unrelated existing publication workflow is not adopted or modified
 by recording this plan.
 
 ## Reference boundary
