@@ -122,10 +122,10 @@ def manager_setup():
         PM=[MANAGER/'bin/brew']
         mirror=ROOT/'brew-source.git'
         run(['git','clone','--bare',args.manager,mirror],'brew-owned-source')
-        run(['git','--git-dir',mirror,'update-ref','refs/heads/master','570982948a8a194f0f42f43f4a5bce2d1c9f64cb'],'brew-owned-master')
-        run(['git','--git-dir',mirror,'symbolic-ref','HEAD','refs/heads/master'],'brew-owned-head')
+        run(['git','--git-dir',mirror,'update-ref','refs/heads/main','570982948a8a194f0f42f43f4a5bce2d1c9f64cb'],'brew-owned-main')
+        run(['git','--git-dir',mirror,'symbolic-ref','HEAD','refs/heads/main'],'brew-owned-head')
         run(['git','-C',MANAGER,'remote','set-url','origin',mirror],'brew-local-origin')
-        run(['git','-C',MANAGER,'checkout','-B','master','570982948a8a194f0f42f43f4a5bce2d1c9f64cb'],'brew-local-master')
+        run(['git','-C',MANAGER,'checkout','-B','main','570982948a8a194f0f42f43f4a5bce2d1c9f64cb'],'brew-local-main')
         ENV['HOMEBREW_BREW_GIT_REMOTE']=str(mirror)
     if WIN:
         empty=ROOT/'empty-main'
