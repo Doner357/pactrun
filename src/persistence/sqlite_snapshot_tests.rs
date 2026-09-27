@@ -255,8 +255,8 @@ fn same_id_different_digest_is_a_collision_without_replacing_the_original() {
 // Test-ID: PR-TEST-0214
 // Verifies: PR-REQ-0292, PR-REQ-0297, PR-REQ-0302
 #[test]
-fn producer_installation_evaluates_the_original_version_without_reclassifying_v1() {
-    for version in [1, 2] {
+fn producer_installation_validates_baseline_protection_without_rewriting_snapshot_bytes() {
+    for invalid_protection in [false, true] {
         let (_tmp, path) = root();
         let p = PactrunPersistence::open(&path).unwrap();
         let mut f = fixture(2);
@@ -295,8 +295,15 @@ fn producer_installation_evaluates_the_original_version_without_reclassifying_v1
         let mut raw: serde_json::Value =
             serde_json::from_str(f["raw_manifest"].as_str().unwrap()).unwrap();
         raw["producer"]["revision_content_digest"] = serde_json::json!(digest.to_string());
-        raw["format_version"] = serde_json::json!(version);
-        f["normalized_manifest"]["format_version"] = serde_json::json!(version);
+        if invalid_protection {
+            let token = raw["managed_bindings"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|binding| binding["input_id"] == "token")
+                .unwrap();
+            token["protection"] = serde_json::json!("normal");
+        }
         f["raw_manifest"] = serde_json::json!(serde_json::to_string(&raw).unwrap());
         let (mut bundle, _) = prepared_fixture(&p, &f);
         let id = bundle.manifest().manifest().snapshot_id();
@@ -304,9 +311,11 @@ fn producer_installation_evaluates_the_original_version_without_reclassifying_v1
             p.import_snapshot_bundle(&mut bundle).unwrap().relational,
             SnapshotRelationalVerification::NotEvaluated
         );
+        let canonical = bundle.manifest().canonical_bytes().to_vec();
         p.persist_revision(package, &content, &[]).unwrap();
+        assert_eq!(bundle.manifest().canonical_bytes(), canonical);
         let result = p.verify_snapshot(id);
-        if version == 2 {
+        if !invalid_protection {
             assert_eq!(
                 result.unwrap().relational,
                 SnapshotRelationalVerification::Valid

@@ -43,8 +43,12 @@ Separate service resources are also necessary for meaningful test isolation.
 Use a **separate native clone for each installation**. For example, normal and
 test Scoop buckets may be named pactrun-preview and pactrun-preview-test; Homebrew
 taps may be pactrun/preview and pactrun/preview-test. Both can point at the same
-source repository, but must not share their local Git clone. Always use qualified
-bucket/tap package names for install, update, reinstall and uninstall.
+source repository, but must not share their local Git clone. Use qualified bucket/tap package names for source-resolving
+install, update and reinstall commands. Scoop inventory-only commands (hold,
+unhold, cleanup and uninstall) require the installed name, not bucket/name;
+verify its install.json bucket and actual hold state. Automation must invoke
+Scoop through its normal exit-code-forwarding shim. Homebrew accepts
+the qualified tap name for those operations.
 
 The source helper accepts only:
 

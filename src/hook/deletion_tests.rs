@@ -3,14 +3,14 @@ use crate::domain::*;
 const WORKER: &str = "hook::tests::deletion_runtime::cleanup_hook_worker";
 const OWNER_WORKER: &str = "hook::tests::deletion_runtime::deletion_owner_worker";
 
-fn fixture(mode: &str, version: u8) -> RuntimeFixture {
+fn fixture(mode: &str) -> RuntimeFixture {
     RuntimeFixture::with_source(|source, _, manifest| {
         let args = serde_json::to_string(&vec!["--exact".to_owned(),WORKER.to_owned(),"--nocapture".to_owned(),"--skip".to_owned(),
             format!("cleanup-mode:{mode}"),"--skip".to_owned(),format!("cleanup-marker:{}",source.parent().unwrap().join("cleanup-count").display())]).unwrap();
         *manifest = manifest.replace("  migrations: []", &format!(r#"  cleanup:
     requires: [{{ role: active, input_id: secret_config }}]
     hook:
-      protocol_version: {version}
+      protocol_version: 1.0-alpha.1
       launch: {{ kind: direct, executable: worker }}
       args: {args}
       io: {{ terminal: none }}
@@ -48,7 +48,7 @@ fn finish(f: &RuntimeFixture, run: RunId) -> crate::domain::RunOutcomeView {
 #[test]
 fn retirement_removes_retained_bindings_without_touching_another_instance_or_source() {
     for mode in [DeletionMode::ManagedCleanup, DeletionMode::AbandonManagement] {
-        let f=fixture("success",1);
+        let f=fixture("success");
         let other=f.application.create_instance(InstanceName::parse("other").unwrap(), f.instance.active_revision.clone(),
             vec![InputAcquisition {input_id:InputIdentity::parse("secret_config").unwrap(), source:Box::new(Cursor::new(SECRET_BINDING.to_vec()))}]).unwrap();
         let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
@@ -73,40 +73,36 @@ fn retirement_removes_retained_bindings_without_touching_another_instance_or_sou
 // Test-ID: PR-TEST-0404
 // Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334
 #[test]
-fn real_cleanup_v1_and_v2_complete_before_instance_removal_with_retained_history() {
-    for version in [1,2] {
-        let f = fixture("success", version);
-        let run = start(&f, DeletionMode::ManagedCleanup);
-        assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
-        assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
-        assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
-        let p = persistence(&f.storage);
-        assert_eq!(p.list_managed_runs(f.instance.id).unwrap().len(), 1);
-        assert!(p.managed_run_inspection(run).unwrap().is_some());
-        assert!(matches!(p.load_managed_run(run).unwrap().unwrap().operation,
-            ManagedRunIdentity::Deletion { mode: DeletionMode::ManagedCleanup, .. }));
-    }
+fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history() {
+    let f = fixture("success");
+    let run = start(&f, DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
+    assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
+    assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
+    let p = persistence(&f.storage);
+    assert_eq!(p.list_managed_runs(f.instance.id).unwrap().len(), 1);
+    assert!(p.managed_run_inspection(run).unwrap().is_some());
+    assert!(matches!(p.load_managed_run(run).unwrap().unwrap().operation,
+        ManagedRunIdentity::Deletion { mode: DeletionMode::ManagedCleanup, .. }));
 }
 
 // Test-ID: PR-TEST-0424
 // Verifies: PR-REQ-0090, PR-REQ-0129, PR-REQ-0130, PR-REQ-0177, PR-REQ-0178
 #[test]
 fn cleanup_receives_required_retained_secret_without_inheriting_active_readiness() {
-    for version in [1, 2] {
-        let f = fixture("retained", version);
-        let intent = f.application.resolve_deletion(&f.instance.name, None, DeletionMode::ManagedCleanup).unwrap();
-        assert!(matches!(f.application.compile_deletion(&intent, &[]), Err(crate::application::ApplicationError::DeletionCompilation(DeletionPlanError::MissingRequirement(_)))));
-        // Seed the same valid detached binding shape used by Migration: this
-        // fixture tests Cleanup context, not the already-covered migration path.
-        let db = rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
-        db.execute("INSERT INTO managed_input_bindings(instance_id,input_identity,payload_id) SELECT instance_id,?2,payload_id FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?3", rusqlite::params![f.instance.id.as_bytes().as_slice(), b"legacy".as_slice(), b"secret_config".as_slice()]).unwrap();
-        db.execute("DELETE FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?2", rusqlite::params![f.instance.id.as_bytes().as_slice(), b"secret_config".as_slice()]).unwrap();
-        drop(db);
-        assert!(!f.application.load_instance(f.instance.id).unwrap().unwrap().required_inputs_satisfied);
-        let run = start(&f, DeletionMode::ManagedCleanup);
-        assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
-        assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
-    }
+    let f = fixture("retained");
+    let intent = f.application.resolve_deletion(&f.instance.name, None, DeletionMode::ManagedCleanup).unwrap();
+    assert!(matches!(f.application.compile_deletion(&intent, &[]), Err(crate::application::ApplicationError::DeletionCompilation(DeletionPlanError::MissingRequirement(_)))));
+    // Seed the same valid detached binding shape used by Migration: this
+    // fixture tests Cleanup context, not the already-covered migration path.
+    let db = rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    db.execute("INSERT INTO managed_input_bindings(instance_id,input_identity,payload_id) SELECT instance_id,?2,payload_id FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?3", rusqlite::params![f.instance.id.as_bytes().as_slice(), b"legacy".as_slice(), b"secret_config".as_slice()]).unwrap();
+    db.execute("DELETE FROM managed_input_bindings WHERE instance_id=?1 AND input_identity=?2", rusqlite::params![f.instance.id.as_bytes().as_slice(), b"secret_config".as_slice()]).unwrap();
+    drop(db);
+    assert!(!f.application.load_instance(f.instance.id).unwrap().unwrap().required_inputs_satisfied);
+    let run = start(&f, DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
+    assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
 }
 
 // Test-ID: PR-TEST-0405
@@ -114,7 +110,7 @@ fn cleanup_receives_required_retained_secret_without_inheriting_active_readiness
 #[test]
 fn real_cleanup_failure_risk_and_ambiguous_loss_never_remove_the_instance() {
     for mode in ["failure", "open_failure", "open_success", "lost_completion"] {
-        let f = fixture(mode, 1);
+        let f = fixture(mode);
         let run = start(&f, DeletionMode::ManagedCleanup);
         assert_eq!(finish(&f, run).outcome, RunOutcome::Failed, "{mode}");
         assert!(f.application.load_instance(f.instance.id).unwrap().is_some());
@@ -128,8 +124,8 @@ fn real_cleanup_failure_risk_and_ambiguous_loss_never_remove_the_instance() {
 // Test-ID: PR-TEST-0426
 // Verifies: PR-REQ-0176, PR-REQ-0321, PR-REQ-0336
 #[test]
-fn v2_cleanup_qualifies_live_service_prerequisites_before_launch_and_ends_storage_after_completion() {
-    let f = fixture("service", 2);
+fn baseline_cleanup_qualifies_live_service_prerequisites_before_launch_and_ends_storage_after_completion() {
+    let f = fixture("service");
     let p = persistence(&f.storage);
     let allocation = p.load_instance_service_state(f.instance.id).unwrap().unwrap().storages[0].allocation;
     let path = f.storage.join("service-storage").join(format!("alloc-{allocation}"));
@@ -150,7 +146,7 @@ fn v2_cleanup_qualifies_live_service_prerequisites_before_launch_and_ends_storag
 // Verifies: PR-REQ-0113, PR-REQ-0181, PR-REQ-0336
 #[test]
 fn abandon_skips_declared_cleanup_but_retains_distinct_run_history() {
-    let f = fixture("success", 1);
+    let f = fixture("success");
     let run = start(&f, DeletionMode::AbandonManagement);
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert!(!f.marker("cleanup-count").exists());
@@ -163,7 +159,7 @@ fn abandon_skips_declared_cleanup_but_retains_distinct_run_history() {
 // Verifies: PR-REQ-0334, PR-REQ-0336
 #[test]
 fn unresolved_cleanup_blocks_ordinary_mutation_even_with_recovery_override() {
-    let f=fixture("lost_completion",1);
+    let f=fixture("lost_completion");
     let cleanup=start(&f,DeletionMode::ManagedCleanup);
     assert_eq!(finish(&f,cleanup).outcome,RunOutcome::Failed);
     let before=f.application.load_instance(f.instance.id).unwrap().unwrap();
@@ -183,7 +179,7 @@ fn unresolved_cleanup_blocks_ordinary_mutation_even_with_recovery_override() {
 // Verifies: PR-REQ-0177, PR-REQ-0178, PR-REQ-0181, PR-REQ-0340
 #[test]
 fn missing_cleanup_requirement_refuses_cli_before_run_or_hook_and_abandon_remains_available() {
-    let mut f = fixture("success", 1);
+    let mut f = fixture("success");
     f.instance = persistence(&f.storage).create_instance(InstanceName::parse("missing-cleanup-input").unwrap(), f.instance.active_revision.clone(), &mut []).unwrap();
     let version = f.instance.state_version;
     for plan in [true, false] {
@@ -246,7 +242,7 @@ fn deletion_owner_worker() {
 #[test]
 fn cleanup_cancellation_distinguishes_no_launch_from_ambiguous_service_execution() {
     for stage in ["accepted", "admitted", "launch_gate", "hang_clear", "open_hang"] {
-        let f = fixture(stage, 1);
+        let f = fixture(stage);
         let cancellation = ActionCancellation::default();
         let intent = f.application.resolve_deletion(&f.instance.name, None, DeletionMode::ManagedCleanup).unwrap();
         let plan = f.application.compile_deletion(&intent, &[]).unwrap();
@@ -292,7 +288,7 @@ fn cleanup_boundary_crashes_require_confirmation_or_finalization_only_never_hook
         ("before_cleanup_boundary_commit", DeletionPhase::ResultUnresolved),
         ("after_cleanup_boundary_commit", DeletionPhase::FinalizationAuthorized),
     ] {
-        let f = fixture("success", 1);
+        let f = fixture("success");
         let status = Command::new(env::current_exe().unwrap())
             .args(["--exact", OWNER_WORKER, "--nocapture"])
             .env("PACTRUN_M7_OWNER_ROOT", &f.storage)

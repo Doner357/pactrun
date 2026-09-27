@@ -2595,35 +2595,40 @@ fn public_source_version_dispatch_rejects_invalid_v2_before_durable_blob_or_revi
 // Test-ID: PR-TEST-0383
 // Verifies: PR-REQ-0318, PR-REQ-0319, PR-REQ-0320, PR-REQ-0323, PR-REQ-0326, PR-REQ-0327, PR-REQ-0328
 #[test]
-fn public_v2_installation_and_v1_roundtrip_preserve_identity_live_storage_and_explicit_reattachment()
- {
+fn public_baseline_service_roundtrip_preserves_identity_live_storage_and_explicit_reattachment() {
     let (_temp, root) = root();
     let source = root.parent().unwrap().join("pack-source");
     fs::create_dir(&source).unwrap();
-    let install = |version: u8, revision: &str| {
+    let install = |revision: &str| {
         let yaml = format!(
-            "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n{revision}\nruntime_content: {{}}\n"
+            "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n{revision}\nruntime_content: {{}}\n"
         );
         fs::write(source.join("pactrun.yaml"), yaml).unwrap();
         let result = service_cli(&root, &["pack", "install", source.to_str().unwrap()]);
         assert_eq!(result.0, 0, "{}", result.2);
         result.1.lines().next().unwrap().to_owned()
     };
-    let legacy = install(1, "  inputs: []");
+    let without_service = install("  inputs: []");
     let result = service_cli(
         &root,
-        &["instance", "create", "first", "--revision", &legacy],
+        &[
+            "instance",
+            "create",
+            "first",
+            "--revision",
+            &without_service,
+        ],
     );
     assert_eq!(result.0, 0, "{}", result.2);
     assert!(!root.join("service-storage").exists());
     let declarations = "  service_storages: [{id: state}]\n  service_resources:\n    - {id: config, storage_id: state, locator: config.json, kind: file, read_exposure: readable, user_mutation: {kind: direct}}";
     let input_mapping = "      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []";
-    let v2_revision = format!(
+    let service_revision = format!(
         "{declarations}\n  migrations:\n    - source_revision_digest: {}\n{input_mapping}\n      storage_transitions: [{{kind: create, target_storage_id: state}}]\n      resource_transitions: [{{kind: create, target_resource_id: config, presence: absent}}]",
-        legacy.split_once('/').unwrap().1
+        without_service.split_once('/').unwrap().1
     );
-    let version_two = install(2, &v2_revision);
-    assert_ne!(legacy, version_two);
+    let with_service = install(&service_revision);
+    assert_ne!(without_service, with_service);
     assert!(
         !root.join("service-storage").exists(),
         "installation must not allocate"
@@ -2632,7 +2637,7 @@ fn public_v2_installation_and_v1_roundtrip_preserve_identity_live_storage_and_ex
         let result = service_cli(&root, &["instance", "migrate", "first", "--to", target]);
         assert_eq!(result.0, 0, "{}", result.2);
     };
-    migrate(&version_two);
+    migrate(&with_service);
     let locate = |retained: bool, intent: &str| {
         let mut args = vec!["resource", "locate", "first", "config", "--intent", intent];
         if retained {
@@ -2659,31 +2664,25 @@ fn public_v2_installation_and_v1_roundtrip_preserve_identity_live_storage_and_ex
     drop(p);
     fs::write(&live, b"service-owned bytes").unwrap();
     assert_eq!(
-        install(2, &v2_revision),
-        version_two,
+        install(&service_revision),
+        with_service,
         "live bytes cannot affect Revision identity"
     );
-    let v1_target = install(
-        1,
-        &format!(
-            "  migrations:\n    - source_revision_digest: {}\n{input_mapping}",
-            version_two.split_once('/').unwrap().1
-        ),
-    );
-    migrate(&v1_target);
+    let service_free_target = install(&format!(
+        "  migrations:\n    - source_revision_digest: {}\n{input_mapping}",
+        with_service.split_once('/').unwrap().1
+    ));
+    migrate(&service_free_target);
     assert_eq!(service_cli(&root, &["resource", "list", "first"]).1, "");
     assert_eq!(
         locate(true, "read"),
         (0, path_result.1.clone(), String::new())
     );
     assert_eq!(locate(true, "write").0, 1);
-    let attached = install(
-        2,
-        &format!(
-            "{declarations}\n  migrations:\n    - source_revision_digest: {}\n{input_mapping}\n      storage_transitions: [{{kind: reattach, source: {{role: retained, storage_id: state}}, target_storage_id: state}}]\n      resource_transitions: [{{kind: reattach, source: {{role: retained, resource_id: config}}, target_resource_id: config}}]",
-            v1_target.split_once('/').unwrap().1
-        ),
-    );
+    let attached = install(&format!(
+        "{declarations}\n  migrations:\n    - source_revision_digest: {}\n{input_mapping}\n      storage_transitions: [{{kind: reattach, source: {{role: retained, storage_id: state}}, target_storage_id: state}}]\n      resource_transitions: [{{kind: reattach, source: {{role: retained, resource_id: config}}, target_resource_id: config}}]",
+        service_free_target.split_once('/').unwrap().1
+    ));
     migrate(&attached);
     assert_eq!(locate(false, "write"), path_result);
     assert_eq!(fs::read(live).unwrap(), b"service-owned bytes");

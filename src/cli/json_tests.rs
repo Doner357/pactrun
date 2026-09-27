@@ -256,3 +256,32 @@ fn version_reports_the_eight_explicit_supported_contracts_without_storage_access
     }
     assert!(!root.exists()); assert!(err.is_empty());
 }
+
+// Test-ID: PR-TEST-0638
+// Verifies: PR-REQ-0331, PR-REQ-0332
+#[test]
+fn unsupported_pack_contract_refuses_public_install_without_changing_existing_objects() {
+    let (temp, root, source) = cli_roots();
+    let revision = json_install(&root, &source);
+    json_ok(&root, &["instance", "create", "kept", "--revision", &revision]);
+    let before = json_ok(&root, &["instance", "show", "kept"]);
+    let revisions = json_ok(&root, &["revision", "list"]);
+    let service = temp.path().join("service-sentinel");
+    fs::write(&service, b"not managed by installation").unwrap();
+    for token in ["1.0-alpha.2", "2.0", "1", "1.0-alpha.01"] {
+        fs::write(source.join("pactrun.yaml"), format!("source_format: {token}\nfuture_body: {{}}\n")).unwrap();
+        let (code, response, stderr) = json_invoke(&root, vec!["pack".into(), "install".into(), source.as_os_str().into()]);
+        assert_eq!(code, 1, "{response}");
+        assert_eq!(response["status"], "failure");
+        assert!(stderr.is_empty());
+        if token == "1.0-alpha.2" {
+            let diagnostic = response["error"].to_string();
+            assert!(diagnostic.contains("1.0-alpha.2"), "{diagnostic}");
+            assert!(diagnostic.contains("1.0-alpha.1"), "{diagnostic}");
+            assert!(!diagnostic.contains("minimum product"));
+        }
+        assert_eq!(json_ok(&root, &["instance", "show", "kept"]), before);
+        assert_eq!(json_ok(&root, &["revision", "list"]), revisions);
+        assert_eq!(fs::read(&service).unwrap(), b"not managed by installation");
+    }
+}

@@ -515,16 +515,17 @@ mod tests {
     // Test-ID: PR-TEST-0366
     // Verifies: PR-REQ-0040, PR-REQ-0326
     #[test]
-    fn action_compilation_preserves_v2_authority_and_prerequisites_without_observing_live_bytes() {
+    fn action_compilation_preserves_baseline_authority_and_prerequisites_without_observing_live_bytes()
+     {
         use serde_json::json;
         let (mut intent, mut repository) = setup(false);
         let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
-        source["format_version"] = json!(2);
+        source["format_version"] = json!("1.0-alpha.1");
         source["service_storages"] = json!([{"id":"state"}]);
         source["service_resources"] = json!([{"id":"live_config","storage_id":"state","locator":"service/config.json","kind":"file","read_exposure":"hidden","user_mutation":{"kind":"unavailable"}}]);
         let reference =
             json!({"view":"current","role":"active","kind":"resource","id":"live_config"});
-        source["actions"][0]["hook"]["protocol_version"] = json!(2);
+        source["actions"][0]["hook"]["protocol_version"] = json!("1.0-alpha.1");
         source["actions"][0]["hook"]["service_access"] =
             json!([{"reference":reference,"mode":"read"}]);
         source["actions"][0]["hook"]["service_requires"] =
@@ -609,7 +610,8 @@ mod tests {
     fn future_hook_versions_remain_format_representable_but_fail_action_compilation() {
         let (mut intent, mut repository) = setup(false);
         let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
-        source["actions"][0]["hook"]["protocol_version"] = serde_json::json!(3);
+        source["format_version"] = serde_json::json!("1.0-alpha.1");
+        source["actions"][0]["hook"]["protocol_version"] = serde_json::json!("1.0-alpha.2");
         let core = crate::revision_declarations::project_service_free_revision_source(
             &serde_json::to_vec(&source).unwrap(),
         )

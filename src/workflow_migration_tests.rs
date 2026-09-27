@@ -95,7 +95,14 @@ fn setup(with_hook: bool) -> (TransitionRevision, Repository) {
         authorize_declassification: false,
     };
     let repo = Repository(MigrationCompilationObservation {
-        service_state: None,
+        service_state: Some(InstanceServiceState {
+            instance: intent.instance,
+            state_version: intent.expected_state_version,
+            current_revision: intent.source.clone(),
+            storages: vec![],
+            resources: vec![],
+            preserved: vec![],
+        }),
         instance: intent.instance,
         state_version: intent.expected_state_version,
         active_revision: intent.source.clone(),

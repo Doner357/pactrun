@@ -19,7 +19,7 @@ import tarfile
 import zipfile
 
 PREFIXES = ("src/", "crates/", "xtask/", "tests/", "docs/", "website/", "tools/", ".cargo/")
-ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md"}
+ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes"}
 TARGETS = {"windows-x86_64": "x86_64-pc-windows-msvc", "linux-x86_64": "x86_64-unknown-linux-gnu"}
 FORBIDDEN = {".git", ".env", ".ssh", ".remote-sync", "node_modules", "__pycache__", "target", "dist", ".pactrun"}
 
@@ -54,7 +54,9 @@ def source(root: Path, output: Path):
         if selected(name) or " -> " in name and any(selected(p) for p in name.split(" -> ")):
             raise ValueError("commit all selected release inputs before making a source snapshot")
     commit = execute(["git", "rev-parse", "HEAD"], root).decode("ascii").strip()
-    raw = execute(["git", "archive", "--format=tar", "HEAD"], root)
+    # Archive uses Git conversion attributes; do not inherit host checkout line endings.
+    raw = execute(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+                   "archive", "--format=tar", "HEAD"], root)
     files = {}
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
         for member in archive:

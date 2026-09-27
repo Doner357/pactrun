@@ -37,7 +37,7 @@ fn immutable_snapshot_reference_corruption_stops_collection_before_removal() {
     p.database
         .lock()
         .unwrap()
-        .execute("UPDATE snapshot_blobs SET blob_digest=zeroblob(32)", [])
+        .execute("UPDATE snapshot_blobs SET blob_digest=zeroblob(32) WHERE (snapshot_id,blob_digest)=(SELECT snapshot_id,blob_digest FROM snapshot_blobs ORDER BY snapshot_id,blob_digest LIMIT 1)", [])
         .unwrap();
     drop(p);
     let collector = PactrunPersistence::open_for_collection(&path).unwrap();

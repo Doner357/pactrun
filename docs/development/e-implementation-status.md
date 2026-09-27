@@ -91,3 +91,34 @@ workspace-local fixtures. These results are NOT the full E gate.
 
 Necessary native build/selection references are in
 [native package engineering delivery](./native-package-delivery.md).
+
+## Source-qualified integration repair checkpoint (2026-09-27)
+
+The first Linux gate at 52ecd80 stopped at a redundant test-only allocation;
+513435a repairs that Clippy warning. Its full library run then reported 498
+passed, 20 failed and four explicitly ignored tests. That is a failed gate, not
+completion. Failures identified remaining numeric Cleanup/source and workflow
+fixtures, Snapshot producer/corruption fixtures, and a real retirement bug:
+parent cascades could reach payloads before bindings under the fresh DDL order.
+Retirement now explicitly removes its own bindings before the Instance cascade,
+in the existing authorized retirement transaction; no upgrade rewrites data.
+Existing lifecycle, service/resource preservation and crash assertions remain.
+Windows repair checks passed Cleanup 13, workflow eight and five individually
+selected lifecycle/Snapshot/service cases; source-refusal PR-TEST-0638 also passed.
+
+Actual native rehearsals on the initial 52ecd80 product plus an isolated,
+software-version-only alpha.2 fixture passed Scoop and Homebrew installation,
+upgrade, hold/pin, exact downgrade, isolation, checksum refusal and live Hook
+update/cleanup/uninstall. They are preliminary evidence: the final input set and
+the expanded PR-TEST-0637 matrix still require qualification. The native failure
+history exposed Git archive inheriting host CRLF settings; source capture now
+pins Git's conversion configuration, SQL checkout has an LF attribute and a
+regression proves identical snapshots under LF/CRLF host settings. Failed
+CRLF-derived fixtures remain evidence, not qualified artifacts.
+
+The reproducible opt-in runner is tools/native_package_acceptance.py, invoked by
+PR-TEST-0637. Its Windows gate requires explicit temporary user PATH permission;
+normal CI ignores this external-manager test, so it must be run separately on
+both platforms. The expanded gate verifies object bytes/identities, exact and
+preview selection after real manager metadata refresh, and live explicit switch.
+No final full-CI pass or merge is claimed at this checkpoint.

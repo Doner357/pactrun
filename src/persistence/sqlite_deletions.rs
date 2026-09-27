@@ -634,7 +634,10 @@ impl PactrunPersistence {
                 .map_err(|e| PersistenceError::sqlite("publish abandoned allocation handoff", e))?;
         }
         super::sqlite_runs::finish_deletion_in_transaction(&tx, run, owner, finish, true)?;
+        // Delete bindings before the Instance cascades into payloads. SQLite's
+        // immediate RESTRICT checks must not depend on table creation order.
         for table in [
+            "managed_input_bindings",
             "instance_deletion_obligations",
             "instance_service_resources",
             "instance_service_storages",

@@ -67,7 +67,7 @@ decisions, not a routine shortcut for internal refactoring. Absence of a
 cross-Major promise does not require deliberately rejecting content that an
 explicitly supported contract can still interpret correctly.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0637 (source-qualified baseline continuity; future formal-release evidence remains a promotion gate).**
 
 ### PR-REQ-0330 - Internal evolution preserves supported external meaning
 
@@ -89,7 +89,7 @@ If the design cannot meet the same-Major promise, revise or defer that design;
 safe refusal alone does not discharge the compatibility obligation. Explicitly
 selecting an older executable does not guarantee data downgrade or rollback.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0637 (identity, installed data and live-operation continuity in the native-manager matrix).**
 
 ### PR-REQ-0331 - Explicit support selection and actionable refusal
 
@@ -110,7 +110,7 @@ This example defines no literal manifest field, version-range syntax, capability
 registry, implicit negotiation or introduced-version lookup table. Their exact
 representation and validation are pending versioning-mechanism design.
 
-**Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634; operation-boundary coverage pending E integration.**
+**Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634, PR-TEST-0638.**
 
 <a id="pr-req-0332---one-time-pre-release-baseline-reset" />
 
@@ -152,7 +152,7 @@ avoiding both experimental compatibility debt and an artificial origin barrier.
 This replaces the previous generation-rejection design; no runtime behavior is
 changed merely by recording the revised rule.
 
-**Verification: Pending automated coverage.**
+**Verification: PR-TEST-0637, PR-TEST-0638 (origin-independent reuse and refusal of unsupported contracts without changing existing objects).**
 
 ### PR-REQ-0333 - Development and formal-release baseline separation
 
@@ -176,7 +176,7 @@ downgrade or cross Major. No formal candidate MUST NOT fall back to prerelease.
 Changing saved eligibility alone MUST NOT replace the executable. Switching an
 executable and validating its data compatibility remain separate responsibilities.
 
-**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636; remaining artifact/promotion coverage pending E integration.**
+**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; native matrix must be rerun for the final E candidate; formal promotion remains a separate future gate.**
 
 ## Verification status
 

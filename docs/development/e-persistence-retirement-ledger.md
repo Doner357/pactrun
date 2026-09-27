@@ -31,3 +31,11 @@ No pre-existing managed database or service resources were deleted. Source code,
 SQL upgrade fragments and obsolete-only tests are the retirement targets.
 Remaining whole-E work and validation are tracked in
 [the implementation ledger](./e-implementation-status.md).
+
+Additional retained cases rebased during full E integration: PR-TEST-0404/0424
+now run the one baseline Cleanup contract rather than duplicated numeric protocol
+versions; PR-TEST-0426 retains service prerequisites. PR-TEST-0214 now verifies
+baseline producer/protection validation (both valid sticky-secret and forbidden
+secret-to-normal cases), not a retired V1/V2 reclassification rule. PR-TEST-0383
+still proves service-free/service-bearing migration, retention and explicit
+reattachment under one current source contract. All these IDs remain active.

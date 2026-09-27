@@ -323,9 +323,9 @@ test('release readiness separates work order from publication and implementation
   assert.deepEqual([...policy.matchAll(/^### (PR-REQ-\d+)/gm)].map(match => match[1]), [
     'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333',
   ]);
-  assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 3);
-  assert.match(normalizedPolicy, /Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634; operation-boundary coverage pending E integration/);
-  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636; remaining artifact\/promotion coverage pending E integration/);
+  assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 0);
+  assert.match(normalizedPolicy, /Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634, PR-TEST-0638/);
+  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; native matrix must be rerun for the final E candidate; formal promotion remains a separate future gate/);
   assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
   assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
   assert.match(normalizedPolicy, /Development iterations are not earlier formal product releases/);

@@ -64,6 +64,17 @@ class ReleaseArtifacts(unittest.TestCase):
         with self.assertRaises(ValueError):release.source(source,self.root/'refused')
         self.assertFalse((self.root/'refused').exists())
         with self.assertRaises(ValueError):release.verify(source,output/'source.sha256',provenance['source_manifest_sha256'])
+    def test_source_capture_does_not_inherit_host_checkout_line_endings(self):
+        source=self.source_fixture()
+        first=self.root/'lf';release.source(source,first)
+        self.git('config','core.autocrlf','true')
+        self.git('config','core.eol','crlf')
+        second=self.root/'crlf';release.source(source,second)
+        for name in ['source.sha256','source.json','source.tar.gz']:
+            self.assertEqual((first/name).read_bytes(),(second/name).read_bytes())
+        with tarfile.open(second/'source.tar.gz') as archive:
+            self.assertEqual(archive.extractfile('src/main.rs').read(),b'public fixture\n')
+
     def test_manifest_traversal_duplicate_and_checksum_mutation_are_refused(self):
         source=self.source_fixture();manifest=self.root/'manifest'
         digest=release.sha(source/'src/main.rs')
