@@ -16,7 +16,7 @@ use super::support::{
 const LAUNCHER_NAME: &str = "pactrun-system-launcher";
 
 fn interpreter_source() -> String {
-    r#"source_format: 1
+    r#"source_format: 1.0-alpha.1
 package_id: {package_id}
 revision:
   inputs: []
@@ -25,7 +25,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch:
           kind: interpreter
           command: pactrun-system-launcher

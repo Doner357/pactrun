@@ -40,7 +40,7 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     fs::create_dir(&source).unwrap();
     let tool = if cfg!(windows) { "tool.exe" } else { "tool" };
     fs::copy(std::env::current_exe().unwrap(), source.join(tool)).unwrap();
-    fs::write(source.join("pactrun.yaml"),format!("source_format: 1\npackage_id: 00000000000000000000000000000088\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'hook_exit_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
+    fs::write(source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000088\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'hook_exit_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
     let reference = success(&root, &["pack", "install", source.to_str().unwrap()])
         .lines()
         .next()
@@ -118,6 +118,15 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     assert_eq!(
         db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        11
+        0
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT format_version FROM pactrun_metadata WHERE singleton=1",
+            [],
+            |r| r.get::<_, String>(0)
+        )
+        .unwrap(),
+        "1.0-alpha.1"
     );
 }

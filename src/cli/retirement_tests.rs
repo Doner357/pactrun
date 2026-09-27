@@ -16,9 +16,9 @@ fn fixture() -> (
         fs::create_dir_all(root.join(part)).unwrap();
     }
     let p = PactrunPersistence::open(&root).unwrap();
-    let core = crate::revision_core_v2::project_revision_core_source_v2(
+    let core = crate::revision_canonical::project_service_revision_source(
         br#"{
-        "format_version":2,"inputs":[],"actions":[],"migrations":[],
+        "format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],
         "service_storages":[{"id":"data"}],"service_resources":[]
     }"#,
     )
@@ -26,7 +26,8 @@ fn fixture() -> (
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v2::validate_revision_content_v2(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let revision = p
         .persist_versioned_revision_with_metadata(
             PackageId::from_bytes([55; 16]),

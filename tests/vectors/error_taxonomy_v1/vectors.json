@@ -1,5 +1,5 @@
 {
-  "format": "PactrunErrorTaxonomyV1Fixtures",
+  "format": "PactrunErrorCatalogFixtures",
   "valid_references": [
     {
       "name": "known_reference",
@@ -33,47 +33,47 @@
   "invalid_catalogs": [
     {
       "name": "duplicate_property",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[],\"codes\":[]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[],\"codes\":[]}",
       "expected_violation": "duplicate_property"
     },
     {
       "name": "unknown_field",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[],\"codes\":[],\"extra\":true}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[],\"codes\":[],\"extra\":true}",
       "expected_violation": "unknown_field"
     },
     {
       "name": "invalid_type",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":{},\"codes\":[]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":{},\"codes\":[]}",
       "expected_violation": "invalid_type"
     },
     {
       "name": "duplicate_owner",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]},{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]},{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[]}",
       "expected_violation": "duplicate_owner"
     },
     {
       "name": "duplicate_error_identity",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]},{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]},{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
       "expected_violation": "duplicate_error_identity"
     },
     {
       "name": "unregistered_owner",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"execution\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
       "expected_violation": "unregistered_owner"
     },
     {
       "name": "unknown_category",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"future_category\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}],\"codes\":[{\"owner\":\"future_owner\",\"code\":\"condition\",\"category\":\"future_category\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-0220\"}]}]}",
       "expected_violation": "invalid_category"
     },
     {
       "name": "missing_normative_source",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[]}],\"codes\":[]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[]}],\"codes\":[]}",
       "expected_violation": "missing_normative_source"
     },
     {
       "name": "unresolved_requirement",
-      "raw_json": "{\"format\":\"PactrunErrorTaxonomyCatalogV1\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-9999\"}]}],\"codes\":[]}",
+      "raw_json": "{\"format\":\"PactrunErrorCatalog\",\"status\":\"candidate\",\"owners\":[{\"owner\":\"future_owner\",\"normative_sources\":[{\"kind\":\"requirement\",\"id\":\"PR-REQ-9999\"}]}],\"codes\":[]}",
       "expected_violation": "unresolved_normative_source"
     }
   ]

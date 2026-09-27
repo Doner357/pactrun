@@ -5,14 +5,14 @@ fn accept(state: &mut ProtocolState, value: Value) -> Result<ProtocolStep, Proto
     state.accept(parse_hook_message_for(&serde_json::to_vec(&value).unwrap(), SessionOperation::Cleanup)?)
 }
 fn ready(state: &mut ProtocolState, session: &str) {
-    accept(state, json!({"type":"session_ready","protocol_version":1,"session_id":session})).unwrap();
+    accept(state, json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session})).unwrap();
 }
 
 // Test-ID: PR-TEST-0399
 // Verifies: PR-REQ-0216, PR-REQ-0334
 #[test]
 fn cleanup_decoder_matches_frozen_vector_and_never_accepts_outputs_or_open_risk_success() {
-    let corpus: Value = serde_json::from_str(include_str!("../../tests/vectors/hook_protocol_v1/vectors.json")).unwrap();
+    let corpus: Value = serde_json::from_str(include_str!("../../tests/vectors/hook_protocol/vectors.json")).unwrap();
     let session: Value = serde_json::from_str(corpus["session_specs"].as_array().unwrap().iter()
         .find(|s| s["name"] == "cleanup").unwrap()["raw_json"].as_str().unwrap()).unwrap();
     let id = session["session_id"].as_str().unwrap();

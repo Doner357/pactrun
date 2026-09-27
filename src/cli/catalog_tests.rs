@@ -10,11 +10,12 @@ fn fixture(count: u8) -> (tempfile::TempDir, PathBuf, Vec<RevisionIdentity>) {
         fs::create_dir_all(root.join(child)).unwrap();
     }
     let p = PactrunPersistence::open(&root).unwrap();
-    let core = crate::revision_core_v2::project_revision_core_source_v2(br#"{"format_version":2,"inputs":[],"actions":[],"migrations":[],"service_storages":[],"service_resources":[]}"#).unwrap();
+    let core = crate::revision_canonical::project_service_revision_source(br#"{"format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],"service_storages":[],"service_resources":[]}"#).unwrap();
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v2::validate_revision_content_v2(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let content = content.into();
     let ids = (0..count)
         .map(|tag| {
@@ -79,9 +80,9 @@ fn catalog_pages_are_bounded_ordered_and_continue_after_deleted_cursors() {
     assert!(!columns[0].contains("..."));
     assert!(!columns[1].contains("..."));
     let reference = format!("exact:{}/{}", columns[0], columns[1]);
-    assert!(ok(&root, &["revision", "show", &reference]).contains("Core format: V2"));
+    assert!(ok(&root, &["revision", "show", &reference]).contains("Core format: 1.0-alpha.1"));
     let show = ok(&root, &["revision", "show", &exact_text(&ids[0])]);
-    assert!(show.contains("Core format: V2"));
+    assert!(show.contains("Core format: 1.0-alpha.1"));
     assert!(show.contains(&exact_text(&ids[0])));
 }
 
@@ -337,22 +338,23 @@ fn catalog_metadata_preserves_claim_sources_and_refuses_ambiguous_resolution() {
 fn catalog_reports_actual_core_version_and_distinguishes_present_absence_text() {
     let (_temp, root, _) = fixture(0);
     let p = PactrunPersistence::open(&root).unwrap();
-    let core = crate::revision_core_v3::project(br#"{"format_version":3,"inputs":[],"actions":[],"migrations":[],"service_storages":[],"service_resources":[]}"#).unwrap();
+    let core = crate::revision_canonical::project_service_revision_source(br#"{"format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],"service_storages":[],"service_resources":[]}"#).unwrap();
     let runtime =
         project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
             .unwrap();
-    let content = crate::revision_core_v3::validate(core, runtime).unwrap();
+    let content =
+        crate::revision_canonical::validate_service_revision_content(core, runtime).unwrap();
     let revision = p
         .persist_versioned_revision_with_metadata(
             PackageId::from_bytes([73; 16]),
-            &content,
+            &content.into(),
             &[],
             &RevisionMetadataMutationBatch::new([]).unwrap(),
         )
         .unwrap();
     drop(p);
     let exact = exact_text(&revision);
-    assert!(ok(&root, &["revision", "show", &exact]).contains("Core format: V3"));
+    assert!(ok(&root, &["revision", "show", &exact]).contains("Core format: 1.0-alpha.1"));
     ok(
         &root,
         &[
@@ -425,7 +427,7 @@ fn catalog_rejects_invalid_options_before_storage_and_queries_do_not_bootstrap()
     let version: i64 = db
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 11);
+    assert_eq!(version, 0);
 }
 
 // Test-ID: PR-TEST-0534

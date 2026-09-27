@@ -3,8 +3,8 @@ use crate::domain::{InputDeclarationV1, InputIdentity, InputProtectionV1, Snapsh
 use serde::Deserialize;
 use std::{io::Cursor, path::Path, process::Command};
 
-const V1: &str = include_str!("../tests/vectors/snapshot_integrity_format_v1/vectors.json");
-const V2: &str = include_str!("../tests/vectors/snapshot_integrity_format_v2/vectors.json");
+const V1: &str = include_str!("../tests/vectors/snapshot_integrity/content.json");
+const V2: &str = include_str!("../tests/vectors/snapshot_integrity/protection.json");
 
 #[derive(Deserialize)]
 struct Corpus {
@@ -105,14 +105,8 @@ fn verify_fixture(
 
 fn assert_corpus(version: SnapshotIntegrityVersion, text: &str) {
     let corpus: Corpus = serde_json::from_str(text).unwrap();
-    assert_eq!(
-        corpus.format,
-        format!(
-            "snapshot_integrity_format_v{}_golden_vectors",
-            version.number()
-        )
-    );
-    assert!(matches!(corpus.status.as_str(), "candidate" | "frozen"));
+    assert_eq!(corpus.format, "snapshot_integrity_baseline_vectors");
+    assert_eq!(corpus.status, "baseline");
     let mut names = BTreeSet::new();
     for fixture in &corpus.valid {
         assert!(names.insert(&fixture.name));
@@ -134,7 +128,6 @@ fn assert_corpus(version: SnapshotIntegrityVersion, text: &str) {
         let normalized: Value = serde_json::from_slice(decoded.canonical_bytes()).unwrap();
         assert_eq!(normalized, fixture.normalized_manifest, "{}", fixture.name);
         let mut frame = Vec::from(&b"pactrun.snapshot-integrity-digest\0"[..]);
-        frame.extend(version.number().to_be_bytes());
         frame.extend(b"snapshot-integrity-manifest\0");
         frame.extend((decoded.canonical_bytes().len() as u64).to_be_bytes());
         frame.extend(decoded.canonical_bytes());
@@ -155,11 +148,16 @@ fn assert_corpus(version: SnapshotIntegrityVersion, text: &str) {
     for fixture in &corpus.invalid {
         assert!(names.insert(&fixture.name));
         let error = verify_fixture(version, fixture).unwrap_err();
-        let SnapshotCodecError::Validation(error) = error else {
-            panic!("{}: wrong failure class {error}", fixture.name);
+        let code = match error {
+            SnapshotCodecError::Validation(value) => value.code(),
+            SnapshotCodecError::UnsupportedVersion(required) => {
+                assert!(!crate::domain::VersionDomain::Snapshot.supports(required));
+                "invalid_format_version"
+            }
+            _ => panic!("{}: wrong failure class {error}", fixture.name),
         };
         assert_eq!(
-            error.code(),
+            code,
             fixture.expected_error.as_ref().unwrap(),
             "{}",
             fixture.name
@@ -177,14 +175,14 @@ fn assert_corpus(version: SnapshotIntegrityVersion, text: &str) {
 // Verifies: PR-REQ-0149, PR-REQ-0297
 #[test]
 fn production_v1_preserves_every_frozen_golden_and_negative_code() {
-    assert_corpus(SnapshotIntegrityVersion::V1, V1);
+    assert_corpus(SnapshotIntegrityVersion::BASELINE, V1);
 }
 
 // Test-ID: PR-TEST-0185
 // Verifies: PR-REQ-0149, PR-REQ-0295, PR-REQ-0296, PR-REQ-0297
 #[test]
 fn production_v2_matches_independent_goldens_and_negative_contracts() {
-    assert_corpus(SnapshotIntegrityVersion::V2, V2);
+    assert_corpus(SnapshotIntegrityVersion::BASELINE, V2);
 }
 
 fn fixture(name: &str) -> Fixture {
@@ -200,13 +198,13 @@ fn fixture(name: &str) -> Fixture {
 // Verifies: PR-REQ-0296, PR-REQ-0297
 #[test]
 fn v2_relaxes_only_bound_active_normal_protection_and_never_upgrades_v1() {
-    for version in [SnapshotIntegrityVersion::V1, SnapshotIntegrityVersion::V2] {
+    for version in [SnapshotIntegrityVersion::BASELINE] {
         for state in ["bound", "absent"] {
             for declared in ["normal", "secret"] {
                 for recorded in ["normal", "secret"] {
                     let mut f = fixture("empty_bound_is_not_absence");
                     let m = &mut f.normalized_manifest;
-                    m["format_version"] = json!(version.number());
+                    m["format_version"] = json!(version.as_str());
                     m["managed_bindings"][0]["state"] = json!(state);
                     m["managed_bindings"][0]["protection"] = json!(recorded);
                     if state == "absent" {
@@ -219,7 +217,7 @@ fn v2_relaxes_only_bound_active_normal_protection_and_never_upgrades_v1() {
                     f.raw_manifest = serde_json::to_string(m).unwrap();
                     let result = decode_fixture(version, &f);
                     let allowed = declared == recorded
-                        || (version == SnapshotIntegrityVersion::V2
+                        || (version == SnapshotIntegrityVersion::BASELINE
                             && state == "bound"
                             && declared == "normal"
                             && recorded == "secret");
@@ -250,19 +248,26 @@ fn v2_relaxes_only_bound_active_normal_protection_and_never_upgrades_v1() {
     }
     assert_eq!(
         SnapshotIntegrityVersion::current_writer(),
-        SnapshotIntegrityVersion::V2
+        SnapshotIntegrityVersion::BASELINE
     );
     for unsupported in [-1, 0, 3, i64::MAX] {
         assert_eq!(
-            SnapshotIntegrityVersion::from_number(unsupported),
+            SnapshotIntegrityVersion::from_text(&unsupported.to_string()),
             Err(SnapshotValidationError::InvalidFormatVersion)
         );
     }
     let f = fixture("active_normal_sticky_secret");
-    assert_eq!(
-        decode_fixture(SnapshotIntegrityVersion::V1, &f).unwrap_err(),
-        SnapshotCodecError::Validation(SnapshotValidationError::InvalidFormatVersion)
-    );
+    assert!(decode_fixture(SnapshotIntegrityVersion::BASELINE, &f).is_ok());
+    for old in ["1", "2"] {
+        let raw = f.raw_manifest.replace(
+            "\"format_version\":\"1.0-alpha.1\"",
+            &format!("\"format_version\":{old}"),
+        );
+        assert!(
+            decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, raw.as_bytes(), None)
+                .is_err()
+        );
+    }
 }
 
 // Test-ID: PR-TEST-0187
@@ -270,7 +275,7 @@ fn v2_relaxes_only_bound_active_normal_protection_and_never_upgrades_v1() {
 #[test]
 fn content_verification_reads_exact_referenced_bytes_once_and_is_not_manifest_only() {
     let f = fixture("shared_logical_service_blob");
-    let manifest = decode_fixture(SnapshotIntegrityVersion::V2, &f).unwrap();
+    let manifest = decode_fixture(SnapshotIntegrityVersion::BASELINE, &f).unwrap();
     let mut opens = 0;
     let verified = manifest
         .verify_content(|digest| {
@@ -307,7 +312,7 @@ fn content_verification_reads_exact_referenced_bytes_once_and_is_not_manifest_on
     assert_eq!(error, SnapshotCodecError::ContentIo(io::ErrorKind::Other));
     assert!(!format!("{error:?} {error}").contains("secret-host-path"));
     let empty = fixture("empty_bound_is_not_absence");
-    let empty_manifest = decode_fixture(SnapshotIntegrityVersion::V2, &empty).unwrap();
+    let empty_manifest = decode_fixture(SnapshotIntegrityVersion::BASELINE, &empty).unwrap();
     assert!(
         empty_manifest
             .verify_content::<Cursor<Vec<u8>>>(|_| Err(SnapshotBlobReadError::Missing))
@@ -324,7 +329,7 @@ fn content_verification_reads_exact_referenced_bytes_once_and_is_not_manifest_on
         0
     );
     let minimal = decode_fixture(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         &fixture("v2_minimal_manifest"),
     )
     .unwrap();
@@ -364,14 +369,15 @@ impl Read for FailingRead {
 fn parser_limits_are_capabilities_while_exact_numbers_and_unicode_remain_format_rules() {
     let over = vec![b' '; SnapshotCapability::RawManifest.maximum().unwrap() as usize + 1];
     assert_eq!(
-        decode_snapshot_manifest(SnapshotIntegrityVersion::V2, &over, None).unwrap_err(),
+        decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, &over, None).unwrap_err(),
         SnapshotCodecError::Capability(CapabilityRefusal {
             capability: SnapshotCapability::RawManifest
         })
     );
     let deep = format!("{}0{}", "[".repeat(17), "]".repeat(17));
     assert_eq!(
-        decode_snapshot_manifest(SnapshotIntegrityVersion::V2, deep.as_bytes(), None).unwrap_err(),
+        decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, deep.as_bytes(), None)
+            .unwrap_err(),
         SnapshotCodecError::Capability(CapabilityRefusal {
             capability: SnapshotCapability::JsonDepth
         })
@@ -390,7 +396,8 @@ fn parser_limits_are_capabilities_while_exact_numbers_and_unicode_remain_format_
         ("1e-9223372036854775808", None),
     ] {
         let bytes = raw.replace("\"unix_seconds\":0", &format!("\"unix_seconds\":{token}"));
-        let result = decode_snapshot_manifest(SnapshotIntegrityVersion::V2, bytes.as_bytes(), None);
+        let result =
+            decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, bytes.as_bytes(), None);
         if let Some(expected) = expected {
             assert_eq!(
                 result.unwrap().manifest().captured_at().unix_seconds(),
@@ -404,13 +411,13 @@ fn parser_limits_are_capabilities_while_exact_numbers_and_unicode_remain_format_
         }
     }
     assert_eq!(
-        decode_snapshot_manifest(SnapshotIntegrityVersion::V2, &[0xff], None).unwrap_err(),
+        decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, &[0xff], None).unwrap_err(),
         SnapshotCodecError::Validation(SnapshotValidationError::InvalidUnicodeScalar)
     );
     f.normalized_manifest["unknown"] = json!("[".repeat(100));
     assert_eq!(
         decode_snapshot_manifest(
-            SnapshotIntegrityVersion::V2,
+            SnapshotIntegrityVersion::BASELINE,
             serde_json::to_string(&f.normalized_manifest)
                 .unwrap()
                 .as_bytes(),
@@ -426,7 +433,7 @@ fn parser_limits_are_capabilities_while_exact_numbers_and_unicode_remain_format_
 #[test]
 fn typed_manifest_constructor_normalizes_sets_and_debug_projections_withhold_digests() {
     let decoded = decode_fixture(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         &fixture("active_normal_sticky_secret"),
     )
     .unwrap();
@@ -478,8 +485,8 @@ fn typed_manifest_constructor_normalizes_sets_and_debug_projections_withhold_dig
 fn independent_node_oracle_matches_v2_goldens() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new("node")
-        .arg(root.join("tests/oracles/snapshot_integrity_format_v2.mjs"))
-        .arg(root.join("tests/vectors/snapshot_integrity_format_v2/vectors.json"))
+        .arg(root.join("tests/oracles/snapshot_integrity_protection.mjs"))
+        .arg(root.join("tests/vectors/snapshot_integrity/protection.json"))
         .output()
         .expect("Node 24 is required for conformance");
     assert!(
@@ -494,7 +501,7 @@ fn independent_node_oracle_matches_v2_goldens() {
 #[test]
 fn required_absence_is_format_representable_not_capture_admission_permission() {
     let f = fixture("active_normal_absent");
-    let decoded = decode_fixture(SnapshotIntegrityVersion::V2, &f).unwrap();
+    let decoded = decode_fixture(SnapshotIntegrityVersion::BASELINE, &f).unwrap();
     let inputs = [InputDeclarationV1 {
         id: InputIdentity::parse("config").unwrap(),
         required: true,
@@ -523,19 +530,14 @@ fn required_absence_is_format_representable_not_capture_admission_permission() {
 // Verifies: PR-REQ-0297
 #[test]
 fn v2_specification_and_corpus_lifecycle_markers_agree() {
-    let specification = include_str!("../docs/spec/contracts/snapshot-integrity-format-v2.md");
+    let specification = include_str!("../docs/spec/contracts/snapshot-integrity.md");
     let status = specification
         .lines()
         .find(|line| line.starts_with("**Status:"))
         .unwrap();
     let corpus: Corpus = serde_json::from_str(V2).unwrap();
-    let expected = if status.starts_with("**Status: Frozen normative") {
-        "frozen"
-    } else {
-        assert!(status.starts_with("**Status: Approved normative Candidate"));
-        "candidate"
-    };
-    assert_eq!(corpus.status, expected);
+    assert!(status.starts_with("**Status: Approved E normative baseline, 1.0-alpha.1"));
+    assert_eq!(corpus.status, "baseline");
 }
 
 // Test-ID: PR-TEST-0194
@@ -549,12 +551,12 @@ fn bounded_hostile_mutations_never_panic_and_accepted_values_remain_canonical() 
             let position = (iteration * 7919 + 23) % mutated.len();
             mutated[position] = [0, b'"', b'[', b'\\', 0xff, b'0', b'9'][iteration % 7];
             let result = std::panic::catch_unwind(|| {
-                decode_snapshot_manifest(SnapshotIntegrityVersion::V2, &mutated, None)
+                decode_snapshot_manifest(SnapshotIntegrityVersion::BASELINE, &mutated, None)
             });
             assert!(result.is_ok(), "decoder panicked for bounded mutation");
             if let Ok(decoded) = result.unwrap() {
                 let again = decode_snapshot_manifest(
-                    SnapshotIntegrityVersion::V2,
+                    SnapshotIntegrityVersion::BASELINE,
                     decoded.canonical_bytes(),
                     None,
                 )
@@ -563,5 +565,26 @@ fn bounded_hostile_mutations_never_panic_and_accepted_values_remain_canonical() 
                 assert_eq!(again.integrity_digest(), decoded.integrity_digest());
             }
         }
+    }
+}
+
+// Test-ID: PR-TEST-0633
+// Verifies: PR-REQ-0331
+#[test]
+fn snapshot_refusal_preserves_the_required_contract_before_decoding_future_content() {
+    let error = decode_snapshot_manifest(
+        SnapshotIntegrityVersion::BASELINE,
+        br#"{"format_version":"1.0-alpha.2","future_body":{}}"#,
+        None,
+    )
+    .unwrap_err();
+    assert!(matches!(error, SnapshotCodecError::UnsupportedVersion(_)));
+    for part in [
+        "snapshot_integrity",
+        "1.0-alpha.2",
+        "1.0-alpha.1",
+        "supporting release",
+    ] {
+        assert!(error.to_string().contains(part));
     }
 }

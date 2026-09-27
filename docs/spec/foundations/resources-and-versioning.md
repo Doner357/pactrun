@@ -127,52 +127,61 @@ current Frozen codecs or authorize a reset during ordinary implementation.
 
 ### PR-REQ-0077 - Separate version domains
 
-Internal persistence schema, Revision Core format and hash domain, Snapshot
-integrity format and hash domain, export bundle format, Hook Protocol, and
-structured CLI output MUST be independently versioned. They
-MUST NOT share one generalized Pactrun schema version.
+There is one product version and exactly eight independent format/protocol
+domains: Pack source, Revision canonical, Hook Protocol, Snapshot content/integrity,
+Snapshot bundle, Pack distribution, CLI machine interface and Persistence.
+Results and event streams share the CLI version; runtime closure, Session subviews,
+error catalogs and selector discriminators do not create additional domains.
 
-The former Recipe Authoring API is withdrawn with the
-[M8 rejection](../../development/history/m8-recipes-rejected.md). A possible public
-Candidate API has no approved format or implementation schedule; this list does
-not require its introduction.
+Format values MUST be strings Major.Minor[-prerelease], without Patch. Published
+prereleases use alpha.N, beta.N or rc.N with positive canonical decimal N. Numeric
+components have no leading zeroes, fit u64, and complete identifiers are bounded
+to 128 ASCII bytes. No whitespace, numeric coercion or build suffix is accepted.
+Products use the corresponding three-component published SemVer profile.
 
-`PackSourceYamlV1` and `PersistenceSchemaV4` are two additional independent
-internal version domains. Their `V1` and `V4` labels do not couple them to
-Revision Core, Hook Protocol, Snapshot Integrity, or a future CLI format.
+Each domain owns its implemented readers and writers. A matching Major or an
+ordered newer identifier MUST NOT be interpreted as automatic support. Format
+Minor does not imply minimum product Minor. The initial values are independently
+1.0-alpha.1; future changes must follow each owning contract rather than synchronizing
+unrelated domains. Unsupported formats are refused in their necessary scope.
 
-**Verification: PR-TEST-0183, PR-TEST-0338, PR-TEST-0369, PR-TEST-0385, PR-TEST-0538, PR-TEST-0557.**
+**Verification: PR-TEST-0183, PR-TEST-0338, PR-TEST-0369, PR-TEST-0385, PR-TEST-0538,
+PR-TEST-0557, PR-TEST-0618, PR-TEST-0619, PR-TEST-0625.**
 
 ### PR-REQ-0078 - Persistence migrations
 
-Internal persistence migration MUST preserve Pactrun domain identities and
-MUST preserve or transform every non-terminal Run and unresolved recovery
-obligation. It MUST NOT be confused with Revision Migration.
+The E one-time reset establishes the complete
+[fresh baseline schema](../persistence/persistence-baseline.md). Development-era
+schemas are unsupported: no implicit or explicit upgrade chain is provided.
+Refusal MUST NOT clear real data, rewrite identities, infer Run outcomes, or touch
+service-owned resources. Pack-defined Revision Migration is a separate feature
+and is not retired by this persistence reset.
 
-The implemented V1-to-V2 migration defined by PR-REQ-0257 MUST preserve every
-existing Package and Revision identity, both exact canonical Revision content
-components, and the complete derived runtime-content reference relation. A
-crash before the migration commit MUST leave an exact admissible V1 database;
-a crash after commit MUST expose an exact admissible V2 database. An
-intermediate version marker or partial V2 schema MUST never be accepted.
+The exact public version is the string in the singleton metadata row. SQLite's
+application marker and private bootstrap marker alone do not prove support.
+Opening an existing store MUST validate the exact supported metadata, table and
+index manifest, column declarations, constraints, keys and references. Pristine
+means zero ownership markers and no non-SQLite objects. Partial, foreign,
+unmarked non-empty and unsupported stores MUST be refused without repair.
 
-The implemented V1/V2-to-V3 extension in PR-REQ-0270 additionally preserves all
-M1-D metadata and adds no inferred Instance, binding, payload, source, or
-installation-history rows.
+Support inspection precedes Pactrun staging/session and content-coordination
+creation. SQLite MAY create or update its own read-coordination sidecars while
+performing ordinary read-only inspection. This exception MUST NOT change existing
+database or committed WAL content, ignore committed WAL frames, grant write
+admission, rewrite objects, run cleanup, or interfere with service resources.
+An existing WAL can contain committed data and MUST NOT be discarded as a
+"temporary" file. This is read coordination, not a format conversion. Writer
+admission MUST repeat qualification after acquiring the serialized transaction;
+preflight is advisory only. Fresh bootstrap publishes the complete schema and
+admission atomically. Interrupted bootstrap cannot expose a partially admitted
+schema. Read-only opening cannot initialize or upgrade storage. Merely reopening
+or updating the product MUST preserve existing identities, bytes, bindings,
+non-terminal Runs and unresolved recovery obligations without reconciliation.
 
-The implemented V1/V2/V3-to-V4 extension in PR-REQ-0276 additionally preserves
-every Instance, binding, payload header, and payload chunk and adds no inferred
-Run, invocation, execution owner, pin, outcome, failure, Hook completion,
-Artifact, or recovery-guard rows. V4 is the first schema that represents Runs;
-a later migration MUST preserve or transform every `run_executions` row as a
-non-terminal Run and every `instance_recovery_guards` row as an unresolved
-recovery obligation rather than inferring their disposition. V4 is the
-integrated M3 baseline. M4's [V5 implementation](../persistence/persistence-schema-v5.md)
-adds explicit writable admission and only the exact V4-to-V5 bootstrap in
-PR-REQ-0300; the M4 binary MUST NOT implicitly chain older schemas through V4.
-Internal persistence remains non-Frozen and non-public.
+Any future internal migration requires an explicit supported contract and must
+preserve those same obligations; E does not invent a future codec or migration.
 
-**Verification: PR-TEST-0073, PR-TEST-0082, PR-TEST-0202.**
+**Verification: PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 
@@ -182,7 +191,7 @@ descriptor, canonical byte profile, hash framing, domain separation, and hash
 algorithm.
 
 The Frozen `RevisionCoreFormatV1` contract is defined by
-[Revision Core Format V1](../contracts/revision-core-format-v1.md).
+[Revision Core Format V1](../contracts/revision-canonical.md).
 
 **Verification: PR-TEST-0044, PR-TEST-0045, PR-TEST-0331, PR-TEST-0333, PR-TEST-0493.**
 
@@ -195,7 +204,7 @@ bytes, domain separation, and hash profile. It MUST hash a semantic manifest,
 not archive bytes. `SnapshotIntegrityFormatV1` MUST apply semantic normalization
 before RFC 8785 JCS encoding and use a fixed SHA-256 profile. The exact Frozen
 contract is defined by
-[Snapshot Integrity Format V1](../contracts/snapshot-integrity-format-v1.md).
+[Snapshot Integrity Format V1](../contracts/snapshot-integrity.md).
 
 **Verification: PR-TEST-0013, PR-TEST-0015, PR-TEST-0016, PR-TEST-0018,
 PR-TEST-0019.**
@@ -208,7 +217,7 @@ MUST be rejected rather than guessed. Packaging or compression changes MUST NOT
 change contained domain identity.
 
 For Revision transport, this envelope is the user-facing distribution Pack in
-[Pack Distribution V1](../contracts/pack-distribution-v1.md), not a separately
+[Pack Distribution V1](../contracts/pack-distribution.md), not a separately
 managed Bundle object. Snapshot transport remains independent and unchanged.
 
 **Verification: PR-TEST-0538, PR-TEST-0540, PR-TEST-0542.**
@@ -240,8 +249,8 @@ migration-coordination, Cleanup coordination, non-destruction, and durable-
 representation encodings and mechanisms remain formal design gates rather than
 properties of V1. Whether non-ServiceStorage-backed service-owned resources use
 the same abstraction remains a separate taxonomy gate. M6.5 supplies the
-independently versioned [Core V2](../contracts/revision-core-format-v2.md) and
-[Hook V2](../contracts/hook-protocol-v2.md) representations; M7 still owns
+independently versioned [Core V2](../contracts/revision-canonical.md) and
+[Hook V2](../contracts/hook-protocol.md) representations; M7 still owns
 destructive finalization, Cleanup receipts and abandonment.
 
 **Verification: PR-TEST-0331, PR-TEST-0369, PR-TEST-0385.**
@@ -270,8 +279,8 @@ the bundle-defined portable non-identity metadata required by
 Pre-M1-D classifies portable-capable metadata but does not define an Export
 Bundle Format, require any metadata kind to be carried, or define application,
 conflict, replacement, or merge semantics for imported metadata. Those choices
-are now owned by [Pack bundle V1](../contracts/pack-distribution-v1.md)
-and the [Pack transport contract](../contracts/pack-distribution-v1.md), not by the
+are now owned by [Pack bundle V1](../contracts/pack-distribution.md)
+and the [Pack transport contract](../contracts/pack-distribution.md), not by the
 historical metadata classification alone.
 
 **Verification: PR-TEST-0538, PR-TEST-0539, PR-TEST-0540, PR-TEST-0544, PR-TEST-0594.**

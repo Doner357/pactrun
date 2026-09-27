@@ -20,7 +20,7 @@ mod migration;
 mod migration_paths;
 mod object_lifecycle;
 mod revision_content;
-mod revision_core_v1;
+mod revision_declarations;
 mod revision_metadata;
 mod run;
 mod service_migration;
@@ -29,10 +29,12 @@ mod service_storage_state;
 mod snapshot;
 mod snapshot_capability;
 mod snapshot_execution;
+mod versioning;
+pub(crate) use versioning::*;
 
 #[allow(unused_imports)]
 pub(crate) use deletion::*;
-pub(crate) use error::PactrunErrorRefV1;
+pub(crate) use error::PactrunErrorRef;
 #[allow(unused_imports)]
 pub(crate) use execution::*;
 #[allow(unused_imports)]
@@ -49,7 +51,7 @@ pub(crate) use migration_paths::*;
 pub(crate) use object_lifecycle::*;
 #[allow(unused_imports)]
 pub(crate) use revision_content::*;
-pub(crate) use revision_core_v1::*;
+pub(crate) use revision_declarations::*;
 #[allow(unused_imports)]
 pub(crate) use revision_metadata::*;
 #[allow(unused_imports)]

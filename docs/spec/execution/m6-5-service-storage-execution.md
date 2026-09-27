@@ -9,8 +9,8 @@ title: M6.5 ServiceStorage Execution
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Read the [Core](../contracts/revision-core-format-v2.md),
-[Hook](../contracts/hook-protocol-v2.md), [V7](../persistence/persistence-schema-v7.md),
+Read the [Core](../contracts/revision-canonical.md),
+[Hook](../contracts/hook-protocol.md), [V7](../persistence/persistence-baseline.md),
 and [CLI](../behavior/m6-5-service-storage-command-reference.md) contracts.
 Existing [M5](./m5-migration-execution.md) and [M6 recovery](./recovery-and-reconciliation.md)
 remain the starting contracts. The [implementation record](../../development/m6-5-implementation-status.md)

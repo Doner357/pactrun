@@ -37,7 +37,7 @@ fn transcript(session: &Value, messages: &[Value]) -> Result<Value, String> {
 // Verifies: PR-REQ-0316, PR-REQ-0212
 #[test]
 fn production_migration_decoder_matches_unchanged_frozen_transcripts() {
-    let corpus:Value=serde_json::from_str(include_str!("../../tests/vectors/hook_protocol_v1/vectors.json")).unwrap();
+    let corpus:Value=serde_json::from_str(include_str!("../../tests/vectors/hook_protocol/vectors.json")).unwrap();
     let session:Value=serde_json::from_str(corpus["session_specs"].as_array().unwrap().iter().find(|s|s["name"]=="migration").unwrap()["raw_json"].as_str().unwrap()).unwrap();
     let mut counts=(0,0);
     for vector in corpus["valid"].as_array().unwrap().iter().filter(|v|v["session"]=="migration") {

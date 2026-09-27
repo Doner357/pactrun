@@ -63,6 +63,7 @@ pub(crate) struct DeletionPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum DeletionPlanError {
+    UnsupportedProtocol(super::FormatVersion),
     ChangedObservation,
     MissingRequirement(super::InputBindingRefV1),
     UnresolvedAttempt(RunId),
@@ -72,7 +73,11 @@ pub(crate) enum DeletionPlanError {
 
 impl std::fmt::Display for DeletionPlanError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(match self {
+        let message = match self {
+            Self::UnsupportedProtocol(version) => {
+                return formatter
+                    .write_str(&super::VersionDomain::Hook.unsupported_message(*version));
+            }
             Self::ChangedObservation => "deletion observation changed",
             Self::MissingRequirement(_) => {
                 "a Cleanup requirement is not bound with its declared role"
@@ -82,7 +87,8 @@ impl std::fmt::Display for DeletionPlanError {
             }
             Self::InvalidLaunch => "Cleanup launcher or runtime content is invalid",
             Self::ServiceBindings => "Cleanup service associations changed",
-        })
+        };
+        formatter.write_str(message)
     }
 }
 impl std::error::Error for DeletionPlanError {}
@@ -129,8 +135,10 @@ pub(crate) fn build_deletion_plan(
             }
         }
         let launch = launch.ok_or(DeletionPlanError::InvalidLaunch)?;
-        if !matches!(cleanup.hook.protocol_version.get(), 1 | 2) {
-            return Err(DeletionPlanError::InvalidLaunch);
+        if !crate::domain::VersionDomain::Hook.supports(cleanup.hook.protocol_version) {
+            return Err(DeletionPlanError::UnsupportedProtocol(
+                cleanup.hook.protocol_version,
+            ));
         }
         let runtime = observation.revision.runtime_content.files();
         let launch_matches = match (&cleanup.hook.launch, &launch) {

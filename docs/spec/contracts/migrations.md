@@ -119,7 +119,7 @@ make that dependence visible.
 
 The V1 identity spelling and the boundary between intrinsic target validation,
 exact-source relational validation, and Admission are defined by
-[Revision Core Format V1](./revision-core-format-v1.md). Source availability is
+[Revision Core Format V1](./revision-canonical.md). Source availability is
 not made an installation prerequisite by that format specification.
 PR-REQ-0262 fixes the M2 inspection and installation-order behavior without
 changing the Frozen format.
@@ -203,8 +203,8 @@ exposure, or reattachment. This requirement does not introduce, imply, or name a
 persisted retained-resource registry, binding registry, state table, or other
 durable representation. How continuity, compatibility, retention, and discard
 map to Pactrun-owned durable state is defined for M6.5 by
-[Core V2](./revision-core-format-v2.md) and
-[V7](../persistence/persistence-schema-v7.md). Destructive discard remains M7 work.
+[Core V2](./revision-canonical.md) and
+[V7](../persistence/persistence-baseline.md). Destructive discard remains M7 work.
 
 **Verification: PR-TEST-0374.**
 
@@ -253,7 +253,7 @@ many and many-to-one relationships likewise require explicit mappings and any
 necessary Migration Hook transformation. These semantics do not define the
 future declaration fields, mapping syntax, compatibility algorithm, or durable
 continuity representation. The approved M6.5 forms and algorithms are specified
-in [Core V2](./revision-core-format-v2.md) and
+in [Core V2](./revision-canonical.md) and
 [service execution](../execution/m6-5-service-storage-execution.md).
 
 **Verification: PR-TEST-0371, PR-TEST-0374, PR-TEST-0388.**

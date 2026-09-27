@@ -8,7 +8,7 @@ title: CLI Presentation Implementation Status
 not pushed or published.**
 
 The [baseline](./design-notes/cli-presentation-baseline.md) and
-[JSON contract](../spec/contracts/cli-json-v1.md) record the approved scope.
+[JSON contract](../spec/contracts/cli-machine-interface.md) record the approved scope.
 The matrix below records the delivered command families and explicit stream
 exceptions. Verification evidence is recorded separately below.
 

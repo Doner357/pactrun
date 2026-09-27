@@ -121,15 +121,6 @@ pub(super) fn require_ordinary_lifecycle(
     database: &Connection,
     instance: InstanceId,
 ) -> Result<(), PersistenceError> {
-    #[cfg(test)]
-    {
-        let version: i64 = database
-            .pragma_query_value(None, "user_version", |r| r.get(0))
-            .map_err(|e| PersistenceError::sqlite("inspect historical fixture version", e))?;
-        if version < 8 {
-            return Ok(());
-        }
-    }
     match require_no_deletion_obligation(obligation_from(database, instance)?) {
         Ok(()) => Ok(()),
         Err(DeletionError::FinalizationPending) => Err(invalid(
@@ -145,14 +136,6 @@ pub(super) fn finalization_references_allocation(
     database: &Connection,
     allocation: ServiceAllocationId,
 ) -> Result<bool, PersistenceError> {
-    #[cfg(test)]
-    if database
-        .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
-        .map_err(|e| PersistenceError::sqlite("inspect historical maintenance version", e))?
-        < 8
-    {
-        return Ok(false);
-    }
     database
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM deletion_finalization_allocations WHERE allocation_id=?1)",
@@ -166,14 +149,6 @@ pub(super) fn reconcile_obligation(
     transaction: &Transaction<'_>,
     run: RunId,
 ) -> Result<(), PersistenceError> {
-    #[cfg(test)]
-    if transaction
-        .pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
-        .map_err(|e| PersistenceError::sqlite("inspect historical recovery version", e))?
-        < 8
-    {
-        return Ok(());
-    }
     transaction
         .execute(
             "UPDATE instance_deletion_obligations SET phase=1 WHERE attempt_run_id=?1 AND phase=0",
@@ -659,7 +634,10 @@ impl PactrunPersistence {
                 .map_err(|e| PersistenceError::sqlite("publish abandoned allocation handoff", e))?;
         }
         super::sqlite_runs::finish_deletion_in_transaction(&tx, run, owner, finish, true)?;
+        // Delete bindings before the Instance cascades into payloads. SQLite's
+        // immediate RESTRICT checks must not depend on table creation order.
         for table in [
+            "managed_input_bindings",
             "instance_deletion_obligations",
             "instance_service_resources",
             "instance_service_storages",

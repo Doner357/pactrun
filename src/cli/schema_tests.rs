@@ -45,7 +45,6 @@ fn generated() -> Value {
     cases.push(("invoke", json!({"anyOf":[inspection,plan]})));
     cases!(Related<e::Inspection> => "run show");
     cases!(e::Reconciled => "run reconcile");
-    cases!(p::StorageUpgrade => "storage upgrade");
     cases!(p::Collection => "storage gc");
     cases!(p::Deletion => "run delete", "revision delete", "snapshot delete");
     cases!(p::ArtifactResult => "run artifact export", "run artifact delete");
@@ -101,10 +100,11 @@ fn generated() -> Value {
         .collect();
     let mut schema = json!({
         "$schema":"https://json-schema.org/draft/2020-12/schema",
-        "title":"Pactrun CLI JSON V1", "type":"object",
-        "required":["format","command","status","result","error"],
+        "title":"Pactrun CLI machine interface 1.0-alpha.1", "type":"object",
+        "required":["format","format_version","command","status","result","error"],
         "properties":{
-            "format":{"const":"pactrun.cli.v1"},
+            "format":{"const":"pactrun.cli"},
+            "format_version":{"const":"1.0-alpha.1"},
             "command":{"anyOf":[{"enum":commands},{"type":"null"}]},
             "status":{"enum":["success","failure"]},
             "result":{"type":["object","null"]},
@@ -125,7 +125,8 @@ fn generated() -> Value {
         schema["$defs"]["ErrorReference"]["properties"][name] = json!({"type":"string","minLength":1,"maxLength":128,"pattern":"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"});
     }
     let record = &mut schema["$defs"]["Record"];
-    record["properties"]["format"] = json!({"const":"pactrun.cli.events.v1"});
+    record["properties"]["format"] = json!({"const":"pactrun.cli"});
+    record["properties"]["format_version"] = json!({"const":"1.0-alpha.1"});
     record["properties"]["sequence"] = json!({"type":"string","pattern":"^[1-9][0-9]*$"});
     for branch in record["oneOf"].as_array_mut().unwrap() {
         if branch["properties"]["type"]["const"] == "output" {
@@ -143,7 +144,7 @@ pub(super) fn assert_response(value: &Value) {
     static VALIDATOR: std::sync::OnceLock<jsonschema::Validator> = std::sync::OnceLock::new();
     let validator = VALIDATOR.get_or_init(|| {
         let schema: Value = serde_json::from_str(include_str!(
-            "../../docs/spec/contracts/cli-json-v1.schema.json"
+            "../../docs/spec/contracts/cli-machine.schema.json"
         ))
         .unwrap();
         jsonschema::validator_for(&schema).unwrap()
@@ -160,9 +161,9 @@ pub(super) fn assert_event(value: &Value) {
             &self,
             uri: &jsonschema::Uri<String>,
         ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-            if uri.as_str() == "https://pactrun.test/cli-json-v1.schema.json" {
+            if uri.as_str() == "https://pactrun.test/cli-machine.schema.json" {
                 Ok(serde_json::from_str(include_str!(
-                    "../../docs/spec/contracts/cli-json-v1.schema.json"
+                    "../../docs/spec/contracts/cli-machine.schema.json"
                 ))?)
             } else {
                 Err(format!("unexpected schema reference: {uri}").into())
@@ -172,11 +173,11 @@ pub(super) fn assert_event(value: &Value) {
     static VALIDATOR: std::sync::OnceLock<jsonschema::Validator> = std::sync::OnceLock::new();
     let validator = VALIDATOR.get_or_init(|| {
         let schema: Value = serde_json::from_str(include_str!(
-            "../../docs/spec/contracts/cli-events-v1.schema.json"
+            "../../docs/spec/contracts/cli-events.schema.json"
         ))
         .unwrap();
         jsonschema::options()
-            .with_base_uri("https://pactrun.test/cli-events-v1.schema.json")
+            .with_base_uri("https://pactrun.test/cli-events.schema.json")
             .with_retriever(Contracts)
             .build(&schema)
             .unwrap()
@@ -194,23 +195,32 @@ fn cli_json_schema_contract_matches_explicit_projections() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/cli-json-evidence");
     fs::create_dir_all(&path).unwrap();
     fs::write(
-        path.join("cli-json-v1.schema.json"),
+        path.join("cli-machine.schema.json"),
         serde_json::to_string_pretty(&generated).unwrap() + "\n",
     )
     .unwrap();
     let checked: Value = serde_json::from_str(include_str!(
-        "../../docs/spec/contracts/cli-json-v1.schema.json"
+        "../../docs/spec/contracts/cli-machine.schema.json"
     ))
     .unwrap();
     assert!(
         checked == generated,
-        "schema drift: review target/cli-json-evidence/cli-json-v1.schema.json; no automatic contract update"
+        "schema drift: review target/cli-json-evidence/cli-machine.schema.json; no automatic contract update"
     );
     let validator = jsonschema::validator_for(&checked).unwrap();
-    let success = json!({"format":"pactrun.cli.v1","command":"version","status":"success","result":{"product_version":"test"},"error":null});
+    let success = json!({"format":"pactrun.cli","format_version":"1.0-alpha.1","command":"version","status":"success","result":{"product_version":"test","build_target":"test","rustc":"test","source_commit":null,"source_manifest_sha256":null,"supported_formats":{},"default_formats":{}},"error":null});
     assert!(validator.is_valid(&success));
+    let mut missing = success.clone();
+    missing.as_object_mut().unwrap().remove("format_version");
+    assert!(!validator.is_valid(&missing));
+    let mut numeric = success.clone();
+    numeric["format_version"] = 1.into();
+    assert!(!validator.is_valid(&numeric));
+    let mut legacy = success.clone();
+    legacy["format"] = "pactrun.cli.v1".into();
+    assert!(!validator.is_valid(&legacy));
     let mut negative = success.clone();
-    negative["format"] = "pactrun.cli.v2".into();
+    negative["format_version"] = "1.1".into();
     assert!(!validator.is_valid(&negative));
     let mut negative = success.clone();
     negative["result"] = json!({"product_version":42});

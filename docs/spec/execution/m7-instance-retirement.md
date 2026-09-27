@@ -12,7 +12,7 @@ This extends lifecycle representation without modifying Frozen Hook/Core formats
 <!-- spec-navigation:start -->
 Related contracts: [Cleanup](../contracts/hooks-recovery-and-cleanup.md),
 [ServiceStorage custody](./m6-5-service-storage-execution.md), and
-[V8 persistence](../persistence/persistence-schema-v8.md).
+[V8 persistence](../persistence/persistence-baseline.md).
 Delivery evidence: [M7 implementation status](../../development/m7-implementation-status.md).
 <!-- spec-navigation:end -->
 

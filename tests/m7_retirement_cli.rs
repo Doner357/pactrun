@@ -47,7 +47,7 @@ fn fixture() -> Fixture {
     }
     let source = temp.path().join("pack");
     fs::create_dir(&source).unwrap();
-    fs::write(source.join("pactrun.yaml"),"source_format: 2\npackage_id: 00000000000000000000000000000097\nrevision:\n  service_storages: [{id: data}]\nruntime_content: {}\n").unwrap();
+    fs::write(source.join("pactrun.yaml"),"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000097\nrevision:\n  service_storages: [{id: data}]\nruntime_content: {}\n").unwrap();
     let revision = success(&store, &["pack", "install", source.to_str().unwrap()])
         .lines()
         .next()

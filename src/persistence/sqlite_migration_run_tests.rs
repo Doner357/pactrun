@@ -43,7 +43,7 @@ fn fixture(p: &PactrunPersistence) -> (InstanceView, Vec<RevisionIdentity>, Runt
         executable: true,
     };
     let hook = HookV1 {
-        protocol_version: PositiveVersion::new(1).unwrap(),
+        protocol_version: crate::domain::FormatVersion::BASELINE,
         launch: HookLaunchV1::Direct {
             executable: file.id.clone(),
         },
@@ -88,7 +88,7 @@ fn fixture(p: &PactrunPersistence) -> (InstanceView, Vec<RevisionIdentity>, Runt
                 hook: None,
             }]
         };
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs,
             actions: vec![ActionV1 {
                 id: ActionIdentity::parse("inspect").unwrap(),
@@ -102,7 +102,7 @@ fn fixture(p: &PactrunPersistence) -> (InstanceView, Vec<RevisionIdentity>, Runt
             cleanup: None,
         })
         .unwrap();
-        let content = validate_revision_content_v1(
+        let content = validate_declaration_content(
             core,
             project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 {
                 files: vec![file.clone()],
@@ -241,9 +241,9 @@ fn assert_released(p: &PactrunPersistence, run: RunId) {
 }
 
 // Test-ID: PR-TEST-0344
-// Verifies: PR-REQ-0325
+// Verifies: PR-REQ-0078
 #[test]
-fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
+fn reopening_preserves_open_migration_and_checkpoint_without_reconciliation() {
     let (_tmp, root) = root();
     let p = PactrunPersistence::open(&root).unwrap();
     let (instance, path, _) = fixture(&p);
@@ -259,13 +259,6 @@ fn v7_upgrade_preserves_open_migration_and_checkpoint_without_reconciliation() {
     let before = p.load_managed_run(run).unwrap().unwrap();
     let before_instance = p.load_instance_by_id(instance.id).unwrap().unwrap();
     p.abandon_execution_owner();
-    let mut db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-    crate::persistence::sqlite_revision_store::configure_connection(&db).unwrap();
-    crate::persistence::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
-    drop(db);
-    assert!(PactrunPersistence::upgrade_storage_v7(&root).unwrap());
-    assert!(PactrunPersistence::upgrade_legacy_v7_to_v8(&root).unwrap());
-    assert!(PactrunPersistence::upgrade_storage(&root).unwrap());
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     assert_eq!(p.load_managed_run(run).unwrap().unwrap(), before);
     assert_eq!(

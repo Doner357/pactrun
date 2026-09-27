@@ -4,20 +4,37 @@ title: Baseline and Managed Object Lifecycle Handoff
 
 # Current baseline and next milestone
 
+> **E engineering handoff:** E runtime contracts and native delivery machinery
+> are implemented. The [E ledger](./e-implementation-status.md) owns the exact
+> qualification and local integration status. The candidate is 1.0.0-alpha.1,
+> with all eight format domains at 1.0-alpha.1; development upgrade chains are
+> not supported. Earlier milestone descriptions below are historical context,
+> not permission to restore those readers or publish the candidate.
+
 **Status: Informative handoff derived from the roadmap and owning contracts.**
 Document migration is complete for existing normative pages. M5 was separately
 approved on 2026-09-13; documentation migration itself granted no implementation
 approval. Implementation evidence is recorded separately from design approval.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](./execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](./object-catalog-history-metadata-status.md). The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C is implemented, verified and integrated into local develop; see the [C record](./pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
+Current integrated work: [Execution Diagnostics and Instance Observability](./execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](./object-catalog-history-metadata-status.md). The former V11 baseline and its V8/V9/V10 upgrades are historical; E uses the clean string-versioned Persistence baseline instead. C is implemented, verified and integrated into local develop; see the [C record](./pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
 
 ## What is already recorded as implemented
 
+For E design rationale, use the [versioning redesign decisions](./design-notes/e-versioning-redesign-decisions.md).
+The subsequent implementation ledger supersedes the earlier planning-only
+status; formal promotion and public publication still require separate gates.
+
+The approved [E S0 whole-milestone plan](./design-notes/e-versioning-s0-plan.md)
+governs retained safety boundaries, historical support removal, native package
+preparation and the acceptance matrix. The operator authorized the entire local
+implementation and integration, including the SQLite read-coordination
+clarification; slices are not new approval gates.
+
 D (CLI presentation and versioned JSON) is implemented, verified and integrated
 into local develop after authorized commit and merge; see its
-[delivery record](./cli-presentation-status.md). E is the next design milestone
-and requires separate S0 approval. This integration does not authorize E runtime
-work, push or publication.
+[delivery record](./cli-presentation-status.md). E subsequently received its own
+implementation and local integration authorization. Neither integration
+authorizes push or publication.
 
 The [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md) records the
 current Pending-block census, concrete evidence follow-ups, later added rules
@@ -26,8 +43,8 @@ the outstanding verification or approve E S0 representations/runtime work.
 The separately authorized [verification follow-up](./verification-gap-closure.md)
 records the subsequent closure work without starting E implementation.
 The [pre-E readiness review](./pre-e-readiness.md) records verified prerequisite
-closure and local develop integration. The baseline is ready to begin separately
-approved E S0 design; E representations and runtime work are not yet approved.
+closure and local develop integration. That review established readiness for E; its earlier S0-only authorization
+boundary was superseded by the whole-E approval and implementation record.
 
 The [M4 closeout](./m4-implementation-status.md) records integration through M4:
 installation and managed Instances, Action execution, Capture and exact-compatible
@@ -48,12 +65,12 @@ integrated into local develop, including V7, V2 installation and service
 execution. [M7 lifecycle](./m7-implementation-status.md) is implemented, verified
 and integrated into local develop under separate operator authorization.
 
-- Current integrated persistence: [V11](../spec/persistence/persistence-schema-v11.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
-- Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity-format-v2.md).
-- Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity-format-v1.md) remains Frozen and supported as specified.
-- Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source-yaml-v1.md) or [Candidate V2](../spec/contracts/pack-source-yaml-v2.md), not a public compatibility promise.
-- Frozen [Core](../spec/contracts/revision-core-format-v1.md), [Hook protocol](../spec/contracts/hook-protocol-v1.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
-- [Core V2](../spec/contracts/revision-core-format-v2.md) and [Hook V2](../spec/contracts/hook-protocol-v2.md) are independently Frozen; their format numbers do not force one another.
+- Current integrated persistence: [V11](../spec/persistence/persistence-baseline.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
+- Current capture writer: [Snapshot integrity V2](../spec/contracts/snapshot-integrity.md).
+- Existing Snapshot compatibility: [V1](../spec/contracts/snapshot-integrity.md) remains Frozen and supported as specified.
+- Pack source spelling: explicitly selected [Candidate V1](../spec/contracts/pack-source.md) or [Candidate V2](../spec/contracts/pack-source.md), not a public compatibility promise.
+- Frozen [Core](../spec/contracts/revision-canonical.md), [Hook protocol](../spec/contracts/hook-protocol.md), and [error identity](../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
+- [Core V2](../spec/contracts/revision-canonical.md) and [Hook V2](../spec/contracts/hook-protocol.md) are independently Frozen; their format numbers do not force one another.
 
 ## M5 is implemented and integrated into develop
 
@@ -71,7 +88,7 @@ configured destination and a non-force branch-state check.
 - [Target-owned Migration edges and transitions](../spec/contracts/migrations.md), including source roles and single-writer rules.
 - [Intrinsic versus relational validation](../spec/behavior/packages-revisions-and-instances.md#pr-req-0262---migration-relational-installation-policy); installing a target is different from admitting an executable edge.
 - Managed Input transitions, staged targets, incomplete intermediate state, and per-edge commit behavior as bounded in the roadmap.
-- The shared [acceptance/concurrency](../spec/execution/execution-and-concurrency.md), [risk/recovery](../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../spec/contracts/hook-protocol-v1.md) contracts.
+- The shared [acceptance/concurrency](../spec/execution/execution-and-concurrency.md), [risk/recovery](../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../spec/contracts/hook-protocol.md) contracts.
 
 ### Handoff checks
 
@@ -172,8 +189,9 @@ and integrated into local develop under its
 C is implemented, verified and integrated into local develop under the separately approved
 [Pack transport baseline](./design-notes/pack-transport-baseline.md), including the
 export naming follow-up. D is implemented, verified and integrated into local develop under the approved [S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); its [implementation record](./cli-presentation-status.md) records verification and authorized integration.
-E is the next design milestone; its runtime work remains unapproved. The original grouping authorized planning only. Full
-usage-guide work remains excluded.
+E subsequently received full local engineering and integration authorization;
+its current evidence is in the E ledger. The original grouping alone had
+only authorized planning. Full usage-guide work remains excluded.
 The [lifecycle implementation record](./managed-object-lifecycle-status.md)
 now tracks all lifecycle slices, including V9 activation, object deletion and GC,
 implemented, verified and integrated into local develop after authorized commit
@@ -195,17 +213,18 @@ Data fully conforming to the final contracts is accepted regardless of developme
 origin; no historical-generation exclusion is required. Current contracts remain
 binding until their reviewed implementation changes. Follow the
 [updated contributor rules](./development-and-verification.md) for all new work;
-legacy code-label cleanup waits for consolidation.
+historical terminology does not authorize development-only compatibility.
 
 ## Release readiness is not the next milestone
 
 [Pre-release readiness work](./release-readiness.md) remains required before
-formal publication. The combined versioning/consolidation milestone is last in
-the agreed sequence, not the next implementation task; no calendar start is set.
+formal publication. E is the last engineering milestone in the agreed sequence;
+its local delivery is not automatic approval for a beta, RC or formal release.
 Removing M8 is not a release trigger. The
 [formal compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
 owns same-Major guarantees, origin-independent final-baseline acceptance and
-the 0.1.0-to-1.0.0 boundary; this record implements none of those mechanisms.
+the alpha-to-formal promotion boundary. This handoff is not independent
+verification; use the owning E evidence and the later release gates.
 
 ## Evidence caveat
 

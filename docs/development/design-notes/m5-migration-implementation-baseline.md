@@ -30,7 +30,7 @@ Owning rules: [Migration](../../spec/contracts/migrations.md),
 [M5 execution](../../spec/execution/m5-migration-execution.md), and
 [M5 commands](../../spec/behavior/m5-migration-command-reference.md).
 
-[V6](../../spec/persistence/persistence-schema-v6.md) now defines implemented
+[V6](../../spec/persistence/persistence-baseline.md) now defines implemented
 exact DDL and explicit V5 upgrade. Migration uses this same substrate for
 declarative and Hook-backed edges without another persistence format.
 See [implementation status](../m5-implementation-status.md) for actual progress.

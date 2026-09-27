@@ -1,7 +1,7 @@
 //! Typed service declarations and Core V2 policy. No filesystem or adapter state.
 
 use super::{
-    ActionIdentity, HookV1, InputIdentity, OperationAccessV1, RevisionCoreV1, RevisionCoreV1Error,
+    ActionIdentity, HookV1, InputIdentity, OperationAccessV1, RevisionDeclarations, RevisionError,
     Sha256Digest,
 };
 use serde::Serialize;
@@ -27,8 +27,8 @@ impl ServiceContractError {
         &self.code
     }
 }
-impl From<RevisionCoreV1Error> for ServiceContractError {
-    fn from(e: RevisionCoreV1Error) -> Self {
+impl From<RevisionError> for ServiceContractError {
+    fn from(e: RevisionError) -> Self {
         Self::new(e.internal_code(), e.to_string())
     }
 }
@@ -81,7 +81,7 @@ impl ServiceLocatorV2 {
                     || !s
                         .bytes()
                         .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-                    || super::revision_core_v1::is_windows_reserved(s)
+                    || super::revision_declarations::is_windows_reserved(s)
             })
         {
             return Err(invalid("invalid portable service locator"));
@@ -306,8 +306,8 @@ pub(crate) struct ServiceMigrationV2 {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct RevisionCoreV2 {
-    common: RevisionCoreV1,
+pub(crate) struct ServiceRevision {
+    common: RevisionDeclarations,
     storages: Vec<ServiceStorageV2>,
     resources: Vec<ServiceResourceV2>,
     hooks: BTreeMap<ServiceHookSite, HookServiceContractV2>,
@@ -315,22 +315,22 @@ pub(crate) struct RevisionCoreV2 {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ValidatedRevisionContentV2 {
-    pub(crate) core: RevisionCoreV2,
+pub(crate) struct ServiceRevisionContent {
+    pub(crate) core: ServiceRevision,
     pub(crate) runtime_content: super::RuntimeContentClosureIdentityV1,
 }
-pub(crate) fn project_revision_content_v2(
-    core: RevisionCoreV2,
+pub(crate) fn validate_service_content(
+    core: ServiceRevision,
     runtime_content: super::RuntimeContentClosureIdentityV1,
-) -> Result<ValidatedRevisionContentV2, ServiceContractError> {
-    super::validate_revision_content_v1(core.common().clone(), runtime_content.clone())?;
-    Ok(ValidatedRevisionContentV2 {
+) -> Result<ServiceRevisionContent, ServiceContractError> {
+    super::validate_declaration_content(core.common().clone(), runtime_content.clone())?;
+    Ok(ServiceRevisionContent {
         core,
         runtime_content,
     })
 }
-impl RevisionCoreV2 {
-    pub(crate) fn common(&self) -> &RevisionCoreV1 {
+impl ServiceRevision {
+    pub(crate) fn common(&self) -> &RevisionDeclarations {
         &self.common
     }
     pub(crate) fn storages(&self) -> &[ServiceStorageV2] {
@@ -373,14 +373,40 @@ fn set<T>(
     Ok(())
 }
 
-pub(crate) fn project_revision_core_v2(
-    common: RevisionCoreV1,
+/// Normalize shared declaration builders into the complete baseline service model.
+/// This is an in-memory construction path, never a historical wire reader.
+pub(crate) fn service_free_revision(common: RevisionDeclarations) -> ServiceRevision {
+    let hooks = hook_owners(&common)
+        .keys()
+        .cloned()
+        .map(|site| (site, HookServiceContractV2::default()))
+        .collect();
+    let migrations = common
+        .migrations()
+        .iter()
+        .map(|m| {
+            (
+                m.source_revision_digest.clone(),
+                ServiceMigrationV2 {
+                    storages: vec![],
+                    resources: vec![],
+                },
+            )
+        })
+        .collect();
+    project_service_revision(common, vec![], vec![], hooks, migrations).expect(
+        "validated declarations without service authority form a complete service-free model",
+    )
+}
+
+pub(crate) fn project_service_revision(
+    common: RevisionDeclarations,
     storages: Vec<ServiceStorageV2>,
     resources: Vec<ServiceResourceV2>,
     hooks: BTreeMap<ServiceHookSite, HookServiceContractV2>,
     migrations: BTreeMap<Sha256Digest, ServiceMigrationV2>,
-) -> Result<RevisionCoreV2, ServiceContractError> {
-    let mut core = RevisionCoreV2 {
+) -> Result<ServiceRevision, ServiceContractError> {
+    let mut core = ServiceRevision {
         common,
         storages,
         resources,
@@ -420,7 +446,9 @@ pub(crate) fn project_revision_core_v2(
         set(&mut h.access, |a, b| a.reference.cmp(&b.reference))?;
         set(&mut h.requires, |a, b| a.reference.cmp(&b.reference))?;
         let (hook, access) = owners[site];
-        if (!h.access.is_empty() || !h.requires.is_empty()) && hook.protocol_version.get() != 2 {
+        if (!h.access.is_empty() || !h.requires.is_empty())
+            && !crate::domain::VersionDomain::Hook.supports(hook.protocol_version)
+        {
             return Err(invalid(
                 "persistent authority/prerequisites require protocol 2",
             ));
@@ -490,7 +518,9 @@ pub(crate) fn project_revision_core_v2(
     Ok(core)
 }
 
-fn hook_owners(core: &RevisionCoreV1) -> BTreeMap<ServiceHookSite, (&HookV1, OperationAccessV1)> {
+fn hook_owners(
+    core: &RevisionDeclarations,
+) -> BTreeMap<ServiceHookSite, (&HookV1, OperationAccessV1)> {
     let mut owners = BTreeMap::new();
     for a in core.actions() {
         owners.insert(ServiceHookSite::Action(a.id.clone()), (&a.hook, a.access));
@@ -524,7 +554,7 @@ fn hook_owners(core: &RevisionCoreV1) -> BTreeMap<ServiceHookSite, (&HookV1, Ope
 }
 
 fn validate_reference(
-    core: &RevisionCoreV2,
+    core: &ServiceRevision,
     site: &ServiceHookSite,
     r: &ServiceReferenceV2,
 ) -> Result<(), ServiceContractError> {
@@ -555,7 +585,7 @@ fn validate_reference(
 }
 
 pub(crate) fn has_resource_authority(
-    core: &RevisionCoreV2,
+    core: &ServiceRevision,
     h: &HookServiceContractV2,
     r: &ServiceReferenceV2,
     mode: ServiceAccessMode,
@@ -588,7 +618,7 @@ pub(crate) fn has_resource_authority(
 }
 
 fn reject_redundant_grants(
-    core: &RevisionCoreV2,
+    core: &ServiceRevision,
     h: &HookServiceContractV2,
 ) -> Result<(), ServiceContractError> {
     for a in &h.access {
@@ -625,7 +655,7 @@ fn record_role(
 }
 
 fn normalize_mappings(
-    core: &RevisionCoreV2,
+    core: &ServiceRevision,
     source: &Sha256Digest,
     m: &mut ServiceMigrationV2,
 ) -> Result<(), ServiceContractError> {
@@ -673,7 +703,7 @@ fn normalize_mappings(
                 .find(|m| &m.source_revision_digest == source)
                 .and_then(|m| m.hook.as_ref())
                 .expect("validated Hook owner");
-            if declaration.protocol_version.get() != 2 {
+            if !crate::domain::VersionDomain::Hook.supports(declaration.protocol_version) {
                 return Err(mapping("transform requires protocol 2"));
             }
             for target in targets.iter() {
@@ -752,26 +782,26 @@ fn normalize_mappings(
 
 #[derive(Clone, Copy)]
 pub(crate) enum ServiceSourceCore<'a> {
-    V1(&'a RevisionCoreV1),
-    V2(&'a RevisionCoreV2),
+    Declarations(&'a RevisionDeclarations),
+    Complete(&'a ServiceRevision),
 }
 impl ServiceSourceCore<'_> {
-    fn common(&self) -> &RevisionCoreV1 {
+    fn common(&self) -> &RevisionDeclarations {
         match self {
-            Self::V1(c) => c,
-            Self::V2(c) => c.common(),
+            Self::Declarations(c) => c,
+            Self::Complete(c) => c.common(),
         }
     }
     fn resources(&self) -> &[ServiceResourceV2] {
         match self {
-            Self::V1(_) => &[],
-            Self::V2(c) => c.resources(),
+            Self::Declarations(_) => &[],
+            Self::Complete(c) => c.resources(),
         }
     }
     fn has(&self, scope: &ServiceScope) -> bool {
         match self {
-            Self::V1(_) => false,
-            Self::V2(c) => match scope {
+            Self::Declarations(_) => false,
+            Self::Complete(c) => match scope {
                 ServiceScope::Resource(id) => c.resource(id).is_some(),
                 ServiceScope::Storage(id) => c.has_storage(id),
             },
@@ -783,7 +813,7 @@ impl ServiceSourceCore<'_> {
 /// retained availability, physical allocation equality, presence, or coherence.
 /// Those facts must still be qualified from the Instance at Admission.
 pub(crate) fn validate_service_sources_v2(
-    target: &RevisionCoreV2,
+    target: &ServiceRevision,
     sources: &BTreeMap<Sha256Digest, ServiceSourceCore<'_>>,
 ) -> Result<super::RelationalValidationV1, ServiceContractError> {
     let input_ids = sources
@@ -837,7 +867,7 @@ pub(crate) fn validate_service_sources_v2(
                     check_role(&r.scope, r.role)?;
                 }
             }
-            if let ServiceSourceCore::V2(source) = source {
+            if let ServiceSourceCore::Complete(source) = source {
                 for grant in &h.access {
                     if grant.reference.view != ServiceView::Source
                         || grant.reference.role != ServiceRole::Active
@@ -934,8 +964,10 @@ pub(crate) fn validate_service_sources_v2(
                 ResourceTransitionV2::Transform { sources: refs, .. } => {
                     let h = h.expect("transform Hook checked intrinsically");
                     for s in refs.iter().filter(|s| s.role == ServiceRole::Active) {
-                        let ServiceSourceCore::V2(source) = source else {
-                            return Err(mapping("V1 source has no active service resource"));
+                        let ServiceSourceCore::Complete(source) = source else {
+                            return Err(mapping(
+                                "source declarations have no active service resource",
+                            ));
                         };
                         let reference = ServiceReferenceV2 {
                             view: ServiceView::Source,

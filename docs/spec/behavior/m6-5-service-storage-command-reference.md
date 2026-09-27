@@ -11,7 +11,7 @@ title: M6.5 ServiceStorage Commands
 
 These commands are available in the integrated M6.5 baseline; their complete
 cross-platform and compatibility closeout remains in progress.
-Read [Core V2](../contracts/revision-core-format-v2.md),
+Read [Core V2](../contracts/revision-canonical.md),
 [execution](../execution/m6-5-service-storage-execution.md), and
 [S0 review](../../development/design-notes/m6-5-servicestorage-baseline.md).
 <!-- spec-navigation:end -->

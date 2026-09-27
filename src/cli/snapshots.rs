@@ -413,7 +413,7 @@ pub(super) fn execute(
             if format == presentation::Format::Json {
                 let result = transport_presentation::SnapshotVerified {
                     snapshot_id: id.to_string(),
-                    integrity_format: verified.inspection.version.number(),
+                    integrity_format: verified.inspection.version.as_str().into(),
                     intrinsic_verification: "valid",
                     content_verification: "valid",
                     relational_verification: if verified.relational
@@ -432,7 +432,7 @@ pub(super) fn execute(
                     |_, _| unreachable!(),
                 );
             }
-            writeln!(stdout,"snapshot: {id}\nintegrity_format: {}\nintrinsic_verification: valid\ncontent_verification: valid\nrelational_verification: {}",verified.inspection.version.number(),if verified.relational==SnapshotRelationalVerification::Valid {"valid"}else{"not_evaluated"}).map_err(io_operation)
+            writeln!(stdout,"snapshot: {id}\nintegrity_format: {}\nintrinsic_verification: valid\ncontent_verification: valid\nrelational_verification: {}",verified.inspection.version.as_str(),if verified.relational==SnapshotRelationalVerification::Valid {"valid"}else{"not_evaluated"}).map_err(io_operation)
         }
         SnapshotCommand::Import(path) => {
             let receipt = app.import_snapshot_file(&path).map_err(safe_error)?;
@@ -917,6 +917,32 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
     use crate::snapshot_integrity::SnapshotCodecError as C;
     let mut result = CliError::operation("");
     preserve_error_facts(&error, &mut result);
+    match &error {
+        ApplicationError::SnapshotCompilation(SnapshotPlanError::UnsupportedProtocol(version)) => {
+            result.message = crate::domain::VersionDomain::Hook.unsupported_message(*version);
+            return result;
+        }
+        ApplicationError::Persistence(PersistenceError::SnapshotCodec(C::UnsupportedVersion(
+            version,
+        ))) => {
+            result.message = crate::domain::VersionDomain::Snapshot.unsupported_message(*version);
+            return result;
+        }
+        ApplicationError::Persistence(PersistenceError::SnapshotBundle(B::UnsupportedVersion(
+            domain,
+            version,
+        ))) => {
+            result.message = domain.unsupported_message(*version);
+            return result;
+        }
+        ApplicationError::Persistence(PersistenceError::SnapshotBundle(B::Integrity(
+            C::UnsupportedVersion(version),
+        ))) => {
+            result.message = crate::domain::VersionDomain::Snapshot.unsupported_message(*version);
+            return result;
+        }
+        _ => {}
+    }
     let message = match error {
         ApplicationError::SnapshotCompilation(SnapshotPlanError::MissingRequired(_)) => {
             "Capture requires all required active bindings; use input list and input set before retrying"
@@ -951,9 +977,6 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
         ) => "Snapshot integrity validation failed under the selected V1/V2 verifier",
         ApplicationError::Persistence(PersistenceError::CorruptSnapshot(_)) => {
             "stored Snapshot content or representation is corrupt; no repair was performed"
-        }
-        ApplicationError::Persistence(PersistenceError::UpgradeRequired) => {
-            "storage upgrade required; run pactrun storage upgrade with a supported exact V8 or V9 store"
         }
         ApplicationError::Persistence(
             PersistenceError::SchemaMismatch(_) | PersistenceError::DatabaseOwnership(_),

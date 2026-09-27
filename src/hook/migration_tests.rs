@@ -13,12 +13,12 @@ fn install_edge(f: &RuntimeFixture, source: &RevisionIdentity, inputs: Vec<Input
     let p = persistence(&f.storage);
     let original = p.load_revision(&f.instance.active_revision).unwrap().unwrap().content;
     let hook = with_hook.then(|| HookV1 {
-        protocol_version: PositiveVersion::new(1).unwrap(),
+        protocol_version: crate::domain::FormatVersion::BASELINE,
         launch: HookLaunchV1::Direct { executable: ContentId::parse("worker").unwrap() },
         args: vec!["--exact".to_owned(), WORKER.to_owned(), "--nocapture".to_owned()],
         io: IOContractV1 { terminal: TerminalContractV1::None },
     });
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs, actions: vec![], snapshot: None, cleanup: None,
         migrations: vec![MigrationV1 {
             source_revision_digest: Sha256Digest::from_bytes(*source.content_digest.as_bytes()),
@@ -28,7 +28,7 @@ fn install_edge(f: &RuntimeFixture, source: &RevisionIdentity, inputs: Vec<Input
             produces_target: if with_hook {vec![InputIdentity::parse("result").unwrap()]} else {vec![]}, hook,
         }],
     }).unwrap();
-    let content = validate_revision_content_v1(core, original.runtime_content).unwrap();
+    let content = validate_declaration_content(core, original.runtime_content).unwrap();
     let witnesses = content.runtime_content.files().iter().map(|file| {
         let path = f.temporary.path().join("source").join(file.path.as_str().rsplit('/').next().unwrap());
         p.put_runtime_content(&file.blob_digest, &mut fs::File::open(path).unwrap()).unwrap()
@@ -226,7 +226,7 @@ fn migration_hook_worker() {
     fs::OpenOptions::new().create(true).append(true).open(request["marker"].as_str().unwrap()).unwrap().write_all(b"once\n").unwrap();
     stream.write_all(PREAMBLE).unwrap();
     if mode == "no_ready" { loop { thread::sleep(Duration::from_secs(1)); } }
-    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":1,"session_id":session["session_id"]}));
+    write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}));
     if mode == "hang" { loop { thread::sleep(Duration::from_secs(1)); } }
     if matches!(mode, "success" | "open_failure" | "success_open") {
         write_frame(&mut stream, &json!({"type":"request","request_id":1,"request":{"kind":"enter_recovery_risk"}}));

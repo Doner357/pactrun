@@ -7,10 +7,12 @@ title: Shell Loader
 **Status: Implemented normative adapter contract; non-Frozen.**
 
 <!-- spec-navigation:start -->
-Read [Core V3](./revision-core-format-v3.md), [Hook V1](./hook-protocol-v1.md)
-and [Hook V2](./hook-protocol-v2.md). The
+Read [Core V3](./revision-canonical.md), [Hook V1](./hook-protocol.md)
+and [Hook V2](./hook-protocol.md). The
 [implementation record](../../development/shell-adapter-loader-status.md) separates
 implementation from acceptance and format Freeze.
+The [executable-lifetime fix](../../development/executable-lifetime-fix-status.md)
+records validation of running-image helper discovery across package-file removal.
 <!-- spec-navigation:end -->
 
 ### PR-REQ-0349 - Session-managed scripts and explicit helpers
@@ -102,4 +104,4 @@ PR-TEST-0495, PR-TEST-0496, PR-TEST-0497, PR-TEST-0498, PR-TEST-0499,
 PR-TEST-0500, PR-TEST-0501, PR-TEST-0502, PR-TEST-0503, PR-TEST-0504,
 PR-TEST-0505, PR-TEST-0506, PR-TEST-0507, PR-TEST-0508, PR-TEST-0509,
 PR-TEST-0511, PR-TEST-0512, PR-TEST-0513, PR-TEST-0514, PR-TEST-0515, PR-TEST-0516,
-PR-TEST-0517.**
+PR-TEST-0517, PR-TEST-0616, PR-TEST-0617.**

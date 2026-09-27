@@ -15,7 +15,7 @@ use tempfile::TempDir;
 
 const TRANSPORT_ENVIRONMENT: &str = "PACTRUN_HOOK_PROTOCOL_TRANSPORT";
 const ENDPOINT_ENVIRONMENT: &str = "PACTRUN_HOOK_PROTOCOL_ENDPOINT";
-const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
+const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
 const COMMAND_DEADLINE: Duration = Duration::from_secs(30);
 const SCENARIO_DEADLINE: Duration = Duration::from_secs(90);
 
@@ -449,7 +449,8 @@ pub(crate) fn assert_success(output: &Output) {
 pub(crate) fn assert_empty_json_result(output: &Output, field: &str) {
     assert_success(output);
     let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(response["format"], "pactrun.cli.v1");
+    assert_eq!(response["format"], "pactrun.cli");
+    assert_eq!(response["format_version"], "1.0-alpha.1");
     assert_eq!(response["status"], "success");
     assert!(response["error"].is_null());
     assert!(
@@ -521,7 +522,8 @@ pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
 
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(response["format"], "pactrun.cli.v1");
+    assert_eq!(response["format"], "pactrun.cli");
+    assert_eq!(response["format_version"], "1.0-alpha.1");
     assert_eq!(response["status"], "success");
     response["result"]["items"]
         .as_array()
@@ -600,7 +602,7 @@ fn required<'a>(fields: &'a std::collections::BTreeMap<&str, &str>, key: &str) -
 }
 
 pub(crate) fn basic_source() -> &'static str {
-    r#"source_format: 1
+    r#"source_format: 1.0-alpha.1
 package_id: {package_id}
 revision:
   inputs: []
@@ -609,7 +611,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: ["--exact", "support::system_hook_success", "--nocapture", "system-marker:{hook_marker}"]
         io: { terminal: none }
@@ -618,7 +620,7 @@ revision:
       access: mutate
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: ["--exact", "support::system_hook_success", "--nocapture", "system-marker:{hook_marker}"]
         io: { terminal: none }
@@ -627,7 +629,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: ["--exact", "support::system_hook_declared_failure", "--nocapture", "system-marker:{hook_marker}"]
         io: { terminal: none }
@@ -655,7 +657,7 @@ pub(crate) fn matrix_source() -> String {
       access: {access}
       parameters: {parameters}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "support::system_hook", "--nocapture", "system-marker:{{hook_marker}}", "system-mode:{mode}"]
         io: {{ terminal: {terminal} }}
@@ -902,7 +904,7 @@ pub(crate) fn matrix_source() -> String {
         actions.push_str(&action(id, access, mode, terminal, parameters, outputs));
     }
     format!(
-        r#"source_format: 1
+        r#"source_format: 1.0-alpha.1
 package_id: {{package_id}}
 revision:
   inputs:
@@ -1015,7 +1017,7 @@ pub(crate) fn system_hook() {
             &mut stream,
             &json!({
                 "type": "session_ready",
-                "protocol_version": 2,
+                "protocol_version": "1.0-alpha.1",
                 "session_id": session_id,
             }),
         )
@@ -1032,7 +1034,7 @@ pub(crate) fn system_hook() {
         &mut stream,
         &json!({
             "type": "session_ready",
-            "protocol_version": 1,
+            "protocol_version": "1.0-alpha.1",
             "session_id": session_id,
         }),
     )
@@ -1360,7 +1362,7 @@ fn hook_worker(declared_failure: bool) {
         &mut stream,
         &json!({
             "type": "session_ready",
-            "protocol_version": 1,
+            "protocol_version": "1.0-alpha.1",
             "session_id": session_id,
         }),
     )

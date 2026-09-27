@@ -37,7 +37,7 @@ fn unified_pack_cli_exports_imports_and_reports_metadata_conflicts() {
             fs::create_dir_all(root.join(part)).unwrap();
         }
     }
-    let yaml = "source_format: 1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\nportable_metadata:\n  presentation: [{target: {kind: revision}, field: display_name, value: Published}]\n";
+    let yaml = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\nportable_metadata:\n  presentation: [{target: {kind: revision}, field: display_name, value: Published}]\n";
     fs::write(source.join("pactrun.yaml"), yaml).unwrap();
     let identity = ok(&a, &["pack", "install", source.to_str().unwrap()]);
     let reference = identity.trim().to_owned();

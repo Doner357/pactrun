@@ -28,7 +28,7 @@ Node.js, Go, Rust, or another executable supported by the host.
 
 `RevisionCoreFormatV1` represents native and interpreter launch without host
 file associations and excludes launcher `argv[0]` from the Pack-facing
-contract. See [Revision Core Format V1](./revision-core-format-v1.md).
+contract. See [Revision Core Format V1](./revision-canonical.md).
 
 **Verification: PR-TEST-0095.**
 
@@ -37,7 +37,7 @@ contract. See [Revision Core Format V1](./revision-core-format-v1.md).
 Direct Hooks, helper CLIs, wrappers, and SDKs MUST converge on one versioned,
 language-neutral canonical Hook Protocol. An adapter MUST NOT define a second
 semantic API. The exact Frozen V1 wire and state-machine contract is defined by
-[Hook Protocol V1](./hook-protocol-v1.md).
+[Hook Protocol V1](./hook-protocol.md).
 
 **Verification: PR-TEST-0093.**
 
@@ -48,7 +48,7 @@ data authorities, protocol-version-defined facilities, and I/O contract granted
 to that execution. Requests outside Pactrun-mediated authority MUST be rejected.
 
 The exact Frozen V1 Session authority representation is defined by
-[Hook Protocol V1](./hook-protocol-v1.md).
+[Hook Protocol V1](./hook-protocol.md).
 
 A future Hook may need explicit authority for persistent `ServiceStorage` or a
 ServiceStorage-backed Managed Service Resource. That authority is distinct from
@@ -82,7 +82,7 @@ readiness and from access authority. When Pactrun is responsible for evaluating
 a definitive presence prerequisite, `Unknown` MUST NOT satisfy it. A Package MAY
 instead perform a service-specific runtime check in its Hook. The authority
 wire shape, observer, admission mechanism, and path mapping are specified by
-[Hook V2](./hook-protocol-v2.md) and the
+[Hook V2](./hook-protocol.md) and the
 [M6.5 execution contract](../execution/m6-5-service-storage-execution.md).
 Workspace MUST remain execution-scoped scratch.
 

@@ -65,7 +65,7 @@ impl PactrunPersistence {
         let mut lengths = std::collections::BTreeMap::new();
         // Physical bytes may have independent Revision, Snapshot and Input
         // owners. Never mistake origin provenance for the complete root set.
-        let mut data = tx.prepare("SELECT blob_digest,byte_length FROM snapshot_blobs WHERE storage_kind=1 UNION SELECT content_digest,byte_length FROM managed_input_payloads WHERE content_digest IS NOT NULL")
+        let mut data = tx.prepare("SELECT blob_digest,byte_length FROM snapshot_blobs UNION SELECT content_digest,byte_length FROM managed_input_payloads WHERE content_digest IS NOT NULL")
             .map_err(|e| PersistenceError::sqlite("read immutable data roots", e))?;
         let rows = data
             .query_map([], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?)))

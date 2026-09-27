@@ -1,19 +1,7 @@
 // Test-ID: PR-TEST-0483
 // Verifies: PR-REQ-0347
 #[test]
-fn explicit_upgrade_preserves_real_inline_snapshots_and_refuses_implicit_upgrade() {
-    let spec = include_str!("../../docs/spec/persistence/persistence-schema-v10.md");
-    let ddl = spec
-        .split_once("```sql\n")
-        .unwrap()
-        .1
-        .split_once("\n```")
-        .unwrap()
-        .0;
-    assert_eq!(
-        ddl.trim(),
-        include_str!("persistence_schema_v10_additions.sql").trim()
-    );
+fn reopening_preserves_real_snapshot_identity_and_immutable_bytes() {
     let (_tmp, path) = root();
     let p = PactrunPersistence::open(&path).unwrap();
     let mut bundle = prepared(&p, 2);
@@ -22,44 +10,11 @@ fn explicit_upgrade_preserves_real_inline_snapshots_and_refuses_implicit_upgrade
     p.import_snapshot_bundle(&mut bundle).unwrap();
     drop(bundle);
     drop(p);
-    let mut db = Connection::open(path.join("database/pactrun.sqlite3")).unwrap();
-    crate::persistence::sqlite_v9::current_to_v9_fixture(&mut db);
-    assert!(matches!(
-        PactrunPersistence::open_read_only(&path),
-        Err(PersistenceError::UpgradeRequired)
-    ));
-    assert!(matches!(
-        PactrunPersistence::open(&path),
-        Err(PersistenceError::UpgradeRequired)
-    ));
-    let chunks: i64 = db
-        .query_row("SELECT count(*) FROM snapshot_blob_chunks", [], |r| {
-            r.get(0)
-        })
-        .unwrap();
-    assert!(chunks > 0);
-    assert!(PactrunPersistence::upgrade_storage(&path).unwrap());
-    assert!(!PactrunPersistence::upgrade_storage(&path).unwrap());
-    assert_eq!(
-        db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
-            .unwrap(),
-        crate::persistence::SCHEMA_VERSION
-    );
-    assert_eq!(
-        db.query_row::<i64, _, _>("SELECT count(*) FROM snapshot_blob_chunks", [], |r| r
-            .get(0))
-            .unwrap(),
-        chunks
-    );
-    assert_eq!(
-        db.query_row::<i64, _, _>(
-            "SELECT count(*) FROM snapshot_blobs WHERE storage_kind<>0",
-            [],
-            |r| r.get(0)
-        )
-        .unwrap(),
-        0
-    );
+    let before = std::fs::read(path.join("database/pactrun.sqlite3")).unwrap();
+    let reader = PactrunPersistence::open_read_only(&path).unwrap();
+    reader.verify_snapshot(id).unwrap();
+    drop(reader);
+    assert_eq!(std::fs::read(path.join("database/pactrun.sqlite3")).unwrap(), before);
     let p = PactrunPersistence::open(&path).unwrap();
     p.verify_snapshot(id).unwrap();
     let exported =
@@ -82,7 +37,7 @@ fn immutable_snapshot_reference_corruption_stops_collection_before_removal() {
     p.database
         .lock()
         .unwrap()
-        .execute("UPDATE snapshot_blobs SET storage_kind=0", [])
+        .execute("UPDATE snapshot_blobs SET blob_digest=zeroblob(32) WHERE (snapshot_id,blob_digest)=(SELECT snapshot_id,blob_digest FROM snapshot_blobs ORDER BY snapshot_id,blob_digest LIMIT 1)", [])
         .unwrap();
     drop(p);
     let collector = PactrunPersistence::open_for_collection(&path).unwrap();

@@ -1,10 +1,10 @@
 use std::{fmt, path::PathBuf};
 
 use super::{
-    ActionIdentity, ActionV1, ContentId, FiniteF64, HookServiceContractV2, HostExecutableName,
-    InputIdentity, InstanceId, InstanceStateVersion, ManagedInputPayloadId, ManagedInputProtection,
-    ManagedOutputIdentity, OperationAccessV1, ParameterDefaultV1, ParameterIdentity,
-    ParameterTypeV1, PositiveVersion, RevisionIdentity, RuntimeFileV1, SafeIntegerV1,
+    ActionIdentity, ActionV1, ContentId, FiniteF64, FormatVersion, HookServiceContractV2,
+    HostExecutableName, InputIdentity, InstanceId, InstanceStateVersion, ManagedInputPayloadId,
+    ManagedInputProtection, ManagedOutputIdentity, OperationAccessV1, ParameterDefaultV1,
+    ParameterIdentity, ParameterTypeV1, RevisionIdentity, RuntimeFileV1, SafeIntegerV1,
     TerminalContractV1, ValidatedRevisionContent,
 };
 
@@ -229,7 +229,7 @@ pub(crate) struct ActionExecutionPlan {
     active_bindings: Vec<ActiveInstanceBindingReference>,
     required_inputs_satisfied: bool,
     runtime_content: Vec<RuntimeFileV1>,
-    protocol_version: PositiveVersion,
+    protocol_version: FormatVersion,
     terminal: TerminalContractV1,
     hook_args: Vec<String>,
     outputs: Vec<ManagedOutputIdentity>,
@@ -286,7 +286,7 @@ impl ActionExecutionPlan {
         &self.launch
     }
 
-    pub(crate) fn protocol_version(&self) -> PositiveVersion {
+    pub(crate) fn protocol_version(&self) -> FormatVersion {
         self.protocol_version
     }
 
@@ -352,7 +352,7 @@ impl std::error::Error for ActionResolutionError {}
 pub(crate) enum PlanCompilationError {
     UnsupportedShell,
     InconsistentFacts,
-    UnsupportedHookProtocol(PositiveVersion),
+    UnsupportedHookProtocol(FormatVersion),
     InvalidLauncherSearchDirectory,
     LauncherNotFound,
     MissingRuntimeContent(ContentId),
@@ -365,11 +365,9 @@ impl fmt::Display for PlanCompilationError {
             Self::InconsistentFacts => {
                 formatter.write_str("compilation facts do not match the resolved intent")
             }
-            Self::UnsupportedHookProtocol(version) => write!(
-                formatter,
-                "Hook protocol version {} is unsupported",
-                version.get()
-            ),
+            Self::UnsupportedHookProtocol(version) => {
+                formatter.write_str(&super::VersionDomain::Hook.unsupported_message(*version))
+            }
             Self::InvalidLauncherSearchDirectory => {
                 formatter.write_str("launcher search directories must be absolute")
             }
@@ -593,7 +591,7 @@ mod tests {
             access: OperationAccessV1::Observe,
             parameters,
             hook: super::super::HookV1 {
-                protocol_version: PositiveVersion::new(1).unwrap(),
+                protocol_version: crate::domain::FormatVersion::BASELINE,
                 launch: HookLaunchV1::Direct {
                     executable: ContentId::parse("tool").unwrap(),
                 },

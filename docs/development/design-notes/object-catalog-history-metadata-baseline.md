@@ -27,7 +27,7 @@ Human formatting is not a machine protocol. Internal results remain typed.
 
 Owning contracts: [command reference](../../spec/behavior/command-and-output-reference.md),
 [identity and metadata](../../spec/foundations/identity-and-state.md), and
-[metadata transactions](../../spec/persistence/persistence-schema-v2.md).
+[metadata transactions](../../spec/persistence/persistence-baseline.md).
 
 At S0 approval, verification was Not run. Current implementation and verification
 evidence is recorded in the [delivery record](../object-catalog-history-metadata-status.md);

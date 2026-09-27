@@ -1,0 +1,2 @@
+# The frozen Persistence DDL must embed identical bytes in every native build.
+*.sql text eol=lf

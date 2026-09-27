@@ -33,7 +33,7 @@ It MUST NOT be used or reinterpreted as persistent `ServiceStorage`.
 An ordinary Action's managed-output declarations define the maximum authorized
 output vocabulary. Declaration alone MUST NOT require submission or publication
 of an output. An Action completion MAY submit a valid subset, including the
-empty set, as defined by [PR-REQ-0212](./hook-protocol-v1.md#pr-req-0212---managed-output-authorities-and-completion).
+empty set, as defined by [PR-REQ-0212](./hook-protocol.md#pr-req-0212---managed-output-authorities-and-completion).
 
 Only outputs validly submitted through a protocol-accepted completion and
 successfully published by Pactrun's managed-output commit become Run Artifacts.
@@ -72,7 +72,7 @@ state; Pactrun supplies and records the complete managed binding state.
 Their `RevisionCoreFormatV1` identity projection keeps Capture and Restore
 separate. Capability-specific prerequisites remain additive to global managed
 execution invariants. See
-[Revision Core Format V1](./revision-core-format-v1.md).
+[Revision Core Format V1](./revision-canonical.md).
 
 **Verification: PR-TEST-0246.**
 
@@ -104,7 +104,7 @@ representation.
 
 The exact V1 identity spelling, semantic manifest, normalization, framing, and
 verification boundary are defined by
-[Snapshot Integrity Format V1](./snapshot-integrity-format-v1.md).
+[Snapshot Integrity Format V1](./snapshot-integrity.md).
 
 **Verification: PR-TEST-0184, PR-TEST-0185.**
 

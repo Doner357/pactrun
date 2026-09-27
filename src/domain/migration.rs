@@ -27,7 +27,7 @@ pub(crate) enum MigrationError {
     IllegalProtection(InputIdentity),
     OutputsWithoutHook,
     InvalidCompletion,
-    UnsupportedProtocol,
+    UnsupportedProtocol(FormatVersion),
     ServiceMapping(ServiceMigrationError),
 }
 
@@ -54,7 +54,7 @@ impl fmt::Display for MigrationError {
             Self::IllegalProtection(id) => write!(f, "illegal Migration protection transition for Input {}", id.as_str()),
             Self::OutputsWithoutHook => f.write_str("Migration outputs require a Hook"),
             Self::InvalidCompletion => f.write_str("Migration completion must submit every declared output once on success, none on failure"),
-            Self::UnsupportedProtocol => f.write_str("Migration Hook protocol is unsupported"),
+            Self::UnsupportedProtocol(version) => f.write_str(&VersionDomain::Hook.unsupported_message(*version)),
             Self::ServiceMapping(error) => error.fmt(f),
         }
     }
@@ -633,12 +633,10 @@ fn evaluate_edge(
     if !relationally_valid(edge, &source.content.core, &target.content.core) {
         return Err(MigrationError::InvalidEdge);
     }
-    if edge
-        .hook
-        .as_ref()
-        .is_some_and(|h| !matches!(h.protocol_version.get(), 1 | 2))
+    if let Some(hook) = edge.hook.as_ref()
+        && !VersionDomain::Hook.supports(hook.protocol_version)
     {
-        return Err(MigrationError::UnsupportedProtocol);
+        return Err(MigrationError::UnsupportedProtocol(hook.protocol_version));
     }
     if !edge.produces_target.is_empty() && edge.hook.is_none() {
         return Err(MigrationError::OutputsWithoutHook);

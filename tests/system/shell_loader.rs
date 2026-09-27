@@ -2,6 +2,65 @@ use super::support::{Scenario, assert_success, command, run_command};
 use serde_json::json;
 use std::{fs, process::Command};
 
+// Test-ID: PR-TEST-0617
+// Verifies: PR-REQ-0349
+#[cfg(target_os = "linux")]
+#[test]
+fn running_hook_uses_its_image_after_unlink_and_path_replacement() {
+    use std::{
+        os::unix::fs::PermissionsExt,
+        thread,
+        time::{Duration, Instant},
+    };
+    for terminal in ["none", "output", "interactive"] {
+        let yaml = source("sh", "sh", &["{ready}".into(), "{release}".into()])
+            .replace("terminal: output", &format!("terminal: {terminal}"));
+        let scenario = Scenario::new(777, &yaml);
+        let ready = scenario.path("image-ready");
+        let release = scenario.path("image-release");
+        let source_file = scenario.source.join("pactrun.yaml");
+        let yaml = fs::read_to_string(&source_file)
+            .unwrap()
+            .replace("{ready}", ready.to_str().unwrap())
+            .replace("{release}", release.to_str().unwrap());
+        fs::write(source_file, yaml).unwrap();
+        fs::write(scenario.source.join("script.txt"),
+            "printf '%s' \"$PACTRUN_EXECUTABLE\" > \"$1\"\nwhile ! test -f \"$2\"; do sleep 0.02; done\n\"$PACTRUN_EXECUTABLE\" hook session >/dev/null || exit 91\n").unwrap();
+        scenario.install_and_create("sample");
+        let program = scenario.path("installed-pactrun");
+        fs::copy(env!("CARGO_BIN_EXE_pactrun"), &program).unwrap();
+        let worker_program = program.clone();
+        let worker_ready = ready.clone();
+        let mutate = thread::spawn(move || -> std::io::Result<()> {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !worker_ready.exists() {
+                if Instant::now() > deadline {
+                    return Err(std::io::Error::other("Hook did not reach image barrier"));
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            fs::remove_file(&worker_program)?;
+            fs::write(&worker_program, b"#!/bin/sh\nexit 93\n")?;
+            fs::set_permissions(&worker_program, fs::Permissions::from_mode(0o700))?;
+            fs::write(release, b"continue")
+        });
+        let mut cmd = Command::new(&program);
+        cmd.args(["invoke", "sample", "run", "--action-timeout-ms", "10000"])
+            .env("PACTRUN_STORAGE_ROOT", &scenario.storage)
+            .current_dir(scenario.path(""));
+        let output = run_command(cmd);
+        mutate.join().unwrap().unwrap();
+        assert_success(&output);
+        let locator = fs::read_to_string(ready).unwrap();
+        assert!(locator.starts_with("/proc/"), "{locator}");
+        assert!(locator.ends_with("/exe"), "{locator}");
+        assert!(
+            !std::path::Path::new(&locator).exists(),
+            "expired Loader locator remained live"
+        );
+    }
+}
+
 fn shells() -> Vec<(&'static str, &'static str)> {
     if cfg!(windows) {
         vec![
@@ -15,7 +74,7 @@ fn shells() -> Vec<(&'static str, &'static str)> {
 
 fn source(shell: &str, executable: &str, args: &[String]) -> String {
     format!(
-        r#"source_format: 3
+        r#"source_format: 1.0-alpha.1
 package_id: '{{package_id}}'
 revision:
   actions:
@@ -23,7 +82,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}
         args: {}
         io: {{terminal: output}}
@@ -222,7 +281,7 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
     for (shell, executable) in shells() {
         let mut yaml = source(shell, executable, &[]);
         let hook = format!(
-            "        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n"
+            "        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n"
         );
         let capabilities = format!(
             "  snapshot:\n    capture:\n      parameters: []\n      access: observe\n      hook:\n{hook}    restore:\n      parameters: []\n      hook:\n{hook}  cleanup:\n    requires: []\n    hook:\n{}",
@@ -295,7 +354,7 @@ fn shell_loader_plain_migration_and_missing_target_output_are_distinct() {
             let base =
                 source(shell, executable, &[]).replace("{package_id}", &format!("{:032x}", 705));
             let migration = format!(
-                "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: {}\n      hook:\n        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n",
+                "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: {}\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: none}}\n",
                 if missing { "[data]" } else { "[]" }
             );
             let mut target =
@@ -366,7 +425,7 @@ fn shell_loader_timeout_does_not_become_success() {
 fn shell_loader_capture_registered_binary_content_round_trips() {
     for (shell, executable) in shells() {
         let hook = format!(
-            "        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        io: {{terminal: none}}\n"
+            "        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        io: {{terminal: none}}\n"
         );
         let capabilities = format!(
             "  snapshot:\n    capture:\n      parameters: []\n      access: observe\n      hook:\n{hook}        args: [capture]\n    restore:\n      parameters: []\n      hook:\n{hook}        args: [restore]\n"
@@ -480,7 +539,7 @@ fn shell_loader_transform_proposal_receipt_and_exit_preserve_target_boundary() {
       resource_transitions:
         - {{kind: transform, sources: [{{role: active, resource_id: data}}], targets: [data]}}
       hook:
-        protocol_version: 2
+        protocol_version: 1.0-alpha.1
         launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}
         args: []
         io: {{terminal: none}}
@@ -867,7 +926,7 @@ fn shell_loader_migration_reads_pinned_source_and_explicitly_registers_target_by
         assert_success(&run_command(set));
         let digest = old.rsplit('/').next().unwrap();
         let migration = format!(
-            "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: [{{role: active, input_id: data}}]\n      requires_target: []\n      produces_target: [result]\n      hook:\n        protocol_version: 2\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: output}}\n"
+            "  migrations:\n    - source_revision_digest: '{digest}'\n      transitions: []\n      requires_source: [{{role: active, input_id: data}}]\n      requires_target: []\n      produces_target: [result]\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: []\n        io: {{terminal: output}}\n"
         );
         let target_source = base
             .replace("inputs: [{id: data,", "inputs: [{id: result,")

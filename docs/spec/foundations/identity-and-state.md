@@ -108,7 +108,7 @@ SHA-256 profile represented by a self-describing digest such as
 `sha256:<value>`. JCS MUST NOT replace Pactrun semantic normalization.
 
 The exact Frozen contract is defined by
-[Revision Core Format V1](../contracts/revision-core-format-v1.md).
+[Revision Core Format V1](../contracts/revision-canonical.md).
 
 **Verification: PR-TEST-0001, PR-TEST-0012, PR-TEST-0044, PR-TEST-0045.**
 
@@ -181,8 +181,8 @@ pair and apply the Frozen dual-component framing and SHA-256 profile.
 Production code MUST NOT depend on or call Pactrun-owned xtask parser,
 normalizer, or verifier implementation. Sharing suitable commodity Rust
 dependencies does not violate this boundary. Every applicable Frozen negative
-vector MUST be rejected, but an exact `PactrunErrorRefV1` is required only when
-the vector's spelling is registered under `revision_core_format_v1` in the
+vector MUST be rejected, but an exact `PactrunErrorRef` is required only when
+the vector's spelling is registered under `revision_core` in the
 Frozen error catalog. Internal or verifier-only spellings MUST remain
 non-normative and MUST NOT be mapped to a speculative generic error.
 

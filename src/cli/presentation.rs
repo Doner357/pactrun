@@ -2,7 +2,8 @@
 use super::*;
 use serde::Serialize;
 
-pub(super) const FORMAT_V1: &str = "pactrun.cli.v1";
+pub(super) const FORMAT_KIND: &str = "pactrun.cli";
+pub(super) const FORMAT_VERSION: &str = crate::domain::VersionDomain::Machine.current_text();
 
 pub(super) fn command_name(command: &Command) -> &'static str {
     use artifacts::ArtifactCommand as A;
@@ -30,7 +31,6 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         Command::Invoke { .. } => "invoke",
         Command::ShowRun { .. } => "run show",
         Command::ReconcileRuns => "run reconcile",
-        Command::UpgradeStorage => "storage upgrade",
         Command::Artifact(A::Export { .. }) => "run artifact export",
         Command::Artifact(A::Delete { .. }) => "run artifact delete",
         Command::Lifecycle(L::Collect { .. }) => "storage gc",
@@ -189,6 +189,7 @@ struct Error<'a> {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Response<'a, T: Serialize> {
     format: &'static str,
+    format_version: &'static str,
     command: Option<&'a str>,
     status: &'static str,
     result: Option<&'a T>,
@@ -231,7 +232,8 @@ pub(super) fn render<T: Serialize>(
         Format::Json => document(
             output,
             &Response {
-                format: FORMAT_V1,
+                format: FORMAT_KIND,
+                format_version: FORMAT_VERSION,
                 command: Some(command),
                 status: "success",
                 result: Some(result),
@@ -250,7 +252,8 @@ pub(super) fn failure<T: Serialize>(
     document(
         output,
         &Response {
-            format: FORMAT_V1,
+            format: FORMAT_KIND,
+            format_version: FORMAT_VERSION,
             command,
             status: "failure",
             result: partial,
@@ -273,6 +276,12 @@ pub(super) struct Help<'a> {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Version<'a> {
     pub(super) product_version: &'a str,
+    pub(super) build_target: &'a str,
+    pub(super) rustc: &'a str,
+    pub(super) source_commit: Option<&'a str>,
+    pub(super) source_manifest_sha256: Option<&'a str>,
+    pub(super) supported_formats: std::collections::BTreeMap<&'a str, Vec<&'a str>>,
+    pub(super) default_formats: std::collections::BTreeMap<&'a str, &'a str>,
 }
 
 #[derive(Serialize)]
@@ -292,13 +301,6 @@ pub(super) struct StateVersion {
 pub(super) struct InputExport {
     pub(super) input_id: String,
     pub(super) state_version: String,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(test, derive(schemars::JsonSchema))]
-pub(super) struct StorageUpgrade {
-    pub(super) schema_version: i64,
-    pub(super) upgraded: bool,
 }
 
 #[derive(Serialize)]
@@ -720,7 +722,7 @@ mod tests {
         })
         .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
-        assert_eq!(json["format"], FORMAT_V1);
+        assert_eq!(json["format"], FORMAT_KIND);
         assert_eq!(json["result"]["state_version"], value.state_version);
         assert!(json["error"].is_null());
         assert_eq!(output.last(), Some(&b'\n'));
@@ -760,6 +762,12 @@ mod tests {
             "version",
             &Version {
                 product_version: "test",
+                build_target: "test",
+                rustc: "test",
+                source_commit: None,
+                source_manifest_sha256: None,
+                supported_formats: std::collections::BTreeMap::new(),
+                default_formats: std::collections::BTreeMap::new(),
             },
             &mut output,
             |_, _| unreachable!(),

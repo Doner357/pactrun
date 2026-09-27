@@ -17,7 +17,7 @@ use crate::{
         InstanceCompilationState, InstanceId, InstanceName, InstanceStateVersion, InstanceSummary,
         InstanceView, MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1, ManagedInputBindingView,
         ManagedInputPayloadId, ManagedInputProtection, ManagedInputRole, RevisionContentDigest,
-        RevisionCoreV1, RevisionIdentity,
+        RevisionDeclarations, RevisionIdentity,
     },
     revision_content::decode_canonical_revision_core,
 };
@@ -258,7 +258,7 @@ impl PactrunPersistence {
             return Ok(None);
         };
         let active_revision = revision_identity(package, digest)?;
-        super::sqlite_v5::load_consequence_version(&database, id)?;
+        super::writer_admission::load_consequence_version(&database, id)?;
         let state_version = state_version(version)?;
         let core = load_revision_core(&database, &active_revision)?;
         let mut active_bindings = Vec::new();
@@ -582,7 +582,7 @@ fn load_instance_from(
     digest: Vec<u8>,
     version: Vec<u8>,
 ) -> Result<InstanceView, PersistenceError> {
-    super::sqlite_v5::load_consequence_version(database, id)?;
+    super::writer_admission::load_consequence_version(database, id)?;
     let name = String::from_utf8(name).map_err(|_| {
         PersistenceError::CorruptManagedInput("InstanceName is not UTF-8".to_owned())
     })?;
@@ -690,7 +690,7 @@ pub(super) fn instance_header(
         |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Vec<u8>>(2)?, row.get::<_, Vec<u8>>(3)?)),
     ).optional().map_err(|error| PersistenceError::sqlite("load Instance header", error))?
         .ok_or_else(|| PersistenceError::MissingInstance(instance.to_string()))?;
-    super::sqlite_v5::load_consequence_version(database, instance)?;
+    super::writer_admission::load_consequence_version(database, instance)?;
     let name = InstanceName::parse(String::from_utf8(row.0).map_err(|_| {
         PersistenceError::CorruptManagedInput("InstanceName is not UTF-8".to_owned())
     })?)
@@ -705,7 +705,7 @@ pub(super) fn instance_header(
 pub(super) fn load_revision_core(
     database: &Connection,
     identity: &RevisionIdentity,
-) -> Result<RevisionCoreV1, PersistenceError> {
+) -> Result<RevisionDeclarations, PersistenceError> {
     let bytes = database
         .query_row(
             "SELECT core_jcs FROM revisions WHERE package_id=?1 AND revision_content_digest=?2",
@@ -725,7 +725,7 @@ pub(super) fn load_revision_core(
 }
 
 fn input_declaration<'a>(
-    core: &'a RevisionCoreV1,
+    core: &'a RevisionDeclarations,
     input: &InputIdentity,
 ) -> Option<&'a InputDeclarationV1> {
     core.inputs()
@@ -896,9 +896,9 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            MANAGED_INPUT_CHUNK_BYTES_V1, RevisionCoreProjectionInputV1,
-            RuntimeContentProjectionInputV1, ValidatedRevisionContentV1, project_revision_core_v1,
-            project_runtime_content_closure_v1, validate_revision_content_v1,
+            DeclarationContent, MANAGED_INPUT_CHUNK_BYTES_V1, RevisionDeclarationInput,
+            RuntimeContentProjectionInputV1, project_revision_declarations,
+            project_runtime_content_closure_v1, validate_declaration_content,
         },
         persistence::PactrunPersistence,
     };
@@ -950,7 +950,7 @@ mod tests {
     }
 
     fn revision(persistence: &PactrunPersistence) -> RevisionIdentity {
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![
                 InputDeclarationV1 {
                     id: InputIdentity::parse("required").unwrap(),
@@ -973,8 +973,8 @@ mod tests {
             files: Vec::new(),
         })
         .unwrap();
-        let content: ValidatedRevisionContentV1 =
-            validate_revision_content_v1(core, runtime_content).unwrap();
+        let content: DeclarationContent =
+            validate_declaration_content(core, runtime_content).unwrap();
         persistence
             .persist_revision(crate::domain::PackageId::from_bytes([9; 16]), &content, &[])
             .unwrap()

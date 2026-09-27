@@ -10,7 +10,7 @@ title: Managed Object Lifecycle and GC
 Read [resource lifetimes](../foundations/resources-and-versioning.md) and
 [command conventions](./command-and-output-reference.md) first. Consult the
 [implementation record](../../development/managed-object-lifecycle-status.md)
-before using a command. [V9](../persistence/persistence-schema-v9.md) is the
+before using a command. [V9](../persistence/persistence-baseline.md) is the
 coordination boundary; this page does not claim integration or publication.
 <!-- spec-navigation:end -->
 
@@ -44,7 +44,7 @@ Only published Artifacts can be exported. Export requires purpose-specific
 destination is required; stdout, overwrite and resume are unsupported. Content
 is opaque and may contain Secrets; diagnostics MUST NOT reveal content or
 sensitive derived information. Streaming MUST NOT inherit a Managed Input cap.
-The existing [Artifact representation maximum](../persistence/persistence-schema-v4.md#pr-req-0275---exact-persistenceschemav4)
+The existing [Artifact representation maximum](../persistence/persistence-baseline.md#pr-req-0275---exact-persistenceschemav4)
 of 536,870,912 bytes remains unchanged; this scope does not increase publication
 or storage capacity. No additional export-only ceiling is introduced.
 

@@ -7,7 +7,7 @@ use std::fmt;
 
 use super::{
     ActionIdentity, ActionPlanStep, ActiveInstanceBindingReference, CompiledHookLaunch, HookCodeV1,
-    InstanceId, InstanceStateVersion, ManagedOutputIdentity, PactrunErrorRefV1, RevisionIdentity,
+    InstanceId, InstanceStateVersion, ManagedOutputIdentity, PactrunErrorRef, RevisionIdentity,
     RunId, RuntimeFileV1,
 };
 
@@ -236,7 +236,7 @@ impl ExecutionOwnerSession {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RunFailureRecord {
-    pub(crate) error: PactrunErrorRefV1,
+    pub(crate) error: PactrunErrorRef,
     pub(crate) message: String,
 }
 
@@ -302,7 +302,7 @@ impl ManagedRunIdentity {
 
     pub(crate) fn authoritative_access(
         &self,
-        core: &super::RevisionCoreV1,
+        core: &super::RevisionDeclarations,
     ) -> Result<super::OperationAccessV1, RunRecordError> {
         match self {
             Self::Migration(_) | Self::Deletion { .. } => Some(super::OperationAccessV1::Mutate),
@@ -483,13 +483,13 @@ pub(crate) enum AdmissionRefusal {
 }
 
 impl AdmissionRefusal {
-    pub(crate) fn error_ref(&self) -> PactrunErrorRefV1 {
+    pub(crate) fn error_ref(&self) -> PactrunErrorRef {
         let code = match self {
             Self::RecoveryGuardActive => "recovery_guard_active",
             Self::PlanInvalidated(_) => "plan_invalidated",
             Self::MutationConflict(_) => "mutation_conflict",
         };
-        PactrunErrorRefV1::new(ADMISSION_ERROR_OWNER, code)
+        PactrunErrorRef::new(ADMISSION_ERROR_OWNER, code)
             .expect("admission error identities are lexically valid")
     }
 

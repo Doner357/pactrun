@@ -1,4 +1,5 @@
 use super::*;
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -25,9 +26,11 @@ fn root() -> (TempDir, PathBuf) {
     (tmp, path)
 }
 fn fixture(version: u32) -> serde_json::Value {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "tests/vectors/snapshot_integrity_format_v{version}/vectors.json"
-    ));
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(if version == 1 {
+        "tests/vectors/snapshot_integrity/content.json"
+    } else {
+        "tests/vectors/snapshot_integrity/protection.json"
+    });
     let corpus: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     corpus["valid"]
         .as_array()
@@ -51,8 +54,8 @@ fn prepared_fixture(
     p: &PactrunPersistence,
     f: &serde_json::Value,
 ) -> (ValidatedSnapshotBundle, fs::File) {
-    let version = SnapshotIntegrityVersion::from_number(
-        f["normalized_manifest"]["format_version"].as_i64().unwrap(),
+    let version = SnapshotIntegrityVersion::from_text(
+        f["normalized_manifest"]["format_version"].as_str().unwrap(),
     )
     .unwrap();
     let manifest = decode_snapshot_manifest(
@@ -100,7 +103,7 @@ fn snapshot_storage_round_trips_both_versions_without_producer_or_origin_ownersh
         );
         assert!(!p.import_snapshot_bundle(&mut bundle).unwrap().inserted);
         let inspection = p.inspect_snapshot(id).unwrap();
-        assert_eq!(inspection.version.number(), version);
+        assert_eq!(inspection.version.as_str(), "1.0-alpha.1");
         assert_eq!(inspection.id, id);
         let verified = p.verify_snapshot(id).unwrap();
         assert_eq!(
@@ -162,12 +165,7 @@ fn import_rolls_back_all_rows_on_failure_and_never_creates_a_run() {
     alias.set_len(0).unwrap();
     assert!(p.import_snapshot_bundle(&mut bundle).is_err());
     let db = p.database.lock().unwrap();
-    for table in [
-        "snapshots",
-        "snapshot_blobs",
-        "snapshot_blob_chunks",
-        "runs",
-    ] {
+    for table in ["snapshots", "snapshot_blobs", "runs"] {
         assert_eq!(
             db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
                 .get::<_, i64>(0))
@@ -220,7 +218,7 @@ fn application_export_requires_one_shot_authorization_and_atomic_no_clobber() {
     let ro = crate::application::PactrunApplication::open_read_only(&path2).unwrap();
     assert_eq!(
         ro.inspect_snapshot(id).unwrap().version,
-        SnapshotIntegrityVersion::V1
+        SnapshotIntegrityVersion::BASELINE
     );
     let mut damaged = before;
     let n = damaged.len();
@@ -257,8 +255,8 @@ fn same_id_different_digest_is_a_collision_without_replacing_the_original() {
 // Test-ID: PR-TEST-0214
 // Verifies: PR-REQ-0292, PR-REQ-0297, PR-REQ-0302
 #[test]
-fn producer_installation_evaluates_the_original_version_without_reclassifying_v1() {
-    for version in [1, 2] {
+fn producer_installation_validates_baseline_protection_without_rewriting_snapshot_bytes() {
+    for invalid_protection in [false, true] {
         let (_tmp, path) = root();
         let p = PactrunPersistence::open(&path).unwrap();
         let mut f = fixture(2);
@@ -276,7 +274,7 @@ fn producer_installation_evaluates_the_original_version_without_reclassifying_v1
                 },
             })
             .collect();
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs,
             actions: vec![],
             snapshot: None,
@@ -287,19 +285,25 @@ fn producer_installation_evaluates_the_original_version_without_reclassifying_v1
         let runtime =
             project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
                 .unwrap();
-        let content = validate_revision_content_v1(core, runtime).unwrap();
+        let content = validate_declaration_content(core, runtime).unwrap();
         let package = f["normalized_manifest"]["producer"]["package_id"]
             .as_str()
             .unwrap()
             .parse()
             .unwrap();
-        let digest =
-            crate::revision_core_v1::calculate_revision_content_digest_v1(&content).unwrap();
+        let digest = crate::revision_declarations::calculate_service_free_digest(&content).unwrap();
         let mut raw: serde_json::Value =
             serde_json::from_str(f["raw_manifest"].as_str().unwrap()).unwrap();
         raw["producer"]["revision_content_digest"] = serde_json::json!(digest.to_string());
-        raw["format_version"] = serde_json::json!(version);
-        f["normalized_manifest"]["format_version"] = serde_json::json!(version);
+        if invalid_protection {
+            let token = raw["managed_bindings"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|binding| binding["input_id"] == "token")
+                .unwrap();
+            token["protection"] = serde_json::json!("normal");
+        }
         f["raw_manifest"] = serde_json::json!(serde_json::to_string(&raw).unwrap());
         let (mut bundle, _) = prepared_fixture(&p, &f);
         let id = bundle.manifest().manifest().snapshot_id();
@@ -307,9 +311,11 @@ fn producer_installation_evaluates_the_original_version_without_reclassifying_v1
             p.import_snapshot_bundle(&mut bundle).unwrap().relational,
             SnapshotRelationalVerification::NotEvaluated
         );
+        let canonical = bundle.manifest().canonical_bytes().to_vec();
         p.persist_revision(package, &content, &[]).unwrap();
+        assert_eq!(bundle.manifest().canonical_bytes(), canonical);
         let result = p.verify_snapshot(id);
-        if version == 2 {
+        if !invalid_protection {
             assert_eq!(
                 result.unwrap().relational,
                 SnapshotRelationalVerification::Valid
@@ -343,10 +349,10 @@ fn real_service_payload_above_512_mib_round_trips_but_is_not_a_publishable_manag
         remaining -= n as u64;
     }
     let digest = Sha256Digest::from_bytes(hash.finalize().into());
-    let mut raw = serde_json::json!({"format_version":2,"snapshot_id":"11111111111111111111111111111111","producer":{"package_id":"22222222222222222222222222222222","revision_content_digest":format!("sha256:{}","3".repeat(64))},"origin_instance_id":"44444444444444444444444444444444","captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[{"role":"database","path":"backup.bin","blob_digest":digest.as_str()}]});
+    let mut raw = serde_json::json!({"format_version":"1.0-alpha.1","snapshot_id":"11111111111111111111111111111111","producer":{"package_id":"22222222222222222222222222222222","revision_content_digest":format!("sha256:{}","3".repeat(64))},"origin_instance_id":"44444444444444444444444444444444","captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[{"role":"database","path":"backup.bin","blob_digest":digest.as_str()}]});
     raw["managed_bindings"] = serde_json::json!([{"input_id":"large","role":"active","state":"bound","protection":"normal","blob_digest":digest.as_str()}]);
     let manifest = decode_snapshot_manifest(
-        SnapshotIntegrityVersion::V2,
+        SnapshotIntegrityVersion::BASELINE,
         &serde_json::to_vec(&raw).unwrap(),
         None,
     )
@@ -426,7 +432,7 @@ fn snapshot_database_full_rolls_back_without_misclassifying_content() {
     assert!(p.list_snapshots(None).unwrap().is_empty());
     {
         let db = p.database.lock().unwrap();
-        for table in ["snapshot_blobs", "snapshot_blob_chunks", "runs"] {
+        for table in ["snapshot_blobs", "runs"] {
             assert_eq!(
                 db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
                     .get::<_, i64>(0))

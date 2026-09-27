@@ -345,35 +345,29 @@ pub(super) fn validate_links(
             }
         }
     }
-    if db
-        .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
-        .map_err(|e| PersistenceError::sqlite("read service evidence schema", e))?
-        >= 7
-    {
-        for index in 0..committed {
-            if let Some(target) = load_revision_from(db, &invocation.path()[index + 1])? {
-                let source =
-                    Sha256Digest::from_bytes(*invocation.path()[index].content_digest.as_bytes());
-                let transformed = target
-                    .content
-                    .core
-                    .service_core()
-                    .and_then(|c| c.migrations().get(&source))
-                    .is_some_and(|m| {
-                        m.resources
-                            .iter()
-                            .any(|r| matches!(r, ResourceTransitionV2::Transform { .. }))
-                    });
-                let recorded:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits WHERE run_id=?1 AND edge_index=?2)",params![run.as_bytes().as_slice(),index as i64],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate committed service evidence",e))?;
-                if transformed != recorded {
-                    return Err(corrupt());
-                }
+    for index in 0..committed {
+        if let Some(target) = load_revision_from(db, &invocation.path()[index + 1])? {
+            let source =
+                Sha256Digest::from_bytes(*invocation.path()[index].content_digest.as_bytes());
+            let transformed = target
+                .content
+                .core
+                .service_core()
+                .and_then(|c| c.migrations().get(&source))
+                .is_some_and(|m| {
+                    m.resources
+                        .iter()
+                        .any(|r| matches!(r, ResourceTransitionV2::Transform { .. }))
+                });
+            let recorded:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits WHERE run_id=?1 AND edge_index=?2)",params![run.as_bytes().as_slice(),index as i64],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate committed service evidence",e))?;
+            if transformed != recorded {
+                return Err(corrupt());
             }
         }
-        let dangling:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits s LEFT JOIN run_migration_boundaries b ON b.run_id=s.run_id AND b.edge_index=s.edge_index WHERE s.run_id=?1 AND b.run_id IS NULL)",[run.as_bytes().as_slice()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate service boundary references",e))?;
-        if dangling {
-            return Err(corrupt());
-        }
+    }
+    let dangling:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM run_service_edge_commits s LEFT JOIN run_migration_boundaries b ON b.run_id=s.run_id AND b.edge_index=s.edge_index WHERE s.run_id=?1 AND b.run_id IS NULL)",[run.as_bytes().as_slice()],|r|r.get(0)).map_err(|e|PersistenceError::sqlite("validate service boundary references",e))?;
+    if dangling {
+        return Err(corrupt());
     }
     Ok(())
 }
@@ -459,7 +453,7 @@ fn invalidated(step: RunFailedStep) -> RunFinish {
         outcome: RunOutcome::Failed,
         primary_failure: Some(RunPrimaryFailure {
             failure: RunFailureRecord {
-                error: PactrunErrorRefV1::new("execution", "migration_publication_rejected")
+                error: PactrunErrorRef::new("execution", "migration_publication_rejected")
                     .expect("registered Migration error"),
                 message: String::new(),
             },

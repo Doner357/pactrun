@@ -19,7 +19,7 @@ const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
 const LAUNCHER_NAME: &str = "pactrun-system-launcher.bat";
 
 fn windows_launcher_source() -> String {
-    r#"source_format: 1
+    r#"source_format: 1.0-alpha.1
 package_id: {package_id}
 revision:
   inputs: []
@@ -28,7 +28,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
         args: ["--exact", "support::system_hook", "--nocapture", "system-marker:{hook_marker}", "system-mode:success"]
         io: { terminal: none }
@@ -37,7 +37,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch:
           kind: interpreter
           command: pactrun-system-launcher.bat

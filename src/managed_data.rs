@@ -212,6 +212,8 @@ impl StagingSession {
 
     /// Prepare only this session; do not inspect another schema's abandoned state.
     pub(crate) fn prepare(storage_root: &Path) -> Result<Self, StagingError> {
+        crate::persistence::PactrunPersistence::preflight_storage(storage_root, false)
+            .map_err(|error| StagingError::Unsupported(error.to_string()))?;
         Self::open_inner(storage_root, false)
     }
 
@@ -803,7 +805,7 @@ mod tests {
         fs::create_dir(&source).unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000031
 revision:
   inputs:

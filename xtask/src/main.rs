@@ -4,30 +4,47 @@ use std::{
     process::{Command, ExitCode},
 };
 
-mod error_taxonomy_v1;
-mod hook_protocol_v1;
+mod error_catalog;
+mod hook_protocol;
 mod lexical_v1;
-mod revision_core_v1;
-mod snapshot_integrity_v1;
-mod snapshot_integrity_v2;
+mod release_sources;
+mod revision_reference;
+mod snapshot_production;
+mod snapshot_reference;
 
 fn main() -> ExitCode {
     let workspace_root = workspace_root();
     let result = match env::args().nth(1).as_deref() {
+        Some("release-publish-local") => {
+            let args = env::args_os().skip(2).collect::<Vec<_>>();
+            if args.len() != 3 {
+                Err("usage: cargo xtask release-publish-local INPUT.json LOCAL_BARE_REPO DEFAULT_REF".into())
+            } else if let Some(default) = args[2].to_str() {
+                release_sources::publish_local(Path::new(&args[0]), Path::new(&args[1]), default)
+            } else {
+                Err("default ref must be ASCII".into())
+            }
+        }
+        Some("release-sources") => {
+            let args = env::args_os().skip(2).collect::<Vec<_>>();
+            if args.len() != 2 {
+                Err("usage: cargo xtask release-sources INPUT.json NEW_OUTPUT_DIRECTORY".into())
+            } else {
+                release_sources::generate(Path::new(&args[0]), Path::new(&args[1]))
+            }
+        }
         Some("ci") => run_ci(&workspace_root),
         Some("rust-ci") => run_rust_ci(&workspace_root),
         Some("system-test") => run_system_tests(&workspace_root),
         Some("docs-build") => build_docs(&workspace_root),
-        Some("revision-core-v1-verify") => revision_core_v1::verify(&workspace_root),
-        Some("revision-core-v2-verify") => verify_revision_core_v2(&workspace_root),
-        Some("revision-core-v1-calculate") => revision_core_v1::calculate(&workspace_root),
-        Some("snapshot-integrity-v1-verify") => snapshot_integrity_v1::verify(&workspace_root),
-        Some("snapshot-integrity-v2-verify") => snapshot_integrity_v2::verify(&workspace_root),
-        Some("snapshot-integrity-v1-calculate") => {
-            snapshot_integrity_v1::calculate(&workspace_root)
-        }
-        Some("hook-protocol-v1-verify") => hook_protocol_v1::verify(&workspace_root),
-        Some("error-taxonomy-v1-verify") => error_taxonomy_v1::verify(&workspace_root),
+        Some("revision-reference-verify") => revision_reference::verify(&workspace_root),
+        Some("revision-canonical-verify") => verify_revision_canonical(&workspace_root),
+        Some("revision-reference-calculate") => revision_reference::calculate(&workspace_root),
+        Some("snapshot-reference-verify") => snapshot_reference::verify(&workspace_root),
+        Some("snapshot-integrity-verify") => snapshot_production::verify(&workspace_root),
+        Some("snapshot-reference-calculate") => snapshot_reference::calculate(&workspace_root),
+        Some("hook-protocol-verify") => hook_protocol::verify(&workspace_root),
+        Some("error-catalog-verify") => error_catalog::verify(&workspace_root),
         Some(command) => Err(format!("unknown xtask command: {command}")),
         None => Err("missing xtask command".to_owned()),
     };
@@ -37,7 +54,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("error: {error}");
             eprintln!(
-                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-core-v1-verify|revision-core-v2-verify|revision-core-v1-calculate|snapshot-integrity-v1-verify|snapshot-integrity-v1-calculate|snapshot-integrity-v2-verify|hook-protocol-v1-verify|error-taxonomy-v1-verify>"
+                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-reference-verify|revision-canonical-verify|revision-reference-calculate|snapshot-reference-verify|snapshot-reference-calculate|snapshot-integrity-verify|hook-protocol-verify|error-catalog-verify>"
             );
             ExitCode::FAILURE
         }
@@ -52,12 +69,12 @@ fn workspace_root() -> PathBuf {
 }
 
 fn run_ci(workspace_root: &Path) -> Result<(), String> {
-    revision_core_v1::verify(workspace_root)?;
-    verify_revision_core_v2(workspace_root)?;
-    snapshot_integrity_v1::verify(workspace_root)?;
-    snapshot_integrity_v2::verify(workspace_root)?;
-    hook_protocol_v1::verify(workspace_root)?;
-    error_taxonomy_v1::verify(workspace_root)?;
+    revision_reference::verify(workspace_root)?;
+    verify_revision_canonical(workspace_root)?;
+    snapshot_reference::verify(workspace_root)?;
+    snapshot_production::verify(workspace_root)?;
+    hook_protocol::verify(workspace_root)?;
+    error_catalog::verify(workspace_root)?;
     run_rust_ci(workspace_root)?;
     run(
         workspace_root,
@@ -67,13 +84,13 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
     build_docs(workspace_root)
 }
 
-fn verify_revision_core_v2(workspace_root: &Path) -> Result<(), String> {
+fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
     run(
         workspace_root,
         "node",
         &[
-            "tests/oracles/revision_core_format_v2.mjs",
-            "tests/vectors/revision_core_format_v2/vectors.json",
+            "tests/oracles/revision_canonical_services.mjs",
+            "tests/vectors/revision_canonical/services.json",
         ],
     )?;
     run(
@@ -85,7 +102,7 @@ fn verify_revision_core_v2(workspace_root: &Path) -> Result<(), String> {
             "pactrun",
             "--lib",
             "--all-features",
-            "revision_core_v2::tests",
+            "revision_canonical::tests",
         ],
     )?;
     run(
@@ -97,7 +114,7 @@ fn verify_revision_core_v2(workspace_root: &Path) -> Result<(), String> {
             "pactrun",
             "--lib",
             "--all-features",
-            "authoring::v2::tests",
+            "authoring::",
         ],
     )
 }

@@ -70,7 +70,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
         }
         "migration" => {
             let core = &stored.content.core;
-            let target_core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+            let target_core = project_revision_declarations(RevisionDeclarationInput {
                 inputs: core.inputs().to_vec(),
                 actions: core.actions().to_vec(),
                 snapshot: core.snapshot().cloned(),
@@ -88,7 +88,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
             })
             .unwrap();
             let content =
-                validate_revision_content_v1(target_core, stored.content.runtime_content.clone())
+                validate_declaration_content(target_core, stored.content.runtime_content.clone())
                     .unwrap();
             let publication = p
                 .put_runtime_content(

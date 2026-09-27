@@ -6,23 +6,12 @@ title: Internal persistence
 
 **Status: Informative navigation.**
 
-[V11](./persistence-schema-v11.md) is the integrated develop baseline, with
-explicit exact-V8/V9/V10 upgrade. The diagnostics delivery record distinguishes
-source verification from the completed local Git integration.
-V6 is the historical M5/M6 baseline. Older schemas retain their historical and compatibility
-obligations; their presence is not permission for an implicit upgrade chain.
+The [Persistence baseline](./persistence-baseline.md) owns the complete fresh
+DDL, typed metadata, admission, immutable references, ownership/recovery,
+service custody and diagnostics requirements. Development schema ladders and
+storage upgrade commands are retired. Real old data is left untouched and
+unsupported; no schema marker is rewritten to make it appear compatible.
 
-- [Persistence Schema V2](./persistence-schema-v2.md): Historical internal contract; not an implicit upgrade path.
-- [Persistence Schema V3](./persistence-schema-v3.md): Historical Instance and managed-binding representation.
-- [Persistence Schema V4](./persistence-schema-v4.md): Historical M3 Run representation.
-- [Persistence Schema V5](./persistence-schema-v5.md): Historical M4 contract, including writable admission and V4 bootstrap. That bootstrap is not an M5 production entry point.
-
-- [Persistence Schema V6](./persistence-schema-v6.md): Historical exact DDL and V5 upgrade; the integrated M5/M6 Migration/recovery baseline.
-- [Persistence Schema V7](./persistence-schema-v7.md): Historical exact DDL, explicit V6 upgrade and implemented ServiceStorage custody/association representation.
-- [Persistence Schema V8](./persistence-schema-v8.md): Historical retirement baseline with explicit exact-V7 upgrade.
-- [Persistence Schema V9](./persistence-schema-v9.md): Historical lifecycle runtime, with explicit exact-V8 upgrade only; superseded by V10.
-- [Persistence Schema V10](./persistence-schema-v10.md): Implemented, verified and integrated Snapshot capacity baseline; explicit V8/V9 upgrade and immutable data references; not published.
-- [Persistence Schema V11](./persistence-schema-v11.md): Current integrated baseline; bounded Run evidence with explicit V8/V9/V10 upgrade; not published.
-
-Return to the [specification map](../index.md). For current runtime support and
-next-milestone boundaries, see [the development entry](../../development/next-milestone.md).
+Older schema pages are non-normative incoming-link explanations. Historical
+verification records describe their original inputs. Current E progress and
+remaining acceptance gates are in [the implementation ledger](../../development/e-implementation-status.md).

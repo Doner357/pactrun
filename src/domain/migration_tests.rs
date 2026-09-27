@@ -296,7 +296,7 @@ fn revision(
         blob_digest: Sha256Digest::from_bytes([99; 32]),
         executable: true,
     };
-    let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    let core = project_revision_declarations(RevisionDeclarationInput {
         inputs,
         actions: vec![],
         snapshot: None,
@@ -309,12 +309,12 @@ fn revision(
             .unwrap();
     MigrationRevision {
         identity: identity(value),
-        content: validate_revision_content_v1(core, closure).unwrap().into(),
+        content: validate_declaration_content(core, closure).unwrap().into(),
     }
 }
 fn hook() -> HookV1 {
     HookV1 {
-        protocol_version: PositiveVersion::new(1).unwrap(),
+        protocol_version: crate::domain::FormatVersion::BASELINE,
         launch: HookLaunchV1::Direct {
             executable: ContentId::parse("tool").unwrap(),
         },
@@ -605,7 +605,7 @@ fn hook_outputs_feed_later_edges_without_requiring_intermediate_readiness() {
     let mut overlap = produce.clone();
     overlap.requires_target.push(id("made"));
     assert!(
-        project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![input("made", true, false)],
             actions: vec![],
             snapshot: None,

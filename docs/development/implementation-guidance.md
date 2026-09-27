@@ -25,22 +25,22 @@ The M1-D non-identity metadata domain and persistence contract are implemented
 against the current internal schema. The
 [Non-Identity Metadata Semantic Baseline](./design-notes/non-identity-metadata-semantic-baseline.md)
 is the navigation entry point; its linked requirement pages, including the
-[Persistence Schema V2](../spec/persistence/persistence-schema-v2.md),
+[Persistence Schema V2](../spec/persistence/persistence-baseline.md),
 remain normative.
 
 The Pre-M2 design is integrated into the canonical `develop` baseline and
 synthesized by the
 [Pre-M2 Installation, Instance, and Binding Baseline](./design-notes/pre-m2-installation-instance-binding-baseline.md).
 Its linked pages, including Candidate
-[Pack Source YAML V1](../spec/contracts/pack-source-yaml-v1.md) and the
+[Pack Source YAML V1](../spec/contracts/pack-source.md) and the
 implemented internal
-[Persistence Schema V3](../spec/persistence/persistence-schema-v3.md), own the
+[Persistence Schema V3](../spec/persistence/persistence-baseline.md), own the
 M2 contract. M2 is integrated into `develop`. The implemented internal
-[Persistence Schema V4](../spec/persistence/persistence-schema-v4.md) extends V3
+[Persistence Schema V4](../spec/persistence/persistence-baseline.md) extends V3
 with M3 Slice 2 Runs, durable pins, Action recovery state, ownership, and Run
-Artifacts. M4 [Persistence Schema V5](../spec/persistence/persistence-schema-v5.md)
+Artifacts. M4 [Persistence Schema V5](../spec/persistence/persistence-baseline.md)
 preserves that contract. Integrated M5 adds the current internal
-[Persistence Schema V6](../spec/persistence/persistence-schema-v6.md), with exact
+[Persistence Schema V6](../spec/persistence/persistence-baseline.md), with exact
 V5 upgrade; it remains non-Frozen and non-public.
 
 The M3 scope and dependency review is complete and synthesized by the
@@ -273,7 +273,7 @@ Candidate API is deferred until concrete demand, not required pre-release work.
 
 The Frozen semantic manifest, binding and content descriptors, normalization,
 JCS profile, framing, digest encoding, and golden vectors are defined by
-[Snapshot Integrity Format V1](../spec/contracts/snapshot-integrity-format-v1.md).
+[Snapshot Integrity Format V1](../spec/contracts/snapshot-integrity.md).
 Production Snapshot persistence and runtime behavior remain Phase 4 work.
 
 ### HookProtocolV1
@@ -282,7 +282,7 @@ The Frozen transport, framing, exact version confirmation, request and
 acknowledgment rules, authority handles, operation contexts, staged outputs,
 recovery-risk state machine, cancellation, completion handshake, and protocol
 errors are defined by
-[Hook Protocol V1](../spec/contracts/hook-protocol-v1.md). Production Hook
+[Hook Protocol V1](../spec/contracts/hook-protocol.md). Production Hook
 Runtime integration remains Phase 3 and later work.
 
 ### M3 Action execution
@@ -302,7 +302,7 @@ its verification, satisfying the M3 human-interface completion gate.
 
 The Frozen identity spelling, normalization, framing, and verification
 boundary are defined by
-[Revision Core Format V1](../spec/contracts/revision-core-format-v1.md).
+[Revision Core Format V1](../spec/contracts/revision-canonical.md).
 The Candidate M2 source spelling and projection into that unchanged boundary
 are defined separately by PackSourceYamlV1. Raw Core JSON remains an internal
 codec/conformance input rather than Package authoring.

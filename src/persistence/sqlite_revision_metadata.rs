@@ -13,7 +13,7 @@ use crate::{
         ManagedOutputIdentity, MetadataPortability, ParameterIdentity, PresentationField,
         PresentationMetadata, PresentationTargetV1, PresentationValue, ProvenanceClaim,
         PublisherName, PublisherNamespace, ReferenceLabel, ReferenceLabelBinding,
-        ReferenceLabelSource, RevisionContentDigest, RevisionCoreV1, RevisionIdentity,
+        ReferenceLabelSource, RevisionContentDigest, RevisionDeclarations, RevisionIdentity,
         RevisionMetadataItem, RevisionMetadataMutation, RevisionMetadataMutationBatch,
         RevisionMetadataView, SourceUri, TrustAssessment,
     },
@@ -188,7 +188,7 @@ pub(super) fn validate_reference_label_lookup_rows(
 fn apply_operation(
     transaction: &Transaction<'_>,
     revision: &RevisionIdentity,
-    core: &RevisionCoreV1,
+    core: &RevisionDeclarations,
     operation: &RevisionMetadataMutation,
 ) -> Result<(), PersistenceError> {
     match operation {
@@ -208,7 +208,7 @@ fn apply_operation(
         } => {
             if !core.contains_presentation_target(target) {
                 return Err(PersistenceError::InvalidMetadata(
-                    "presentation target is absent from the strict-decoded RevisionCoreV1"
+                    "presentation target is absent from the strict-decoded RevisionDeclarations"
                         .to_owned(),
                 ));
             }
@@ -796,7 +796,7 @@ fn cas_requires_change<T: Eq>(
 pub(super) fn load_revision_metadata_from(
     database: &Connection,
     revision: &RevisionIdentity,
-    core: &RevisionCoreV1,
+    core: &RevisionDeclarations,
 ) -> Result<RevisionMetadataView, PersistenceError> {
     let mut items = Vec::new();
     load_reference_labels(database, revision, &mut items)?;
@@ -902,7 +902,7 @@ fn decode_label_source(
 fn load_presentations(
     database: &Connection,
     revision: &RevisionIdentity,
-    core: &RevisionCoreV1,
+    core: &RevisionDeclarations,
     output: &mut Vec<RevisionMetadataItem>,
 ) -> Result<(), PersistenceError> {
     let sql = r#"
@@ -985,7 +985,7 @@ ORDER BY target_rank, component_1, component_2
         let target = decode_presentation_target(rank, &component_1, &component_2)?;
         if !core.contains_presentation_target(&target) {
             return Err(PersistenceError::CorruptMetadata(
-                "stored presentation target is absent from RevisionCoreV1".to_owned(),
+                "stored presentation target is absent from RevisionDeclarations".to_owned(),
             ));
         }
         if fields.iter().all(Option::is_none) {
@@ -1247,7 +1247,7 @@ fn load_local_metadata(
 pub(super) fn load_revision_core(
     database: &Connection,
     revision: &RevisionIdentity,
-) -> Result<RevisionCoreV1, PersistenceError> {
+) -> Result<RevisionDeclarations, PersistenceError> {
     let raw = database
         .query_row(
             "SELECT core_jcs, runtime_content_jcs FROM revisions \
@@ -1398,8 +1398,6 @@ mod tests {
         io::Cursor,
         path::{Path, PathBuf},
         process::{Command, Stdio},
-        sync::{Arc, Barrier},
-        thread,
     };
 
     use sha2::{Digest, Sha256};
@@ -1407,20 +1405,14 @@ mod tests {
 
     use super::*;
     use crate::domain::{
-        ActionV1, CaptureV1, CleanupV1, ContentId, HookLaunchV1, HookV1, IOContractV1,
-        InputDeclarationV1, InputProtectionV1, ManagedOutputV1, MigrationV1, OperationAccessV1,
-        ParameterTypeV1, ParameterV1, PositiveVersion, RestoreV1, RevisionCoreProjectionInputV1,
+        ActionV1, CaptureV1, CleanupV1, ContentId, DeclarationContent, HookLaunchV1, HookV1,
+        IOContractV1, InputDeclarationV1, InputProtectionV1, ManagedOutputV1, MigrationV1,
+        OperationAccessV1, ParameterTypeV1, ParameterV1, RestoreV1, RevisionDeclarationInput,
         RuntimeContentProjectionInputV1, RuntimeFileKindV1, RuntimeFileV1, RuntimePath,
-        Sha256Digest, SnapshotCapabilityV1, TerminalContractV1, ValidatedRevisionContentV1,
-        project_revision_core_v1, project_runtime_content_closure_v1, validate_revision_content_v1,
+        Sha256Digest, SnapshotCapabilityV1, TerminalContractV1, project_revision_declarations,
+        project_runtime_content_closure_v1, validate_declaration_content,
     };
-    use crate::persistence::sqlite_revision_store::{
-        APPLICATION_ID, SCHEMA_V1_SQL, SCHEMA_V2_ADDITIONS_SQL, SCHEMA_V4_VERSION, SCHEMA_VERSION,
-        legacy_v4_fixture,
-    };
-    use crate::revision_core_v1::{
-        encode_canonical_revision_core_v1, encode_canonical_runtime_content_v1,
-    };
+    use crate::persistence::sqlite_revision_store::SCHEMA_VERSION;
 
     const WORKER_TEST: &str = "persistence::sqlite_revision_metadata::tests::m1d_subprocess_worker";
 
@@ -1454,7 +1446,7 @@ mod tests {
 
     fn hook() -> HookV1 {
         HookV1 {
-            protocol_version: PositiveVersion::new(1).unwrap(),
+            protocol_version: crate::domain::FormatVersion::BASELINE,
             launch: HookLaunchV1::Direct {
                 executable: ContentId::parse("launcher").unwrap(),
             },
@@ -1465,8 +1457,8 @@ mod tests {
         }
     }
 
-    fn full_content(digest: &Sha256Digest) -> ValidatedRevisionContentV1 {
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    fn full_content(digest: &Sha256Digest) -> DeclarationContent {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![InputDeclarationV1 {
                 id: InputIdentity::parse("config").unwrap(),
                 required: true,
@@ -1531,13 +1523,13 @@ mod tests {
             }],
         })
         .unwrap();
-        validate_revision_content_v1(core, runtime_content).unwrap()
+        validate_declaration_content(core, runtime_content).unwrap()
     }
 
     fn persist_full(
         persistence: &PactrunPersistence,
         package_tag: u8,
-    ) -> (RevisionIdentity, ValidatedRevisionContentV1) {
+    ) -> (RevisionIdentity, DeclarationContent) {
         let bytes = b"m1-d metadata fixture";
         let digest = blob_digest(bytes);
         let publication = persistence
@@ -1548,56 +1540,6 @@ mod tests {
             .persist_revision(package(package_tag), &content, &[publication])
             .unwrap();
         (identity, content)
-    }
-
-    fn initialize_v1(
-        root: &Path,
-        content: Option<(&RevisionIdentity, &ValidatedRevisionContentV1)>,
-    ) {
-        let database = Connection::open(database_path(root)).unwrap();
-        database.execute_batch(SCHEMA_V1_SQL).unwrap();
-        database
-            .pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        database.pragma_update(None, "user_version", 1).unwrap();
-        if let Some((identity, content)) = content {
-            let core = encode_canonical_revision_core_v1(&content.core).unwrap();
-            let runtime = encode_canonical_runtime_content_v1(&content.runtime_content).unwrap();
-            database
-                .execute(
-                    "INSERT INTO packages(package_id) VALUES (?1)",
-                    [identity.package_id.as_bytes().as_slice()],
-                )
-                .unwrap();
-            database
-                .execute(
-                    "INSERT INTO revisions(\
-                     package_id, revision_content_digest, core_jcs, runtime_content_jcs\
-                     ) VALUES (?1, ?2, ?3, ?4)",
-                    params![
-                        identity.package_id.as_bytes().as_slice(),
-                        identity.content_digest.as_bytes().as_slice(),
-                        core,
-                        runtime,
-                    ],
-                )
-                .unwrap();
-            for file in content.runtime_content.files() {
-                database
-                    .execute(
-                        "INSERT INTO revision_runtime_content_refs(\
-                         package_id, revision_content_digest, content_id, blob_digest\
-                         ) VALUES (?1, ?2, ?3, ?4)",
-                        params![
-                            identity.package_id.as_bytes().as_slice(),
-                            identity.content_digest.as_bytes().as_slice(),
-                            file.id.as_str(),
-                            file.blob_digest.to_bytes().as_slice(),
-                        ],
-                    )
-                    .unwrap();
-            }
-        }
     }
 
     fn run_worker(
@@ -1647,11 +1589,7 @@ mod tests {
             return;
         };
         let root = PathBuf::from(std::env::var_os("PACTRUN_M1D_ROOT").unwrap());
-        let persistence = if operation == "legacy-open" {
-            legacy_v4_fixture(&root).unwrap()
-        } else {
-            PactrunPersistence::open(&root).unwrap()
-        };
+        let persistence = PactrunPersistence::open(&root).unwrap();
         if operation == "metadata" {
             let package: [u8; 16] = hex::decode(std::env::var("PACTRUN_M1D_PACKAGE").unwrap())
                 .unwrap()
@@ -1701,7 +1639,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            72 // Existing schema tables plus V11 collection and event evidence.
+            72 // Baseline metadata; obsolete inline Snapshot storage is absent.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),
@@ -1758,153 +1696,6 @@ mod tests {
                 )
                 .is_err()
         );
-    }
-
-    // Test-ID: PR-TEST-0060
-    // Verifies: PR-REQ-0257
-    #[test]
-    fn legacy_v1_to_v4_preserves_content_and_has_atomic_crash_boundaries() {
-        let (_temporary, root) = test_root();
-        let digest = blob_digest(b"migration fixture");
-        let content = full_content(&digest);
-        let identity = RevisionIdentity::new(
-            package(2),
-            crate::revision_core_v1::calculate_revision_content_digest_v1(&content).unwrap(),
-        );
-        initialize_v1(&root, Some((&identity, &content)));
-        let persistence = legacy_v4_fixture(&root).unwrap();
-        assert_eq!(
-            persistence
-                .load_revision(&identity)
-                .unwrap()
-                .unwrap()
-                .content,
-            content.clone().into()
-        );
-        assert_eq!(
-            persistence
-                .database
-                .lock()
-                .unwrap()
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_V4_VERSION
-        );
-
-        let (_before_temporary, before_root) = test_root();
-        initialize_v1(&before_root, None);
-        assert!(!run_worker(
-            &before_root,
-            "legacy-open",
-            Some("before_schema_migration_commit"),
-            None,
-        ));
-        let before_database = Connection::open(database_path(&before_root)).unwrap();
-        assert_eq!(
-            before_database
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            1
-        );
-        assert_eq!(
-            before_database
-                .query_row(
-                    "SELECT count(*) FROM sqlite_schema \
-                     WHERE name = 'revision_local_aliases'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            0
-        );
-        drop(before_database);
-        legacy_v4_fixture(&before_root).unwrap();
-
-        let (_after_temporary, after_root) = test_root();
-        initialize_v1(&after_root, None);
-        assert!(!run_worker(
-            &after_root,
-            "legacy-open",
-            Some("after_schema_migration_commit"),
-            None,
-        ));
-        assert_eq!(
-            Connection::open(database_path(&after_root))
-                .unwrap()
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_V4_VERSION
-        );
-        legacy_v4_fixture(&after_root).unwrap();
-    }
-
-    // Test-ID: PR-TEST-0061
-    // Verifies: PR-REQ-0257
-    #[test]
-    fn legacy_concurrent_migrators_converge_and_inadmissible_schemas_are_rejected() {
-        let (_temporary, root) = test_root();
-        initialize_v1(&root, None);
-        let barrier = Arc::new(Barrier::new(3));
-        let handles = (0..2)
-            .map(|_| {
-                let root = root.clone();
-                let barrier = Arc::clone(&barrier);
-                thread::spawn(move || {
-                    barrier.wait();
-                    legacy_v4_fixture(root).map(|_| ())
-                })
-            })
-            .collect::<Vec<_>>();
-        barrier.wait();
-        for handle in handles {
-            handle.join().unwrap().unwrap();
-        }
-        legacy_v4_fixture(&root).unwrap();
-
-        let (_partial_temporary, partial_root) = test_root();
-        let partial = Connection::open(database_path(&partial_root)).unwrap();
-        partial.execute_batch(SCHEMA_V1_SQL).unwrap();
-        partial
-            .execute_batch(
-                SCHEMA_V2_ADDITIONS_SQL
-                    .split("CREATE TABLE revision_presentation_current")
-                    .next()
-                    .unwrap(),
-            )
-            .unwrap();
-        partial
-            .pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        partial.pragma_update(None, "user_version", 1).unwrap();
-        drop(partial);
-        assert!(legacy_v4_fixture(&partial_root).is_err());
-
-        let (_newer_temporary, newer_root) = test_root();
-        let newer = Connection::open(database_path(&newer_root)).unwrap();
-        newer.execute_batch(SCHEMA_V1_SQL).unwrap();
-        newer.execute_batch(SCHEMA_V2_ADDITIONS_SQL).unwrap();
-        newer
-            .pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        newer
-            .pragma_update(None, "user_version", SCHEMA_V4_VERSION + 1)
-            .unwrap();
-        drop(newer);
-        assert!(legacy_v4_fixture(&newer_root).is_err());
-
-        let (_drift_temporary, drift_root) = test_root();
-        let drift = Connection::open(database_path(&drift_root)).unwrap();
-        drift.execute_batch(SCHEMA_V1_SQL).unwrap();
-        drift.execute_batch(SCHEMA_V2_ADDITIONS_SQL).unwrap();
-        drift
-            .execute_batch("CREATE TABLE drift(value TEXT) STRICT;")
-            .unwrap();
-        drift
-            .pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        drift.pragma_update(None, "user_version", 2).unwrap();
-        drop(drift);
-        assert!(legacy_v4_fixture(&drift_root).is_err());
     }
 
     // Test-ID: PR-TEST-0062

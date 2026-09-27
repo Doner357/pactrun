@@ -7,6 +7,7 @@ const config: Config = {
   url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000',
   baseUrl: process.env.DOCUSAURUS_BASE_URL ?? '/',
   onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
   staticDirectories: ['static', '.generated-text'],
   plugins: ['./plugins/text-docs/index.mjs'],
 

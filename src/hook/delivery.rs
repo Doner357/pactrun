@@ -104,6 +104,7 @@ pub(crate) enum Event {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(crate) struct Record {
     pub(crate) format: String,
+    pub(crate) format_version: String,
     pub(crate) sequence: String,
     pub(crate) received_at_unix_ms: Option<String>,
     pub(crate) command: String,
@@ -208,7 +209,10 @@ impl Delivery {
                             .checked_add(1)
                             .ok_or_else(|| io::Error::other("delivery counter overflow"))?;
                         let record = Record {
-                            format: "pactrun.cli.events.v1".into(),
+                            format: "pactrun.cli".into(),
+                            format_version: crate::domain::VersionDomain::Machine
+                                .current_text()
+                                .into(),
                             sequence: sequence.to_string(),
                             received_at_unix_ms: now(),
                             command: command.clone(),

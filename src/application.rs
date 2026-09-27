@@ -37,7 +37,7 @@ use crate::{
         ActionV1, ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName,
         InstanceStateVersion, InstanceSummary, InstanceView, InvokeAction, LocalAlias,
         ManagedOutputIdentity, PlanCompilationError, RawParameterInput, ReferenceLabel,
-        RevisionCoreV1Error, RevisionIdentity, RevisionMetadataMutationBatch, RunFinish, RunId,
+        RevisionError, RevisionIdentity, RevisionMetadataMutationBatch, RunFinish, RunId,
         RunInspectionData, RunOutcome, RunSummary, RunView, bind_action_parameters,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
@@ -78,7 +78,7 @@ pub(crate) enum ApplicationError {
     Authoring(AuthoringError),
     SourceAcquisition(SourceAcquisitionError),
     Staging(StagingError),
-    Revision(RevisionCoreV1Error),
+    Revision(RevisionError),
     RevisionContent(crate::revision_content::RevisionContentError),
     Persistence(PersistenceError),
     ActionResolution(ActionResolutionError),
@@ -176,8 +176,8 @@ impl From<StagingError> for ApplicationError {
     }
 }
 
-impl From<RevisionCoreV1Error> for ApplicationError {
-    fn from(source: RevisionCoreV1Error) -> Self {
+impl From<RevisionError> for ApplicationError {
+    fn from(source: RevisionError) -> Self {
         Self::Revision(source)
     }
 }
@@ -1162,7 +1162,7 @@ mod action_tests {
         fs::write(source.join("config.bin"), b"secret config").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000031
 revision:
   inputs:
@@ -1173,7 +1173,7 @@ revision:
       parameters:
         - { id: count, type: integer, sensitive: false }
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: tool }
         args: [fixed]
         io: { terminal: output }
@@ -1300,7 +1300,7 @@ runtime_content:
         fs::write(source.join("tool.bin"), b"tool").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000032
 revision:
   inputs:
@@ -1310,7 +1310,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: tool }
         args: []
         io: { terminal: none }
@@ -1570,7 +1570,7 @@ mod admission_tests {
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1
+                r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000033
 revision:
   inputs:
@@ -1580,7 +1580,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: tool }}
         args: []
         io: {{ terminal: output }}
@@ -1589,7 +1589,7 @@ revision:
       access: mutate
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: interpreter, command: {command}, interpreter_args: [--strict], script: hook }}
         args: []
         io: {{ terminal: none }}
@@ -1598,7 +1598,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: interpreter, command: {command}, interpreter_args: [], script: hook }}
         args: []
         io: {{ terminal: none }}

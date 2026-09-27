@@ -11,7 +11,7 @@ fn resource(id: &str, storage: &str, locator: &str) -> Value {
     json!({"id":id,"storage_id":storage,"locator":locator,"kind":"file","read_exposure":"hidden","user_mutation":{"kind":"unavailable"}})
 }
 fn core(storages: &[&str], resources: Vec<Value>, migration: Option<Value>) -> RevisionCore {
-    crate::revision_core_v2::project_revision_core_source_v2(&serde_json::to_vec(&json!({"format_version":2,"inputs":[],"actions":[],
+    crate::revision_canonical::project_service_revision_source(&serde_json::to_vec(&json!({"format_version":"1.0-alpha.1","inputs":[],"actions":[],
         "migrations":migration.into_iter().collect::<Vec<_>>(),"service_storages":storages.iter().map(|id| json!({"id":id})).collect::<Vec<_>>(),"service_resources":resources})).unwrap()).unwrap().into()
 }
 fn edge(source: u8, storages: Value, resources: Value) -> Value {
@@ -184,7 +184,7 @@ fn split_transform_plans_fresh_roots_without_allocating_or_presuming_presence() 
         json!([{"kind":"create","target_storage_id":"new_state"}]),
         json!([{"kind":"transform","sources":[{"role":"active","resource_id":"config"}],"targets":["left","right"]}]),
     );
-    transition["hook"] = json!({"protocol_version":2,"launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},"service_requires":[],
+    transition["hook"] = json!({"protocol_version":"1.0-alpha.1","launch":{"kind":"direct","executable":"tool"},"args":[],"io":{"terminal":"none"},"service_requires":[],
         "service_access":[{"reference":{"view":"source","role":"active","kind":"resource","id":"config"},"mode":"read"},
         {"reference":{"view":"target","role":"active","kind":"storage","id":"new_state"},"mode":"write"}]});
     let target = core(

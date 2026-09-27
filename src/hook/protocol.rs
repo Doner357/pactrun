@@ -24,10 +24,33 @@ use crate::{
 
 use super::platform::ProtocolStream;
 
-#[path = "protocol_v2.rs"]
-pub(super) mod v2;
+#[path = "protocol_authority.rs"]
+pub(super) mod authority;
 
-pub(super) const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
+pub(super) const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
+pub(super) fn read_preamble(reader: &mut impl Read) -> io::Result<bool> {
+    const PREFIX: &[u8] = b"pactrun.hook-protocol\0";
+    let mut prefix = [0; PREFIX.len()];
+    if !matches!(read_fully(reader, &mut prefix)?, ReadOutcome::Complete) || prefix != PREFIX {
+        return Ok(false);
+    }
+    let mut size = [0; 2];
+    if !matches!(read_fully(reader, &mut size)?, ReadOutcome::Complete) {
+        return Ok(false);
+    }
+    let size = usize::from(u16::from_be_bytes(size));
+    if !(1..=128).contains(&size) {
+        return Ok(false);
+    }
+    let mut text = [0; 128];
+    if !matches!(
+        read_fully(reader, &mut text[..size])?,
+        ReadOutcome::Complete
+    ) {
+        return Ok(false);
+    }
+    Ok(&text[..size] == crate::domain::VersionDomain::Hook.current_text().as_bytes())
+}
 pub(super) const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
 
 /// Chosen by the owner before reading the peer stream, not by a Hook field.
@@ -237,10 +260,9 @@ pub(super) fn read_wire_events_for(
     operation: SessionOperation,
     mut deliver: impl FnMut(WireEvent) -> bool,
 ) {
-    let mut preamble = [0_u8; PREAMBLE.len()];
-    match read_fully(reader, &mut preamble) {
-        Ok(ReadOutcome::Complete) => {}
-        Ok(ReadOutcome::EndOfStream | ReadOutcome::Truncated) => {
+    match read_preamble(reader) {
+        Ok(true) => {}
+        Ok(false) => {
             deliver(WireEvent::Failure(invalid_preamble()));
             return;
         }
@@ -248,10 +270,6 @@ pub(super) fn read_wire_events_for(
             deliver(WireEvent::TransportFailure);
             return;
         }
-    }
-    if preamble != PREAMBLE {
-        deliver(WireEvent::Failure(invalid_preamble()));
-        return;
     }
     loop {
         let mut length = [0_u8; 4];
@@ -352,7 +370,7 @@ fn is_disconnect(error: &io::Error) -> bool {
 #[derive(Debug)]
 pub(super) enum HookMessage {
     SessionReady {
-        protocol_version: u64,
+        protocol_version: crate::domain::FormatVersion,
         session_id: String,
     },
     Diagnostic(crate::domain::HookText),
@@ -417,7 +435,11 @@ pub(super) fn parse_hook_message_for(
 fn parse_session_ready(mut object: Fields) -> Result<HookMessage, ProtocolFailure> {
     closed(&object, &["protocol_version", "session_id"])?;
     Ok(HookMessage::SessionReady {
-        protocol_version: take_safe_integer(&mut object, "protocol_version")?,
+        protocol_version: take_string(&mut object, "protocol_version")?
+            .parse()
+            .map_err(|_| {
+                ProtocolFailure::new("unsupported_protocol_version", "invalid Hook version")
+            })?,
         session_id: take_machine_id(&mut object, "session_id")?,
     })
 }
@@ -825,7 +847,7 @@ impl ProtocolState {
                 if self.phase != Phase::AwaitReady {
                     return Err(unexpected_message());
                 }
-                if protocol_version != 1 {
+                if !crate::domain::VersionDomain::Hook.supports(protocol_version) {
                     return Err(ProtocolFailure::new(
                         "unsupported_protocol_version",
                         "Hook must confirm exact protocol version 1",
@@ -1005,7 +1027,7 @@ mod tests {
         let mut state = ProtocolState::new(id.clone(), BTreeSet::new());
         state
             .accept(HookMessage::SessionReady {
-                protocol_version: 1,
+                protocol_version: crate::domain::FormatVersion::BASELINE,
                 session_id: id,
             })
             .unwrap();

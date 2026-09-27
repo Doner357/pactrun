@@ -3,7 +3,7 @@ fn described_action() -> (TempDir, PathBuf, PathBuf, String) {
     let (temp, root, source) = cli_action_roots();
     let path = source.join("pactrun.yaml");
     let mut text = fs::read_to_string(&path).unwrap()
-        .replace("source_format: 1", "source_format: 3")
+        .to_owned()
         .replace("{ id: value, type: string, sensitive: false }", "{ id: value, type: string, sensitive: false, default: normal-default }\n        - { id: token, type: string, sensitive: true, default: private-default-sentinel }");
     text.push_str("\nportable_metadata:\n  presentation:\n    - target: { kind: action, action_id: inspect }\n      field: summary\n      value: Inspect the service\n    - target: { kind: action, action_id: inspect }\n      field: description\n      value: \"Read its status.\\nMore details here.\"\n");
     fs::write(path, text).unwrap();
@@ -82,7 +82,8 @@ fn assert_machine_bytes(events: &[serde_json::Value]) {
     for (n, event) in events.iter().enumerate() {
         schema_tests::assert_event(event);
         assert_eq!(event["sequence"], (n + 1).to_string());
-        assert_eq!(event["format"], "pactrun.cli.events.v1");
+        assert_eq!(event["format"], "pactrun.cli");
+        assert_eq!(event["format_version"], "1.0-alpha.1");
         if event["type"] != "output" { continue; }
         assert_eq!(event["encoding"], "base64");
         let bytes = base64::engine::general_purpose::STANDARD.decode(event["data"].as_str().unwrap()).unwrap();
@@ -222,11 +223,21 @@ fn slow_machine_receiver_does_not_block_timeout_or_request_cancellation() {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
             if !self.blocked {
                 self.blocked = true;
-                thread::sleep(Duration::from_secs(3));
-                let list = json_ok(&self.root, &["run", "list"]);
-                assert_eq!(list["items"].as_array().unwrap().len(), 1);
-                assert_eq!(list["items"][0]["state"]["phase"], "finished");
-                assert_eq!(list["items"][0]["state"]["outcome"], "timed_out");
+                // Keep output blocked until durable finalization is observable.
+                // A fixed sleep races parallel filesystem/SQLite work; the watchdog
+                // still fails if finalization depends on this writer returning.
+                let deadline = std::time::Instant::now() + Duration::from_secs(30);
+                loop {
+                    let list = json_ok(&self.root, &["run", "list"]);
+                    assert_eq!(list["items"].as_array().unwrap().len(), 1);
+                    if list["items"][0]["state"]["phase"] == "finished" {
+                        assert_eq!(list["items"][0]["state"]["outcome"], "timed_out");
+                        break;
+                    }
+                    assert!(std::time::Instant::now() < deadline,
+                        "Run finalization must not wait for the blocked machine writer");
+                    thread::sleep(Duration::from_millis(10));
+                }
             }
             self.bytes.extend_from_slice(bytes); Ok(bytes.len())
         }

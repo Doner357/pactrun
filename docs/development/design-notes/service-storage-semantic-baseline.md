@@ -61,7 +61,7 @@ deferred.
 The Frozen Hook completion rule says that loss before accepted completion
 prevents protocol success, prohibits inferred replay or compensation, and that
 `completion_accepted` does not itself imply a Run or Instance commit. See
-[PR-REQ-0216](../../spec/contracts/hook-protocol-v1.md#pr-req-0216---operation-completion-and-terminal-states).
+[PR-REQ-0216](../../spec/contracts/hook-protocol.md#pr-req-0216---operation-completion-and-terminal-states).
 
 Consequently, a Cleanup success submission followed by loss before Pactrun
 durably publishes the Cleanup-completed/do-not-replay boundary is not treated as

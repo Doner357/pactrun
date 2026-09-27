@@ -292,7 +292,7 @@ fn finalize_storage(
             let failure = RunFinish {
                 outcome: RunOutcome::Failed,
                 primary_failure: Some(RunPrimaryFailure {
-                    failure: RunFailureRecord { error: PactrunErrorRefV1::new("service_storage", "allocation_unavailable").expect("registered error"), message: "storage finalization could not complete safely; the obligation is retained".to_owned() },
+                    failure: RunFailureRecord { error: PactrunErrorRef::new("service_storage", "allocation_unavailable").expect("registered error"), message: "storage finalization could not complete safely; the obligation is retained".to_owned() },
                     step: RunFailedStep::DeletionPlan(crate::domain::DeletionPlanStep::FinalizeStorage),
                 }),
                 secondary_failures: finish.secondary_failures.clone(), hook_completion: finish.hook_completion.clone(),

@@ -92,15 +92,7 @@ impl PactrunPersistence {
                 });
             }
         }
-        let service_state = if tx
-            .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
-            .map_err(|e| PersistenceError::sqlite("read service observation version", e))?
-            >= 7
-        {
-            super::sqlite_service_views::load_instance_service_state_from(&tx, id)?
-        } else {
-            None
-        };
+        let service_state = super::sqlite_service_views::load_instance_service_state_from(&tx, id)?;
         tx.commit()
             .map_err(|e| PersistenceError::sqlite("finish Migration observation", e))?;
         Ok(MigrationCompilationObservation {
@@ -118,7 +110,8 @@ impl PactrunPersistence {
 mod tests {
     use super::*;
     use crate::domain::{
-        project_revision_core_v1, project_runtime_content_closure_v1, validate_revision_content_v1,
+        project_revision_declarations, project_runtime_content_closure_v1,
+        validate_declaration_content,
     };
     use std::{fs, io::Cursor, path::Path};
 
@@ -134,7 +127,7 @@ mod tests {
         }
         let p = PactrunPersistence::open(temporary.path()).unwrap();
         let input = InputIdentity::parse("config").unwrap();
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![InputDeclarationV1 {
                 id: input.clone(),
                 required: false,
@@ -149,7 +142,7 @@ mod tests {
         let runtime =
             project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files: vec![] })
                 .unwrap();
-        let content = validate_revision_content_v1(core, runtime.clone()).unwrap();
+        let content = validate_declaration_content(core, runtime.clone()).unwrap();
         let package = PackageId::from_bytes([1; 16]);
         let source = p.persist_revision(package, &content, &[]).unwrap();
         let mut bytes = Cursor::new(b"private bytes".to_vec());
@@ -164,7 +157,7 @@ mod tests {
                 }],
             )
             .unwrap();
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: vec![],
             actions: vec![],
             snapshot: None,
@@ -179,7 +172,7 @@ mod tests {
             cleanup: None,
         })
         .unwrap();
-        let content = validate_revision_content_v1(core, runtime).unwrap();
+        let content = validate_declaration_content(core, runtime).unwrap();
         let target = p.persist_revision(package, &content, &[]).unwrap();
         // A fixture boundary makes the binding retained without requiring the
         // not-yet-implemented Migration publisher to manufacture test state.

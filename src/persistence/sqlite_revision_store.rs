@@ -20,133 +20,27 @@ use super::runtime_content_store::{
     validate_existing_regular_entry, validate_supported_storage_root,
 };
 #[cfg(test)]
-use crate::revision_core_v1::{
-    calculate_revision_content_digest_v1, encode_canonical_revision_core_v1,
-};
+use crate::revision_declarations::{calculate_service_free_digest, encode_service_free_revision};
 use crate::{
     domain::{
-        PackageId, RevisionIdentity, RevisionMetadataMutationBatch, RunId, Sha256Digest,
-        ValidatedRevisionContent, ValidatedRevisionContentV1,
+        DeclarationContent, PackageId, RevisionIdentity, RevisionMetadataMutationBatch, RunId,
+        Sha256Digest, ValidatedRevisionContent,
     },
     revision_content::{
         calculate_revision_content_digest, core_format_version, decode_canonical_revision_content,
         encode_canonical_revision_core,
     },
-    revision_core_v1::encode_canonical_runtime_content_v1,
+    revision_declarations::encode_canonical_runtime_content,
 };
 
 const DATABASE_DIRECTORY: &str = "database";
 const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
 pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
-const SCHEMA_V1_VERSION: i64 = 1;
-const SCHEMA_V2_VERSION: i64 = 2;
-pub(super) const SCHEMA_V3_VERSION: i64 = 3;
-pub(super) const SCHEMA_V4_VERSION: i64 = 4;
-pub(super) const SCHEMA_V5_VERSION: i64 = 5;
-pub(super) const SCHEMA_V6_VERSION: i64 = 6;
-pub(super) const SCHEMA_V7_VERSION: i64 = 7;
-pub(super) const SCHEMA_V8_VERSION: i64 = 8;
-pub(super) const SCHEMA_V9_VERSION: i64 = 9;
-pub(super) const SCHEMA_V10_VERSION: i64 = 10;
-pub(crate) const SCHEMA_VERSION: i64 = 11;
+// Private SQLite bootstrap/admission marker, not the public format version.
+pub(crate) const SCHEMA_VERSION: i64 = 0;
+pub(super) const BASELINE_SQL: &str = include_str!("persistence_baseline.sql");
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-
-pub(super) const SCHEMA_V1_SQL: &str = r#"
-CREATE TABLE packages (
-    package_id BLOB NOT NULL
-        CHECK(length(package_id) = 16),
-
-    PRIMARY KEY (package_id)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE revisions (
-    package_id BLOB NOT NULL
-        CHECK(length(package_id) = 16),
-
-    revision_content_digest BLOB NOT NULL
-        CHECK(length(revision_content_digest) = 32),
-
-    core_jcs BLOB NOT NULL,
-    runtime_content_jcs BLOB NOT NULL,
-
-    PRIMARY KEY (
-        package_id,
-        revision_content_digest
-    ),
-
-    FOREIGN KEY (package_id)
-        REFERENCES packages(package_id)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE revision_runtime_content_refs (
-    package_id BLOB NOT NULL
-        CHECK(length(package_id) = 16),
-
-    revision_content_digest BLOB NOT NULL
-        CHECK(length(revision_content_digest) = 32),
-
-    content_id TEXT NOT NULL COLLATE BINARY,
-
-    blob_digest BLOB NOT NULL
-        CHECK(length(blob_digest) = 32),
-
-    PRIMARY KEY (
-        package_id,
-        revision_content_digest,
-        content_id
-    ),
-
-    FOREIGN KEY (
-        package_id,
-        revision_content_digest
-    )
-    REFERENCES revisions(
-        package_id,
-        revision_content_digest
-    )
-) STRICT, WITHOUT ROWID;
-"#;
-pub(super) const SCHEMA_V2_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v2_additions.sql");
-pub(super) const SCHEMA_V3_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v3_additions.sql");
-pub(super) const SCHEMA_V4_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v4_additions.sql");
-pub(super) const SCHEMA_V5_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v5_additions.sql");
-pub(super) const SCHEMA_V6_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v6_additions.sql");
-pub(super) const SCHEMA_V7_ADDITIONS_SQL: &str =
-    include_str!("persistence_schema_v7_additions.sql");
-
-/// The ordered schema ladder: every version applies the SQL of all lower
-/// versions first. Index `n` holds the additions that produce version `n + 1`.
-pub(super) const SCHEMA_LADDER: [(&str, &str); 11] = [
-    (SCHEMA_V1_SQL, "PersistenceSchemaV1"),
-    (SCHEMA_V2_ADDITIONS_SQL, "PersistenceSchemaV2 additions"),
-    (SCHEMA_V3_ADDITIONS_SQL, "PersistenceSchemaV3 additions"),
-    (SCHEMA_V4_ADDITIONS_SQL, "PersistenceSchemaV4 additions"),
-    (SCHEMA_V5_ADDITIONS_SQL, "PersistenceSchemaV5 additions"),
-    (SCHEMA_V6_ADDITIONS_SQL, "PersistenceSchemaV6 changes"),
-    (SCHEMA_V7_ADDITIONS_SQL, "PersistenceSchemaV7 additions"),
-    (
-        include_str!("persistence_schema_v8_additions.sql"),
-        "PersistenceSchemaV8 lifecycle changes",
-    ),
-    (
-        include_str!("persistence_schema_v9_additions.sql"),
-        "PersistenceSchemaV9 coordination",
-    ),
-    (
-        include_str!("persistence_schema_v10_additions.sql"),
-        "PersistenceSchemaV10 immutable data references",
-    ),
-    (
-        include_str!("persistence_schema_v11_additions.sql"),
-        "PersistenceSchemaV11 Run diagnostics",
-    ),
-];
 
 #[derive(Debug)]
 pub(crate) struct PactrunPersistence {
@@ -197,9 +91,7 @@ pub(crate) enum PersistenceError {
     MissingRecoveryGuard,
     InvalidRunArtifact(String),
     DatabaseLockPoisoned,
-    UpgradeRequired,
     WriterAdmissionRequired,
-    LegacySessionUncertain,
     ActiveWriters,
     MigrationMutationConflict(RunId),
     MissingSnapshot(crate::domain::SnapshotId),
@@ -221,8 +113,12 @@ impl PersistenceError {
 impl fmt::Display for PersistenceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ServiceStorageUnavailable(message) => write!(formatter,"service storage unavailable: {message}"),
-            Self::CorruptServiceStorage(message) => write!(formatter,"corrupt service storage: {message}"),
+            Self::ServiceStorageUnavailable(message) => {
+                write!(formatter, "service storage unavailable: {message}")
+            }
+            Self::CorruptServiceStorage(message) => {
+                write!(formatter, "corrupt service storage: {message}")
+            }
             Self::RuntimeContent(source) => write!(formatter, "runtime content: {source}"),
             Self::Sqlite { operation, source } => write!(formatter, "{operation}: {source}"),
             Self::Io { operation, source } => write!(formatter, "{operation}: {source}"),
@@ -273,17 +169,23 @@ impl fmt::Display for PersistenceError {
                 write!(formatter, "invalid Run Artifact: {message}")
             }
             Self::DatabaseLockPoisoned => formatter.write_str("database mutex poisoned"),
-            Self::MissingSnapshot(id) => write!(formatter,"Snapshot {id} is not persisted"),
-            Self::SnapshotCollision(id) => write!(formatter,"Snapshot identity collision: {id}"),
+            Self::MissingSnapshot(id) => write!(formatter, "Snapshot {id} is not persisted"),
+            Self::SnapshotCollision(id) => write!(formatter, "Snapshot identity collision: {id}"),
             Self::SnapshotBundle(error) => error.fmt(formatter),
             Self::SnapshotCodec(error) => error.fmt(formatter),
-            Self::CorruptSnapshot(reason) => write!(formatter,"corrupt Snapshot: {reason}"),
-            Self::UnauthorizedSnapshotExport => formatter.write_str("Snapshot export requires --authorize-sensitive-export for this operation"),
-            Self::UpgradeRequired => formatter.write_str("exact V8, V9 or V10 requires explicit pactrun storage upgrade to V11"),
-            Self::WriterAdmissionRequired => formatter.write_str("current writable admission is required"),
-            Self::LegacySessionUncertain => formatter.write_str("legacy evidence is insufficient for safe migration: another session is live or unknown"),
-            Self::ActiveWriters => formatter.write_str("schema migration is blocked by a live or unknown admitted writer"),
-            Self::MigrationMutationConflict(run) => write!(formatter,"mutation_conflict: admitted Migration Run {run} holds this Instance"),
+            Self::CorruptSnapshot(reason) => write!(formatter, "corrupt Snapshot: {reason}"),
+            Self::UnauthorizedSnapshotExport => formatter.write_str(
+                "Snapshot export requires --authorize-sensitive-export for this operation",
+            ),
+            Self::WriterAdmissionRequired => {
+                formatter.write_str("current writable admission is required")
+            }
+            Self::ActiveWriters => formatter
+                .write_str("exclusive maintenance is blocked by a live or unknown admitted writer"),
+            Self::MigrationMutationConflict(run) => write!(
+                formatter,
+                "mutation_conflict: admitted Migration Run {run} holds this Instance"
+            ),
         }
     }
 }
@@ -306,6 +208,50 @@ impl From<RuntimeContentStoreError> for PersistenceError {
 }
 
 impl PactrunPersistence {
+    /// Advisory read before staging, coordination, journal changes or publication.
+    /// Admission must repeat the exact contract check inside its transaction.
+    pub(crate) fn preflight_storage(root: &Path, collection: bool) -> Result<(), PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
+        let directory = root.join(DATABASE_DIRECTORY);
+        match std::fs::symlink_metadata(&directory) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !collection => {
+                return Ok(());
+            }
+            Err(source) => {
+                return Err(PersistenceError::Io {
+                    operation: "inspect database directory",
+                    source,
+                });
+            }
+            Ok(_) => {}
+        }
+        let directory = validate_supported_storage_root(&directory)?;
+        validate_existing_regular_entry(&directory, DATABASE_NAME)?;
+        let path = directory.join(DATABASE_NAME);
+        match std::fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !collection => {
+                return Ok(());
+            }
+            Err(source) => {
+                return Err(PersistenceError::Io {
+                    operation: "inspect database entry",
+                    source,
+                });
+            }
+            Ok(_) => {}
+        }
+        let reader = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|error| PersistenceError::sqlite("inspect persistence contract", error))?;
+        configure_read_connection(&reader)?;
+        match classify_database(&reader)? {
+            DatabaseState::Baseline => Ok(()),
+            DatabaseState::Pristine if !collection => Ok(()),
+            _ => Err(PersistenceError::DatabaseOwnership(
+                "operation requires a supported persistence baseline".to_owned(),
+            )),
+        }
+    }
+
     pub(crate) fn open(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
         let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
@@ -323,6 +269,7 @@ impl PactrunPersistence {
 
     pub(crate) fn open_for_collection(root: &Path) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
+        Self::preflight_storage(&root, true)?;
         let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
             PersistenceError::DatabaseOwnership("could not prepare collection session".to_owned())
         })?;
@@ -345,38 +292,10 @@ impl PactrunPersistence {
 
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
         let database_path = database_root.join(DATABASE_NAME);
-        // Reject unsupported existing stores before creating coordination state.
-        // This advisory read grants no write authority; admission rechecks below.
-        if database_path.exists() {
-            let reader =
-                Connection::open_with_flags(&database_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-                    .map_err(|e| PersistenceError::sqlite("inspect writable store", e))?;
-            configure_read_connection(&reader)?;
-            match classify_database(&reader)? {
-                DatabaseState::V11 => {}
-                DatabaseState::Pristine if !collection => {}
-                DatabaseState::Pristine => {
-                    return Err(PersistenceError::DatabaseOwnership(
-                        "collection requires an existing exact V11 reference catalog".to_owned(),
-                    ));
-                }
-                DatabaseState::V8 | DatabaseState::V9 | DatabaseState::V10 => {
-                    return Err(PersistenceError::UpgradeRequired);
-                }
-                _ => {
-                    return Err(PersistenceError::DatabaseOwnership(
-                        "writer requires pristine or exact V11 storage".to_owned(),
-                    ));
-                }
-            }
-        } else if collection {
-            return Err(PersistenceError::DatabaseOwnership(
-                "collection requires an existing exact V11 reference catalog".to_owned(),
-            ));
-        }
+        Self::preflight_storage(&root, collection)?;
         let runtime_content = RuntimeContentStore::open(&runtime_root)?
             .with_collection_coordination(collection, true)?;
-        let database = super::sqlite_v5::open_writer_database(&database_path, &session)?;
+        let database = super::writer_admission::open_writer_database(&database_path, &session)?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
         // Cross-session cleanup and publisher maintenance require a supported,
         // durably admitted schema; pre-admission preparation cannot authorize them.
@@ -405,15 +324,9 @@ impl PactrunPersistence {
             )?;
         configure_read_connection(&database)?;
         let state = classify_database(&database)?;
-        if state != DatabaseState::V11 {
-            if matches!(
-                state,
-                DatabaseState::V8 | DatabaseState::V9 | DatabaseState::V10
-            ) {
-                return Err(PersistenceError::UpgradeRequired);
-            }
+        if state != DatabaseState::Baseline {
             return Err(PersistenceError::SchemaMismatch(
-                "read-only opening requires exact V11; use a compatible build to reach V8 or V9 before explicit upgrade".to_owned(),
+                "read-only opening requires an existing supported persistence baseline".to_owned(),
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
@@ -443,7 +356,7 @@ impl PactrunPersistence {
     pub(crate) fn persist_revision(
         &self,
         package_id: PackageId,
-        content: &ValidatedRevisionContentV1,
+        content: &DeclarationContent,
         publications: &[StoredRuntimeBlob],
     ) -> Result<RevisionIdentity, PersistenceError> {
         self.persist_revision_internal(package_id, &content.clone().into(), publications, None)
@@ -452,7 +365,7 @@ impl PactrunPersistence {
     pub(crate) fn persist_revision_with_metadata(
         &self,
         package_id: PackageId,
-        content: &ValidatedRevisionContentV1,
+        content: &DeclarationContent,
         publications: &[StoredRuntimeBlob],
         metadata: &RevisionMetadataMutationBatch,
     ) -> Result<RevisionIdentity, PersistenceError> {
@@ -509,14 +422,9 @@ impl PactrunPersistence {
         ),
         PersistenceError,
     > {
-        if content.core.version() > 1 && SCHEMA_VERSION < 7 {
-            return Err(PersistenceError::CorruptRevision(
-                "Core V2 requires the V7 persistence boundary".to_owned(),
-            ));
-        }
         let core_jcs = encode_canonical_revision_core(&content.core)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
-        let runtime_content_jcs = encode_canonical_runtime_content_v1(&content.runtime_content)
+        let runtime_content_jcs = encode_canonical_runtime_content(&content.runtime_content)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
         let content_digest = calculate_revision_content_digest(content)
             .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))?;
@@ -654,18 +562,16 @@ pub(super) fn validate_core_storage_version(
     database: &Connection,
     core: &[u8],
 ) -> Result<(), PersistenceError> {
-    let version =
-        core_format_version(core).map_err(|e| PersistenceError::CorruptRevision(e.to_string()))?;
-    if version > 1 {
-        let schema: i64 = database
-            .pragma_query_value(None, "user_version", |row| row.get(0))
-            .map_err(|e| PersistenceError::sqlite("check Core storage compatibility", e))?;
-        if schema < 7 {
-            return Err(PersistenceError::CorruptRevision(
-                "Core V2 is not valid in a pre-V7 store".to_owned(),
-            ));
-        }
+    core_format_version(core).map_err(|e| PersistenceError::CorruptRevision(e.to_string()))?;
+    let marker: i64 = database
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(|e| PersistenceError::sqlite("check revision storage marker", e))?;
+    if marker != SCHEMA_VERSION {
+        return Err(PersistenceError::CorruptRevision(
+            "unsupported revision storage marker".to_owned(),
+        ));
     }
+    require_persistence_version(database)?;
     Ok(())
 }
 
@@ -706,116 +612,6 @@ pub(super) fn configure_read_connection(database: &Connection) -> Result<(), Per
         )));
     }
     Ok(())
-}
-
-#[cfg(test)]
-pub(super) fn legacy_v4_open_database(path: &Path) -> Result<Connection, PersistenceError> {
-    let mut database = Connection::open(path)
-        .map_err(|error| PersistenceError::sqlite("open SQLite database", error))?;
-    configure_connection(&database)?;
-
-    legacy_v4_classify(&database)?;
-    establish_wal_mode(&database)?;
-    configure_connection(&database)?;
-    fault(FaultPoint::AfterWalBeforeBootstrap);
-
-    let transaction = database
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|error| PersistenceError::sqlite("begin schema bootstrap", error))?;
-    let state = legacy_v4_classify(&transaction)?;
-    let migrated = match state {
-        DatabaseState::Pristine => {
-            apply_legacy_v4_ladder(&transaction, 0)?;
-            transaction
-                .pragma_update(None, "application_id", APPLICATION_ID)
-                .map_err(|error| PersistenceError::sqlite("set application_id", error))?;
-            transaction
-                .pragma_update(None, "user_version", SCHEMA_V4_VERSION)
-                .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
-            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
-            fault(FaultPoint::BeforeBootstrapCommit);
-            false
-        }
-        DatabaseState::V1 | DatabaseState::V2 | DatabaseState::V3 => {
-            let current = state.version().expect("exact versions carry a version");
-            apply_legacy_v4_ladder(&transaction, current)?;
-            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
-            transaction
-                .pragma_update(None, "user_version", SCHEMA_V4_VERSION)
-                .map_err(|error| PersistenceError::sqlite("set user_version", error))?;
-            fault(FaultPoint::BeforeSchemaMigrationCommit);
-            true
-        }
-        DatabaseState::V5
-        | DatabaseState::V6
-        | DatabaseState::V7
-        | DatabaseState::V8
-        | DatabaseState::V9
-        | DatabaseState::V10
-        | DatabaseState::V11 => {
-            return Err(PersistenceError::DatabaseOwnership(
-                "legacy V4 binary rejects newer schema".to_owned(),
-            ));
-        }
-        DatabaseState::V4 => {
-            validate_schema(&transaction, SCHEMA_V4_VERSION)?;
-            false
-        }
-    };
-    transaction
-        .commit()
-        .map_err(|error| PersistenceError::sqlite("commit schema bootstrap", error))?;
-    if migrated {
-        fault(FaultPoint::AfterSchemaMigrationCommit);
-    }
-    configure_connection(&database)?;
-    Ok(database)
-}
-
-/// Executes every ladder step above `current` so the schema becomes exact
-/// `SCHEMA_V4_VERSION`; `current = 0` builds the complete schema from nothing.
-#[cfg(test)]
-fn apply_legacy_v4_ladder(database: &Connection, current: i64) -> Result<(), PersistenceError> {
-    let start = usize::try_from(current).expect("schema versions are non-negative");
-    for (sql, label) in &SCHEMA_LADDER[start..4] {
-        database
-            .execute_batch(sql)
-            .map_err(|error| PersistenceError::Sqlite {
-                operation: label,
-                source: error,
-            })?;
-    }
-    Ok(())
-}
-#[cfg(test)]
-fn legacy_v4_classify(database: &Connection) -> Result<DatabaseState, PersistenceError> {
-    let version: i64 = database
-        .pragma_query_value(None, "user_version", |row| row.get(0))
-        .map_err(|e| PersistenceError::sqlite("legacy V4 version check", e))?;
-    if version > SCHEMA_V4_VERSION {
-        return Err(PersistenceError::DatabaseOwnership(
-            "legacy V4 binary rejects newer schema".to_owned(),
-        ));
-    }
-    classify_database(database)
-}
-
-/// Historical <=V4 schema fixtures only, never an M4 production open path.
-/// Reads retain the original migration assertions; current writes still require
-/// admission and therefore cannot be performed through this unqualified view.
-#[cfg(test)]
-pub(super) fn legacy_v4_fixture(
-    root: impl AsRef<Path>,
-) -> Result<PactrunPersistence, PersistenceError> {
-    let root = root.as_ref();
-    let path = root.join("database/pactrun.sqlite3");
-    let database = legacy_v4_open_database(&path)?;
-    Ok(PactrunPersistence {
-        database: Mutex::new(database),
-        database_path: path,
-        runtime_content: RuntimeContentStore::open(root.join("runtime-content"))?,
-        session: None,
-    })
 }
 
 pub(super) fn establish_wal_mode(database: &Connection) -> Result<(), PersistenceError> {
@@ -884,36 +680,7 @@ pub(super) fn configure_connection(database: &Connection) -> Result<(), Persiste
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum DatabaseState {
     Pristine,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    V10,
-    V11,
-}
-
-impl DatabaseState {
-    fn version(self) -> Option<i64> {
-        match self {
-            Self::Pristine => None,
-            Self::V1 => Some(SCHEMA_V1_VERSION),
-            Self::V2 => Some(SCHEMA_V2_VERSION),
-            Self::V3 => Some(SCHEMA_V3_VERSION),
-            Self::V4 => Some(SCHEMA_V4_VERSION),
-            Self::V5 => Some(SCHEMA_V5_VERSION),
-            Self::V6 => Some(SCHEMA_V6_VERSION),
-            Self::V7 => Some(SCHEMA_V7_VERSION),
-            Self::V8 => Some(SCHEMA_V8_VERSION),
-            Self::V9 => Some(SCHEMA_V9_VERSION),
-            Self::V10 => Some(SCHEMA_V10_VERSION),
-            Self::V11 => Some(SCHEMA_VERSION),
-        }
-    }
+    Baseline,
 }
 
 pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, PersistenceError> {
@@ -927,55 +694,13 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
 
     match (application_id, user_version, has_user_objects) {
         (0, 0, false) => Ok(DatabaseState::Pristine),
-        (APPLICATION_ID, SCHEMA_V1_VERSION, true) => {
-            validate_schema(database, SCHEMA_V1_VERSION)?;
-            Ok(DatabaseState::V1)
-        }
-        (APPLICATION_ID, SCHEMA_V2_VERSION, true) => {
-            validate_schema(database, SCHEMA_V2_VERSION)?;
-            Ok(DatabaseState::V2)
-        }
-        (APPLICATION_ID, SCHEMA_V3_VERSION, true) => {
-            validate_schema(database, SCHEMA_V3_VERSION)?;
-            Ok(DatabaseState::V3)
-        }
-        (APPLICATION_ID, SCHEMA_V4_VERSION, true) => {
-            validate_schema(database, SCHEMA_V4_VERSION)?;
-            Ok(DatabaseState::V4)
-        }
-        (APPLICATION_ID, SCHEMA_V5_VERSION, true) => {
-            validate_schema(database, SCHEMA_V5_VERSION)?;
-            Ok(DatabaseState::V5)
-        }
-        (APPLICATION_ID, SCHEMA_V6_VERSION, true) => {
-            validate_schema(database, SCHEMA_V6_VERSION)?;
-            Ok(DatabaseState::V6)
-        }
-        (APPLICATION_ID, SCHEMA_V7_VERSION, true) => {
-            validate_schema(database, SCHEMA_V7_VERSION)?;
-            Ok(DatabaseState::V7)
-        }
-        (APPLICATION_ID, SCHEMA_V8_VERSION, true) => {
-            validate_schema(database, SCHEMA_V8_VERSION)?;
-            Ok(DatabaseState::V8)
-        }
-        (APPLICATION_ID, SCHEMA_V9_VERSION, true) => {
-            validate_schema(database, SCHEMA_V9_VERSION)?;
-            Ok(DatabaseState::V9)
-        }
-        (APPLICATION_ID, SCHEMA_V10_VERSION, true) => {
-            validate_schema(database, SCHEMA_V10_VERSION)?;
-            Ok(DatabaseState::V10)
-        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
-            Ok(DatabaseState::V11)
+            Ok(DatabaseState::Baseline)
         }
-        (APPLICATION_ID, version, _) if version > SCHEMA_VERSION => {
-            Err(PersistenceError::DatabaseOwnership(format!(
-                "unsupported newer persistence schema version {version}"
-            )))
-        }
+        (APPLICATION_ID, version, _) => Err(PersistenceError::DatabaseOwnership(format!(
+            "unsupported persistence bootstrap marker {version}; development stores are not upgraded"
+        ))),
         (application, _, _) if application != 0 && application != APPLICATION_ID => {
             Err(PersistenceError::DatabaseOwnership(format!(
                 "foreign application_id 0x{application:08x}"
@@ -1030,24 +755,39 @@ struct ForeignKeyRow {
     match_clause: String,
 }
 
+/// Keep even corrupt metadata diagnostics bounded; 129 characters cannot parse as
+/// a supported identifier (the shared grammar is bounded to 128 ASCII bytes).
+fn require_persistence_version(database: &Connection) -> Result<(), PersistenceError> {
+    let text: String = database
+        .query_row(
+            "SELECT substr(format_version,1,129) FROM pactrun_metadata WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| PersistenceError::sqlite("read persistence format version", error))?;
+    crate::domain::VersionDomain::Persistence
+        .require(&text)
+        .map(|_| ())
+        .map_err(PersistenceError::SchemaMismatch)
+}
+
 pub(super) fn validate_schema(database: &Connection, version: i64) -> Result<(), PersistenceError> {
-    if !(SCHEMA_V1_VERSION..=SCHEMA_VERSION).contains(&version) {
-        return Err(PersistenceError::SchemaMismatch(format!(
-            "unsupported expected schema version {version}"
-        )));
-    }
     let expected = Connection::open_in_memory()
         .map_err(|error| PersistenceError::sqlite("open expected schema database", error))?;
-    let steps = usize::try_from(version).expect("schema versions are non-negative");
-    for (sql, _) in &SCHEMA_LADDER[..steps] {
+    if version == SCHEMA_VERSION {
         expected
-            .execute_batch(sql)
-            .map_err(|error| PersistenceError::sqlite("construct expected schema", error))?;
+            .execute_batch(BASELINE_SQL)
+            .map_err(|error| PersistenceError::sqlite("construct expected baseline", error))?;
+        require_persistence_version(database)?;
+    } else {
+        return Err(PersistenceError::SchemaMismatch(
+            "unsupported persistence marker".to_owned(),
+        ));
     }
 
     if schema_objects(database)? != schema_objects(&expected)? {
         return Err(PersistenceError::SchemaMismatch(format!(
-            "sqlite_schema manifest differs from PersistenceSchemaV{version}"
+            "sqlite_schema manifest differs from the supported Persistence baseline ({version})"
         )));
     }
     if table_list(database)? != table_list(&expected)? {
@@ -1352,15 +1092,10 @@ pub(crate) enum FaultPoint {
     AfterCollectionRemoval,
     AfterCollectionClaim,
     AfterSnapshotReadEstablished,
-    AfterCoordinationAdmissionInspection,
     BeforeSnapshotImportCommit,
     AfterSnapshotImportCommit,
     BeforeWritableAdmission,
     AfterWritableAdmission,
-    AfterLegacySessionInspection,
-    AfterV5AdmissionInspection,
-    AfterV6AdmissionInspection,
-    AfterV7AdmissionInspection,
     BeforeCleanupBoundaryCommit,
     AfterCleanupBoundaryCommit,
     AfterDiscardIntentCommit,
@@ -1378,8 +1113,6 @@ pub(crate) enum FaultPoint {
     AfterMigrationEdgeCommit,
     AfterWalBeforeBootstrap,
     BeforeBootstrapCommit,
-    BeforeSchemaMigrationCommit,
-    AfterSchemaMigrationCommit,
     BeforeMetadataCommit,
     AfterMetadataCommit,
     BeforeRevisionCommit,
@@ -1410,15 +1143,10 @@ impl FaultPoint {
             Self::AfterCollectionRemoval => "after_collection_removal",
             Self::AfterCollectionClaim => "after_collection_claim",
             Self::AfterSnapshotReadEstablished => "after_snapshot_read_established",
-            Self::AfterCoordinationAdmissionInspection => "after_coordination_admission_inspection",
             Self::BeforeSnapshotImportCommit => "before_snapshot_import_commit",
             Self::AfterSnapshotImportCommit => "after_snapshot_import_commit",
             Self::BeforeWritableAdmission => "before_writable_admission",
             Self::AfterWritableAdmission => "after_writable_admission",
-            Self::AfterLegacySessionInspection => "after_legacy_session_inspection",
-            Self::AfterV5AdmissionInspection => "after_v5_admission_inspection",
-            Self::AfterV6AdmissionInspection => "after_v6_admission_inspection",
-            Self::AfterV7AdmissionInspection => "after_v7_admission_inspection",
             Self::BeforeCleanupBoundaryCommit => "before_cleanup_boundary_commit",
             Self::AfterCleanupBoundaryCommit => "after_cleanup_boundary_commit",
             Self::AfterDiscardIntentCommit => "after_discard_intent_commit",
@@ -1436,8 +1164,6 @@ impl FaultPoint {
             Self::AfterMigrationEdgeCommit => "after_migration_edge_commit",
             Self::AfterWalBeforeBootstrap => "after_wal_before_bootstrap",
             Self::BeforeBootstrapCommit => "before_bootstrap_commit",
-            Self::BeforeSchemaMigrationCommit => "before_schema_migration_commit",
-            Self::AfterSchemaMigrationCommit => "after_schema_migration_commit",
             Self::BeforeMetadataCommit => "before_metadata_commit",
             Self::AfterMetadataCommit => "after_metadata_commit",
             Self::BeforeRevisionCommit => "before_revision_commit",
@@ -1520,9 +1246,9 @@ mod tests {
 
     use super::*;
     use crate::domain::{
-        ContentId, RevisionCoreProjectionInputV1, RuntimeContentProjectionInputV1,
-        RuntimeFileKindV1, RuntimeFileV1, RuntimePath, project_revision_core_v1,
-        project_runtime_content_closure_v1, validate_revision_content_v1,
+        ContentId, RevisionDeclarationInput, RuntimeContentProjectionInputV1, RuntimeFileKindV1,
+        RuntimeFileV1, RuntimePath, project_revision_declarations,
+        project_runtime_content_closure_v1, validate_declaration_content,
     };
 
     const WORKER_TEST: &str = "persistence::sqlite_revision_store::tests::m1c_subprocess_worker";
@@ -1530,43 +1256,30 @@ mod tests {
     // Test-ID: PR-TEST-0339
     // Verifies: PR-REQ-0018, PR-REQ-0318
     #[test]
-    fn candidate_v2_cannot_be_interpreted_as_v1_inside_an_exact_v6_store() {
+    fn unsupported_core_is_not_interpreted_as_a_supported_revision() {
         let (_temporary, root) = test_root();
-        let writer = PactrunPersistence::open(&root).unwrap();
-        drop(writer);
-        let mut db = Connection::open(database_path(&root)).unwrap();
-        configure_connection(&db).unwrap();
-        super::super::sqlite_v7::empty_v7_to_v6_fixture(&mut db);
-        drop(db);
-        let p = super::super::sqlite_v7::legacy_v6_read_fixture(&root);
-        let core=br#"{"actions":[],"format_version":2,"inputs":[],"migrations":[],"service_resources":[],"service_storages":[]}"#;
-        let runtime = br#"{"files":[]}"#;
-        let candidate =
-            crate::revision_core_v2::decode_canonical_revision_content_v2(core, runtime).unwrap();
+        drop(PactrunPersistence::open(&root).unwrap());
+        let p = PactrunPersistence::open_read_only(&root).unwrap();
         let id = RevisionIdentity::new(
             package(65),
-            crate::revision_core_v2::calculate_revision_content_digest_v2(&candidate).unwrap(),
+            crate::domain::RevisionContentDigest::from_bytes([65; 32]),
         );
-        // Deliberately corrupt V6 via raw fixture SQL. This is not a production
-        // publisher for V2 identities and must be refused on every V6 read.
-        {
-            let db = Connection::open(database_path(&root)).unwrap();
-            db.execute(
-                "INSERT INTO packages VALUES(?1)",
-                [id.package_id.as_bytes().as_slice()],
-            )
-            .unwrap();
-            db.execute(
-                "INSERT INTO revisions VALUES(?1,?2,?3,?4)",
-                params![
-                    id.package_id.as_bytes().as_slice(),
-                    id.content_digest.as_bytes().as_slice(),
-                    core.as_slice(),
-                    runtime.as_slice()
-                ],
-            )
-            .unwrap();
-        }
+        let db = Connection::open(database_path(&root)).unwrap();
+        db.execute(
+            "INSERT INTO packages VALUES(?1)",
+            [id.package_id.as_bytes().as_slice()],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO revisions VALUES(?1,?2,?3,?4)",
+            params![
+                id.package_id.as_bytes().as_slice(),
+                id.content_digest.as_bytes().as_slice(),
+                br#"{"format_version":99}"#.as_slice(),
+                br#"{"files":[]}"#.as_slice()
+            ],
+        )
+        .unwrap();
         assert!(matches!(
             p.load_revision(&id),
             Err(PersistenceError::CorruptRevision(_))
@@ -1575,10 +1288,6 @@ mod tests {
             p.load_revision_metadata(&id),
             Err(PersistenceError::CorruptRevision(_))
         ));
-        assert!(
-            p.persist_revision_internal(id.package_id, &candidate.into(), &[], None)
-                .is_err()
-        );
     }
 
     fn digest(bytes: &[u8]) -> Sha256Digest {
@@ -1618,8 +1327,8 @@ mod tests {
         )
     }
 
-    fn content_with_files(files: Vec<RuntimeFileV1>) -> ValidatedRevisionContentV1 {
-        let core = project_revision_core_v1(RevisionCoreProjectionInputV1 {
+    fn content_with_files(files: Vec<RuntimeFileV1>) -> DeclarationContent {
+        let core = project_revision_declarations(RevisionDeclarationInput {
             inputs: Vec::new(),
             actions: Vec::new(),
             snapshot: None,
@@ -1629,10 +1338,10 @@ mod tests {
         .unwrap();
         let runtime_content =
             project_runtime_content_closure_v1(RuntimeContentProjectionInputV1 { files }).unwrap();
-        validate_revision_content_v1(core, runtime_content).unwrap()
+        validate_declaration_content(core, runtime_content).unwrap()
     }
 
-    fn shared_content(blob_digest: &Sha256Digest) -> ValidatedRevisionContentV1 {
+    fn shared_content(blob_digest: &Sha256Digest) -> DeclarationContent {
         content_with_files(vec![
             RuntimeFileV1 {
                 id: ContentId::parse("launcher").unwrap(),
@@ -1651,11 +1360,7 @@ mod tests {
         ])
     }
 
-    fn one_file_content(
-        id: &str,
-        path: &str,
-        blob_digest: &Sha256Digest,
-    ) -> ValidatedRevisionContentV1 {
+    fn one_file_content(id: &str, path: &str, blob_digest: &Sha256Digest) -> DeclarationContent {
         content_with_files(vec![RuntimeFileV1 {
             id: ContentId::parse(id).unwrap(),
             path: RuntimePath::parse(path).unwrap(),
@@ -1712,11 +1417,7 @@ mod tests {
         persistence: &PactrunPersistence,
         package_id: PackageId,
         bytes: &[u8],
-    ) -> (
-        ValidatedRevisionContentV1,
-        StoredRuntimeBlob,
-        RevisionIdentity,
-    ) {
+    ) -> (DeclarationContent, StoredRuntimeBlob, RevisionIdentity) {
         let blob_digest = digest(bytes);
         let publication = persistence
             .put_runtime_content(&blob_digest, &mut Cursor::new(bytes))
@@ -1826,7 +1527,7 @@ mod tests {
             &newer_root,
             APPLICATION_ID,
             SCHEMA_VERSION + 1,
-            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
+            BASELINE_SQL,
         );
         assert!(PactrunPersistence::open(&newer_root).is_err());
 
@@ -1835,9 +1536,7 @@ mod tests {
             &drift_root,
             APPLICATION_ID,
             SCHEMA_VERSION,
-            &format!(
-                "{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}\nCREATE TABLE drift(value TEXT) STRICT;"
-            ),
+            &format!("{BASELINE_SQL}\nCREATE TABLE drift(value TEXT) STRICT;"),
         );
         assert!(PactrunPersistence::open(&drift_root).is_err());
 
@@ -1870,94 +1569,6 @@ mod tests {
         PactrunPersistence::open(&concurrent_root).unwrap();
     }
 
-    // Test-ID: PR-TEST-0073
-    // Verifies: PR-REQ-0078, PR-REQ-0269, PR-REQ-0270
-    #[test]
-    fn legacy_v2_migrates_transactionally_to_v4_and_preserves_wal() {
-        let (_temporary, root) = test_root();
-        initialize_direct(
-            &root,
-            APPLICATION_ID,
-            SCHEMA_V2_VERSION,
-            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
-        );
-        let persistence = legacy_v4_fixture(&root).unwrap();
-        let database = persistence.database.lock().unwrap();
-        assert_eq!(
-            database
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_V4_VERSION
-        );
-        assert_eq!(
-            database
-                .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
-                .unwrap(),
-            "wal"
-        );
-        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
-        drop(database);
-
-        let (before_temporary, before_root) = test_root();
-        initialize_direct(
-            &before_root,
-            APPLICATION_ID,
-            SCHEMA_V2_VERSION,
-            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
-        );
-        let before_marker = before_temporary.path().join("migration-before.success");
-        assert!(!run_worker(
-            &before_root,
-            "legacy-open",
-            Some(FaultPoint::BeforeSchemaMigrationCommit),
-            &before_marker,
-        ));
-        let database = raw_database(&before_root);
-        assert_eq!(
-            database
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_V2_VERSION
-        );
-        assert_eq!(
-            database
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name='instances'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            0
-        );
-        drop(database);
-        legacy_v4_fixture(&before_root).unwrap();
-
-        let (after_temporary, after_root) = test_root();
-        initialize_direct(
-            &after_root,
-            APPLICATION_ID,
-            SCHEMA_V2_VERSION,
-            &format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
-        );
-        let after_marker = after_temporary.path().join("migration-after.success");
-        assert!(!run_worker(
-            &after_root,
-            "legacy-open",
-            Some(FaultPoint::AfterSchemaMigrationCommit),
-            &after_marker,
-        ));
-        let database = raw_database(&after_root);
-        assert_eq!(
-            database
-                .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
-                .unwrap(),
-            SCHEMA_V4_VERSION
-        );
-        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
-        drop(database);
-        legacy_v4_fixture(&after_root).unwrap();
-    }
-
     // Test-ID: PR-TEST-0053
     // Verifies: PR-REQ-0013, PR-REQ-0232
     #[test]
@@ -1967,9 +1578,8 @@ mod tests {
         let bytes = b"shared canonical blob";
         let (content, publication, identity) = persist_sample(&persistence, package(1), bytes);
 
-        let expected_core = encode_canonical_revision_core_v1(&content.core).unwrap();
-        let expected_runtime =
-            encode_canonical_runtime_content_v1(&content.runtime_content).unwrap();
+        let expected_core = encode_service_free_revision(&content.core).unwrap();
+        let expected_runtime = encode_canonical_runtime_content(&content.runtime_content).unwrap();
         let database = persistence.database.lock().unwrap();
         let stored: (Vec<u8>, Vec<u8>) = database
             .query_row(
@@ -2019,11 +1629,11 @@ mod tests {
         assert_ne!(other_revision.content_digest, identity.content_digest);
         assert_eq!(
             expected_core,
-            encode_canonical_revision_core_v1(&content.core).unwrap()
+            encode_service_free_revision(&content.core).unwrap()
         );
         assert_eq!(
             expected_runtime,
-            encode_canonical_runtime_content_v1(&content.runtime_content).unwrap()
+            encode_canonical_runtime_content(&content.runtime_content).unwrap()
         );
     }
 
@@ -2220,7 +1830,7 @@ mod tests {
         let expected_content = shared_content(&digest(b"m1c worker content"));
         let expected_identity = RevisionIdentity::new(
             package(42),
-            calculate_revision_content_digest_v1(&expected_content).unwrap(),
+            calculate_service_free_digest(&expected_content).unwrap(),
         );
         let reopened = PactrunPersistence::open(&process_root).unwrap();
         assert!(
@@ -2242,7 +1852,7 @@ mod tests {
             let content = shared_content(&digest(b"m1c worker content"));
             let identity = RevisionIdentity::new(
                 package(42),
-                calculate_revision_content_digest_v1(&content).unwrap(),
+                calculate_service_free_digest(&content).unwrap(),
             );
             match fault {
                 FaultPoint::BeforeRevisionCommit => {
@@ -2290,16 +1900,16 @@ mod tests {
         let (_canonical_temporary, canonical_root) = test_root();
         let canonical = PactrunPersistence::open(&canonical_root).unwrap();
         let (content, _, identity) = persist_sample(&canonical, package(31), b"canonical");
-        let before_core = encode_canonical_revision_core_v1(&content.core).unwrap();
-        let before_runtime = encode_canonical_runtime_content_v1(&content.runtime_content).unwrap();
-        let before_digest = calculate_revision_content_digest_v1(&content).unwrap();
+        let before_core = encode_service_free_revision(&content.core).unwrap();
+        let before_runtime = encode_canonical_runtime_content(&content.runtime_content).unwrap();
+        let before_digest = calculate_service_free_digest(&content).unwrap();
         let loaded = canonical.load_revision(&identity).unwrap().unwrap();
         assert_eq!(
             encode_canonical_revision_core(&loaded.content.core).unwrap(),
             before_core
         );
         assert_eq!(
-            encode_canonical_runtime_content_v1(&loaded.content.runtime_content).unwrap(),
+            encode_canonical_runtime_content(&loaded.content.runtime_content).unwrap(),
             before_runtime
         );
         assert_eq!(
@@ -2342,241 +1952,15 @@ mod tests {
         }
 
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
-            "../../tests/vectors/revision_core_format_v1/vectors.json"
+            "../../tests/vectors/revision_canonical/declarations.json"
         ))
         .unwrap();
         let catalog: serde_json::Value = serde_json::from_str(include_str!(
             "../../tests/vectors/error_taxonomy_v1/catalog.json"
         ))
         .unwrap();
-        assert_eq!(vectors["status"], "frozen");
+        assert_eq!(vectors["status"], "baseline");
         assert_eq!(catalog["status"], "frozen");
-    }
-
-    // Test-ID: PR-TEST-0082
-    // Verifies: PR-REQ-0078, PR-REQ-0275, PR-REQ-0276
-    #[test]
-    fn legacy_v3_migrates_to_v4_preserving_instances_with_crash_and_concurrency() {
-        fn v3_sql() -> String {
-            format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}\n{SCHEMA_V3_ADDITIONS_SQL}")
-        }
-        fn seed_v3(root: &Path) {
-            initialize_direct(root, APPLICATION_ID, SCHEMA_V3_VERSION, &v3_sql());
-            let database = raw_database(root);
-            database
-                .execute_batch(
-                    "INSERT INTO packages(package_id) VALUES (x'01010101010101010101010101010101');\
-                     INSERT INTO revisions(package_id, revision_content_digest, core_jcs, runtime_content_jcs) \
-                       VALUES (x'01010101010101010101010101010101', \
-                               x'0202020202020202020202020202020202020202020202020202020202020202', \
-                               x'7b7d', x'7b7d');\
-                     INSERT INTO instances(instance_id, instance_name, active_package_id, \
-                                           active_revision_content_digest, instance_state_version) \
-                       VALUES (x'03030303030303030303030303030303', CAST('node' AS BLOB), \
-                               x'01010101010101010101010101010101', \
-                               x'0202020202020202020202020202020202020202020202020202020202020202', \
-                               x'04040404040404040404040404040404');\
-                     INSERT INTO managed_input_payloads(instance_id, payload_id, protection_rank, byte_length) \
-                       VALUES (x'03030303030303030303030303030303', x'05050505050505050505050505050505', 1, 3);\
-                     INSERT INTO managed_input_payload_chunks(instance_id, payload_id, chunk_index, chunk_bytes) \
-                       VALUES (x'03030303030303030303030303030303', x'05050505050505050505050505050505', 0, x'616263');\
-                     INSERT INTO managed_input_bindings(instance_id, input_identity, payload_id) \
-                       VALUES (x'03030303030303030303030303030303', CAST('config' AS BLOB), \
-                               x'05050505050505050505050505050505');",
-                )
-                .unwrap();
-        }
-        fn preserved_rows(database: &Connection) -> (i64, i64, i64, i64, Vec<u8>) {
-            let counts = |table: &str| -> i64 {
-                database
-                    .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                        row.get(0)
-                    })
-                    .unwrap()
-            };
-            (
-                counts("instances"),
-                counts("managed_input_payloads"),
-                counts("managed_input_payload_chunks"),
-                counts("managed_input_bindings"),
-                database
-                    .query_row("SELECT instance_state_version FROM instances", [], |row| {
-                        row.get(0)
-                    })
-                    .unwrap(),
-            )
-        }
-        fn user_version(database: &Connection) -> i64 {
-            database
-                .pragma_query_value(None, "user_version", |row| row.get(0))
-                .unwrap()
-        }
-        fn has_table(database: &Connection, table: &str) -> bool {
-            database
-                .query_row(
-                    "SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name=?1",
-                    [table],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap()
-                == 1
-        }
-
-        // Exact V3 with real Instance rows migrates to exact V4 and preserves
-        // every row without inferring any Run state.
-        let (_temporary, root) = test_root();
-        seed_v3(&root);
-        let before = preserved_rows(&raw_database(&root));
-        let persistence = legacy_v4_fixture(&root).unwrap();
-        let database = persistence.database.lock().unwrap();
-        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
-        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
-        assert_eq!(preserved_rows(&database), before);
-        for table in [
-            "runs",
-            "run_executions",
-            "run_revision_pins",
-            "run_payload_pins",
-            "run_outcomes",
-            "run_artifacts",
-            "instance_recovery_guards",
-        ] {
-            assert!(has_table(&database, table));
-            assert_eq!(
-                database
-                    .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row
-                        .get::<_, i64>(0))
-                    .unwrap(),
-                0
-            );
-        }
-        assert_eq!(
-            database
-                .query_row(
-                    "SELECT count(*) FROM pragma_table_list \
-                     WHERE schema = 'main' AND name NOT LIKE 'sqlite_%'",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                )
-                .unwrap(),
-            35
-        );
-        drop(database);
-        drop(persistence);
-
-        // Crash before the commit leaves exact V3; crash after exposes exact V4.
-        let (before_temporary, before_root) = test_root();
-        seed_v3(&before_root);
-        let before_marker = before_temporary.path().join("v4-before.success");
-        assert!(!run_worker(
-            &before_root,
-            "legacy-open",
-            Some(FaultPoint::BeforeSchemaMigrationCommit),
-            &before_marker,
-        ));
-        assert!(!before_marker.exists());
-        let database = raw_database(&before_root);
-        assert_eq!(user_version(&database), SCHEMA_V3_VERSION);
-        assert!(!has_table(&database, "runs"));
-        validate_schema(&database, SCHEMA_V3_VERSION).unwrap();
-        assert_eq!(preserved_rows(&database), before);
-        drop(database);
-        legacy_v4_fixture(&before_root).unwrap();
-
-        let (after_temporary, after_root) = test_root();
-        seed_v3(&after_root);
-        let after_marker = after_temporary.path().join("v4-after.success");
-        assert!(!run_worker(
-            &after_root,
-            "legacy-open",
-            Some(FaultPoint::AfterSchemaMigrationCommit),
-            &after_marker,
-        ));
-        let database = raw_database(&after_root);
-        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
-        validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
-        assert_eq!(preserved_rows(&database), before);
-        drop(database);
-        legacy_v4_fixture(&after_root).unwrap();
-
-        // Pristine, exact V1, and exact V2 converge on exact V4 as well.
-        let (_pristine_temporary, pristine_root) = test_root();
-        let pristine = legacy_v4_fixture(&pristine_root).unwrap();
-        assert_eq!(
-            user_version(&pristine.database.lock().unwrap()),
-            SCHEMA_V4_VERSION
-        );
-        for (version, sql) in [
-            (SCHEMA_V1_VERSION, SCHEMA_V1_SQL.to_owned()),
-            (
-                SCHEMA_V2_VERSION,
-                format!("{SCHEMA_V1_SQL}\n{SCHEMA_V2_ADDITIONS_SQL}"),
-            ),
-        ] {
-            let (_temporary, root) = test_root();
-            initialize_direct(&root, APPLICATION_ID, version, &sql);
-            let persistence = legacy_v4_fixture(&root).unwrap();
-            let database = persistence.database.lock().unwrap();
-            assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
-            validate_schema(&database, SCHEMA_V4_VERSION).unwrap();
-        }
-
-        // Concurrent migrators converge through SQLite locking alone.
-        let (concurrent_temporary, concurrent_root) = test_root();
-        seed_v3(&concurrent_root);
-        let workers = (0..2)
-            .map(|index| {
-                let root = concurrent_root.clone();
-                let marker = concurrent_temporary
-                    .path()
-                    .join(format!("migrate-{index}.success"));
-                thread::spawn(move || (run_worker(&root, "legacy-open", None, &marker), marker))
-            })
-            .collect::<Vec<_>>();
-        for worker in workers {
-            let (success, marker) = worker.join().unwrap();
-            assert!(success);
-            assert!(marker.exists());
-        }
-        let database = raw_database(&concurrent_root);
-        assert_eq!(user_version(&database), SCHEMA_V4_VERSION);
-        assert_eq!(preserved_rows(&database), before);
-        drop(database);
-
-        // A V4 marker over a drifted manifest and a V3 marker over a partial
-        // V4 table set are both inadmissible.
-        let (_drift_temporary, drift_root) = test_root();
-        initialize_direct(
-            &drift_root,
-            APPLICATION_ID,
-            SCHEMA_V4_VERSION,
-            &format!(
-                "{}\n{SCHEMA_V4_ADDITIONS_SQL}\nCREATE TABLE drift(value TEXT) STRICT;",
-                v3_sql()
-            ),
-        );
-        assert!(matches!(
-            legacy_v4_fixture(&drift_root),
-            Err(PersistenceError::SchemaMismatch(_))
-        ));
-        let (_partial_temporary, partial_root) = test_root();
-        initialize_direct(
-            &partial_root,
-            APPLICATION_ID,
-            SCHEMA_V3_VERSION,
-            &format!(
-                "{}\n{}",
-                v3_sql(),
-                SCHEMA_V4_ADDITIONS_SQL
-                    .split("CREATE TABLE run_action_invocations")
-                    .next()
-                    .unwrap()
-            ),
-        );
-        assert!(matches!(
-            legacy_v4_fixture(&partial_root),
-            Err(PersistenceError::SchemaMismatch(_))
-        ));
     }
 
     #[test]
@@ -2586,13 +1970,9 @@ mod tests {
         };
         let root = PathBuf::from(std::env::var_os("PACTRUN_M1C_ROOT").unwrap());
         let marker = PathBuf::from(std::env::var_os("PACTRUN_M1C_SUCCESS_MARKER").unwrap());
-        let persistence = if operation == "legacy-open" {
-            legacy_v4_fixture(&root).unwrap()
-        } else {
-            PactrunPersistence::open(&root).unwrap()
-        };
+        let persistence = PactrunPersistence::open(&root).unwrap();
         match operation.to_string_lossy().as_ref() {
-            "open" | "legacy-open" => {}
+            "open" => {}
             "persist" => {
                 let bytes = b"m1c worker content";
                 let blob_digest = digest(bytes);

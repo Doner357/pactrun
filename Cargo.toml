@@ -1,8 +1,9 @@
 [package]
 name = "pactrun"
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 edition = "2024"
 publish = false
+default-run = "pactrun"
 
 [workspace]
 members = ["crates/pactrun-windows-ntfs", "xtask"]

@@ -36,7 +36,7 @@ const DESCENDANT_ENVIRONMENT: &str = "PACTRUN_E2E_DESCENDANT";
 const CANCEL_ENVIRONMENT: &str = "PACTRUN_E2E_CANCEL_ACK";
 #[cfg(windows)]
 const LAUNCHER_REPORT_ENVIRONMENT: &str = "PACTRUN_E2E_LAUNCHER_REPORT";
-const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\0\0\x01";
+const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
 
 fn read_frame(stream: &mut impl Read) -> io::Result<Value> {
     let mut length = [0_u8; 4];
@@ -105,7 +105,7 @@ fn e2e_hook_worker() {
         &mut stream,
         &json!({
             "type": "session_ready",
-            "protocol_version": 1,
+            "protocol_version": "1.0-alpha.1",
             "session_id": session_id,
         }),
     )
@@ -216,7 +216,7 @@ fn setup_source(root: &std::path::Path) {
     fs::write(
         source.join("pactrun.yaml"),
         format!(
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000038
 revision:
   inputs: []
@@ -225,7 +225,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "e2e_hook_worker", "--nocapture"]
         io: {{ terminal: interactive }}
@@ -250,7 +250,7 @@ fn setup_interpreter_source(root: &std::path::Path) {
     fs::write(source.join("hook-script.txt"), b"interpreter hook script").unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1
+        r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000039
 revision:
   inputs: []
@@ -259,7 +259,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch:
           kind: interpreter
           command: pactrun-e2e-launcher.exe
@@ -287,7 +287,7 @@ fn setup_interpreter_source(root: &std::path::Path) {
     fs::write(source.join("hook-script.txt"), b"interpreter hook script").unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1
+        r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000040
 revision:
   inputs: []
@@ -296,7 +296,7 @@ revision:
       access: observe
       parameters: []
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch:
           kind: interpreter
           command: pactrun-e2e-launcher

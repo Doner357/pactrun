@@ -72,17 +72,17 @@ driven development.
   implementation are integrated into the canonical `develop` baseline.
   M2 introduced PersistenceSchemaV3 for Instances and Managed Input bindings.
   Candidate `PackSourceYamlV1` remains non-Frozen.
-- [PersistenceSchemaV11](../spec/persistence/persistence-schema-v11.md) is the integrated
+- [PersistenceSchemaV11](../spec/persistence/persistence-baseline.md) is the integrated
   `develop` persistence baseline, with explicit exact-V8/V9/V10 upgrade and writable
   admission and bounded Run diagnostic evidence. Snapshot and restored Input data
   use immutable file references. It preserves the earlier contracts, including
-  [V10](../spec/persistence/persistence-schema-v10.md) from Snapshot capacity,
-  [V9](../spec/persistence/persistence-schema-v9.md) from managed-object lifecycle,
-  [V8](../spec/persistence/persistence-schema-v8.md) from M7,
-  [V7](../spec/persistence/persistence-schema-v7.md) from M6.5,
-  [V6](../spec/persistence/persistence-schema-v6.md) from M5/M6,
-  [V5](../spec/persistence/persistence-schema-v5.md) from M4 and
-  [V4](../spec/persistence/persistence-schema-v4.md) from M3 Slice 2.
+  [V10](../spec/persistence/persistence-baseline.md) from Snapshot capacity,
+  [V9](../spec/persistence/persistence-baseline.md) from managed-object lifecycle,
+  [V8](../spec/persistence/persistence-baseline.md) from M7,
+  [V7](../spec/persistence/persistence-baseline.md) from M6.5,
+  [V6](../spec/persistence/persistence-baseline.md) from M5/M6,
+  [V5](../spec/persistence/persistence-baseline.md) from M4 and
+  [V4](../spec/persistence/persistence-baseline.md) from M3 Slice 2.
 - M5 Managed Input Migration is implemented and integrated into `develop`,
   including operator acquisition, Hook execution, per-edge publication and
   bounded interruption/reconciliation. See the [M5 closeout](./m5-implementation-status.md).
@@ -271,7 +271,7 @@ presentation, typed provenance claims, and local Revision alias, note, and
 trust state through the crate-private typed repository contract and exact
 PersistenceSchemaV2. The authoritative design is linked from the
 [Non-Identity Metadata Semantic Baseline](./design-notes/non-identity-metadata-semantic-baseline.md)
-and [Persistence Schema V2](../spec/persistence/persistence-schema-v2.md).
+and [Persistence Schema V2](../spec/persistence/persistence-baseline.md).
 M1-C MUST NOT be retrofitted with an opaque metadata schema.
 
 M1-D implementation MUST preserve exact UTF-8 values and complete typed
@@ -397,7 +397,7 @@ remains Pending automated coverage until its Admission and Executor clauses are
 implemented and tested.
 
 The completed M3 Slice 2 implements exact
-[PersistenceSchemaV4](../spec/persistence/persistence-schema-v4.md): transactional
+[PersistenceSchemaV4](../spec/persistence/persistence-baseline.md): transactional
 V1/V2/V3-to-V4 migration, durable Run records with a Running-only execution
 owner selected by `PR-REQ-0277`, execution pins released only in the terminal
 transaction, live and terminal recovery risk state, the `ManualRecoveryRequired`
@@ -857,7 +857,7 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | B | Object Catalog, Historical Discovery and Metadata Operations | S0-S4 implemented, verified and integrated into local develop |
 | C | Portable Pack and Revision Export | S0-S3 and export naming [implemented, verified and integrated into local develop](./pack-transport-status.md) |
 | D | Machine-readable CLI Output | S0-S4 [implemented, verified and integrated into local develop](./cli-presentation-status.md) |
-| E | Versioning and Baseline Consolidation | Existing final milestone, after D |
+| E | Versioning and Baseline Consolidation | Local engineering delivery complete; [verification and integration scope](./e-implementation-status.md) |
 
 A-E are sequence labels, not M-series identifiers. The original approval recorded
 the grouping only; A subsequently received separate design/implementation approval

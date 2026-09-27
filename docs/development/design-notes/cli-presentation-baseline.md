@@ -51,4 +51,4 @@ observable semantics, required permissions or external blockers only. Commit,
 merge, push and publication require separate authorization. Preserve unrelated
 untracked files. E follows verified D; this approval does not start E.
 
-The owning contract is [CLI JSON V1](../../spec/contracts/cli-json-v1.md).
+The owning contract is [CLI JSON V1](../../spec/contracts/cli-machine-interface.md).

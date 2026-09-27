@@ -13,21 +13,16 @@ use yaml_rust2::{
 };
 
 mod source_acquisition;
-#[path = "authoring_v2.rs"]
-mod v2;
-pub(crate) use v2::{NormalizedPackSourceCandidateV2, parse_pack_source_yaml_v2};
+#[path = "authoring_projection.rs"]
+mod source_projection;
 
 pub(crate) use source_acquisition::{SecureSourceRoot, SourceAcquisitionError};
 
-use crate::{
-    domain::{
-        ActionIdentity, AttributionText, ContentId, InputIdentity, ManagedOutputIdentity,
-        PackageId, ParameterIdentity, PresentationField, PresentationTargetV1, PresentationValue,
-        ProvenanceClaim, PublisherName, PublisherNamespace, ReferenceLabel, ReferenceLabelSource,
-        RevisionContentDigest, RevisionCoreV1, RuntimeContentClosureIdentityV1, RuntimePath,
-        SourceUri,
-    },
-    revision_core_v1::project_revision_core_source_v1,
+use crate::domain::{
+    ActionIdentity, AttributionText, ContentId, InputIdentity, ManagedOutputIdentity, PackageId,
+    ParameterIdentity, PresentationField, PresentationTargetV1, PresentationValue, ProvenanceClaim,
+    PublisherName, PublisherNamespace, ReferenceLabel, ReferenceLabelSource, RevisionContentDigest,
+    RuntimeContentClosureIdentityV1, RuntimePath, SourceUri,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -62,14 +57,6 @@ pub(crate) struct RuntimeSourceRecordV1 {
 
 pub(crate) use crate::domain::{PortableMetadataTemplate, PortablePresentationTemplate};
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct NormalizedPackSourceCandidate {
-    pub(crate) package_id: PackageId,
-    pub(crate) revision: RevisionCoreV1,
-    pub(crate) runtime_sources: Vec<RuntimeSourceRecordV1>,
-    pub(crate) portable_metadata: PortableMetadataTemplate,
-}
-
 /// Host-source-independent normalized semantic model. Source locators and
 /// acquisition handles cannot cross into this type.
 #[derive(Clone, Debug, PartialEq)]
@@ -87,52 +74,11 @@ pub(crate) struct VersionedPackSourceCandidate {
     pub(crate) runtime_sources: Vec<RuntimeSourceRecordV1>,
     pub(crate) portable_metadata: PortableMetadataTemplate,
 }
-impl From<NormalizedPackSourceCandidate> for VersionedPackSourceCandidate {
-    fn from(source: NormalizedPackSourceCandidate) -> Self {
-        Self {
-            package_id: source.package_id,
-            revision: source.revision.into(),
-            runtime_sources: source.runtime_sources,
-            portable_metadata: source.portable_metadata,
-        }
-    }
-}
-impl From<NormalizedPackSourceCandidateV2> for VersionedPackSourceCandidate {
-    fn from(source: NormalizedPackSourceCandidateV2) -> Self {
-        Self {
-            package_id: source.package_id,
-            revision: source.revision.into(),
-            runtime_sources: source.runtime_sources,
-            portable_metadata: source.portable_metadata,
-        }
-    }
-}
-
-/// Explicit source-version selection, not fallback after a failed V1 parse.
+/// A supported source version is selected before semantic projection or acquisition.
 pub(crate) fn parse_pack_source_yaml(
     source: &[u8],
 ) -> Result<VersionedPackSourceCandidate, AuthoringError> {
-    let text = std::str::from_utf8(source)
-        .map_err(|_| AuthoringError::new("pactrun.yaml must be valid UTF-8"))?;
-    reject_forbidden_tokens(text)?;
-    let mut root = closed_map(
-        parse_document(text)?,
-        &["source_format", "package_id", "revision", "runtime_content"],
-        &["portable_metadata"],
-        "Pack source",
-    )?;
-    let version = take_scalar(&mut root, "source_format")?;
-    if version.style != TScalarStyle::Plain {
-        return Err(AuthoringError::new(
-            "source_format must use a supported plain integer token",
-        ));
-    }
-    match capture_numeric_token(text, &version)?.as_str() {
-        "1" => parse_pack_source_yaml_v1(source).map(Into::into),
-        "2" => parse_pack_source_yaml_v2(source).map(Into::into),
-        "3" => v2::parse_service_source(source, 3),
-        _ => Err(AuthoringError::new("unsupported source_format")),
-    }
+    source_projection::parse_source(source)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -179,56 +125,6 @@ impl MarkedEventReceiver for EventSink {
     fn on_event(&mut self, event: Event, marker: Marker) {
         self.events.push((event, marker));
     }
-}
-
-pub(crate) fn parse_pack_source_yaml_v1(
-    source: &[u8],
-) -> Result<NormalizedPackSourceCandidate, AuthoringError> {
-    let source = std::str::from_utf8(source)
-        .map_err(|_| AuthoringError::new("pactrun.yaml must be valid UTF-8"))?;
-    reject_forbidden_tokens(source)?;
-    let root = parse_document(source)?;
-    let mut root = closed_map(
-        root,
-        &["source_format", "package_id", "revision", "runtime_content"],
-        &["portable_metadata"],
-        "PackSourceYamlV1",
-    )?;
-
-    let source_format = take_scalar(&mut root, "source_format")?;
-    if source_format.style != TScalarStyle::Plain
-        || capture_numeric_token(source, &source_format)? != "1"
-    {
-        return Err(AuthoringError::new("source_format must use raw token 1"));
-    }
-    let package_id = PackageId::from_str(&string_scalar(take(&mut root, "package_id")?)?)
-        .map_err(AuthoringError::new)?;
-
-    let revision_json = revision_json(source, take(&mut root, "revision")?)?;
-    let revision_bytes = serde_json::to_vec(&revision_json)
-        .map_err(|error| AuthoringError::new(format!("encode projected Revision: {error}")))?;
-    let revision = project_revision_core_source_v1(&revision_bytes)
-        .map_err(|error| AuthoringError::new(format!("project RevisionCoreV1: {error}")))?;
-    let runtime_sources = runtime_sources(take(&mut root, "runtime_content")?)?;
-    let portable_metadata = match root.remove("portable_metadata") {
-        Some(value) => portable_metadata(value)?,
-        None => PortableMetadataTemplate::default(),
-    };
-
-    for item in &portable_metadata.presentation {
-        if !revision.contains_presentation_target(&item.target) {
-            return Err(AuthoringError::new(
-                "presentation target is not declared by the normalized Revision",
-            ));
-        }
-    }
-
-    Ok(NormalizedPackSourceCandidate {
-        package_id,
-        revision,
-        runtime_sources,
-        portable_metadata,
-    })
 }
 
 fn reject_forbidden_tokens(source: &str) -> Result<(), AuthoringError> {
@@ -358,35 +254,6 @@ fn expect_event(
     }
     *cursor += 1;
     Ok(())
-}
-
-fn revision_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
-    let mut revision = closed_map(
-        node,
-        &[],
-        &["inputs", "actions", "snapshot", "migrations", "cleanup"],
-        "revision",
-    )?;
-    for key in ["inputs", "actions", "migrations"] {
-        revision
-            .entry(key.to_owned())
-            .or_insert_with(|| Node::Sequence(Vec::new()));
-    }
-    if let Some(Node::Sequence(inputs)) = revision.get_mut("inputs") {
-        for input in inputs {
-            let map = mapping_mut(input, "Input declaration")?;
-            map.entry("required".to_owned())
-                .or_insert_with(|| plain("false"));
-            map.entry("protection".to_owned())
-                .or_insert_with(|| plain("normal"));
-        }
-    }
-    let mut json = Map::new();
-    json.insert("format_version".to_owned(), Value::Number(Number::from(1)));
-    for (key, value) in revision {
-        json.insert(key, node_to_json(source, value, None)?);
-    }
-    Ok(Value::Object(json))
 }
 
 fn runtime_sources(node: Node) -> Result<Vec<RuntimeSourceRecordV1>, AuthoringError> {
@@ -621,11 +488,11 @@ fn node_to_json(source: &str, node: Node, field: Option<&str>) -> Result<Value, 
                     ))
                 }),
             Some("protocol_version") => {
-                let value = exact_integer(&capture_numeric_token(source, &scalar)?)?;
-                if value <= 0 {
-                    return Err(AuthoringError::new("protocol_version must be positive"));
-                }
-                Ok(Value::Number(Number::from(value)))
+                let value = string_scalar(Node::Scalar(scalar))?;
+                value
+                    .parse::<crate::domain::FormatVersion>()
+                    .map_err(|e| AuthoringError::new(e.to_string()))?;
+                Ok(Value::String(value))
             }
             _ => Ok(Value::String(string_scalar(Node::Scalar(scalar))?)),
         },
@@ -953,10 +820,6 @@ fn take(map: &mut BTreeMap<String, Node>, key: &str) -> Result<Node, AuthoringEr
         .ok_or_else(|| AuthoringError::new(format!("missing required field {key}")))
 }
 
-fn take_scalar(map: &mut BTreeMap<String, Node>, key: &str) -> Result<ScalarNode, AuthoringError> {
-    scalar(take(map, key)?)
-}
-
 fn require_no_fields(map: &BTreeMap<String, Node>, name: &str) -> Result<(), AuthoringError> {
     if let Some(field) = map.keys().next() {
         Err(AuthoringError::new(format!(
@@ -989,7 +852,7 @@ mod tests {
 
     fn minimal(extra: &str) -> String {
         format!(
-            "source_format: 1\npackage_id: 00000000000000000000000000000001\nrevision:\n  inputs: []\n  actions: []\n  migrations: []\nruntime_content:\n  files: []\n{extra}"
+            "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000001\nrevision:\n  inputs: []\n  actions: []\n  migrations: []\nruntime_content:\n  files: []\n{extra}"
         )
     }
 
@@ -997,7 +860,7 @@ mod tests {
     // Verifies: PR-REQ-0123
     #[test]
     fn source_defaults_equal_explicit_values_without_inventing_input_transitions() {
-        for version in [1, 2, 3] {
+        for version in ["1.0-alpha.1", "\"1.0-alpha.1\""] {
             let short = format!(
                 "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: config}}]\nruntime_content: {{}}\n"
             );
@@ -1029,7 +892,7 @@ mod tests {
     // Verifies: PR-REQ-0159
     #[test]
     fn declarative_input_authoring_rejects_split_merge_and_payload_transformations() {
-        for version in [1, 2, 3] {
+        for version in ["1.0-alpha.1", "\"1.0-alpha.1\""] {
             let source = format!(
                 "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: a}}, {{id: b}}]\n  migrations:\n    - source_revision_digest: sha256:{}\n      transitions: [TRANSITIONS]\n      requires_source: []\n      requires_target: []\n      produces_target: []\nruntime_content: {{}}\n",
                 "1".repeat(64)
@@ -1068,12 +931,12 @@ mod tests {
     // Verifies: PR-REQ-0002, PR-REQ-0006, PR-REQ-0124, PR-REQ-0125, PR-REQ-0126, PR-REQ-0134
     #[test]
     fn authoring_refuses_stack_catch_all_operations_and_raw_parameter_vectors() {
-        assert!(parse_pack_source_yaml_v1(minimal("").as_bytes()).is_ok());
-        assert!(parse_pack_source_yaml_v1(parameter_default("integer", "7").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(minimal("").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(parameter_default("integer", "7").as_bytes()).is_ok());
         for name in ["start", "stop", "cleanup", "capture", "migrate"] {
             let text =
                 parameter_default("integer", "7").replace("id: inspect", &format!("id: {name}"));
-            let candidate = parse_pack_source_yaml_v1(text.as_bytes()).unwrap();
+            let candidate = parse_pack_source_yaml(text.as_bytes()).unwrap();
             assert_eq!(candidate.revision.actions()[0].id.as_str(), name);
             assert_eq!(
                 candidate.revision.actions()[0].access,
@@ -1096,7 +959,7 @@ mod tests {
                 .replace("      parameters:", "      argv: []\n      parameters:"),
         ] {
             assert!(
-                parse_pack_source_yaml_v1(invalid.as_bytes()).is_err(),
+                parse_pack_source_yaml(invalid.as_bytes()).is_err(),
                 "accepted {invalid}"
             );
         }
@@ -1104,7 +967,7 @@ mod tests {
 
     fn parameter_default(parameter_type: &str, default: &str) -> String {
         format!(
-            r#"source_format: 1
+            r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000001
 revision:
   inputs: []
@@ -1114,7 +977,7 @@ revision:
       parameters:
         - {{ id: value, type: {parameter_type}, sensitive: false, default: {default} }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: hook }}
         args: []
         io: {{ terminal: output }}
@@ -1134,13 +997,13 @@ runtime_content:
     // Verifies: PR-REQ-0002, PR-REQ-0010, PR-REQ-0016, PR-REQ-0258
     #[test]
     fn schema_directed_scalars_and_forbidden_yaml_are_exact() {
-        assert!(parse_pack_source_yaml_v1(minimal("").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(minimal("").as_bytes()).is_ok());
         assert!(
-            parse_pack_source_yaml_v1(
+            parse_pack_source_yaml(
                 minimal("")
                     .replace(
-                        "source_format: 1\n",
-                        "# 前置 Unicode\r\nsource_format: 1 # raw\r\n"
+                        "source_format: 1.0-alpha.1\n",
+                        "# 前置 Unicode\r\nsource_format: 1.0-alpha.1 # raw\r\n"
                     )
                     .as_bytes()
             )
@@ -1148,60 +1011,55 @@ runtime_content:
         );
         let mut integer_revisions = Vec::new();
         for value in ["1", "1.0", "1e0", "1E+0"] {
-            let parsed = parse_pack_source_yaml_v1(parameter_default("integer", value).as_bytes());
+            let parsed = parse_pack_source_yaml(parameter_default("integer", value).as_bytes());
             assert!(parsed.is_ok(), "{value}: {parsed:?}");
             integer_revisions.push(parsed.unwrap().revision);
         }
         assert!(integer_revisions.windows(2).all(|pair| pair[0] == pair[1]));
         let negative_zero =
-            parse_pack_source_yaml_v1(parameter_default("float", "-0.0").as_bytes()).unwrap();
+            parse_pack_source_yaml(parameter_default("float", "-0.0").as_bytes()).unwrap();
         let positive_zero =
-            parse_pack_source_yaml_v1(parameter_default("float", "0").as_bytes()).unwrap();
+            parse_pack_source_yaml(parameter_default("float", "0").as_bytes()).unwrap();
         assert_eq!(negative_zero.revision, positive_zero.revision);
-        assert!(parse_pack_source_yaml_v1(parameter_default("string", "true").as_bytes()).is_ok());
-        assert!(parse_pack_source_yaml_v1(parameter_default("string", "123").as_bytes()).is_ok());
-        assert!(parse_pack_source_yaml_v1(parameter_default("boolean", "true").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(parameter_default("string", "true").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(parameter_default("string", "123").as_bytes()).is_ok());
+        assert!(parse_pack_source_yaml(parameter_default("boolean", "true").as_bytes()).is_ok());
         for invalid in ["01", "+1", ".5", "1.", "0x10", "1_000", ".nan", ".inf"] {
             assert!(
-                parse_pack_source_yaml_v1(parameter_default("float", invalid).as_bytes()).is_err(),
+                parse_pack_source_yaml(parameter_default("float", invalid).as_bytes()).is_err(),
                 "{invalid}"
             );
         }
+        assert!(parse_pack_source_yaml(parameter_default("float", "1e9999").as_bytes()).is_err());
         assert!(
-            parse_pack_source_yaml_v1(parameter_default("float", "1e9999").as_bytes()).is_err()
-        );
-        assert!(
-            parse_pack_source_yaml_v1(parameter_default("integer", "9007199254740992").as_bytes())
+            parse_pack_source_yaml(parameter_default("integer", "9007199254740992").as_bytes())
                 .is_err()
         );
+        assert!(parse_pack_source_yaml(parameter_default("integer", "\"1\"").as_bytes()).is_err());
         assert!(
-            parse_pack_source_yaml_v1(parameter_default("integer", "\"1\"").as_bytes()).is_err()
+            parse_pack_source_yaml(parameter_default("boolean", "\"true\"").as_bytes()).is_err()
         );
         assert!(
-            parse_pack_source_yaml_v1(parameter_default("boolean", "\"true\"").as_bytes()).is_err()
-        );
-        assert!(
-            parse_pack_source_yaml_v1(
+            parse_pack_source_yaml(
                 minimal("")
-                    .replace("source_format: 1", "source_format: 1.0")
+                    .replace("source_format: 1.0-alpha.1", "source_format: 1.0")
                     .as_bytes()
             )
             .is_err()
         );
         assert!(
-            parse_pack_source_yaml_v1(
+            parse_pack_source_yaml(
                 minimal("")
-                    .replace("source_format: 1", "source_format: !!int 1")
+                    .replace("source_format: 1.0-alpha.1", "source_format: !!int 1")
                     .as_bytes()
             )
             .is_err()
         );
         assert!(
-            parse_pack_source_yaml_v1(format!("%YAML 1.2\n---\n{}", minimal("")).as_bytes())
-                .is_err()
+            parse_pack_source_yaml(format!("%YAML 1.2\n---\n{}", minimal("")).as_bytes()).is_err()
         );
         assert!(
-            parse_pack_source_yaml_v1(
+            parse_pack_source_yaml(
                 minimal("")
                     .replace("package_id:", "package_id: !!str")
                     .as_bytes()
@@ -1209,17 +1067,17 @@ runtime_content:
             .is_err()
         );
         assert!(
-            parse_pack_source_yaml_v1(format!("{}---\n{}", minimal(""), minimal("")).as_bytes())
+            parse_pack_source_yaml(format!("{}---\n{}", minimal(""), minimal("")).as_bytes())
                 .is_err()
         );
-        assert!(parse_pack_source_yaml_v1(minimal("unknown: value\n").as_bytes()).is_err());
+        assert!(parse_pack_source_yaml(minimal("unknown: value\n").as_bytes()).is_err());
     }
 
     // Test-ID: PR-TEST-0069
     // Verifies: PR-REQ-0006, PR-REQ-0011, PR-REQ-0014, PR-REQ-0015, PR-REQ-0121, PR-REQ-0122, PR-REQ-0124, PR-REQ-0125, PR-REQ-0126, PR-REQ-0127, PR-REQ-0136, PR-REQ-0142, PR-REQ-0258, PR-REQ-0260
     #[test]
     fn source_candidate_keeps_authored_content_identity_and_portable_metadata() {
-        let yaml = r#"source_format: 1
+        let yaml = r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000001
 revision:
   inputs:
@@ -1230,7 +1088,7 @@ revision:
       parameters:
         - { id: detail, type: string, sensitive: false }
       hook: &forbidden-anchor
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: launcher }
         args: []
         io: { terminal: output }
@@ -1242,7 +1100,7 @@ revision:
         - { id: capture_mode, type: string, sensitive: false }
       access: observe
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: launcher }
         args: []
         io: { terminal: output }
@@ -1250,7 +1108,7 @@ revision:
       parameters:
         - { id: restore_mode, type: string, sensitive: false }
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: launcher }
         args: []
         io: { terminal: output }
@@ -1263,7 +1121,7 @@ revision:
   cleanup:
     requires: []
     hook:
-      protocol_version: 1
+      protocol_version: 1.0-alpha.1
       launch: { kind: direct, executable: launcher }
       args: []
       io: { terminal: output }
@@ -1296,9 +1154,9 @@ portable_metadata:
     - { kind: publisher_attribution, publisher_name: Example, publisher_namespace: tools, source_uri: "urn:example:publisher" }
     - { kind: attribution, attribution_text: "Built by Example", source_uri: "https://example.test/credits#team" }
 "#;
-        assert!(parse_pack_source_yaml_v1(yaml.as_bytes()).is_err());
+        assert!(parse_pack_source_yaml(yaml.as_bytes()).is_err());
         let yaml = yaml.replace("      hook: &forbidden-anchor\n", "      hook:\n");
-        let candidate = parse_pack_source_yaml_v1(yaml.as_bytes()).unwrap();
+        let candidate = parse_pack_source_yaml(yaml.as_bytes()).unwrap();
         assert_eq!(candidate.runtime_sources[0].id.as_str(), "launcher");
         assert_eq!(
             candidate.runtime_sources[0].source.as_str(),
@@ -1316,7 +1174,7 @@ portable_metadata:
         let duplicate = minimal(
             "portable_metadata:\n  reference_labels:\n    - { label: stable, source: { kind: unattributed } }\n    - { label: stable, source: { kind: unattributed } }\n",
         );
-        assert!(parse_pack_source_yaml_v1(duplicate.as_bytes()).is_err());
+        assert!(parse_pack_source_yaml(duplicate.as_bytes()).is_err());
     }
 
     // Supporting lexical coverage for PR-TEST-0070.

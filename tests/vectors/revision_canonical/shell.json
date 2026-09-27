@@ -1,0 +1,62 @@
+{
+  "status": "baseline",
+  "normalized_core": {
+    "format_version": "1.0-alpha.1",
+    "inputs": [],
+    "migrations": [],
+    "service_storages": [],
+    "service_resources": [],
+    "actions": [
+      {
+        "id": "run",
+        "access": "observe",
+        "parameters": [],
+        "outputs": [],
+        "hook": {
+          "protocol_version": "1.0-alpha.1",
+          "launch": {
+            "kind": "shell_loader",
+            "shell": "sh",
+            "command": "shell",
+            "script": "script"
+          },
+          "args": [],
+          "io": {
+            "terminal": "none"
+          },
+          "service_access": [],
+          "service_requires": []
+        }
+      }
+    ]
+  },
+  "normalized_content": {
+    "files": [
+      {
+        "id": "script",
+        "path": "script.sh",
+        "kind": "regular_file",
+        "blob_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "executable": false
+      }
+    ]
+  },
+  "cases": [
+    {
+      "shell": "sh",
+      "digest": "sha256:843618997742a87327c350a0552f87a62eecadcae396cbbb9067fba6bfdbe6bc"
+    },
+    {
+      "shell": "bash",
+      "digest": "sha256:7db272659aee8424d6c1affe51148de3bbda3fbfd387857055299962566542da"
+    },
+    {
+      "shell": "powershell_7",
+      "digest": "sha256:7bc30df486658336eb23a7a115b075746af022238e004efd1a900980c10e2e29"
+    },
+    {
+      "shell": "windows_powershell_5_1",
+      "digest": "sha256:579367118694aa249896e7ee1dbc87544a69ed3fb0fb8f9fb4f370f17db24f08"
+    }
+  ]
+}

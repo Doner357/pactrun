@@ -20,10 +20,10 @@ separately approved M6.5 milestone under the
 
 Read [recovery and reconciliation](../../spec/execution/recovery-and-reconciliation.md),
 [execution and concurrency](../../spec/execution/execution-and-concurrency.md),
-[HookProtocolV1](../../spec/contracts/hook-protocol-v1.md),
+[HookProtocolV1](../../spec/contracts/hook-protocol.md),
 [M4 publication](../../spec/execution/m4-snapshot-lifecycle-approval-baseline.md),
 [M5 execution](../../spec/execution/m5-migration-execution.md), and
-[exact V6](../../spec/persistence/persistence-schema-v6.md).
+[exact V6](../../spec/persistence/persistence-baseline.md).
 
 M6 covers existing Action, Capture, Restore and Managed Input Migration. Keep
 M3-M5 owner leases, continuations, durable risk acknowledgments, exact pins,

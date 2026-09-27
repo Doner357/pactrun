@@ -345,7 +345,7 @@ fn direct_action_with_outputs(
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
         args: ["--exact", "{WORKER_TEST}", "--nocapture", "--test-threads=1", "{ARGUMENT_TAIL}"{extra}]
         io: {{ terminal: {terminal} }}
@@ -384,7 +384,7 @@ fn manifest() -> String {
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: interpreter, command: {launcher}, interpreter_args: ["--exact", "{WORKER_TEST}", "--nocapture", "--skip"], script: hook_script }}
         args: ["--test-threads=1", "{ARGUMENT_TAIL}"]
         io: {{ terminal: none }}
@@ -397,7 +397,7 @@ fn manifest() -> String {
         - {{ id: expected_binding, type: string, sensitive: true }}
         - {{ id: sensitive_value, type: string, sensitive: true }}
       hook:
-        protocol_version: 1
+        protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: broken }}
         args: []
         io: {{ terminal: none }}
@@ -406,7 +406,7 @@ fn manifest() -> String {
         launcher = launcher_command(),
     ));
     format!(
-        r#"source_format: 1
+        r#"source_format: 1.0-alpha.1
 package_id: 00000000000000000000000000000034
 revision:
   inputs:
@@ -766,12 +766,12 @@ impl HookWorker {
         assert_eq!(preamble, PREAMBLE);
         let session = read_frame(&mut self.stream).expect("session_start");
         assert_eq!(session["type"], "session_start");
-        assert_eq!(session["protocol_version"], 1);
+        assert_eq!(session["protocol_version"], "1.0-alpha.1");
         let session_id = session["session_id"].as_str().unwrap().to_owned();
         self.stream.write_all(PREAMBLE).unwrap();
         write_frame(
             &mut self.stream,
-            &json!({"type": "session_ready", "protocol_version": 1, "session_id": session_id}),
+            &json!({"type": "session_ready", "protocol_version": "1.0-alpha.1", "session_id": session_id}),
         );
 
         let parameters: BTreeMap<String, Value> = session["parameters"]
@@ -1099,7 +1099,7 @@ impl HookWorker {
 
 fn vectors() -> Value {
     let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/hook_protocol_v1/vectors.json");
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/hook_protocol/vectors.json");
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
@@ -1409,7 +1409,7 @@ fn production_action_protocol_matches_frozen_vectors_and_real_hooks() {
     assert_eq!(
         failure_ref(&invalid),
         Some((
-            "hook_protocol_v1",
+            "hook_protocol",
             "invalid_authority",
             RunFailedStep::Plan(ActionPlanStep::AcceptCompletion)
         ))
@@ -1957,7 +1957,7 @@ fn deadlines_cancellation_eof_and_process_loss_lock_outcomes_only_after_exit() {
     assert_eq!(
         failure_ref(&facts),
         Some((
-            "hook_protocol_v1",
+            "hook_protocol",
             "unexpected_message",
             RunFailedStep::Plan(ActionPlanStep::AcceptCompletion)
         ))
@@ -1974,7 +1974,7 @@ fn deadlines_cancellation_eof_and_process_loss_lock_outcomes_only_after_exit() {
     assert_eq!(
         failure_ref(&facts),
         Some((
-            "hook_protocol_v1",
+            "hook_protocol",
             "unexpected_message",
             RunFailedStep::Plan(ActionPlanStep::AcceptCompletion)
         ))

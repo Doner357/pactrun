@@ -33,7 +33,7 @@ Installing a Package creates or reuses an immutable Revision; it does not create
 an Instance. Exact internal identity rules are defined in
 [Identity and State](../foundations/identity-and-state.md).
 The closed M2 source and installation flow is defined by
-[Pack Source YAML V1](../contracts/pack-source-yaml-v1.md).
+[Pack Source YAML V1](../contracts/pack-source.md).
 
 ### PR-REQ-0086 - Exact resolution before operation
 

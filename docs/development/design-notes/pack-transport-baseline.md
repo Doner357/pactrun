@@ -13,7 +13,7 @@ distribution Pack from exact installed canonical content, not reconstructed YAML
 Folder layout is identical to archive layout. ZIP is the sole container; format
 versions remain independent from authoring, Core and persistence versions.
 
-The [owning Spec](../../spec/contracts/pack-distribution-v1.md) records metadata
+The [owning Spec](../../spec/contracts/pack-distribution.md) records metadata
 defaults, opt-in portable carriage, overwrite/keep/refuse conflict semantics,
 structural limits and publication boundaries. Source and distribution adapters
 converge on a private typed installation core. Public Candidate/SDK APIs remain

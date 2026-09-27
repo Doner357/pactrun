@@ -98,7 +98,7 @@ fn bindings(value: &Value, retained: bool, handles: &mut BTreeSet<String>) -> io
     Ok(())
 }
 
-pub(super) fn validate(value: &Value, version: u32) -> io::Result<()> {
+pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
     let mut fields = vec![
         "type",
         "protocol_version",
@@ -110,20 +110,11 @@ pub(super) fn validate(value: &Value, version: u32) -> io::Result<()> {
         "io",
         "operation",
     ];
-    if version == 2 {
-        fields.push("service_authorities");
-    }
-    object(
-        value,
-        &fields,
-        if version == 2 {
-            &["target_commit"]
-        } else {
-            &[]
-        },
-    )?;
+    fields.push("service_authorities");
+    object(value, &fields, &["target_commit"])?;
     if value["type"] != "session_start"
-        || positive_integer(&value["protocol_version"]) != Some(u64::from(version))
+        || value["protocol_version"].as_str() != Some(version)
+        || version != crate::domain::VersionDomain::Hook.current_text()
     {
         return Err(failure());
     }
@@ -262,7 +253,7 @@ pub(super) fn validate(value: &Value, version: u32) -> io::Result<()> {
     if op["kind"] == "migration" {
         array(&op["target_outputs"])?;
     }
-    if version == 2 {
+    {
         let mut keys = BTreeSet::new();
         let mut previous = None;
         for authority in array(&value["service_authorities"])? {

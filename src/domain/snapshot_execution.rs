@@ -105,6 +105,7 @@ impl SnapshotExecutionPlan {
 
 #[derive(Debug)]
 pub(crate) enum SnapshotPlanError {
+    UnsupportedProtocol(super::FormatVersion),
     Parameters(ActionResolutionError),
     MissingRequired(Vec<InputIdentity>),
     Invalid(&'static str),
@@ -112,6 +113,9 @@ pub(crate) enum SnapshotPlanError {
 impl fmt::Display for SnapshotPlanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedProtocol(version) => {
+                f.write_str(&super::VersionDomain::Hook.unsupported_message(*version))
+            }
             Self::Parameters(error) => error.fmt(f),
             Self::MissingRequired(ids) => write!(
                 f,
@@ -128,7 +132,7 @@ impl fmt::Display for SnapshotPlanError {
 impl std::error::Error for SnapshotPlanError {}
 
 pub(crate) fn snapshot_hook(
-    core: &RevisionCoreV1,
+    core: &RevisionDeclarations,
     operation: SnapshotOperation,
 ) -> Result<(&[ParameterV1], &HookV1), SnapshotPlanError> {
     let capability = core.snapshot().ok_or(SnapshotPlanError::Invalid(
@@ -196,9 +200,9 @@ pub(crate) fn build_snapshot_plan(
     }
     let core = &observation.revision.core;
     let (parameters, hook) = snapshot_hook(core.common(), intent.operation)?;
-    if !matches!(hook.protocol_version.get(), 1 | 2) {
-        return Err(SnapshotPlanError::Invalid(
-            "Snapshot Hook protocol is unsupported",
+    if !crate::domain::VersionDomain::Hook.supports(hook.protocol_version) {
+        return Err(SnapshotPlanError::UnsupportedProtocol(
+            hook.protocol_version,
         ));
     }
     let parameters = bind_operation_parameters(parameters, intent.parameters.clone())

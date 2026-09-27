@@ -62,7 +62,8 @@ use crate::revision_installation::PreparedRevision;
 #[serde(deny_unknown_fields)]
 struct Descriptor {
     kind: String,
-    format_version: u8,
+    format_version: String,
+    revision_format: String,
     package_id: String,
     revision_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -287,14 +288,43 @@ pub(crate) fn acquire(
                     _ => false,
                 }
             }
-            if has_null(&crate::strict_json::parse_json(&bytes, JSON_LIMIT as usize).map_err(err)?)
-            {
+            let raw = crate::strict_json::parse_json(&bytes, JSON_LIMIT as usize).map_err(err)?;
+            let crate::strict_json::RawJsonValue::Object(fields) = &raw else {
+                return Err("Pack descriptor must be an object".into());
+            };
+            let header = |name: &str| -> Result<&str> {
+                fields
+                    .iter()
+                    .find(|(key, _)| key == name)
+                    .and_then(|(_, value)| match value {
+                        crate::strict_json::RawJsonValue::String(text) => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| format!("Pack descriptor requires string {name}"))
+            };
+            if header("kind")? != "pactrun_distribution" {
+                return Err("unsupported Pack distribution kind".into());
+            }
+            crate::domain::VersionDomain::PackDistribution
+                .require(header("format_version")?)
+                .map_err(err)?;
+            crate::domain::VersionDomain::Revision
+                .require(header("revision_format")?)
+                .map_err(err)?;
+            if has_null(&raw) {
                 return Err("Pack descriptor optional values must be omitted, not null".into());
             }
             let dto: Descriptor = serde_json::from_slice(&bytes).map_err(err)?;
-            if dto.kind != "pactrun_distribution" || dto.format_version != 1 {
+            if dto.kind != "pactrun_distribution"
+                || crate::domain::VersionDomain::PackDistribution
+                    .require(&dto.format_version)
+                    .is_err()
+            {
                 return Err("unsupported Pack distribution format".into());
             }
+            crate::domain::VersionDomain::Revision
+                .require(&dto.revision_format)
+                .map_err(err)?;
             let identity = RevisionIdentity::new(
                 dto.package_id.parse().map_err(err)?,
                 dto.revision_digest.parse().map_err(err)?,
@@ -436,7 +466,10 @@ pub(crate) fn encode(
 ) -> Result<StagedFile> {
     let dto = Descriptor {
         kind: "pactrun_distribution".into(),
-        format_version: 1,
+        format_version: crate::domain::VersionDomain::PackDistribution
+            .current_text()
+            .into(),
+        revision_format: crate::domain::VersionDomain::Revision.current_text().into(),
         package_id: pack.identity.package_id.to_string(),
         revision_digest: pack.identity.content_digest.to_string(),
         portable_metadata: include_metadata
@@ -467,7 +500,7 @@ pub(crate) fn encode(
             ),
             (
                 RUNTIME,
-                crate::revision_core_v1::encode_canonical_runtime_content_v1(
+                crate::revision_declarations::encode_canonical_runtime_content(
                     &pack.content.runtime_content,
                 )
                 .map_err(err)?,
