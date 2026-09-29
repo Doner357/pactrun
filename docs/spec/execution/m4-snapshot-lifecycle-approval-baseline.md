@@ -62,6 +62,10 @@ this view. Capture has no Restore-style terminal state-token comparison.
 
 **Verification: PR-TEST-0220, PR-TEST-0221, PR-TEST-0222, PR-TEST-0223, PR-TEST-0224, PR-TEST-0225, PR-TEST-0226, PR-TEST-0227, PR-TEST-0228, PR-TEST-0229, PR-TEST-0230, PR-TEST-0231, PR-TEST-0232, PR-TEST-0233, PR-TEST-0234, PR-TEST-0235, PR-TEST-0236, PR-TEST-0237, PR-TEST-0238, PR-TEST-0239, PR-TEST-0240, PR-TEST-0246, PR-TEST-0248, PR-TEST-0249, PR-TEST-0253, PR-TEST-0262, PR-TEST-0267, PR-TEST-0270, PR-TEST-0271, PR-TEST-0273.**
 
+**Historical S4–S6 coverage (informative):** the following paragraphs describe
+the evidence accumulated before the completed M4 CLI closeout. They do not
+reopen that delivery or claim that early fixtures already proved later stages.
+
 Partial S4 coverage: the shared persisted-access predicate covers all operation
 pairs; production Action Admission includes Snapshot competitors and commits
 its refusal or pins atomically. Snapshot competitors in these tests are durable
@@ -84,11 +88,17 @@ S5 adds real Capture Hook execution, active-only materialization from complete
 pins, candidate acquisition and atomic V2 publication in PR-TEST-0246 through
 PR-TEST-0254. S4 readiness and conflict tests remain the admission evidence.
 S6 adds RestoreSession content authorities and successful atomic replacement.
-The full multi-slice requirement is not yet end-to-end complete through human CLI.
+At the S6 stage, the full multi-slice requirement was not yet end-to-end
+complete through the human CLI. The subsequent [M4 closeout](../../development/m4-implementation-status.md)
+records completed CLI delivery and its tested source. For current baseline
+qualification, use the [E ledger](../../development/e-implementation-status.md);
+earlier stage evidence is not relabeled as a fresh pass.
 
 ### PR-REQ-0290 - Capture publication and capture time
 
-Capture MUST emit only SnapshotIntegrityFormatV2, using its exact verifier.
+Capture MUST emit only the current [Snapshot integrity baseline](../contracts/snapshot-integrity.md),
+using its exact verifier. Historical format-type names do not select retired
+numeric writers or readers.
 Pactrun MUST validate the Hook-submitted candidate and independently determine
 its complete content digests. Only explicitly submitted service content belongs
 to the candidate; Pactrun MUST NOT scan ServiceStorage, unrelated storage, or
@@ -175,17 +185,21 @@ Protocol completion_accepted is not a managed publication boundary.
 
 ## Scope, versions, and ownership
 
-Use [integrity V2](../contracts/snapshot-integrity.md),
-[bundle V1](../contracts/snapshot-bundle.md),
-[V5 persistence](../persistence/persistence-baseline.md), and
+Use the current [integrity](../contracts/snapshot-integrity.md),
+[bundle](../contracts/snapshot-bundle.md),
+[persistence](../persistence/persistence-baseline.md), and
 [fixed capabilities](../behavior/m4-runtime-capabilities.md).
-Their versions remain independent of Frozen RevisionCoreFormatV1 and
-HookProtocolV1. Snapshot owns its payload closure independently of its origin,
+Their versions remain independent of the Revision and Hook protocol domains.
+Snapshot owns its payload closure independently of its origin,
 creator Run, or installed producer. Restore copies into new target-scoped
 payload identities. There is no cross-resource CAS/dedup ownership model.
 
-M4 includes human capture/restore/import/export/verify and minimum inspection,
-not Snapshot delete, Revision deployment, Migration/Cleanup execution,
+Historical M4 scope (informative): that delivery included human
+capture/restore/import/export/verify and minimum inspection. It excluded
+Snapshot deletion, Revision deployment, Migration/Cleanup execution,
 ServiceStorage runtime, background reconciliation, public Rust APIs, stable
-machine output, or Pages deployment. Multi-milestone requirements remain
-partially pending; a test for an M4 clause does not implement a later clause.
+machine output, and Pages deployment. Later delivery evidence belongs to the
+[current handoff](../../development/next-milestone.md) and its linked records.
+An M4 test is evidence for its covered clause; it does not establish coverage
+of later lifecycle or presentation work. These historical exclusions do not
+describe current runtime availability.

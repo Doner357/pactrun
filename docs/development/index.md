@@ -5,47 +5,45 @@ slug: /development
 
 # Developing Pactrun
 
-The [short-ID selector record](./short-id-selectors-status.md) tracks shared
-object selection, validation and local integration.
-
-The [CLI interface refinement record](./cli-interface-refinement-status.md)
-tracks the current human-output and JSON/JSONL work.
-
 **Status: Informative development entry.** This section helps implementers work
 from the specification; it does not replace the product rules or an approved
 milestone scope.
 
 ## Start a development task
 
-E implementation is authorized and in progress. Use the
-[E implementation ledger](./e-implementation-status.md) before interpreting
-individual component passes as whole-milestone completion.
+E local engineering and the same-version help/README correction are integrated
+into develop. The [E delivery ledger](./e-implementation-status.md) records actual
+verification and publication limits.
 
-The [E versioning redesign decisions](./design-notes/e-versioning-redesign-decisions.md)
-record the approved policy and closed version matrix, with remaining questions
-separated from settled direction. Detailed S0 representations and runtime work
-are not yet approved.
+**Completed delivery: F — Documentation and Documentation Site.** The operator
+selected complete documentation authoring and documentation website/page design.
+F implementation and review corrections are complete. On 2026-09-29 the operator
+approved local commit and merge into develop. See the [F delivery record](./f-documentation-status.md) for scope and verification.
+Use the [F direction record](./remaining-capability-milestones.md#f-documentation-and-documentation-site)
+and [current handoff](./next-milestone.md). Public publication remains separately
+authorized; the port-3000 preview remains available.
 
-The proposed [whole-milestone E S0 plan](./design-notes/e-versioning-s0-plan.md)
-collects concrete representations, the removal/preservation inventory, installer
-scope, remaining decisions, all implementation slices and acceptance evidence
-for one overall approval. It is not an approved specification or runtime work.
+The [E design decisions](./design-notes/e-versioning-redesign-decisions.md),
+[approved E S0 plan](./design-notes/e-versioning-s0-plan.md) and
+[pre-E review](./pre-e-readiness.md) remain historical rationale and evidence,
+not pending approval gates for the completed E work.
 
-The [pre-E readiness review](./pre-e-readiness.md) records prerequisite
-closure, source-qualified validation and local integration separately from
-E S0 approval and release readiness.
-
-1. Read [the Spec map](../spec/index.md) and, if needed, the
-   [developer product overview](./product-overview.md).
-2. Choose a [task reading path](./reading-paths.md) rather than reading all files.
-3. Check [the current baseline and next milestone](./next-milestone.md).
-4. Follow [development and verification policy](./development-and-verification.md).
-5. Report changed behavior, rule/test evidence, verification results, and limits.
+1. Read the [developer product overview](./product-overview.md).
+2. Establish the [current baseline and authorized scope](./next-milestone.md).
+3. Choose a [task reading path](./reading-paths.md) and its owning rules rather than reading all files.
+4. Apply [implementation guidance](./implementation-guidance.md).
+5. Follow [development and verification policy](./development-and-verification.md),
+   then report changed behavior, evidence, results, and limits.
 
 The [roadmap](./implementation-roadmap.md) controls work order. The Spec controls
 product semantics. A design summary may help locate a rule but cannot override
 it. The [M4 closeout](./m4-implementation-status.md) records integrated work, not
 a release or a fresh claim that every test has just run.
+
+## Historical milestone chronology
+
+The following records describe their original source revisions. Use the current
+handoff above for availability and baseline decisions.
 
 The historical work-order entry is the [ServiceStorage staged alignment](./design-notes/service-storage-staged-design-alignment.md).
 The [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md)
@@ -74,8 +72,9 @@ Execution diagnostics/Instance observability is integrated into local develop.
 [Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
 also implemented, verified and integrated. [Portable Pack transport](./pack-transport-status.md)
 is implemented, verified and integrated into local develop.
-Machine-readable output is implemented, verified and integrated into local develop under its [approved S0-S4 baseline](./design-notes/cli-presentation-baseline.md); see the [implementation record](./cli-presentation-status.md). E is the next design milestone and requires separate S0 approval. This excludes
-full usage-guide writing. No retired milestone number is reused.
+Machine-readable output is implemented, verified and integrated into local develop under its [approved S0-S4 baseline](./design-notes/cli-presentation-baseline.md); see the [implementation record](./cli-presentation-status.md). E is locally delivered; F is the selected documentation/site follow-up. The
+former full-usage-guide exclusion belongs to A-E, not F. No retired milestone
+number is reused.
 The [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md) classifies
 remaining traceability, acceptance, formal-baseline and conditional-scope work.
 It supplements the historical inventory without approving E design or runtime work.
@@ -100,9 +99,11 @@ inventing new product concepts. For a real conflict, identify the owning rules,
 observable consequences, and proposed decision before changing semantics.
 A passing test is evidence of an exercised contract, not permission to weaken it.
 
-The [migration review](./spec-migration-review.md) records the document move and
-its preservation checks. User, Pack-author, and operation-oriented agent guides
-remain reserved for a later documentation phase.
+The [migration review](./spec-migration-review.md) records the earlier document move
+and its preservation checks. Current [user guides](../guides/index.md),
+[author guides](../package-authors/index.md), and agent task entries
+(`docs/agents/index.md` in the checkout, also available through the site's agent
+text entry) are available; that migration's original placeholder scope is historical.
 
 Repository instructions and the task determine execution permissions. Personal
 communication and machine preferences are not part of the Pactrun Spec.

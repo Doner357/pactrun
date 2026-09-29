@@ -54,23 +54,22 @@ website build. They do not constitute additional requirements.
 ## M6.5 contracts {#proposed-m65-s0-designs-not-active-contracts}
 
 The historical S0 anchor is retained for existing links. The M6.5 design was
-approved on 2026-09-15, including mapped-source consumption. Core/Hook V2 are
-Frozen and the runtime/installer is integrated into local develop; final
-verification and integration are recorded separately. The integrated
-persistence baseline is V7; V6 is historical. Frozen V1
-contracts are unchanged.
+approved on 2026-09-15, including mapped-source consumption. Its original
+format activation and runtime integration are recorded in the
+[M6.5 delivery record](../development/m6-5-implementation-status.md). Current
+Revision, Hook and Persistence formats are owned by the complete E baselines
+listed above; historical format labels are not a current support matrix.
 
 | Contract | Status |
 | --- | --- |
 | [M6.5 Execution](execution/m6-5-service-storage-execution.md) | Implemented normative ServiceStorage execution contract. |
 | [M6.5 Commands](behavior/m6-5-service-storage-command-reference.md) | Implemented normative human CLI contract. Non-Frozen human output. |
 
-For V2 and V3 persistence, references to V4 as a successor record an intermediate
-historical baseline. [V7](./persistence/persistence-baseline.md) is current in
-the integrated M6.5 develop baseline.
-Preserve the exact documented upgrade gates rather than inferring one from this
-index. See [remaining decisions](../development/next-milestone.md) for deferred
-runtime work, not just the historical status on a format page.
+Use the [current handoff](../development/next-milestone.md) to distinguish
+current availability from earlier activation gates. The
+[Persistence baseline](./persistence/persistence-baseline.md) defines present
+support and refusal behavior. This index does not authorize development-era
+readers, upgrade chains or new runtime work.
 
 ## CLI presentation contract
 
@@ -83,10 +82,11 @@ runtime work, not just the historical status on a format page.
 
 M7 is implemented, verified and integrated into local develop, but not published.
 See the [acceptance record](../development/m7-implementation-status.md).
-That historical integration writes V8; managed-object lifecycle subsequently
-introduced V9. The current integrated baseline is V11, as recorded in the
-[diagnostics integration record](../development/execution-diagnostics-observability-status.md).
-The historical M6.5 and M7 integration records are unchanged.
+The [current handoff](../development/next-milestone.md),
+[Persistence baseline](./persistence/persistence-baseline.md), and
+[E ledger](../development/e-implementation-status.md) identify current support
+and qualification. Earlier integration records retain their development-era
+format history; they do not authorize those readers or upgrade chains.
 
 | Contract | Status |
 | --- | --- |

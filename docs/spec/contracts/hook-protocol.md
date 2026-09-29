@@ -560,7 +560,8 @@ completion_with_open_risk
 ```
 
 These codes belong to HookProtocol validation and state-machine handling.
-They do not establish the future cross-layer error architecture owned by M0-C.
+Cross-layer ownership and category rules belong to the
+[error taxonomy](./error-taxonomy-v1.md).
 A Pactrun-originated `protocol_error` MUST use one of these codes; a
 Hook-originated `protocol_error` uses a Hook-owned code. Sender and state make
 the two closed message forms unambiguous.

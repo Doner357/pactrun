@@ -6,9 +6,9 @@ title: Persistence Schema V4 (moved)
 
 **Status: Informative compatibility entry; no independent specification.**
 
-Read [the current document](../../spec/persistence/persistence-baseline.md). Its original rule IDs, contract status,
-and verification evidence have been preserved. This page retains old link
-anchors only; do not use it as a second source of product behavior.
+Read [the current document](../../spec/persistence/persistence-baseline.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
 ## Previous section links
 
@@ -19,7 +19,7 @@ anchors only; do not use it as a second source of product behavior.
 [PR-REQ-0276 - Persistence migration to V4](../../spec/persistence/persistence-baseline.md#pr-req-0276---persistence-migration-to-v4)
 
 <a id="candidate-crate-private-repository-contract" />
-[Candidate crate-private repository contract](../../spec/persistence/persistence-baseline.md#candidate-crate-private-repository-contract)
+[Run repository contract](../../spec/persistence/persistence-baseline.md#candidate-crate-private-repository-contract-1)
 
 <a id="deferred-work" />
-[Deferred work](../../spec/persistence/persistence-baseline.md#deferred-work)
+[Historical Run-slice exclusions](../../spec/persistence/persistence-baseline.md#deferred-work-2)

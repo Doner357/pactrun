@@ -5,6 +5,8 @@ slug: /spec
 
 # Pactrun Specification
 
+**Status: Informative specification map.**
+
 **Authority:** English normative text under this Spec tree defines Pactrun's
 product behavior and required architectural boundaries. Reading aids, examples,
 and this map explain the contracts; they do not add requirements.
@@ -17,13 +19,17 @@ and this map explain the contracts; they do not add requirements.
    and exact immutable representations.
 4. [Execution and recovery](./execution/index.md): acceptance, concurrency, failure,
    and durable recovery boundaries.
-5. [Internal persistence](./persistence/index.md): current schema and earlier
-   compatibility contracts, not a public database API.
+5. [Internal persistence](./persistence/index.md): current schema and internal
+   storage guarantees, not a public database API.
 
 Use the [shared vocabulary](./glossary.md) to locate a term's owner and the
 [contract catalog](./catalog.md) to find an exact page and its original status.
 For development work, use the [task reading paths](../development/reading-paths.md)
 instead of loading every specification at once.
+The layers organize references; they are not commands to execute or a mandatory
+cover-to-cover course. Start a development task with the current work scope, then
+read its owning rules and linked dependencies. Historical records preserve the
+evidence of their own stage and are not prerequisites for ordinary user tasks.
 
 ## One authority, different kinds of evidence
 
@@ -36,7 +42,7 @@ instead of loading every specification at once.
 | Roadmap and implementation records | Work order and reported implementation progress |
 | Compatibility pages at old paths | Forward old links; contain no independent rules |
 | Generated HTML and text copies | Publish the same source, never a second specification |
-| User and Pack author guides | Reserved for later usage documentation |
+| User and Pack author guides | Explain product use and authoring; link to owning contracts without adding rules |
 
 Requirement-bearing documents live here, including new milestone contracts. Non-normative
 syntheses and planning baselines live under Development. A milestone-specific

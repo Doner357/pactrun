@@ -1109,8 +1109,8 @@ or a reader for the original development schema.
 The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 For a pristine database, the complete block above is the exact implemented
-schema. For an exact V1 database, migration executes only the additions after
-the marked boundary. The presentation operation ranks are Capture `0` and Restore `1`; the trust
+schema. Existing development-era databases are refused without applying an
+addition block or upgrade. The presentation operation ranks are Capture `0` and Restore `1`; the trust
 ranks are Trusted `0` and Distrusted `1`. Table identity supplies the remaining
 presentation target ranks from PR-REQ-0251. A presentation row represents the
 four current fields for one target. SQL NULL represents an absent field only
@@ -1220,14 +1220,21 @@ accepted replacement MUST already exist, and the batch's target Revision is the
 desired target for a present binding or the current target for a clear. No
 stable public Rust API, CLI spelling, or wire contract is created here.
 
-## Deferred work
+## Historical metadata-slice exclusions {#deferred-work}
 
-This internal schema does not define Export Bundle serialization or merge,
+The M1-D metadata slice did not define Export Bundle serialization or merge,
 Package or Instance metadata, `LocalInstall`, generic timestamps, localization,
 fuzzy lookup, additional provenance claims, trust policy or history, note history,
 history-sensitive CAS or ABA detection, stable new error codes, cross-domain
 Revision-plus-metadata publication, CLI, or ServiceStorage persistence.
 
+This is historical scope, not a list of missing current capabilities. The
+complete DDL above and the functional contracts below own current persistence.
+Use [Pack distribution](../contracts/pack-distribution.md),
+[ServiceStorage execution](../execution/m6-5-service-storage-execution.md), and
+[managed-object lifecycle](../behavior/managed-object-lifecycle.md) for those
+capabilities. This baseline does not add `LocalInstall`, history-sensitive CAS,
+or a stable public repository API.
 
 ### PR-REQ-0269 - Exact PersistenceSchemaV3
 
@@ -1279,8 +1286,8 @@ Initial publication stores the active declaration's protection. Replacement
 stores the stronger of the previous payload protection and the active
 declaration. Any operation that promotes an existing binding MUST publish a
 fresh Secret payload because it cannot mutate an existing payload header.
-Future Migration coordination must establish the same committed invariant
-before target publication, without this V3 contract defining M5 execution.
+Migration coordination must establish the same committed invariant before target
+publication under the [Migration execution contract](../execution/m5-migration-execution.md).
 
 Every deterministic Instance enumeration MUST order by exact
 `instance_name`, then `instance_id`, using BLOB byte order. Binding enumeration
@@ -1292,9 +1299,10 @@ order.
 The active Revision foreign key prevents deletion while a live Instance refers
 to it. Instance deletion remains M7 behavior; the cascades define relational
 cleanup only after a separately authorized Instance deletion transaction.
-Current bindings, in-progress ExportInput observations, and future durable pin
-or recovery references govern payload reachability. V3 does not add those
-future reference kinds or a generic GC table.
+Current bindings, in-progress ExportInput observations, durable pins, and recovery
+references govern payload reachability under the
+[managed-object lifecycle contract](../behavior/managed-object-lifecycle.md).
+The complete DDL above owns the persisted reference kinds.
 
 **Verification: PR-TEST-0075.**
 
@@ -1308,7 +1316,7 @@ compatibility promise for the new baseline.
 
 **Verification: Not applicable — retired requirement, not pending runtime coverage.**
 
-## Candidate crate-private repository contract
+## Instance repository contract (crate-private) {#candidate-crate-private-repository-contract}
 
 The M2 implementation derives typed operations equivalent to:
 
@@ -1330,13 +1338,17 @@ bind buffer. A transaction failure publishes no header, chunk, binding,
 Instance, or new state version. The concrete Rust names remain crate-private
 and are not a stable API.
 
-## Deferred work
+## Historical Instance-slice exclusions {#deferred-work-1}
 
-V3 does not define Action execution, durable pins, Snapshot persistence,
+The V3 Instance slice did not define Action execution, durable pins, Snapshot persistence,
 Migration execution, recovery state, Instance deletion UX, ServiceStorage,
 stable public APIs, payload encryption, secure erasure, generic garbage
 collection, or a backup format.
 
+These were exclusions of that historical slice. The current baseline includes
+the later Run, Snapshot, Migration, retirement, and ServiceStorage relations
+shown above. Public APIs, payload encryption, and secure erasure remain outside
+this persistence contract.
 
 ### PR-REQ-0275 - Exact PersistenceSchemaV4
 
@@ -1472,7 +1484,7 @@ transitions MUST reject it without publishing an outcome, changing the Instance
 recovery guard or state version, releasing references, or normalizing it into a
 valid state.
 
-V4 has no dedicated sensitive-value fields: no table stores invocation
+Run relations have no dedicated sensitive-value fields: no table stores invocation
 parameter values, Secret payload bytes, or value-derived digests for a Run.
 This is a schema fact only. Runtime redaction of Hook-authored and
 Pactrun-authored diagnostic text remains the obligation of the slices that
@@ -1490,7 +1502,7 @@ compatibility promise for the new baseline.
 
 **Verification: Not applicable — retired requirement, not pending runtime coverage.**
 
-## Candidate crate-private repository contract
+## Run repository contract (crate-private) {#candidate-crate-private-repository-contract-1}
 
 The M3 Slice 2 implementation derives typed operations equivalent to:
 
@@ -1551,13 +1563,19 @@ and its Instance's current recovery guard from one SQLite read snapshot. These
 additions do not alter the V4 table manifest or expose a public inspection or
 CLI surface.
 
-## Deferred work
+## Historical Run-slice exclusions {#deferred-work-2}
 
-V4 does not define non-sensitive parameter recording, Run retention policy,
+The V4 Run slice did not define non-sensitive parameter recording, Run retention policy,
 Snapshot, Migration, Restore, or Cleanup execution records, Instance deletion,
 generic garbage collection, Artifact export, ServiceStorage, a stable public
 API, or human spelling.
 
+These were exclusions of that historical slice. Current execution/lifecycle
+records are defined below, including diagnostic retention. The
+[command reference](../behavior/command-and-output-reference.md) and
+[managed-object lifecycle contract](../behavior/managed-object-lifecycle.md)
+own human spelling and retained-object operations; this is not a stable public
+repository API.
 
 ### PR-REQ-0298 - Exact PersistenceSchemaV5
 
@@ -1670,11 +1688,14 @@ qualification MUST first prevent all further schema-dependent writes, then
 revoke its admission and release connection/lease resources. If orderly
 revocation fails, a stale record remains owner-lost rather than silently live.
 
-Migration MUST inspect committed admissions under that serialized boundary:
+Any separately approved internal storage migration MUST inspect committed
+admissions under that serialized boundary:
 live or unknown admitted owners block; confirmed owner loss does not. Missing
 admission in admission-aware storage MUST NOT trigger a fallback scan of all leases.
 An orphan Run does not require a fabricated writer admission. Removing stale
-writer qualification MUST NOT reconcile or infer any Run outcome.
+writer qualification MUST NOT reconcile or infer any Run outcome. This is a
+conditional migration obligation; the current baseline provides no upgrade
+from development-era schemas.
 
 **Verification: PR-TEST-0195, PR-TEST-0196, PR-TEST-0197, PR-TEST-0198,
 PR-TEST-0201, PR-TEST-0622, PR-TEST-0623, PR-TEST-0639.**
@@ -1754,8 +1775,10 @@ PR-REQ-0306, not claims established solely by these SQL constraints.
 
 Matching rank-3 invocations MUST be decoded as Migration rather than inferred
 as Action. Mixed invocation kinds and inconsistent path/boundary/reference data
-MUST be rejected. Execution capability is separate from structural inspection;
-Hook-backed execution remains unsupported by this slice.
+MUST be rejected. Structural inspection does not establish execution support.
+The tests listed here cover this persistence representation; Hook-backed
+execution and its evidence are owned by the
+[Migration execution contract](../execution/m5-migration-execution.md).
 
 **Verification: PR-TEST-0293, PR-TEST-0299.**
 
@@ -1794,15 +1817,16 @@ a dedicated typed service-resource relation, not ManagedInputBindings or EAV.
   and pins that exact declaration until protection/publication; after promotion,
   Instance associations or the Running Migration's path pins own needed contracts.
 - The immutable allocation owner InstanceId is intentionally not an Instance FK:
-  pre-Instance allocation and future non-destructive abandonment must not erase
+  pre-Instance allocation and non-destructive abandonment must not erase
   physical custody. At creation its exact origin Core must declare the storage
   in that Package. Origin Revision identity is thereafter audit provenance,
   not an installation-lifetime FK. Physical paths and service bytes are absent
   from SQL. Removing an origin Revision cannot remove allocation custody.
-  In V7 a protected allocation still requires an extant owner Instance; only
-  an unexposed creation preparation may precede that Instance. A missing owner
-  is corruption, not permission to delete bytes. The later M7 schema must add
-  explicit detached-custody evidence before making owner removal a valid state.
+  An unexposed creation preparation may precede its owner Instance. A protected
+  allocation requires either a live owner or valid retirement/detached or
+  completed-finalization evidence under
+  [PR-REQ-0338](#pr-req-0338---exact-v8-lifecycle-records). Missing ownership
+  evidence is corruption, not permission to delete bytes.
 - Each published association belongs to an extant Instance with the same Package
   and to an allocation with that same immutable owner. Its declaration Revision
   must contain that typed declaration. Current declared identities have exactly
@@ -1901,8 +1925,9 @@ rmdir and required barriers; then remove preparation/origin/allocation records
 atomically. A missing directory is an idempotent empty-preparation case.
 Unexpected contents, linked/unsafe paths or inconclusive ownership preserve the
 records. Unknown/unrecorded directories are not automatically adopted or deleted.
-No startup cleanup traverses protected storage. M7 finalization is the only future
-destructive lifecycle, under its separately approved receipt protocol.
+No startup cleanup traverses protected storage. Destructive finalization follows
+the explicit authorization and receipt protocol in the
+[retirement contract](../execution/m7-instance-retirement.md).
 
 ### Crash matrix
 

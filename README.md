@@ -3,6 +3,18 @@
 Pactrun manages installed Pack revisions, long-lived Instances, and Pack-defined
 operations on the local machine. It runs as a single executable on Linux and Windows.
 
+## Get started
+
+1. [Install and verify the supplied Pactrun executable](./docs/guides/installation.md).
+2. [Create your first Instance](./docs/introduction.md) in an isolated environment.
+3. [Install a supplied Pack and create a usable Instance](./docs/guides/use-pack.md),
+   then choose an operating task from the [user guide](./docs/guides/index.md).
+
+To write Packs instead, verify the executable first, then follow the
+[author route](./docs/package-authors/index.md). Public download/package-source
+publication is not announced here; the installation procedure uses an approved
+standalone delivery and checksum.
+
 ## What you can do
 
 - Install Packs from source, distribution directories, or `.pack` archives.
@@ -25,7 +37,7 @@ provides execution diagnostics.
 
 Object IDs accept unique prefixes of at least eight lowercase hexadecimal digits,
 for example `pactrun run show 6fb391d6`. Human lists display usable short IDs;
-`--no-trunc` shows full IDs. See [ID selectors](./docs/spec/contracts/cli-id-selectors.md)
+`--no-trunc` shows full IDs. See [references and pagination](./docs/pactrun-users/operations/command-and-output-reference.md#references-and-pagination)
 for Revision and Migration forms.
 
 - `--format json` returns one complete response.
@@ -36,12 +48,13 @@ for Revision and Migration forms.
 - `--cancel-on-output-close` requests cancellation when a JSONL execution's
   receiver disconnects. By default, Pactrun continues managing the operation.
 
-See the [command reference](./docs/spec/behavior/command-and-output-reference.md)
-and [machine-output contract](./docs/spec/contracts/cli-machine-interface.md).
+See the [user command reference](./docs/pactrun-users/reference/index.md)
+and [machine-output reference](./docs/pactrun-users/reference/machine-output.md).
 
 ## Documentation
 
-- [Usage guides](./docs/guides/index.md) - planned guides and topic coverage.
+- [User guides](./docs/guides/index.md) - onboarding and independent operating tasks.
+- [Pack author guide](./docs/package-authors/index.md) - authoring route, optional capabilities, and field references.
 - [Specification](./docs/spec/index.md) - formats, lifecycle, and exact behavior.
 - [Development](./docs/development/index.md) - implementation history, current
   baseline, and verification policy.
@@ -53,7 +66,7 @@ English Markdown in `docs/` is canonical. `website/` renders it with Docusaurus.
 ## Development
 
 Pactrun is written in Rust as a modular monolith. Read
-[CONTRIBUTING.md](./CONTRIBUTING.md) and the [agent entry](./docs/agents/index.md)
+[CONTRIBUTING.md](./CONTRIBUTING.md) and the [developer agent entry](./docs/agents/develop-pactrun.md)
 before changing the implementation. Source lives in `src/`; repository checks
 live in `xtask/`.
 

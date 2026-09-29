@@ -41,9 +41,10 @@ source location or content. ID generation is a separate non-mutating operation.
 `RevisionContentDigest` MUST identify Pactrun-managed operational semantics and
 immutable owned runtime content. It MUST exclude `PackageId`, display content,
 publisher claims, labels, source location, install time, local aliases, notes,
-and local trust decisions. A future Revision Core format may make a
-ServiceStorage-backed Managed Service Resource declaration identity-bearing,
-but the service-owned live bytes MUST remain outside the Revision digest.
+and local trust decisions. ServiceStorage and Managed Service Resource
+declarations are identity-bearing under the
+[Revision baseline](../contracts/revision-canonical.md). The service-owned live
+bytes MUST remain outside the Revision digest.
 
 **Verification: PR-TEST-0044, PR-TEST-0067, PR-TEST-0331, PR-TEST-0346, PR-TEST-0493, PR-TEST-0594, PR-TEST-0600.**
 
@@ -68,11 +69,14 @@ Session authority, Inputs, Snapshot, Migration, Cleanup, failures, recovery, or
 service-facing runtime behavior. Presentation, attribution, provenance, and
 local-management data MUST remain outside it.
 
-`RevisionCoreFormatV1` is already Frozen and contains no `ServiceStorage` or
-ServiceStorage-backed Managed Service Resource declaration. The accepted future
-architecture does not retroactively add those concepts to its closed schema.
-Candidate `PackSourceYamlV1` is an authoring projection into this unchanged
-format, not another Revision identity or a raw-Core authoring route.
+The current [Revision baseline](../contracts/revision-canonical.md) includes the
+common fields and the service declarations as one complete identity-bearing
+projection. ServiceStorage and service-resource declarations participate in that
+projection under PR-REQ-0317. Historical type and requirement names do not select
+an older wire format. The [Pack source](../contracts/pack-source.md) projects into
+this boundary; it defines neither another Revision identity nor a raw-Core
+authoring route. Published-format compatibility remains governed by the owning
+version policy rather than by retroactively extending an old closed schema.
 
 **Verification: PR-TEST-0040, PR-TEST-0041, PR-TEST-0069, PR-TEST-0331, PR-TEST-0493, PR-TEST-0600.**
 
@@ -250,7 +254,7 @@ closure bytes, Revision Core bytes, or `RevisionContentDigest`.
 A verified blob means that the opened regular-file object was fully hashed at
 acquisition under a dedicated trusted-root and cooperative-writer model. M1-B
 does not provide hostile post-verification tamper resistance or an operating
-system sandbox. Durable blob publication MUST precede any future database
+system sandbox. Durable blob publication MUST precede any database
 reference publication. M1-B provides no deletion, garbage collection,
 reachability, pin, or database-reference behavior.
 
@@ -258,14 +262,15 @@ reachability, pin, or database-reference behavior.
 
 ### PR-REQ-0231 - SQLite persistence ownership and bootstrap
 
-M1-C MUST use an independently versioned `PersistenceSchemaV1` in a
+Pactrun MUST use the independently versioned
+[Persistence baseline](../persistence/persistence-baseline.md) in a
 caller-provisioned, dedicated local storage root. The database and runtime
 content child directories MUST already exist. On Windows the supported profile
 is local fixed NTFS; on Linux it is limited to the ext4, XFS, Btrfs, and ZFS
 profiles established by M1-B. M1-C MUST NOT claim to create those persistent
 directories durably.
 
-The SQLite database MUST use application ID `0x50414354`, user version `1`, WAL
+The SQLite database MUST use application ID `0x50414354`, private user version `0`, WAL
 journal mode, `synchronous=FULL`, foreign-key enforcement, and a five-second
 busy timeout. In WAL mode, the main database and a live WAL MAY together carry
 committed database state. The SHM WAL index is reconstructible coordination and
@@ -273,18 +278,20 @@ cache state, not authoritative Pactrun Domain state. M1-C does not define live
 filesystem-copy backup; a future backup facility MUST use a SQLite-supported
 consistent backup or checkpoint mechanism.
 
-Before claiming a database, Pactrun MUST inspect its application ID, user
-version, and non-SQLite schema objects. Only an exact V1 database or a pristine
-database with application ID zero, user version zero, and no user objects is
-admissible. WAL establishment MUST return exactly `wal`. Pactrun MUST then use
+Before claiming a database, Pactrun MUST inspect its application ID, private user
+version, supported `pactrun_metadata.format_version`, and non-SQLite schema objects.
+Only the exact supported metadata and schema or a pristine database with
+application ID zero, user version zero, and no user objects is admissible.
+WAL establishment MUST return exactly `wal`. Pactrun MUST then use
 `BEGIN IMMEDIATE`, re-read the ownership markers and schema while holding the
-write transaction, and either validate exact V1 or atomically create the
-complete V1 schema and markers. Foreign, unmarked non-empty, newer, or
-schema-drifted databases MUST be rejected. Two concurrent initializers MUST
+write transaction, and either validate the supported baseline or atomically create
+its complete schema and markers. Development-era, foreign, unmarked non-empty,
+unsupported, or schema-drifted databases MUST be rejected without conversion or
+data deletion. Two concurrent initializers MUST
 converge on one exact schema through SQLite locking; M1-C MUST NOT add a second
 cross-process lock protocol.
 
-Every V1 table MUST be `STRICT` and `WITHOUT ROWID`. Package IDs MUST be BLOBs
+Every baseline table MUST be `STRICT` and `WITHOUT ROWID`. Package IDs MUST be BLOBs
 of exactly 16 bytes; Revision and runtime blob digests MUST be BLOBs of exactly
 32 bytes. Schema validation MUST verify the actual tables, columns, constraints,
 primary keys, foreign keys, and table options rather than trusting version
@@ -421,7 +428,7 @@ one Pactrun installation. These fields MUST remain non-identity metadata.
 
 Local install timestamps, source filesystem paths, local aliases, local notes,
 and local trust decisions are local-only and MUST be excluded by default.
-Portable-capable does not require a future Export Bundle Format to carry a
+Portable-capable does not require an Export Bundle Format to carry a
 metadata kind and does not define serialization, carriage, import conflict, or
 merge policy. Publisher claims and digests MUST NOT be presented as publisher
 authentication.
@@ -726,6 +733,10 @@ metadata name.
 
 ### PR-REQ-0272 - M2 scope and anti-backdoor boundary
 
+**Scope:** the M2 increment recorded below. Its prohibition on simulating live
+service state with Inputs or metadata remains binding. Later operations have
+their own approved contracts; this is not a global ban on their current runtimes.
+
 M2 MUST implement only minimal Pack authoring and Revision installation,
 Instance creation and inspection, Pactrun-authoritative Managed Input bindings,
 Secret disclosure controls, and their internal persistence and concurrency
@@ -746,9 +757,9 @@ Candidate `PackSourceYamlV1` and the implemented internal
 independently versioned internal contracts. They MUST
 NOT modify or acquire the compatibility
 status of Frozen Revision Core, Snapshot Integrity, Hook Protocol, or Error
-Taxonomy V1. A future ServiceStorage design MUST enter through its own approved
-Revision, authority, persistence, and runtime gates rather than an M2
-authoring, binding, or metadata extension.
+Taxonomy V1. ServiceStorage entered through its separately approved Revision,
+authority, persistence and runtime contracts. An M2 authoring, binding or metadata
+change MUST NOT invent additional service semantics outside those owners.
 
 **Verification: PR-TEST-0079.**
 

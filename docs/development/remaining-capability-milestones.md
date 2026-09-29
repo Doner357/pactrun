@@ -4,13 +4,11 @@ title: Remaining Capability Milestones
 
 # Remaining capability milestones
 
-**Status: Approved remaining scope and work order on 2026-09-19.
-A is implemented, verified and integrated into local develop. C is implemented,
-verified and integrated into local develop; D S0-S4 is implemented, verified and integrated into local develop; E remains pending. B S0-S4 is implemented, verified
-and integrated into local develop; see its
-[record](./object-catalog-history-metadata-status.md).**
+**Status: Approved remaining scope and work order on 2026-09-19 for the original
+A-E sequence; A-E are implemented and locally integrated. F was selected on
+2026-09-27 as the next milestone; planning recorded only, implementation not started.**
 
-The operator approved the following grouping after the diagnostic and capability
+The operator approved the original A-E grouping after the diagnostic and capability
 gap review, and authorized recording the plan only. This record does not start
 runtime implementation, amend Spec, allocate format/schema versions, commit,
 merge, push or authorize publication. The [roadmap](./implementation-roadmap.md)
@@ -22,7 +20,7 @@ remain implemented and integrated. Their acceptance evidence is not rewritten.
 The original [2026-09-17 completion plan](./product-completion-milestones.md)
 remains the historical scope/rationale record. This approval inserts three
 capability milestones before its remaining machine-output and consolidation work.
-A-E are sequence labels in this plan, not new M-series identifiers or versions;
+A-E and the later F extension are sequence labels in this plan, not new M-series identifiers or versions;
 M8 stays rejected and its number is not reused. Relative order is approved;
 calendar dates and effort estimates are not assigned.
 
@@ -35,6 +33,13 @@ calendar dates and effort estimates are not assigned.
 | C | Revision Bundle Export and Import | Provide a portable immutable Revision round trip without rebuilding from source |
 | D | Machine-readable CLI Output | Expose deliberate typed results for the completed command/inspection surface |
 | E | Versioning and Baseline Consolidation | Close the formal baseline, support/evolution mechanisms and remaining obligation inventory |
+| F | Documentation and Documentation Site | Write complete product documentation and design/organize the documentation website; details deferred until milestone entry |
+
+**Current next milestone: F — Documentation and Documentation Site (文件與頁面).**
+F is a separate 2026-09-27 selection after E, not part of the original A-E approval.
+Its high-level direction is selected; detailed scope, design, execution and
+acceptance criteria will be discussed when entering F. This record does not
+start documentation authoring or website implementation.
 
 **Delivery update:** A is implemented, verified and integrated into local develop.
 B is also implemented, verified and integrated under the separately approved
@@ -43,12 +48,15 @@ C is now implemented, verified and integrated into local develop under the
 [Pack transport baseline](./design-notes/pack-transport-baseline.md). Its
 [status record](./pack-transport-status.md) distinguishes implementation evidence
 from the separately authorized local integration. D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence.
-The sections below retain the original grouping rationale;
+E is also locally integrated; its [delivery ledger](./e-implementation-status.md)
+records source-qualified scope and publication limits.
+The A-E sections below retain the original grouping rationale;
 the approved Pack baseline owns the subsequent concrete scope refinement.
 The original work-order decision was **Next: A.**
 At that decision, D is no longer the immediately next capability. A and B establish
 the observable data and public operations; C adds transport results and failures.
-Only then should D close machine-output models and command coverage. E stays last.
+Only then should D close machine-output models and command coverage. E was last
+in that original A-E sequence; F is the separately selected follow-up.
 This avoids encoding missing features as JSON or repeatedly redesigning envelopes.
 
 ## A. Execution Diagnostics and Instance State Observability
@@ -216,6 +224,24 @@ unowned until the end. It neither changes 0.1.0 to 1.0.0 automatically nor autho
 publication. Internal actual-use evaluation and release-mechanism acceptance remain
 separate pre-publication gates under release readiness.
 
+## F. Documentation and Documentation Site
+
+**State: Authorized for implementation, verification, and remote review.**
+
+The operator selected F on 2026-09-27 and subsequently authorized completion.
+Write complete product documentation. Design and organize the documentation website and its pages.
+Use English sources, retain Docusaurus, and apply the adopted external writing
+style with Pactrun terminology and contract safeguards.
+
+The [F delivery record](./f-documentation-status.md) owns the coverage matrix and
+acceptance evidence. Scope includes authority/history separation, reader guides,
+search and basic filters, generated references, agent text navigation, and drift checks.
+
+Keep changes uncommitted and unmerged for operator review. Authorization does not
+include Git push, public Releases, package-source publication, Pages deployment,
+or activation of the existing untracked workflow. Preview on the configured
+remote port 3000 is authorized. Runtime behavior and format contracts are unchanged.
+
 ## Shared obligation inventory and completion rules
 
 The [2026-09-23 audit](./obligation-audit-2026-09-23.md) supplies the current
@@ -256,10 +282,12 @@ platform-specific checks; documentation-only planning uses documentation checks.
 
 ## Exclusions and authorization boundary
 
-Full user, Pack Author and Hook usage guides/placeholders are excluded by the
-operator's instruction. Necessary Spec, CLI help, implementation records and
-acceptance material still accompany actual capability work; this exclusion does
-not justify an undocumented command contract.
+Full user, Pack Author and Hook usage guides/placeholders are excluded from the
+historical A-E implementation scope. That exclusion does not apply to F's selected
+complete-documentation direction; detailed coverage is deferred until F entry.
+Necessary Spec, CLI help, implementation records and acceptance material still accompany
+actual capability work; the historical exclusion never justified undocumented
+command contracts.
 
 Do not pull OS sandbox/WASI/container isolation, encrypted Secret/Snapshot storage,
 registry/signing/trust enforcement, broader external-resource taxonomy, LocalInstall

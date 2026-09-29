@@ -7,8 +7,8 @@ title: Shell Loader
 **Status: Implemented normative adapter contract; non-Frozen.**
 
 <!-- spec-navigation:start -->
-Read [Core V3](./revision-canonical.md), [Hook V1](./hook-protocol.md)
-and [Hook V2](./hook-protocol.md). The
+Read the [Revision baseline](./revision-canonical.md) and
+[Hook protocol](./hook-protocol.md). The
 [implementation record](../../development/shell-adapter-loader-status.md) separates
 implementation from acceptance and format Freeze.
 The [executable-lifetime fix](../../development/executable-lifetime-fix-status.md)
@@ -57,12 +57,14 @@ an OS sandbox. The trusted-Hook host access contract remains unchanged.
 | `completion --file FILE` | Optional code/message and sticky failure selection, not Session completion |
 | `target-ready` | Submit registered target handles and wait for the V2 receipt |
 
-Implementation availability note (informative): `diagnostic` currently validates
-and forwards the canonical message, but Core discards its text after validation;
-it is not displayed live or retained for Run inspection. This is a known
-[observability follow-up](../../development/shell-adapter-loader-status.md#known-follow-up-usable-hook-diagnostics),
-not proof that the original user-visible diagnostic goal is complete. This note
-does not amend the wire grammar or the existing text-retention/presentation rules.
+Implementation availability note (informative): accepted diagnostic text is
+presented live and retained by default for Run inspection under the
+[execution diagnostics policy](../behavior/execution-diagnostics.md).
+`--no-retain-hook-text` suppresses persistent Hook text without disabling live
+display. Interactive presentation waits until the terminal is returned. The
+[historical Loader closeout](../../development/shell-adapter-loader-status.md#known-follow-up-usable-hook-diagnostics)
+records the earlier limitation; it does not describe current behavior. Hook
+authors remain responsible for keeping sensitive values out of diagnostics.
 
 Read results support `--output FILE`, creating a new file instead of overwriting
 an existing file. JSON files are UTF-8 without an added BOM. Text-file output

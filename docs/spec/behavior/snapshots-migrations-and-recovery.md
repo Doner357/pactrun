@@ -9,7 +9,7 @@ title: Snapshots, Migration, and Recovery
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Compare observable Snapshot, Migration, and recovery behavior. Check the implementation record before treating specified future operations as available.
+Compare observable Snapshot, Migration, and recovery behavior. Use the current handoff for availability and the linked operation owners for concrete behavior.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.
@@ -130,10 +130,13 @@ service-specific transformation is required, target-owned inbound Migration
 semantics and a Migration Hook own the transformation and use the existing
 recovery-risk handshake.
 
-This policy does not define a retained-resource registry or any other durable
-representation. Compatibility, continuity, retention, discard, association,
-access, prerequisites, target-commit coordination, and persistence ownership
-remain future-version design gates.
+This policy defines resource semantics. The concrete association, compatibility,
+continuity, access, prerequisite and target-publication mechanisms are owned by
+[ServiceStorage execution](../execution/m6-5-service-storage-execution.md) and
+the [Persistence baseline](../persistence/persistence-baseline.md).
+[Instance retirement](../execution/m7-instance-retirement.md) owns detached
+custody and explicit discard. These owners do not imply a taxonomy for resources
+outside ServiceStorage.
 
 ## Failure and recovery
 
@@ -207,23 +210,25 @@ success, Pactrun MUST NOT infer replay or compensation, and
 `completion_accepted` does not itself imply a Run or Instance commit. Therefore,
 loss after a Hook sends Cleanup success but before Pactrun durably publishes the
 Cleanup-completed boundary MUST NOT be treated as proof that replay is safe or
-that Cleanup durably completed. Exact coordination of that ambiguous window
-remains a future Hook Protocol and recovery design gate; this requirement adds
-no replay, compensation, manual-recovery, or finalization inference.
+that Cleanup durably completed. The evidence-directed recovery and qualified
+confirmation rules in [Instance retirement](../execution/m7-instance-retirement.md)
+own coordination of that window. This requirement adds no replay, compensation,
+manual-recovery or finalization inference.
 
 After the durable Cleanup-completed boundary exists, a crash or failure during
 Pactrun-provided storage-lifetime finalization MUST retry or resume only that
 Pactrun-owned finalization obligation and MUST NOT replay Cleanup. Until it
 finishes, deletion MUST NOT report success or allow ordinary management to
 bypass the obligation. The obligation MUST NOT require a public persistent
-`Deleting` or `DeletionFailed` Instance state; its representation and retry
-mechanism remain future persistence and runtime design.
+`Deleting` or `DeletionFailed` Instance state. The retirement and Persistence
+contracts own the durable obligation and finalization-only retry mechanism.
 
 `AbandonManagement` MUST NOT destructively remove the abandoned service-owned
 state during abandonment and MUST NOT authorize later ordinary garbage
 collection, unreferenced-storage cleanup, or maintenance to remove it. The
-durable non-destruction representation, later discoverability, operator handoff,
-and explicit discard remain future persistence and runtime design gates. This
-requirement introduces no orphan-storage or retained-resource registry.
+durable non-destruction representation, later discoverability, operator handoff
+and explicit discard follow the retirement and Persistence contracts. This
+requirement supplies the safety invariant; it does not define an alternate
+registry or grant implicit discard authority.
 
 **Verification: PR-TEST-0407, PR-TEST-0408, PR-TEST-0409, PR-TEST-0410, PR-TEST-0411, PR-TEST-0412, PR-TEST-0413, PR-TEST-0414, PR-TEST-0433, PR-TEST-0445.**

@@ -1,0 +1,2 @@
+export type SearchPage = {title: string; source: string; url: string; state: string; role: string; audiences: string[]; text: string; readerView?: boolean; requirements: string[]; requirementAnchors: Record<string, string>};
+export function searchPages(pages: SearchPage[], query?: {q?: string; state?: string; role?: string; audience?: string}): Array<SearchPage & {score: number; readerPriority: number; snippet: string}>;

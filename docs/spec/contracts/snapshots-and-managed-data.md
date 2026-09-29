@@ -102,9 +102,9 @@ content roles and digests. It MUST exclude presentation-only origin names,
 local import metadata, labels, notes, trust decisions, compression, and archive
 representation.
 
-The exact V1 identity spelling, semantic manifest, normalization, framing, and
+The exact supported identity spelling, semantic manifest, normalization, framing, and
 verification boundary are defined by
-[Snapshot Integrity Format V1](./snapshot-integrity.md).
+[Snapshot Integrity Baseline](./snapshot-integrity.md).
 
 **Verification: PR-TEST-0184, PR-TEST-0185.**
 

@@ -9,7 +9,7 @@ const config: Config = {
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
   staticDirectories: ['static', '.generated-text'],
-  plugins: ['./plugins/text-docs/index.mjs'],
+  plugins: ['./plugins/text-docs/index.mjs', './plugins/document-catalog/index.mjs'],
 
   presets: [
     [
@@ -33,11 +33,16 @@ const config: Config = {
     navbar: {
       title: 'Pactrun',
       items: [
+        {to: '/guides/', label: 'Users', position: 'left'},
+        {to: '/package-authors/', label: 'Authors', position: 'left'},
+        {to: '/spec/', label: 'Spec', position: 'left'},
+        {to: '/commands', label: 'Commands', position: 'right'},
+        {to: '/search', label: 'Search', position: 'right'},
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Documentation',
+          label: 'Browse',
         },
       ],
     },

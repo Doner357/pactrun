@@ -22,13 +22,14 @@ The original status, rules, exceptions, and verification declarations below reta
 
 A minimal Pack can contain metadata, one Action, and one Hook. Structured
 parameters, persistent Inputs, managed outputs, Snapshots, Migration,
-future ServiceStorage-backed Managed Service Resources, and interactive terminal
+ServiceStorage-backed Managed Service Resources, and interactive terminal
 behavior are optional capabilities and must not burden minimal Packs.
 
 Authors describe capabilities they provide. They are not required to enumerate
 large sets of negative `supports_x: false` flags.
 
-YAML V1/V2/V3 are the current built-in frontends. The internal Candidate model below
+The [Pack source baseline](./pack-source.md) defines the current built-in YAML
+frontend and its explicit string marker. The internal Candidate model below
 is not a public API. A common external entry point for third-party frontends is
 deferred until concrete demand; install-time Recipes were
 [rejected with M8](../../development/history/m8-recipes-rejected.md).
@@ -48,9 +49,10 @@ The final normalized definition MUST contain resolved semantic runtime
 descriptors with author-declared `ContentId` values and content-derived
 `blob_digest` values before it crosses this boundary.
 
-Candidate `PackSourceYamlV1` is the closed minimal M2 frontend. Its exact source
-profile, schema-directed scalar rules, portable metadata shapes, source
-acquisition, and projection are owned by PR-REQ-0258 through PR-REQ-0260.
+The built-in Pack source frontend uses the exact source profile, schema-directed
+scalar rules, portable metadata shapes, safe acquisition and projection owned by
+PR-REQ-0258 through PR-REQ-0260. Those stable requirement names do not enable
+retired numeric source formats.
 
 **Verification: PR-TEST-0069.**
 
@@ -72,12 +74,11 @@ identity.
 
 Local aliases, notes, and trust assessments are not part of
 `NormalizedPackDefinition`. A crate-private installation orchestrator MAY
-supply a separate explicit local M1-D mutation batch, but Candidate
-`PackSourceYamlV1` carries portable metadata only and the M2 human install
-command supplies an empty local batch. This contract does not itself redefine
-the M2 source syntax or installation transaction, which are owned by
-PR-REQ-0258 through PR-REQ-0261. It does not define an Export Bundle Format or
-change the M1-D production implementation.
+supply a separate explicit local metadata mutation batch. The built-in source
+frontend carries portable metadata only, and the human install command supplies
+an empty local batch. Source syntax and installation publication are owned by
+PR-REQ-0258 through PR-REQ-0261; transport encoding is owned separately by the
+[Pack distribution contract](./pack-distribution.md).
 
 Source-stage locators, directory handles, acquisition evidence, and transient
 staging identities MUST be consumed before `NormalizedPackDefinition` is
@@ -99,6 +100,8 @@ NormalizedPackDefinition
 |- PresentationMetadata
 |- ProvenanceMetadata
 |- InputDeclarations
+|- ServiceStorageDeclarations
+|- ServiceResourceDeclarations
 |- Actions
 |- SnapshotCapability
 |- InboundMigrationEdges
@@ -112,20 +115,20 @@ semantics in the authoring model, but the installation projection separates
 their identity roles. A separate orchestration-supplied local metadata batch is
 installation context, not authoring content.
 
-In `RevisionCoreFormatV1`, capability-specific fixed prerequisites are
-semantics of the capability kind. They are not an author-configurable generic
-requirements block. The exact identity projection is defined by
-[Revision Core Format V1](./revision-canonical.md).
+Capability-specific fixed prerequisites are semantics of the capability kind.
+They are not an author-configurable generic requirements block. Explicit service
+grants and presence prerequisites use the closed shapes in the
+[Revision baseline](./revision-canonical.md), which also owns identity projection.
 
-The displayed normalized model reflects capabilities representable by the
-current Frozen format. The accepted future architecture requires a versioned
-way to declare `ServiceStorage` and stable ServiceStorage-backed Managed Service
-Resources, but this page does not add fields to `RevisionCoreV1` or choose
-authoring syntax, identity encoding, association or locator fields, access or
-prerequisite encoding, compatibility mapping, continuity, retention, discard,
-or persistence representation. Those representations remain formal design
-gates. The broader taxonomy for non-ServiceStorage-backed service-owned
-resources also remains deferred.
+ServiceStorage and ServiceStorage-backed Managed Service Resource declarations
+are part of the current normalized model. Their source fields and identity
+projection are owned by the [Pack source](./pack-source.md) and
+[Revision](./revision-canonical.md) baselines. Session grants are owned by the
+[Hook protocol](./hook-protocol.md); association, continuity, retention and
+publication follow [ServiceStorage execution](../execution/m6-5-service-storage-execution.md)
+and [Instance retirement](../execution/m7-instance-retirement.md). This page does
+not create alternate encodings or implicit synchronization. The broader taxonomy
+for non-ServiceStorage-backed resources remains separately deferred.
 
 ### PR-REQ-0123 - Explicit normalized semantics
 

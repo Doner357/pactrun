@@ -58,7 +58,7 @@ They are not interchangeable generic maps.
 
 ## Informative live-file example
 
-A NetBird Revision may declare a future Managed Service File with semantic
+A Pack wrapping NetBird may declare a ServiceStorage-backed file resource with semantic
 identity `management_config`, associated with storage `netbird_state` and path
 `management.json`. The declaration may exist while the file is absent. The
 service may later create and continuously use the same file, and a user may
@@ -66,11 +66,14 @@ need to inspect or edit that live state. A compatible Revision transition or
 container recreation continues to use that one persistent resource without
 copying or rematerializing it.
 
-This case is not modeled as `Input -> materialize -> synchronize`. Formal
-identity encoding, authoring, authority wire shape, access encoding,
-compatibility representation, retention persistence, and durable representation
-remain future-version design gates. The example does not classify non-
-ServiceStorage-backed resources.
+This case does not use `Input -> materialize -> synchronize`. The
+[Pack source](../contracts/pack-source.md) and [Revision baseline](../contracts/revision-canonical.md)
+own declarations and identity. The [Hook protocol](../contracts/hook-protocol.md),
+[service execution](../execution/m6-5-service-storage-execution.md), and
+[retirement](../execution/m7-instance-retirement.md) own authority, continuity,
+retention and custody. This is a conceptual example, not an assertion that a
+particular NetBird Pack is distributed. It does not classify resources outside
+ServiceStorage.
 
 ### PR-REQ-0090 - Ordinary execution context
 
@@ -79,8 +82,9 @@ current active Input and Secret bindings as one Instance context. Retained
 bindings MUST NOT appear in ordinary execution context. Migration and Cleanup
 MAY receive typed active and retained contexts defined by their own contracts.
 
-PersistenceSchemaV3 stores only the one binding registry; these roles and any
-future execution context are derived from the strict active Revision.
+The [persistence baseline](../persistence/persistence-baseline.md) stores one
+binding registry. Active and retained roles are derived from the strict active
+Revision; execution contexts follow the operation-specific contracts.
 
 **Verification: PR-TEST-0249, PR-TEST-0312, PR-TEST-0322, PR-TEST-0424, PR-TEST-0603.**
 
@@ -147,7 +151,7 @@ sequence on load.
 
 A replacement MUST create a fresh payload even when bytes equal the current
 payload. The old payload remains available while reachable by a current
-binding, an acquired operation-local export observation, or a future durable
+binding, an acquired operation-local export observation, or a durable
 execution or recovery reference. Reclamation MUST NOT invalidate any such
 reference and MUST NOT infer reachability from payload equality.
 
@@ -288,9 +292,10 @@ EffectiveProtection(retained binding) = StoredProtection
 A committed active Secret binding MUST reference a Secret payload. Active
 Normal with a Secret payload is valid and effectively Secret. A retained
 binding has no active declaration and MUST preserve the payload's stored
-protection. Future Migration target publication MUST satisfy this persisted
-invariant, but M2 does not define or execute Migration transformation or
-declassification.
+protection. Migration target publication MUST satisfy this persisted invariant.
+Transformation and declassification follow the
+[Migration contract](../contracts/migrations.md); ordinary Input management
+does not perform them.
 
 Pactrun-owned Input views, inspection, diagnostics, and human output MUST apply effective
 protection and MUST NOT reveal Secret bytes, a preview, digest, length, payload

@@ -16,7 +16,7 @@ Milestone state on this page is planning metadata. It must not be treated as
 evidence that a requirement has automated coverage or that a format or protocol
 is Frozen.
 
-Current integrated work: [Execution Diagnostics and Instance Observability](../development/execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are implemented, verified and integrated into local develop. The current persistence baseline is V11, with explicit exact-V8/V9/V10 upgrade. C (Portable Pack and Revision Export) is [implemented, verified and integrated into local develop](./pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](./design-notes/cli-presentation-baseline.md); see its [implementation record](./cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
+Current work and baseline: see [the handoff](./next-milestone.md) and [F delivery](./f-documentation-status.md). The chronology below preserves earlier milestone evidence and does not authorize retired format readers.
 
 ## Development entry after Spec migration
 
@@ -27,10 +27,15 @@ milestone records remain development guidance, not competing specifications.
 
 The Spec reorganization did not change milestone states. The subsequent
 2026-09-13 M5 approval is recorded in its milestone section and bounded baseline.
-Usage guides remain a later documentation task and do not block specification-
-driven development.
+F now covers usage documentation; see its delivery record for scope and verification.
 
 ## Current baseline
+
+Use the [current handoff](./next-milestone.md) for the supported baseline and
+[F delivery](./f-documentation-status.md) for current work. Development-era
+readers and upgrade chains described below are retired by E.
+
+## Historical pre-E baseline
 
 - `RevisionCoreFormatV1` is Frozen with Rust verification, an independent Node
   24 oracle, golden vectors, and requirement/test traceability.
@@ -858,14 +863,19 @@ implemented and integrated. On 2026-09-19 the operator approved this
 | C | Portable Pack and Revision Export | S0-S3 and export naming [implemented, verified and integrated into local develop](./pack-transport-status.md) |
 | D | Machine-readable CLI Output | S0-S4 [implemented, verified and integrated into local develop](./cli-presentation-status.md) |
 | E | Versioning and Baseline Consolidation | Local engineering delivery complete; [verification and integration scope](./e-implementation-status.md) |
+| F | Documentation and Documentation Site | Implemented and verified; local commit and merge approved on 2026-09-29. [Scope and boundaries](./remaining-capability-milestones.md#f-documentation-and-documentation-site); [delivery and deferred external-author test](./f-documentation-status.md) |
 
-A-E are sequence labels, not M-series identifiers. The original approval recorded
+A-F are sequence labels, not M-series identifiers. F was separately selected on
+2026-09-27 for complete documentation and documentation-site/page design; no
+implementation starts from this planning update. The original approval recorded
 the grouping only; A subsequently received separate design/implementation approval
 and completed verification and local develop integration. B subsequently received
 [S0-S4 implementation approval](./design-notes/object-catalog-history-metadata-baseline.md).
 C received [S0-S3 implementation approval](./design-notes/pack-transport-baseline.md)
-for directory/ZIP Packs and unified installation. D S0-S4 is implemented, verified and integrated; E still requires its own detailed S0 closure. Full
-usage-guide writing is excluded; necessary Spec/help/acceptance material is not.
+for directory/ZIP Packs and unified installation. D S0-S4 and E are implemented
+and locally integrated. Full usage-guide writing was excluded from A-E and is
+now part of F's selected direction; exact coverage and acceptance will be
+settled when entering F. Necessary Spec/help/acceptance material remains required.
 A's S0 established the obligation inventory, and every milestone closes its own
 user-entry-point, observable-result and test evidence. Unowned gaps cannot wait
 silently for E. No calendar date or effort estimate is assigned.
@@ -875,9 +885,10 @@ is complete: all S0-S5 slices are implemented, verified and integrated into loca
 develop after separately authorized commit and merge. Snapshot Capacity and
 Restore Workflow is also [implemented, verified and integrated](./snapshot-capacity-and-restore-status.md),
 including the authorized V10 immutable-data-reference adjustment, full CI and
-real beyond-ceiling round trips. The current develop runtime is V11, with explicit
-exact-V8/V9/V10 upgrade; the [lifecycle record](./managed-object-lifecycle-status.md)
-retains its historical V9 evidence. Shell Adapter / Loader is now
+real beyond-ceiling round trips. V11 and its V8/V9/V10 upgrades are historical;
+current develop uses E's 1.0-alpha.1 baseline without those development upgrade
+chains. The [lifecycle record](./managed-object-lifecycle-status.md) retains its
+historical V9 evidence. Shell Adapter / Loader is now
 [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md),
 including Core V3, YAML V3 and the four-shell runtime/helper matrix. Hook diagnostic
 presentation was assigned to A and is now implemented and verified in its

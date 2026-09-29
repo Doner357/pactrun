@@ -29,9 +29,13 @@ pactrun instance migrate <instance> --to <revision-reference>
     [--termination-grace-ms <milliseconds>]
 ```
 
-Instance and Revision references retain existing spelling and exact resolution.
-target-digest is full sha256 spelling for a target on the selected same-Package
-path. Split the first equals sign, preserving the remaining native path.
+Instance names remain exact. Revision references, path fingerprints and
+Migration Input target digests accept the forms in the
+[ID selector contract](../contracts/cli-id-selectors.md). Resolution fixes complete
+identities before acquisition or execution. A complete target-digest uses
+`sha256:<digest>` for a target on the selected same-Package path; permitted unique
+prefixes resolve within that lineage. Split the first equals sign, preserving
+the remaining native path.
 Duplicate operator writers MUST fail. Inputs are files only: no stdin, inline
 values, parameters, request file, or resume. Timeout ranges/defaults follow M4
 and apply to each Hook invocation; declarative edges launch no process.
@@ -47,7 +51,9 @@ reconciliation. Safe typed output shows exact path, requirements, writers,
 retained dependencies, declassification, and predicted readiness. Inspection
 and Run records MUST NOT disclose Secret values or value-derived digests.
 run show exposes Migration progress and the last committed Revision without
-claiming service coherence. No stable JSON envelope or public Rust API is added.
+claiming service coherence. Versioned JSON/JSONL presentation follows the
+[CLI machine contract](../contracts/cli-machine-interface.md). No public Rust
+API is introduced by this command spelling.
 
 Executing Migration returns 0 only for durable Succeeded, 2 for syntax errors,
 and 1 for failure/cancellation. Successful read-only queries and compile-only
@@ -82,9 +88,13 @@ The fingerprint is SHA-256 over this exact byte sequence:
 The suffix carries intermediate digests in that same order. Endpoints come from
 the resolved request and current source Revision; the fingerprint MUST match
 the reconstructed sequence and every edge MUST still be valid before use. A
-direct path has no suffix. Unknown prefixes, noncanonical spelling, changed
-context, missing edges, or repeated nodes MUST fail, never fall back to another
-route. The full selector must be copied; short hash-prefix lookup is not supported.
+direct path has no suffix. Unknown encoding prefixes, noncanonical spelling,
+changed context, missing edges, or repeated nodes MUST fail, never fall back to
+another route. Full selectors retain this self-contained encoding. The CLI also
+accepts unique `mp1-<8..63 hex digits>` fingerprint prefixes under
+[PR-REQ-0369](../contracts/cli-id-selectors.md#pr-req-0369---unique-object-prefixes).
+That selector layer resolves one complete path before use; it does not change
+the fingerprint bytes, choose an ambiguous path, or introduce a mutable registry.
 IDs are longer for chains so selection needs neither a mutable registry nor an
 exhaustive search of all possible paths. This versioned CLI encoding changes no
 Frozen Revision identity or Hook wire format.
@@ -160,15 +170,18 @@ An incomplete result is not failure or manual recovery. Terminal non-success
 returns 1 with the last committed boundary retained. Broken diagnostic output
 or transient persistence errors must not discard an uncertain owned continuation.
 run list/show recognizes Migration and safely projects its historical progress.
-No JSON envelope, daemon, generic DAG executor, or public Rust API is added.
+Machine presentation uses the [CLI machine contract](../contracts/cli-machine-interface.md).
+No daemon, generic DAG executor or public Rust API is added.
 
 **Verification: PR-TEST-0305, PR-TEST-0307, PR-TEST-0308, PR-TEST-0310,
 PR-TEST-0311, PR-TEST-0316.**
 
 ### PR-REQ-0315 - Target-qualified detached operator file acquisition
 
-Each repeated input-file option MUST name a full target Revision digest and
-declared Input on the exact selected path. Parsing MUST split only the first
+Each repeated input-file option MUST resolve to a complete target Revision
+digest and declared Input on the exact selected path. Accepted target-digest
+prefixes follow the ID selector contract and resolve before source acquisition.
+Parsing MUST split only the first
 equals sign and preserve the remaining host-native path, including additional
 equals signs and non-Unicode native path units. Duplicate target/Input pairs
 are syntax errors. Whole-chain symbolic preflight MUST reserve declared writers

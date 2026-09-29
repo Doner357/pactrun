@@ -52,9 +52,10 @@ boundary. The active Revision and managed bindings remain at the source boundary
 until the edge commit atomically publishes target Revision, staged binding
 state, Managed Input disposition, and a new Instance state version. This is an
 atomic Pactrun-owned state commit. It does not include service-owned filesystem,
-database, Docker volume, or external-resource bytes, and it does not define a
-future persisted representation for ServiceStorage-backed Managed Service
-Resource association, continuity, retention, or discard.
+database, Docker volume, or external-resource bytes. ServiceStorage-backed
+Managed Service Resource association and continuity follow the
+[service execution publication rules](../execution/m6-5-service-storage-execution.md);
+retention and discard also follow the [retirement contract](../execution/m7-instance-retirement.md).
 
 **Verification: PR-TEST-0301, PR-TEST-0304, PR-TEST-0317, PR-TEST-0321.**
 
@@ -96,7 +97,8 @@ Declarative Managed Input transitions MUST express binding continuity and
 disposition only. They MUST NOT perform one-to-many, many-to-one, or arbitrary
 payload transformation. Opaque Managed Input transformation belongs to a typed
 Migration Hook output. Service-owned transformation follows the separate
-future-version direction in PR-REQ-0237 and PR-REQ-0238.
+continuity rules in PR-REQ-0237 and PR-REQ-0238 and the
+[service execution contract](../execution/m6-5-service-storage-execution.md).
 
 **Verification: PR-TEST-0312, PR-TEST-0609.**
 
@@ -181,10 +183,10 @@ Automated examples do not prove subjective quality or arbitrary author intent.
 
 ## ServiceStorage-backed resource continuity
 
-This section records accepted semantic policy for a future versioned design. It
-does not define authoring syntax, Revision Core fields, Hook Protocol authority,
-transition variants, a retained-resource registry, persistence tables, or an
-atomic storage mechanism.
+This section owns service-resource continuity policy. Its representations and
+execution boundaries are defined by the [Revision baseline](./revision-canonical.md),
+[Hook protocol](./hook-protocol.md), [service execution](../execution/m6-5-service-storage-execution.md),
+and [persistence baseline](../persistence/persistence-baseline.md).
 
 ### PR-REQ-0237 - Service-resource continuity and conservative retention
 
@@ -231,11 +233,15 @@ Pactrun-owned committed boundary MUST NOT be presented as proof that the
 service-owned state remains coherent with the source Revision. No inferred
 compensation, automatic Hook replay, or service-state rollback is introduced.
 
-The identity encoding, association schema, compatibility expression,
-continuity and retention representation, discard representation, target-commit
-coordination mechanism, operation-prerequisite representation, user-access
-encoding, and persistence ownership remain future design gates. This section
-does not classify non-ServiceStorage-backed service-owned resources.
+The [Revision baseline](./revision-canonical.md),
+[Hook protocol](./hook-protocol.md), and
+[ServiceStorage execution](../execution/m6-5-service-storage-execution.md) own
+identity, mappings, authority, prerequisites and target-publication coordination.
+[Persistence](../persistence/persistence-baseline.md) and
+[retirement](../execution/m7-instance-retirement.md) own durable custody,
+retention and explicit discard. These concrete mechanisms preserve the
+non-atomic service/managed-state boundary above. This section does not classify
+service-owned resources outside ServiceStorage.
 
 **Verification: PR-TEST-0378, PR-TEST-0382, PR-TEST-0386.**
 
@@ -250,10 +256,9 @@ A locator change, representation or schema change, identity change, split, or
 merge MUST use explicit target-owned semantics. An identity spelling change is
 an identity change and requires an explicit source-to-target mapping; one-to-
 many and many-to-one relationships likewise require explicit mappings and any
-necessary Migration Hook transformation. These semantics do not define the
-future declaration fields, mapping syntax, compatibility algorithm, or durable
-continuity representation. The approved M6.5 forms and algorithms are specified
-in [Core V2](./revision-canonical.md) and
+necessary Migration Hook transformation. Declaration fields, mapping syntax,
+compatibility algorithms, and durable continuity representation are specified
+in the [Revision baseline](./revision-canonical.md) and
 [service execution](../execution/m6-5-service-storage-execution.md).
 
 **Verification: PR-TEST-0371, PR-TEST-0374, PR-TEST-0388.**

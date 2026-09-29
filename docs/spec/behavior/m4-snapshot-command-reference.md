@@ -55,8 +55,10 @@ Among Snapshot subcommands, only capture/restore accept execution-options:
 [--termination-grace-ms <milliseconds>]
 ```
 
-Instance operands keep M2 exact InstanceName semantics. SnapshotId is exactly
-32 lowercase hexadecimal characters; no prefixes or fuzzy lookup. Typed
+Instance operands keep M2 exact InstanceName semantics. A complete SnapshotId has
+32 lowercase hexadecimal characters. CLI operands also accept unique lowercase
+hexadecimal prefixes of at least eight digits under the
+[ID selector contract](../contracts/cli-id-selectors.md); fuzzy lookup is not supported. Typed
 parameters, Protected file/stdin sources, redaction, deadline range checks,
 and interactive-Hook stdin exclusion retain M3 semantics. Bundle stdin/stdout
 is not enabled by parameter stdin. Omitted startup/execution timeouts are
@@ -75,14 +77,18 @@ Capture/Restore return 0 only after durable Succeeded publication. Import and
 export accept filesystem paths only; '-' and force/overwrite/resume are not
 supported. The development-era storage upgrade command is retired by E; an
 unsupported persistence store is refused without an upgrade or data deletion.
-Delete, machine-output envelopes, raw manifest, payload preview, and stable
-public Rust APIs are outside M4.
+Historical M4 scope excluded deletion and machine-output envelopes; their
+current owners are [managed-object lifecycle](./managed-object-lifecycle.md)
+and the [CLI machine interface](../contracts/cli-machine-interface.md).
+Raw manifest/payload previews and stable public Rust APIs are outside this command contract.
 
 **Verification: PR-TEST-0268, PR-TEST-0269, PR-TEST-0270, PR-TEST-0271, PR-TEST-0272, PR-TEST-0273, PR-TEST-0274.**
 
-S7 implements the Snapshot commands through the existing typed Compiler,
-Admission, owner continuation and dedicated result publishers. Both V1 and V2
-have fresh-process import/verify/export/Restore journeys with real service bytes.
+Historical S7 evidence: that delivery exercised numeric V1 and V2
+import/verify/export/Restore journeys with real service bytes through the typed
+Compiler, Admission, owner continuation, and result publishers. The
+[E delivery record](../../development/e-implementation-status.md) owns current
+string-baseline qualification; these earlier results do not authorize numeric readers.
 
 ### PR-REQ-0302 - Snapshot inspection, verification, and diagnostics
 
@@ -99,7 +105,9 @@ for a particular target. A stored Snapshot may be valid but not executable by
 this build. An unspecified target MUST NOT be reported as definitely eligible.
 
 verify MUST explicitly check the selected stored manifest and complete payload
-closure with its original V1/V2 verifier. It creates no Run and does not repair
+closure with the supported [integrity baseline](../contracts/snapshot-integrity.md)
+verifier. Numeric development formats are refused without conversion. It creates
+no Run and does not repair
 or reconcile. If producer semantics are unavailable but intrinsic/content
 verification completes, return 0 and explicitly report relational validation
 not_evaluated. If capacity/resource limits prevent completion, return 1 and

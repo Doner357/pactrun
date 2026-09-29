@@ -12,7 +12,7 @@ This extends lifecycle representation without modifying Frozen Hook/Core formats
 <!-- spec-navigation:start -->
 Related contracts: [Cleanup](../contracts/hooks-recovery-and-cleanup.md),
 [ServiceStorage custody](./m6-5-service-storage-execution.md), and
-[V8 persistence](../persistence/persistence-baseline.md).
+[Persistence baseline](../persistence/persistence-baseline.md).
 Delivery evidence: [M7 implementation status](../../development/m7-implementation-status.md).
 <!-- spec-navigation:end -->
 
@@ -34,7 +34,8 @@ after owner loss; only Pactrun-owned finalization may be retried.
 
 **Verification: PR-TEST-0389, PR-TEST-0391, PR-TEST-0397, PR-TEST-0399, PR-TEST-0404, PR-TEST-0405, PR-TEST-0407, PR-TEST-0413, PR-TEST-0425, PR-TEST-0447.**
 
-Coverage includes pure evidence/risk policy, durable refusal, real V1/V2 Cleanup
+Coverage includes pure evidence/risk policy, durable refusal, real service-free
+and service-authority Cleanup,
 and fresh-process loss around the Cleanup boundary. Finalization interruption
 tests cover persisted incarnation and absence evidence. The M7 delivery record
 separately tracks remaining execution/concurrency scenarios and platform results;
@@ -140,7 +141,9 @@ Execution options are `--authorize-recovery-override`, `--startup-timeout-ms`,
 timeouts are unlimited; termination grace defaults to 5000 ms. They do not create
 a Hook for Abandon or finalization-only work. Cleanup accepts no parameters.
 Duplicate, unknown, malformed and unsupported flags MUST fail before execution.
-No generic force flag, stable JSON, replayable Plan or path-based discard exists.
+No generic force flag, replayable Plan or path-based discard exists. Versioned
+JSON/JSONL presentation follows the [CLI machine contract](../contracts/cli-machine-interface.md)
+and does not change these commands' permissions or lifecycle semantics.
 
 Planning and inspection MUST be read-only: no Run, launch, pin or writer admission
 may result. Execution resolves the name once to exact Instance identity/version;

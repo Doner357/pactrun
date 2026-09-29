@@ -8,7 +8,7 @@ title: Execution Diagnostics
 
 <!-- spec-navigation:start -->
 Read [Run behavior](./actions-plans-and-runs.md), [Hook Protocol](../contracts/hook-protocol.md)
-and [V11 persistence](../persistence/persistence-baseline.md). Delivery is recorded
+and [Persistence baseline](../persistence/persistence-baseline.md). Delivery is recorded
 in the [implementation status](../../development/execution-diagnostics-observability-status.md).
 <!-- spec-navigation:end -->
 

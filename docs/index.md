@@ -3,33 +3,57 @@ title: Pactrun
 slug: /
 ---
 
-# Pactrun Spec and Development
+# Manage Packs and Instances
 
-Pactrun's documentation currently focuses on defining the product and enabling
-its implementation. This is not yet a beginner usage manual.
+Pactrun installs immutable Pack revisions and manages long-lived Instances on
+your local machine. Packs define Actions, Snapshots, Migrations, and Cleanup.
 
-## Find the right entry
+## Choose a starting point
 
-- **Understand the contracts:** [Pactrun Spec](./spec/index.md).
-- **Find a term or a contract:** [vocabulary](./spec/glossary.md) and [catalog](./spec/catalog.md).
-- **Start a development task:** [Development](./development/index.md) and [task reading paths](./development/reading-paths.md).
-- **Continue the roadmap:** [current baseline and M6.5 handoff](./development/next-milestone.md).
-- **Review this migration:** [scope and preservation evidence](./development/spec-migration-review.md).
+| I want to… | Start here |
+| --- | --- |
+| Get Pactrun ready to run | [Install and verify Pactrun](./guides/installation.md) |
+| Try an already verified executable | [First Instance](./introduction.md) |
+| Install and operate a Pack | [User guides](./guides/index.md) |
+| Write a Pack or Hook | [Pack author guide](./package-authors/index.md) |
+| Look up commands and output | [Command reference](./pactrun-users/operations/command-and-output-reference.md) |
+| Understand an exact product rule | [Specification](./spec/index.md) |
+| Change Pactrun itself | [Development](./development/index.md) |
 
-## One specification
+## Find a document
 
-Normative text under Spec defines product behavior. Development guides explain
-how to work from those rules. The roadmap records work order, and implementation
-records describe completed work; neither independently defines behavior.
-Old document paths remain compatibility entries. Website and text publications
-are copies of the same English source, not separate specifications.
+Use **Search** in the navigation bar to search commands, error text, concepts,
+and requirement IDs. Search starts with current documents. Select **All states**
+to include historical records and superseded compatibility pages. Filters and
+queries can be shared through the search URL.
 
-## Usage guides come later
+Users can stay in the [user reference](./pactrun-users/reference/index.md).
+Authors can look up [field values and defaults](./package-authors/reference/pack-fields.md)
+or [service and Migration fields](./package-authors/reference/service-fields.md)
+without leaving their section. Advanced reader references stay synchronized with
+the product rules; their maintainer sources are optional.
 
-[User and Pack author guides](./guides/index.md) retain their places but do not
-provide instructions yet. We will complete them in a separate documentation
-phase rather than making beginners learn the implementation model first.
+## Before using managed data
 
-The documentation migration does not announce a release, implement M5, or add
-new agent runtime APIs. Check the development handoff before assuming a specified
-capability is available.
+Run only Packs whose Hooks you trust. Hooks execute host programs and can affect
+service data. Use a separate storage root for experiments, inspect plans, and
+keep independent backups of important service data.
+
+## Documentation authority
+
+English Markdown is the source for both this website and the text interface.
+Users and authors can follow their own guides and references. This local
+candidate is not a public-release announcement; use the
+[installation guide](./guides/installation.md) to obtain a trusted executable.
+
+<details>
+<summary>For Pactrun maintainers (optional)</summary>
+
+[Spec](./spec/index.md) owns product rules. Guides explain how to use them.
+[Current baseline and work status](./development/next-milestone.md) records
+implementation availability. Historical delivery records preserve the evidence
+for their own source revisions.
+
+See [release readiness](./development/release-readiness.md) before publishing Pactrun itself.
+
+</details>
