@@ -6,9 +6,9 @@ title: Documentation edition 1 - review (moved)
 
 **Status: Informative compatibility entry; no independent specification.**
 
-Read [the current document](../development/history/documentation-edition-1.md). Its original rule IDs, contract status,
-and verification evidence have been preserved. This page retains old link
-anchors only; do not use it as a second source of product behavior.
+Read [the current document](../development/history/documentation-edition-1.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
 ## Previous section links
 

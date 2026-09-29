@@ -4,17 +4,57 @@ const sidebars: SidebarsConfig = {
   docsSidebar: [
     'index',
     {
+      type: 'category', label: 'Users', collapsed: true, items: [
+        'guides/index', 'guides/installation', 'introduction', 'guides/use-pack',
+        {type: 'category', label: 'Choose a task', collapsed: false, items: [
+          'guides/configure-inputs', 'guides/run-and-diagnose', 'guides/service-resources',
+          'pactrun-users/operations/snapshots-migrations-and-recovery', 'guides/pack-management',
+          'guides/recovery', 'guides/retirement', 'guides/data-location',
+        ]},
+        {type: 'category', label: 'Concepts', items: [
+          'pactrun-users/concepts/packages-revisions-and-instances',
+          'pactrun-users/concepts/inputs-secrets-and-readiness',
+          'pactrun-users/concepts/actions-plans-and-runs',
+        ]},
+        {type: 'category', label: 'Reference', collapsed: false, items: [
+          'pactrun-users/reference/index', 'pactrun-users/reference/vocabulary',
+          'pactrun-users/operations/command-and-output-reference', 'pactrun-users/operations/invoke-reference',
+          'pactrun-users/reference/command-details', 'pactrun-users/reference/snapshot-details',
+          'pactrun-users/reference/migration-details', 'pactrun-users/reference/resource-details',
+          'pactrun-users/reference/retirement-details', 'pactrun-users/reference/object-lifecycle',
+          'pactrun-users/reference/machine-output', 'pactrun-users/reference/snapshot-limits',
+        ]},
+      ],
+    },
+    {type: 'category', label: 'Pack authors', items: [
+          'package-authors/index', 'package-authors/setup',
+          'package-authors/fundamentals/authoring-model',
+          'package-authors/fundamentals/actions-inputs-and-parameters',
+          'package-authors/fundamentals/recipes-and-runtime-content',
+          'package-authors/managed-capabilities/hooks-recovery-and-cleanup',
+          {type: 'category', label: 'Optional capability tutorials', items: [
+            'package-authors/managed-capabilities/snapshots-and-managed-data',
+            'package-authors/managed-capabilities/migrations',
+          ]},
+          {type: 'category', label: 'Reference', collapsed: false, items: [
+            'package-authors/reference/pack-fields', 'package-authors/reference/service-fields',
+            'package-authors/reference/shell-loader', 'package-authors/reference/hook-protocol',
+            'package-authors/reference/source-format', 'package-authors/reference/revision-format',
+            'package-authors/reference/snapshot-limits',
+          ]},
+    ]},
+    {
       type: 'category',
       label: 'Pactrun Spec',
-      collapsed: false,
+      collapsed: true,
       items: [
         'spec/index', 'spec/glossary', 'spec/catalog',
         {type: 'category', label: 'Foundations', items: [
           'spec/foundations/index',
+          'spec/foundations/system-model',
           'spec/foundations/identity-and-state',
           'spec/foundations/resources-and-versioning',
           'spec/foundations/product-versioning-and-compatibility',
-          'spec/foundations/system-model',
         ]},
         {type: 'category', label: 'Observable behavior', items: [
           'spec/behavior/index',
@@ -35,6 +75,7 @@ const sidebars: SidebarsConfig = {
           'spec/contracts/authoring-model',
           'spec/contracts/error-taxonomy-v1',
             'spec/contracts/cli-machine-interface',
+          'spec/contracts/cli-id-selectors',
           'spec/contracts/hook-protocol',
           'spec/contracts/hooks-recovery-and-cleanup',
           'spec/contracts/migrations',
@@ -51,6 +92,7 @@ const sidebars: SidebarsConfig = {
           'spec/execution/execution-and-concurrency',
           'spec/execution/m4-snapshot-lifecycle-approval-baseline',
           'spec/execution/m5-migration-execution',
+          'spec/execution/m5-migration-execution',
           'spec/execution/m7-instance-retirement',
           'spec/execution/recovery-and-reconciliation',
         ]},
@@ -61,7 +103,7 @@ const sidebars: SidebarsConfig = {
           {type: 'category', label: 'Shell Adapter / Loader', items: [
             'spec/contracts/shell-loader',
           ]},
-          {type: 'category', label: 'M6.5 Candidate Contracts', items: [
+          {type: 'category', label: 'ServiceStorage', items: [
           'spec/execution/m6-5-service-storage-execution',
           'spec/behavior/m6-5-service-storage-command-reference',
         ]},
@@ -72,9 +114,12 @@ const sidebars: SidebarsConfig = {
       label: 'Development',
       items: [
         'development/index', 'development/product-overview',
-        'development/reading-paths', 'development/next-milestone',
-        'development/implementation-roadmap', 'development/development-and-verification',
-        'development/release-readiness',
+        'development/next-milestone', 'development/reading-paths',
+        'development/implementation-guidance', 'development/development-and-verification',
+        'development/documentation-style', 'development/f-documentation-status',
+        'development/release-readiness', 'development/design-references',
+        {type: 'category', label: 'Delivery records and historical scope', items: [
+        'development/implementation-roadmap',
         'development/product-completion-milestones',
         'development/remaining-capability-milestones',
         'development/execution-diagnostics-observability-status',
@@ -88,12 +133,13 @@ const sidebars: SidebarsConfig = {
         'development/managed-object-lifecycle-status',
           'development/snapshot-capacity-and-restore-status',
           'development/shell-adapter-loader-status',
-        'development/implementation-guidance', 'development/m4-implementation-status',
+        'development/m4-implementation-status',
         'development/m6-implementation-status',
         'development/m6-5-implementation-status',
         'development/m7-implementation-status',
         'development/design-notes/m7-cleanup-deletion-implementation-baseline',
         'development/spec-migration-review',
+        ]},
         {type: 'category', label: 'Design syntheses and history', items: [
             'development/design-notes/snapshot-capacity-and-restore-baseline',
             'development/design-notes/shell-adapter-loader-baseline',
@@ -110,31 +156,14 @@ const sidebars: SidebarsConfig = {
           'development/design-notes/m6-recovery-implementation-baseline',
           'development/design-notes/m6-5-servicestorage-baseline',
           'development/design-notes/m3-action-execution-approval-baseline',
-          'development/design-references', 'development/history/documentation-edition-1',
+          'development/history/documentation-edition-1',
+          'development/history/handoff-before-consistency-review-2026-09-28',
+          'development/history/guidance-before-consistency-review-2026-09-28',
           'development/history/m8-recipes-rejected',
         ]},
       ],
     },
-    {
-      type: 'category', label: 'Usage Guides (Planned)', items: [
-        'guides/index', 'introduction',
-        {type: 'category', label: 'Users (Planned)', items: [
-          'pactrun-users/concepts/actions-plans-and-runs',
-          'pactrun-users/concepts/inputs-secrets-and-readiness',
-          'pactrun-users/concepts/packages-revisions-and-instances',
-          'pactrun-users/operations/command-and-output-reference',
-          'pactrun-users/operations/snapshots-migrations-and-recovery',
-        ]},
-        {type: 'category', label: 'Pack authors (Planned)', items: [
-          'package-authors/fundamentals/actions-inputs-and-parameters',
-          'package-authors/fundamentals/authoring-model',
-          'package-authors/fundamentals/recipes-and-runtime-content',
-          'package-authors/managed-capabilities/hooks-recovery-and-cleanup',
-          'package-authors/managed-capabilities/migrations',
-          'package-authors/managed-capabilities/snapshots-and-managed-data',
-        ]},
-      ],
-    },
+
   ],
 };
 

@@ -220,9 +220,9 @@ binary64 using round-to-nearest, ties-to-even. Overflow, including `1e400`, is
 `invalid_number`. Underflow to zero is allowed. Negative zero from `-0` or
 `-0.0` semantically normalizes to positive zero before JCS.
 
-Fixed integral schema values, including format and protocol versions, use the
-same exact mathematical integral check. A Hook protocol version must be in
-`1..=2^53-1`; it is not fixed to HookProtocol.
+Fixed integral schema values use the same exact mathematical integral check.
+Format and Hook protocol versions in the current baseline are FormatVersion
+strings, not numbers; the supported marker is `"1.0-alpha.1"`.
 
 **Verification: PR-TEST-0006, PR-TEST-0007.**
 
@@ -234,7 +234,7 @@ Every Hook uses this closed identity-bearing representation:
 
 ```text
 HookV1
-|- protocol_version: PositiveVersion
+|- protocol_version: FormatVersion string
 |- launch:
 |  |- { kind: direct, executable: ContentId }
 |  `- {
@@ -354,9 +354,9 @@ This requirement does not implicitly define one.
 
 **Verification: PR-TEST-0125.**
 
-This requirement defines runtime behavior but is intentionally not claimed by
-Revision Core golden vectors. It requires future Compiler, Admission, and
-Executor integration tests.
+Revision Core golden vectors do not establish this runtime behavior. The
+Compiler, Admission, and Executor integration tests listed below cover it
+separately from canonical-byte verification.
 
 **Verification: PR-TEST-0081, PR-TEST-0090, PR-TEST-0095, PR-TEST-0101,
 PR-TEST-0102, PR-TEST-0134, PR-TEST-0135, PR-TEST-0136, PR-TEST-0137,
@@ -560,8 +560,9 @@ Ordinary Action/Capture/Restore references use `current/active`. For Restore,
 current service authority is the target Instance's existing live storage, while
 Input authority is still the staged Snapshot binding view. Migration references
 use `source/active`, `source/retained`, or `target/active`; `current` is forbidden
-there. Cleanup can encode `current/active` and `current/retained`, but Cleanup
-execution remains unsupported until M7. Source/active authority resolves against
+there. Cleanup uses `current/active` and `current/retained` under the
+[Instance retirement contract](../execution/m7-instance-retirement.md).
+Source/active authority resolves against
 the exact source Core; source/retained authority resolves the explicitly named
 retained association and its last declaration. A grant need not consume a
 mapping source: an explicitly granted source Storage can contain a resource
@@ -757,6 +758,10 @@ requiring an installed PATH alias or copying Pactrun into the Pack.
 Pack Source YAML baseline explicitly uses the string `source_format: "1.0-alpha.1"` and otherwise
 retains YAML baseline's closed schema, defaults, scalar handling and source acquisition.
 Its revision projection inserts `format_version: "1.0-alpha.1"`. There is no inferred upgrade
-of a V1/V2 source or installed Revision, and no interpreter argument override on
-the shell_loader alternative. YAML remains Candidate, not a public compatibility
-promise. Availability is tracked in the [implementation record](../../development/shell-adapter-loader-status.md).
+of a development-era source or installed Revision, and no interpreter argument
+override on the shell_loader alternative. Baseline evolution and formal promotion
+follow [product versioning](../foundations/product-versioning-and-compatibility.md).
+The [current handoff](../../development/next-milestone.md) links availability and
+source-qualified evidence; the original
+[Loader implementation record](../../development/shell-adapter-loader-status.md)
+retains its historical scope.

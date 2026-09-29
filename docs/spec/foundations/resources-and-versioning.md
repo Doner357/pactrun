@@ -99,9 +99,10 @@ durably pinned by an accepted Run. A compile-only Plan MUST NOT prevent
 deletion. Historical Run identity and Snapshot provenance MUST NOT permanently
 prevent Revision deletion.
 
-PersistenceSchemaV3 represents the active-Instance guard as an exact
-`ON DELETE RESTRICT` foreign key. This relational guard does not define the
-future M7 Instance deletion workflow.
+The [Persistence baseline](../persistence/persistence-baseline.md) represents
+the active-Instance guard with an exact `ON DELETE RESTRICT` foreign key. The
+[Instance retirement contract](../execution/m7-instance-retirement.md) separately
+owns the deletion workflow; a relational guard does not perform Cleanup.
 
 **Verification: PR-TEST-0459, PR-TEST-0465, PR-TEST-0470.**
 
@@ -113,8 +114,8 @@ references or reachability rather than interpreting operation names or service
 semantics. This rule governs Pactrun-owned content stores; it does not authorize
 Pactrun to delete service-owned live resources. In particular, abandonment does
 not make ServiceStorage-backed state collectible as unreferenced storage. The
-non-destruction policy and its future durable representation are separate design
-concerns defined by PR-REQ-0247.
+non-destruction policy in PR-REQ-0247 and its durable implementation in the
+[retirement contract](../execution/m7-instance-retirement.md) preserve that boundary.
 
 **Verification: PR-TEST-0461, PR-TEST-0463, PR-TEST-0464, PR-TEST-0467, PR-TEST-0469, PR-TEST-0471, PR-TEST-0474.**
 
@@ -233,25 +234,27 @@ helpers MUST remain adapters to that protocol.
 
 ### PR-REQ-0240 - Future ServiceStorage version gates
 
-The accepted `ServiceStorage` and ServiceStorage-backed Managed Service Resource
-architecture MUST NOT be added to the closed `RevisionCoreFormatV1` schema or
-the Frozen `HookProtocolV1` authority union. A formal identity-bearing storage
-or resource declaration requires a future Revision Core format. A formal
-persistent service-storage Session authority, if required, requires a future
-Hook Protocol version.
+ServiceStorage declarations and Session authorities MUST follow their explicitly
+versioned [Revision](../contracts/revision-canonical.md) and
+[Hook](../contracts/hook-protocol.md) contracts. Implementers MUST NOT add them
+retroactively to an older closed schema or authority union. The current
+complete baselines include these capabilities; the retired numeric development
+formats are not alternative supported readers.
 
 Revision Core and Hook Protocol remain independent version domains. A future
 Revision Core format MUST NOT imply that every Hook uses the same-numbered or a
-new Hook Protocol version. PR-REQ-0235 through PR-REQ-0248 close the
-representation-independent ServiceStorage-backed semantics. The declaration,
-authority, compatibility, access, prerequisite, continuity, retention, discard,
-migration-coordination, Cleanup coordination, non-destruction, and durable-
-representation encodings and mechanisms remain formal design gates rather than
-properties of V1. Whether non-ServiceStorage-backed service-owned resources use
-the same abstraction remains a separate taxonomy gate. M6.5 supplies the
-independently versioned [Core V2](../contracts/revision-canonical.md) and
-[Hook V2](../contracts/hook-protocol.md) representations; M7 still owns
-destructive finalization, Cleanup receipts and abandonment.
+new Hook Protocol version. PR-REQ-0235 through PR-REQ-0248 own the resource
+semantics. Their implemented declaration, authority and publication mechanisms
+are owned by the current baselines and
+[ServiceStorage execution](../execution/m6-5-service-storage-execution.md);
+[retirement](../execution/m7-instance-retirement.md) owns Cleanup receipts,
+finalization and abandonment custody.
+
+Whether resources outside ServiceStorage use the same abstraction remains a
+separate taxonomy gate. Completion of the bounded ServiceStorage contracts does
+not authorize that broader design. The historical requirement heading is retained
+for stable references; it does not describe these implemented mechanisms as
+pending work.
 
 **Verification: PR-TEST-0331, PR-TEST-0369, PR-TEST-0385.**
 
@@ -279,8 +282,7 @@ the bundle-defined portable non-identity metadata required by
 Pre-M1-D classifies portable-capable metadata but does not define an Export
 Bundle Format, require any metadata kind to be carried, or define application,
 conflict, replacement, or merge semantics for imported metadata. Those choices
-are now owned by [Pack bundle V1](../contracts/pack-distribution.md)
-and the [Pack transport contract](../contracts/pack-distribution.md), not by the
+are now owned by the [Pack distribution baseline](../contracts/pack-distribution.md), not by the
 historical metadata classification alone.
 
 **Verification: PR-TEST-0538, PR-TEST-0539, PR-TEST-0540, PR-TEST-0544, PR-TEST-0594.**
@@ -297,9 +299,9 @@ Local aliases, local current notes, local current trust assessments, local
 install timestamps, and source filesystem paths MUST be local-only.
 Portable-capable MUST NOT be equated with identity-bearing or automatically
 exported. Local persistence MUST NOT be treated as evidence that a kind is
-local-only. Export serialization, selection, carriage, import conflict, and
-merge policy remain future Export Bundle Format work and MUST NOT alter
-Revision identity.
+local-only. Export serialization, selection, carriage, import conflict and
+merge policy are owned by the [Pack distribution contract](../contracts/pack-distribution.md)
+and MUST NOT alter Revision identity.
 
 **Verification: PR-TEST-0058.**
 

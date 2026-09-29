@@ -68,7 +68,7 @@ Inputs, Actions, Snapshot Capture and Restore, inbound Migration edges, and
 Cleanup. Their semantic identifiers and values project to the corresponding
 Frozen typed fields. The subtree uses the Frozen semantic property and variant
 spellings, but MUST NOT contain `format_version`; projection inserts exact
-Revision Core format version `1`. The `runtime_content.files` source record
+Revision Core format version `"1.0-alpha.1"`. The `runtime_content.files` source record
 replaces the Frozen derived `blob_digest` with `source`, and omits `kind`
 because M2 supports only `regular_file`; `id`, logical `path`, and `executable`
 retain their Frozen meanings. A source record MUST NOT supply `blob_digest` or
@@ -129,8 +129,9 @@ be within `-(2^53-1)` through `+(2^53-1)`; `1`, `1.0`, and `1e0` therefore
 normalize to the same integer. Float defaults convert the raw decimal once to
 finite IEEE-754 binary64 using round-to-nearest, ties-to-even; overflow is
 invalid, underflow to zero is allowed, and negative zero normalizes to positive
-zero. Fixed integral fields, including Hook protocol versions, use exact
-mathematical-integral validation without a binary64 intermediate.
+zero. Fixed integral fields use exact mathematical-integral validation without a
+binary64 intermediate. Hook `protocol_version` is a FormatVersion string; the
+current supported value is `"1.0-alpha.1"`, and numeric markers are rejected.
 `source_format` is a FormatVersion string. Only `1.0-alpha.1` is supported;
 quoted and unquoted string spellings normalize identically. Numeric, malformed
 and unsupported markers are rejected without trying another schema.
@@ -354,28 +355,28 @@ valid or installable.
 
 **Verification: PR-TEST-0069, PR-TEST-0072.**
 
-## Candidate evolution and exclusions
+## Baseline evolution and installation scope {#candidate-evolution-and-exclusions}
 
-Unsupported source versions fail explicitly. Because this contract is a
-Candidate, future review may replace it before a public compatibility promise;
-implementations MUST nevertheless follow the exact current version rather than
-guessing unknown syntax. M2 implements authoring and installation only. Recipe
-programs, `InstallContext`, network or generated authoring, stable public APIs,
-and runtime execution of Action, Snapshot, Migration, or Cleanup capabilities
-remain outside this slice.
+Unsupported source versions fail explicitly. Implementations MUST follow the
+exact current baseline rather than guessing unknown syntax. Changes and formal
+promotion follow [product versioning](../foundations/product-versioning-and-compatibility.md).
+Source acquisition and installation do not execute Actions, Capture, Restore,
+Migration, or Cleanup; those capabilities have separate operation contracts.
+Recipes and `InstallContext` are retired. Network/generated authoring and a
+stable public authoring API remain outside this source contract.
 
 
 ### PR-REQ-0320 - YAML V2 projection and examples
 
-`pactrun.yaml` uses the exact V1 top-level schema with
+`pactrun.yaml` uses the closed top-level schema above with
 `source_format: "1.0-alpha.1"`. `package_id`, runtime source acquisition and portable
-metadata retain V1 semantics. `revision` is Core baseline without format_version;
-the projector inserts the exact baseline string. Every V1 scalar-style, raw numeric-token, duplicate-key,
+metadata retain their declared semantics. `revision` is Core baseline without format_version;
+the projector inserts the exact baseline string. Every scalar-style, raw numeric-token, duplicate-key,
 tag/alias/anchor/merge-key, null, unknown-field and source-root rule remains.
 There is no include/template language, arbitrary host-path declaration, inferred
 Package lineage, automatic Core-version selection, or Recipe support here.
 
-All V1 authoring defaults remain. Additionally:
+The defaults above also apply to service-capable Packs. Additionally:
 
 | Position | Default |
 | --- | --- |
@@ -389,8 +390,8 @@ Storage/resource identity, locator, kind, storage_id, mapping kind/operands,
 authority mode/reference and prerequisite presence have no defaults. Missing
 resource-create presence is also invalid; use any/present/absent explicitly.
 Missing transition arrays still fail target-coverage validation when targets exist.
-No new portable_metadata presentation/provenance target variants are added;
-existing V1 variants address corresponding V2 capabilities only. Services and
+Service declarations add no portable_metadata presentation/provenance target
+variants; the existing variants address their declared capabilities. Services and
 resources use their semantic IDs for display until a separately approved
 presentation extension exists. Metadata is not an operational state channel.
 
@@ -469,7 +470,7 @@ multiple sources and one target. Neither example silently copies bytes.
 | file resource without storage_id/kind/locator | missing required field |
 | locator `../outside`, `C:/data`, `db\\state`, `CON`, or `db/name ` | invalid portable locator |
 | locators `DB/state` and `db/state` in one storage | portable alias collision |
-| Hook 1 with service_access | unsupported authority/version combination |
+| numeric Hook protocol_version 1, with or without service_access | unsupported development protocol; no fallback |
 | presence prerequisite but no read/write grant | valid prerequisite only; grants no authority |
 | omitted mappings for a target resource | missing target writer |
 | two transforms naming the same target | writer conflict |

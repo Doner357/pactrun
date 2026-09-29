@@ -1,8 +1,12 @@
 # Integrate a Hook
 
-**Status: Planned usage-guide placeholder.** This page does not provide
-operational instructions. Complete it in the later usage-documentation phase.
+Use [Hook integration](../package-authors/managed-capabilities/hooks-recovery-and-cleanup.md)
+and the [Shell Loader tutorial](../package-authors/fundamentals/authoring-model.md).
+For direct protocol clients, read the author-facing
+[message reference](../package-authors/reference/hook-protocol.md) and
+[service authority/transition guide](../package-authors/reference/service-fields.md).
 
-For exact existing contracts, see [Spec](../spec/contracts/hook-protocol.md). To develop Pactrun itself,
-use [the development route](./develop-pactrun.md). A specified contract does not
-prove that the corresponding operation is implemented or authorized.
+Track granted Session authority, explicit output registration, cancellation,
+risk acknowledgment, and completion. A normal process exit alone is not proof
+of durable success. Keep Secrets out of diagnostics and never simulate
+ServiceStorage with Inputs or Workspace.

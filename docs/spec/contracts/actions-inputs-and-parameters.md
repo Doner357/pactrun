@@ -9,7 +9,7 @@ title: Actions, Inputs, and Parameters
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Read the author-facing declarations and the distinctions between managed bindings, invocation parameters, and future service-resource exposure.
+Read the author-facing declarations and the distinctions between managed bindings, invocation parameters, and service-resource exposure.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.

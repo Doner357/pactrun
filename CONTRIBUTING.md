@@ -23,7 +23,7 @@ not every urgent or small change. See the
   contracts. Do not create placeholder traceability.
 - New functions and tests use product concepts, behavior and invariants, not
   milestone/slice markers in names or executable content. Existing occurrences
-  wait for baseline consolidation; do not mass-rename unrelated code now.
+  are reviewed when working in the affected area; do not mass-rename unrelated code.
   Real format/protocol versions and stable requirement/test IDs are not milestones.
 - Record design rationale with the owning rule or a stable decision reference:
   problem, reason, material alternatives, assumptions/evidence and conditions for
@@ -45,9 +45,10 @@ records, and work-order guidance. Old paths are compatibility entries, not
 additional authority. Read the [Spec map](docs/spec/index.md) and the
 [development entry](docs/development/index.md).
 
-Usage guides for users, Pack authors, and operation-oriented agents remain
-placeholders until a later documentation phase. Development guides and
-[agent development navigation](docs/agents/develop-pactrun.md) are available now.
+Users, Pack authors, and operation-oriented agents have complete reading entries:
+[user onboarding](docs/guides/index.md), [authoring](docs/package-authors/index.md),
+and [agent task selection](docs/agents/index.md). Product implementers use
+[agent development navigation](docs/agents/develop-pactrun.md).
 Agent sources are excluded from human HTML pages and navigation. Generated text
 and HTML are publication copies, never additional authority. Personal developer
 preferences do not belong in the product specification.

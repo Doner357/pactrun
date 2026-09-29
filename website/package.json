@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node scripts/prepare-text.mjs && docusaurus start",
-    "build": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs && node scripts/prepare-text.mjs && docusaurus build",
-    "test:docs": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs",
+    "build": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs scripts/catalog.test.mjs scripts/tutorial-setup.test.mjs scripts/role-reading.test.mjs scripts/reader-transform.test.mjs scripts/reading-order.test.mjs && node scripts/prepare-text.mjs && docusaurus build",
+    "test:docs": "node --test scripts/text-docs.test.mjs scripts/spec-docs.test.mjs scripts/catalog.test.mjs scripts/tutorial-setup.test.mjs scripts/role-reading.test.mjs scripts/reader-transform.test.mjs scripts/reading-order.test.mjs",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit"

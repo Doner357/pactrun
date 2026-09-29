@@ -9,7 +9,7 @@ title: Hooks, Recovery, and Cleanup
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Understand semantic Hook authority, risk reporting, and Cleanup obligations. Consult the wire specification for encoding and the roadmap for deferred runtimes.
+Understand semantic Hook authority, risk reporting, and Cleanup obligations. Consult the wire specification for encoding and the current handoff for availability.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.
@@ -36,8 +36,8 @@ contract. See [Revision Core Format V1](./revision-canonical.md).
 
 Direct Hooks, helper CLIs, wrappers, and SDKs MUST converge on one versioned,
 language-neutral canonical Hook Protocol. An adapter MUST NOT define a second
-semantic API. The exact Frozen V1 wire and state-machine contract is defined by
-[Hook Protocol V1](./hook-protocol.md).
+semantic API. The exact wire and state-machine contract is defined by the
+[Hook protocol baseline](./hook-protocol.md).
 
 **Verification: PR-TEST-0093.**
 
@@ -47,17 +47,16 @@ A `HookSessionSpec` MUST provide only the Instance context, parameters, managed
 data authorities, protocol-version-defined facilities, and I/O contract granted
 to that execution. Requests outside Pactrun-mediated authority MUST be rejected.
 
-The exact Frozen V1 Session authority representation is defined by
-[Hook Protocol V1](./hook-protocol.md).
-
-A future Hook may need explicit authority for persistent `ServiceStorage` or a
-ServiceStorage-backed Managed Service Resource. That authority is distinct from
-an execution-scoped Workspace and is not present in the Frozen V1 authority
-union. Its handles, paths, visibility, access, storage layout, and wire
-representation remain future design work and require a future Hook Protocol
-version if exposed on the wire.
-Revision Core and Hook Protocol versions remain independent, so a future
-Revision Core format does not force every Hook to use a new protocol.
+The [Hook protocol baseline](./hook-protocol.md) defines the exact Session
+authority representation, including explicitly granted persistent service
+authorities. ServiceStorage and ServiceStorage-backed resource grants remain
+distinct from execution-scoped Workspace. Their handles, access and prerequisites
+follow the closed declarations and the
+[ServiceStorage execution contract](../execution/m6-5-service-storage-execution.md).
+A Hook without a grant does not gain authority merely because the capability is
+implemented. Revision Core and Hook Protocol remain independent version domains;
+a Revision format change does not itself force a Hook protocol change or permit
+rewriting an older published protocol.
 
 The Session MUST NOT let a Hook browse arbitrary managed stores, read another
 Instance's managed data, delete arbitrary resources, invoke another Action,
@@ -135,7 +134,7 @@ host-device sandbox.
 
 Hook Protocol transport discovery is a stable Pack-facing runtime-integration
 contract that selects the dedicated stream required by PR-REQ-0205 without
-changing the Frozen `HookProtocolV1` framing, message schema, or state machine.
+changing the supported Hook protocol framing, message schema or state machine.
 Before launching a Hook, Pactrun MUST create one owner-private listener and MUST
 replace both of these variables in the exact child environment:
 
@@ -162,7 +161,7 @@ or cleanup path.
 
 The endpoint is a capability locator, not a Run, Session, Hook, or Package
 identity and not an alternative authentication or protocol-version mechanism.
-The first bytes in each direction after connection remain the exact Frozen V1
+The first bytes in each direction after connection remain the exact supported
 preamble from PR-REQ-0205.
 
 **Verification: PR-TEST-0095, PR-TEST-0098, PR-TEST-0099, PR-TEST-0102,
@@ -285,8 +284,11 @@ It records explicit operator intent to stop management and remove Pactrun-owned
 Instance state while service-owned state may remain. That intent MUST NOT
 authorize Pactrun to destroy the abandoned service-owned state during the
 operation or later through ordinary garbage collection, unreferenced-storage
-cleanup, or another maintenance path. The durable representation of this
-non-destruction obligation, later discovery, operator handoff, and explicit
-discard remain future persistence and runtime design gates.
+cleanup, or another maintenance path. The
+[Instance retirement contract](../execution/m7-instance-retirement.md) and
+[Persistence baseline](../persistence/persistence-baseline.md) define the durable
+custody, later discovery, operator handoff and explicit discard mechanisms.
+Discard remains a separately authorized management operation; abandonment
+itself does not authorize it.
 
 **Verification: PR-TEST-0406, PR-TEST-0409, PR-TEST-0417, PR-TEST-0418, PR-TEST-0437.**

@@ -16,8 +16,9 @@ Read these boundaries before choosing a transaction, ownership, retry, or recove
 
 The [M6.5 execution contract](./m6-5-service-storage-execution.md) defines the
 implemented ServiceStorage target-publication path and durable M7 handoff
-boundary. It preserves the existing no-replay and manual-recovery constraints;
-M7 destructive operations remain separate work.
+boundary. It preserves the existing no-replay and manual-recovery constraints.
+[Instance retirement](./m7-instance-retirement.md) owns Cleanup, finalization,
+abandonment, and detached disposal; use its separate evidence and authorization rules.
 
 Return to the [specification map](../index.md). For current runtime support and
 next-milestone boundaries, see [the development entry](../../development/next-milestone.md).

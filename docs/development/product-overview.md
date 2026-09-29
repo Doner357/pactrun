@@ -5,8 +5,10 @@ title: Developer Product Overview
 # Developer product overview
 
 This is an informative orientation for implementers, not a beginner usage guide.
-The [Spec](../spec/index.md) owns normative requirements. User and Pack author
-usage guides remain planned for a later documentation phase.
+The [Spec](../spec/index.md) owns normative requirements.
+[User guides](../guides/index.md) and [Pack author guides](../package-authors/index.md)
+cover the operating and authoring workflows. Use the
+[current handoff](./next-milestone.md) for availability and review status.
 
 ## What Pactrun is
 
@@ -19,7 +21,7 @@ consistent model for:
 - managed Instances;
 - Inputs and Secrets;
 - Pactrun-provided persistent ServiceStorage and service-authoritative resources
-  within it as a future versioned capability;
+  within it under explicit versioned contracts;
 - typed invocation parameters;
 - managed data and Snapshots;
 - Revision Migration;
@@ -53,8 +55,12 @@ authoritative contents belong to the service even when Pactrun identifies or
 exposes the resource contractually. Pactrun does not keep the two models
 consistent through implicit synchronization. This closure does not classify
 Docker volumes, external databases, remote objects, or other non-ServiceStorage-
-backed state. Formal ServiceStorage authoring and runtime support requires future
-independently versioned contracts and is not a Frozen V1 feature.
+backed state. Current declarations, identity and Session authority are owned by
+the [Pack source](../spec/contracts/pack-source.md),
+[Revision](../spec/contracts/revision-canonical.md), and
+[Hook protocol](../spec/contracts/hook-protocol.md) baselines. Their version
+domains remain independent; service operations follow the
+[ServiceStorage execution contract](../spec/execution/m6-5-service-storage-execution.md).
 
 ## Core flow
 
@@ -91,9 +97,8 @@ generic authoring abstraction.
 - **Pactrun Developers** should begin with the
   [system model](../spec/foundations/system-model.md) and
   [development policy](./development-and-verification.md).
-- **Pactrun Users** can review the planned
+- **Pactrun Users** can start with the
   [Packages, Revisions, and Instances](../pactrun-users/concepts/packages-revisions-and-instances.md)
-  guide structure.
-- **Package Authors** can review the planned
-  [authoring model](../package-authors/fundamentals/authoring-model.md) guide
-  structure.
+  guide.
+- **Package Authors** can follow the
+  [authoring model](../package-authors/fundamentals/authoring-model.md) guide.

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
-import textDocs, {exportText, markdownBody, readDocuments, validateLinks} from '../plugins/text-docs/index.mjs';
+import textDocs, {exportText, markdownBody, readDocuments, validateLinks, textBody} from '../plugins/text-docs/index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -57,7 +57,7 @@ test('text export is deterministic, preserves relative links, and removes stale 
     assert.equal(await readFile(path.join(outDir, 'keep.html'), 'utf8'), 'human');
     await assert.rejects(readFile(path.join(outDir, 'agent-docs/stale.md')));
     await assert.rejects(readFile(path.join(outDir, 'agent-docs/archive/old.md')));
-    assert.equal(await readFile(path.join(outDir, 'agent-docs/agents/index.md'), 'utf8'), '# Agent\n[Spec](../index.md)\n');
+    assert.equal(await readFile(path.join(outDir, 'agent-docs/agents/index.md'), 'utf8'), textBody('agents/index.md', '# Agent\n[Spec](../index.md)\n'));
     const entry = await readFile(path.join(outDir, 'llms.txt'), 'utf8');
     assert.match(entry, /\.\/agent-docs\/agents\/index\.md/);
     await writeFile(path.join(docsDir, 'index.md'), '# Changed spec\n');
@@ -66,6 +66,19 @@ test('text export is deterministic, preserves relative links, and removes stale 
   } finally {
     await rm(workspace, {recursive: true, force: true});
   }
+});
+
+
+test('agent text shares classification and preserves the entire original body after context', () => {
+  const source = '---\ntitle: Old\n---\n\n# Contract\nMUST preserve this exact sentence.\n';
+  for (const [name, state] of [['development/m4-implementation-status.md', 'historical'], ['spec/contracts/pack-source.md', 'current'], ['pactrun-developers/old.md', 'superseded']]) {
+    const text = textBody(name, source);
+    assert.ok(text.startsWith('> Document context (generated): ' + state));
+    assert.equal(text.slice(text.indexOf('\n\n') + 2), markdownBody(source));
+    assert.ok(text.includes('> Source: docs/' + name));
+  }
+  const schema = '  {"type":"object"}\n';
+  assert.equal(textBody('example.schema.json', schema), schema);
 });
 
 test('discovery supports a project base path and agent HTML routes are rejected', async () => {

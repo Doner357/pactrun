@@ -11,7 +11,7 @@ informative.**
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-Understand the relationship between a Package lineage, an exact Revision, and a long-lived Instance. Installation, configuration readiness, and future lifecycle support are separate questions.
+Understand the relationship between a Package lineage, an exact Revision, and a long-lived Instance. Installation, configuration readiness, and lifecycle operations are separate questions.
 
 Start with the [specification map](../index.md)
 and [shared vocabulary](../glossary.md) if a term is unfamiliar.
@@ -25,9 +25,10 @@ The original status, rules, exceptions, and verification declarations below reta
 A **Package** is a stable product lineage. A **Revision** is one immutable
 operational definition and its owned runtime content. An **Instance** is the
 long-lived service object that a user manages against one active Revision. Its
-persistent data may include Pactrun-authoritative Managed Input Bindings and,
-under a future versioned contract, service-authoritative Managed Service
-Resources. Those ownership models are distinct.
+persistent data may include Pactrun-authoritative Managed Input Bindings and
+service-authoritative Managed Service Resources under the
+[ServiceStorage contract](../execution/m6-5-service-storage-execution.md).
+Those ownership models are distinct.
 
 Installing a Package creates or reuses an immutable Revision; it does not create
 an Instance. Exact internal identity rules are defined in
@@ -184,7 +185,7 @@ without exposing managed payload bytes.
 
 ## ServiceStorage-backed live resources
 
-A future Revision may declare a stable ServiceStorage-backed Managed Service
+A Revision may declare a stable ServiceStorage-backed Managed Service
 Resource even while the corresponding live object is absent. The service may
 create or mutate the live state later without advancing `InstanceStateVersion`.
 Pactrun may manage the resource contract and continuity without owning its
@@ -192,11 +193,13 @@ authoritative bytes.
 
 Compatible Revisions interpret and use the same Instance live resource rather
 than copying it into Revision-specific files. A source-only resource is retained
-conservatively unless destructive removal is explicit. The schema and durable
-representation of declaration, compatibility, continuity, retention, discard,
-access, and prerequisites remain future design work rather than current V1
-product support. This model does not yet classify Docker volumes, external
-databases, remote objects, or other non-ServiceStorage-backed resources.
+conservatively unless destructive removal is explicit. The
+[Revision baseline](../contracts/revision-canonical.md),
+[ServiceStorage execution](../execution/m6-5-service-storage-execution.md), and
+[retirement contract](../execution/m7-instance-retirement.md) own declarations,
+compatibility, continuity, retention, discard, access and prerequisites. This
+model does not classify Docker volumes, external databases, remote objects or
+other resources outside ServiceStorage.
 
 ## Package scope
 

@@ -4,360 +4,182 @@ title: Implementation Guidance
 
 # Implementation Guidance
 
-**Status: Informative implementation guidance constrained by the normative
-architecture.**
+**Status: Informative implementation guidance constrained by the owning contracts.**
 
-The [Spec map](../spec/index.md) is the authority entry. Read
-[the current M6.5 handoff](./next-milestone.md) before using a historical baseline
-as a work order. Linked synthesis pages are navigation only. Usage guides are
-reserved for later; this document is for implementers.
-
-The Frozen V1 identity and wire domains remain closed for their existing scope,
-and no known issue blocks prototypes that stay within that scope. The
-representation-independent semantics for `ServiceStorage` and ServiceStorage-
-backed Managed Service Resources are closed; their serialization, wire,
-persistence, and runtime remain deferred. Implementers must not hide that work
-by modeling service-owned live files as synchronized Inputs or M1-D metadata. If
-a prototype shows that established invariants cannot coexist, the conflict must
-return to design review rather than being hidden by another abstraction.
-
-The M1-D non-identity metadata domain and persistence contract are implemented
-against the current internal schema. The
-[Non-Identity Metadata Semantic Baseline](./design-notes/non-identity-metadata-semantic-baseline.md)
-is the navigation entry point; its linked requirement pages, including the
-[Persistence Schema V2](../spec/persistence/persistence-baseline.md),
-remain normative.
-
-The Pre-M2 design is integrated into the canonical `develop` baseline and
-synthesized by the
-[Pre-M2 Installation, Instance, and Binding Baseline](./design-notes/pre-m2-installation-instance-binding-baseline.md).
-Its linked pages, including Candidate
-[Pack Source YAML V1](../spec/contracts/pack-source.md) and the
-implemented internal
-[Persistence Schema V3](../spec/persistence/persistence-baseline.md), own the
-M2 contract. M2 is integrated into `develop`. The implemented internal
-[Persistence Schema V4](../spec/persistence/persistence-baseline.md) extends V3
-with M3 Slice 2 Runs, durable pins, Action recovery state, ownership, and Run
-Artifacts. M4 [Persistence Schema V5](../spec/persistence/persistence-baseline.md)
-preserves that contract. Integrated M5 adds the current internal
-[Persistence Schema V6](../spec/persistence/persistence-baseline.md), with exact
-V5 upgrade; it remains non-Frozen and non-public.
-
-The M3 scope and dependency review is complete and synthesized by the
-[M3 Action Execution Approval Baseline](./design-notes/m3-action-execution-approval-baseline.md).
-M3 implementation is complete: Slices 1 through 6 are integrated into
-`develop`, including the Slice 5 crate-private managed-output, Run finalization,
-cleanup, owner-loss reconciliation, and inspection-data substrate, plus the
-Slice 6 user-visible Run inspection, exact human spelling, and `PR-REQ-0097`
-verification.
-
-The integrated Slice 6 implementation closes that deferred human boundary
-with exact Action/Plan/Run command spelling, a structural-only Run formatter,
-read-only inspection and Plan opening, protected file/stdin parameter sources,
-owner-held foreground cancellation, and explicit owner-loss/manual-recovery
-operations. These additions remain crate-private and do not add a public API,
-stable JSON envelope, V5 schema, or Frozen wire change; the result is integrated
-into `develop`.
-
-M4 is also complete and integrated: it adds the Snapshot lifecycle and human CLI,
-Frozen integrity V2 current-writer/backward-reader support, bounded bundle V1,
-exact V5 bootstrap/writable admission and the guarded Restore publication path.
-See the [M4 execution record](./m4-implementation-status.md) for integration and
-verification evidence. These additions do not implement Snapshot deletion,
-ServiceStorage runtime, a public Rust API or stable machine-output envelopes.
-
-M5 Managed Input Migration is integrated, including per-edge publication,
-operator/Hook execution and bounded recovery; see its
-[closeout](./m5-implementation-status.md). Bounded M6 is also complete and
-integrated under its [baseline](./design-notes/m6-recovery-implementation-baseline.md)
-and [closeout](./m6-implementation-status.md). The next entry is M6.5 design.
-The [staged alignment](./design-notes/service-storage-staged-design-alignment.md)
-formally orders M6 recovery, M6.5 ServiceStorage and M7 Cleanup/deletion without
-approving the still-open representation or runtime designs.
+Start with the [current handoff](./next-milestone.md), select a [task reading path](./reading-paths.md),
+and read its owning Spec rules. [User guides](../guides/index.md)
+and [author guides](../package-authors/index.md) describe
+available workflows. This page describes implementation discipline rather than
+repeating milestone status or a second format-support matrix.
 
 ## Implementation decisions
 
-Implementers may choose, without changing Pactrun semantics:
+Choose mechanisms that satisfy the approved contracts: private Rust module/API
+organization, repository/query helpers, bounded buffering, test fixtures, parser
+libraries, process supervision adapters and equivalent synchronization mechanisms.
+Libraries implement mechanisms; Domain types retain policy, identity and lifecycle
+ownership. Preserve the modular-monolith dependency direction and typed boundaries.
 
-- SQLite, another KV mechanism, or a file model;
-- database tables, indexes, repositories, and migration framework;
-- storage directories and immutable-content layout;
-- UUID and hash libraries;
-- concrete `InstanceId` and `InstanceStateVersion` encodings;
-- Rust crate, module, type, trait, and design-pattern names;
-- PTY, ConPTY, Unix process-group, and Windows Job Object libraries;
-- file locks, execution ownership, leases, and durable pin storage;
-- persistence choices outside the exact implemented V2 through V6 internal
-  schemas;
-- socket, named-pipe, or other side-channel transport;
-- Hook Protocol framing and encoding;
-- YAML and CLI parser libraries that preserve the exact Candidate source and
-  fixed minimal-CLI semantics;
-- compression, archive layout, blob storage, refcount, or mark-and-sweep GC;
-- buffering, batching, caching, test, and mock libraries;
-- exact machine-readable CLI schema spelling.
+The following are already specified and are not unconstrained implementation
+choices: identity/token encodings, canonical bytes, Hook framing and authority,
+SQLite baseline shape, archive layout, machine-result schemas, ServiceStorage
+continuity/retention, and Cleanup/abandonment publication. Read their owners before
+changing a representation. New externally observable behavior or incompatible
+representation requires the applicable design-change process.
 
-Those decisions must not change the canonical hash contracts, domain
-identities, state transitions, authority boundaries, or user-visible
-guarantees.
+## Identity, metadata and storage checks
 
-They also do not authorize an implementer to invent ServiceStorage declaration
-serialization, authority wire shapes, continuity or retention persistence,
-discard representation, access encoding, compatibility algorithms, Cleanup
-coordination, Abandon non-destruction state, or a broader service-resource
-taxonomy. Those representations and mechanisms require later formal design;
-the closed semantics are summarized in
-[ServiceStorage Semantic Baseline](./design-notes/service-storage-semantic-baseline.md).
+- Acquire and hash the same safely opened source objects. Validate before durable
+  publication; do not replace exact-object acquisition with path re-resolution.
+- Use closed typed metadata values and complete semantic comparators. Preserve
+  exact UTF-8 values, Absent-before-Present ordering, and explicit SQL ordering
+  equivalent to Domain ordering. Current-state CAS does not promise history or
+  ABA detection.
+- Follow the [Persistence baseline](../spec/persistence/persistence-baseline.md).
+  Do not substitute generic JSON/EAV storage, rowid ordering, all-NULL presentation
+  rows or nullable note/trust tombstones for its contract. Check presentation
+  targets against the strict-decoded Revision and preserve all four fields for
+  each supported presentation target.
+- Keep Input staging bounded and detached. Preserve token-first CAS, Secret
+  floors, protection inheritance, no-clobber file export and explicitly non-atomic
+  stdout export. Do not synchronize Inputs with live service files.
+- Keep accepted Runs, pins, ownership and outcome publication distinct. No
+  reconciler may fabricate an owner's successful publication or infer service repair.
 
-## Suggested implementation sequence
+## Execution and service checks
+
+Keep admitted paths host-native through Windows process creation and interactive
+adapters. An explicit `lpApplicationName` launch is not shell redirection. The
+existing image guard rejects non-image batch-suffixed candidates while eligible
+native images retain exact-path launch. Human Plan output preserves native
+paths using terminal escaping or explicit native code-unit/byte forms; use the
+machine contract for structured consumers.
+
+Workspace is execution-scoped scratch. ServiceStorage is persistent,
+service-authoritative state with explicit granted authority; Input bindings are
+detached Pactrun-authoritative values. Service mutations do not automatically
+advance Instance state tokens or become atomic with Pactrun database commits.
+
+Use the [canonical Revision](../spec/contracts/revision-canonical.md),
+[Hook protocol](../spec/contracts/hook-protocol.md),
+[ServiceStorage execution](../spec/execution/m6-5-service-storage-execution.md),
+and [retirement](../spec/execution/m7-instance-retirement.md) contracts for their
+implemented representations and transitions. Keep the broader taxonomy for
+non-ServiceStorage resources outside this scope.
+
+Cleanup uncertainty, durable no-replay boundaries, abandonment custody and
+explicit discard follow their owning lifecycle rules. A cleanup-finalization
+retry must not replay a completed Cleanup Hook; ordinary GC does not authorize
+destruction of abandoned service data.
+
+## Verification route
+
+Select checks using [development and verification policy](./development-and-verification.md).
+Prove success, refusal, partial publication and output failure at the appropriate
+level. Use source-qualified evidence; preserve requirement/test identities and
+report skipped or reused checks explicitly. Read [writing and maintenance](./documentation-style.md)
+when changing documentation.
+
+## Historical sequence {#suggested-implementation-sequence}
+
+The following retained anchors navigate the old sequence; they do not schedule
+new work. The [captured guidance](./history/guidance-before-consistency-review-2026-09-28.md)
+preserves its original context, including subsequently completed gates.
 
 ### Phase 0 - Canonical specifications and vectors
 
-- freeze terminology and persistence-independent domain types;
-- specify RevisionCoreV1 semantics and JCS/hash vectors;
-- specify SnapshotIntegrityFormatV1 and vectors;
-- define the HookProtocolV1 message and state-machine skeleton;
-- establish a structured error taxonomy.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-0---canonical-specifications-and-vectors).
+Current formats are listed in the handoff and owned by Spec.
 
 ### Phase 1 - Identity and persistence
 
-- Package and Revision identities;
-- Instance identity and state version;
-- immutable runtime content;
-- RevisionCore projection and canonicalization;
-- label, presentation, and provenance associations;
-- persistence migration skeleton.
-
-For M1-D, use only the closed typed metadata values, complete semantic
-comparators, mutation batch, semantic current-state CAS, and exact implemented
-PersistenceSchemaV2. Authoritative strings retain exact UTF-8 bytes; optional
-values order `Absent` before `Present`; every deterministic SQL query states a
-complete `ORDER BY` that is parity-equivalent with the Domain comparator.
-Current-state CAS deliberately does not detect history or ABA.
-
-Do not replace the internal schema with a generic key/value, JSON, EAV, nullable
-semantic tuple, serialized Rust object, or rowid-ordered repository. Do not
-persist all-NULL presentation rows or nullable note/trust tombstones. Target
-existence for presentation is checked against the exact strict-decoded
-Revision Core, and every one of the four presentation fields is valid for every
-closed `PresentationTargetV1` variant.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-1---identity-and-persistence).
+Use the current identity and Persistence contracts.
 
 ### Phase 2 - Packs, Instances, and bindings
 
-- strict Candidate `PackSourceYamlV1` authoring with schema-directed scalars,
-  closed portable metadata unions, explicit Package lineage, and Windows/Linux
-  exact-object source-root acquisition;
-- exact-object staging and hashing, followed by intrinsic validation, Frozen
-  projection, and typed metadata-plan validation before durable M1-B blob
-  publication and one atomic Revision/metadata database publication;
-- exact PersistenceSchemaV3, including transactional V1/V2 migration;
-- bounded-memory, file-backed staging below the dedicated Pactrun storage root;
-- incomplete Instance creation and one chunked immutable payload registry;
-- active and retained binding derivation and mutation;
-- strict token-first state-version CAS and per-Instance Mutate exclusivity;
-- Observe-only exact-payload export with atomic no-clobber file publication and
-  explicitly non-atomic stdout;
-- persisted sticky Secret floors, effective active/retained protection,
-  structural redaction, and purpose-specific export authorization under an
-  explicit plaintext-at-rest and no-secure-erasure limitation;
-- the fixed minimal M2 human CLI with an empty installation local-metadata
-  batch.
-
-This phase implements Pactrun-authoritative bindings only. It must not
-materialize a Managed Input into a service file and synchronize it as a
-substitute for `ServiceStorage`.
-
-It also must not add Action execution, durable pins, Run/recovery state,
-Instance deletion, advanced authoring, stable machine APIs, new Frozen errors,
-or cryptographic Secret storage. Authoring all Frozen capability declarations
-does not claim their runtime implementation.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-2---packs-instances-and-bindings).
+Use the current source, acquisition and Input contracts.
 
 ### Phase 3 - Action execution
 
-- Resolution and InvokeAction intent;
-- typed sequential compilation;
-- stale-state admission and durable pins;
-- Hook Runtime and Session authority;
-- I/O transitions, Action outputs, and Run records;
-- exact launcher revalidation and native/interpreter process execution;
-- cancellation, timeout, EOF, protocol failure, and process-loss finalization;
-- the minimum Action recovery substrate required for durable HookProtocolV1
-  risk acknowledgments and open-risk consequences;
-- crash/failure injection and end-to-end runtime integration;
-- requirement-backed minimal invocation, plan, Run, sensitive-parameter,
-  cancellation, and manual-recovery spelling before M3 completion.
-
-On Windows, exact admitted Hook pathnames remain host-native (`Path`/`OsStr`/
-`OsString`) across the interactive adapter and reach the native launcher
-without UTF-8 conversion. An explicit `lpApplicationName` `CreateProcessW`
-launch is not shell redirection; the Executor-side `GetBinaryTypeW` guard
-rejects non-image batch-suffixed candidates while native PE names remain
-eligible. The human `--plan` projection also preserves host-native launcher
-pathnames: valid UTF-8 uses the existing readable terminal escaping, while
-non-UTF-8 Windows and POSIX paths use explicit native UTF-16 and byte forms;
-this is not a stable machine protocol.
-
-Workspace remains execution-scoped scratch. Persistent service-resource
-authority is not part of Frozen Hook Protocol V1 or this phase.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-3---action-execution).
+Use the current execution and Hook contracts.
 
 ### Phase 4 - Snapshots
 
-- capture binding-view consistency;
-- SnapshotCandidate validation and commit;
-- complete managed binding state and canonical integrity;
-- sensitive export/import;
-- exact-compatible cross-Instance Restore.
-
-Capture selects service recovery content; this phase does not automatically
-Snapshot an entire future `ServiceStorage`.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-4---snapshots).
+Use the current Snapshot integrity, bundle and operation contracts.
 
 ### Phase 5 - Migration
 
-- target-owned graph and chaining;
-- explicit normalized transitions;
-- typed active and retained references;
-- requirements, outputs, and single-writer validation;
-- staged targets, incomplete intermediate state, and per-edge commits.
-
-These transitions govern Managed Input Bindings. They must not be generalized
-into an unapproved Service Resource transition or persistence schema.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-5---migration).
+Use the current edge, execution and selector contracts.
 
 ### Phase 6 - Recovery
 
-- harden existing Action, Capture, Restore and Migration ownership and recovery
-  over the integrated M3-M5 substrate;
-- complete risk handling, Plan-free durable evidence and atomic publication
-  within the bounded M6 scope once approved;
-- crash-boundary injection tests;
-- orphan reconciliation and manual recovery.
-
-The approved M6 baseline controls S0-S4 and retains exact V6 after the S0 audit.
-ServiceStorage and Cleanup runtime evidence belong to the following stages,
-not to placeholder implementations needed to close M6.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-6---recovery).
+Use the current recovery owner rather than replaying the old work order.
 
 ### Phase 6.5 - ServiceStorage
 
-- separately approve Core representation, Hook authority where needed, and
-  persistence/access/compatibility contracts after M6;
-- align retention, finalization and abandonment persistence with M7 before
-  storage schema approval;
-- implement format/validation, storage allocation/access and continuity/Hook
-  integration, then verify real-resource isolation and target-publication crashes;
-- do not expose destructive storage paths that bypass the M7 lifecycle.
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-65---servicestorage).
+ServiceStorage has implemented declaration, authority and execution contracts.
 
 ### Phase 7 - Cleanup and deletion
 
-- typed Cleanup requirements and context;
-- shared risk protocol;
-- cleanup-before-delete behavior;
-- durable Cleanup-completed finalization without inferred Hook replay;
-- explicit AbandonManagement.
-
-An ambiguous Cleanup completion before the durable do-not-replay boundary is a
-future Hook Protocol and recovery coordination gate. After that boundary,
-storage-finalization retry must not replay Cleanup. Abandonment must not make
-service-owned state eligible for ordinary GC or unreferenced-storage cleanup.
-
-<a id="phase-8---recipes-and-advanced-authoring" />
+[Historical phase](./history/guidance-before-consistency-review-2026-09-28.md#phase-7---cleanup-and-deletion).
+Retirement and retained-object lifecycle have their own current contracts.
 
 ### Removed phase: M8 Recipes
 
-The operator rejected M8 on 2026-09-16; it is not an implementation phase.
-See the [historical proposal and decision](./history/m8-recipes-rejected.md).
-Keep the internal Candidate boundary and built-in YAML frontend. A public
-Candidate API is deferred until concrete demand, not required pre-release work.
+[M8 was rejected](./history/m8-recipes-rejected.md). The [historical phase](./history/guidance-before-consistency-review-2026-09-28.md#removed-phase-m8-recipes)
+is retained for audit. It does not authorize a Recipe feature or public Candidate API.
 
-## Specification status and open work
+## Contract lookup {#specification-status-and-open-work}
 
-### SnapshotIntegrityFormatV1
+These legacy anchors now point to the effective owners, not obsolete reader support.
 
-The Frozen semantic manifest, binding and content descriptors, normalization,
-JCS profile, framing, digest encoding, and golden vectors are defined by
-[Snapshot Integrity Format V1](../spec/contracts/snapshot-integrity.md).
-Production Snapshot persistence and runtime behavior remain Phase 4 work.
+### Snapshot integrity {#snapshotintegrityformatv1}
 
-### HookProtocolV1
+[Snapshot integrity baseline](../spec/contracts/snapshot-integrity.md).
 
-The Frozen transport, framing, exact version confirmation, request and
-acknowledgment rules, authority handles, operation contexts, staged outputs,
-recovery-risk state machine, cancellation, completion handshake, and protocol
-errors are defined by
-[Hook Protocol V1](../spec/contracts/hook-protocol.md). Production Hook
-Runtime integration remains Phase 3 and later work.
+### Hook protocol {#hookprotocolv1}
 
-### M3 Action execution
+[Hook protocol baseline](../spec/contracts/hook-protocol.md).
 
-M3 is approved and ordered by the linked Action execution baseline. The
-normative execution, Hook Protocol, Run, pin, recovery-risk, launcher, and
-sensitive-data contracts are sufficient to begin bounded internal
-implementation. Slice 5 now provides owner-held finalization, atomic eligible
-Action output publication, execution-workspace cleanup, explicit confirmed
-owner-loss reconciliation, and crate-private Run inspection/data access over
-PersistenceSchemaV4. Slice 6 supplies the human projection and traceability for
-`PR-REQ-0097`; the exact persistence encoding and process mechanisms remain
-implementation choices. Exact new CLI spelling is closed by `PR-REQ-0284` and
-its verification, satisfying the M3 human-interface completion gate.
+### Action execution {#m3-action-execution}
 
-### RevisionCoreV1 authoring spelling
+[Action behavior](../spec/behavior/actions-plans-and-runs.md) and
+[execution boundaries](../spec/execution/execution-and-concurrency.md).
 
-The Frozen identity spelling, normalization, framing, and verification
-boundary are defined by
-[Revision Core Format V1](../spec/contracts/revision-canonical.md).
-The Candidate M2 source spelling and projection into that unchanged boundary
-are defined separately by PackSourceYamlV1. Raw Core JSON remains an internal
-codec/conformance input rather than Package authoring.
+### Pack authoring {#revisioncorev1-authoring-spelling}
 
-### Closed ServiceStorage semantics; deferred representation
+[Pack source](../spec/contracts/pack-source.md) and
+[identity projection](../spec/contracts/revision-canonical.md). Raw canonical JSON
+remains a codec/conformance input; it is not an alternate Pack source frontend.
 
-Persistent Instance data has two relevant ownership domains: detached
-Pactrun-authoritative Managed Input Bindings and ServiceStorage-backed,
-service-authoritative Managed Service Resources. The service may create or
-mutate live resource bytes without advancing `InstanceStateVersion`; Pactrun
-does not implicitly synchronize, pin, content-address, or automatically
-Snapshot those bytes. This closure does not classify non-ServiceStorage-backed
-service-owned resources.
+### ServiceStorage contracts {#closed-servicestorage-semantics-deferred-representation}
 
-The domain semantics are closed in the linked normative requirements and
-synthesized by the ServiceStorage Semantic Baseline. Before implementation,
-formal design must still define Revision Core serialization, Hook authority wire
-support where needed, durable continuity/retention/discard and Abandon non-
-destruction representation, Cleanup completion coordination, and the concrete
-runtime. Revision Core and Hook Protocol versions remain independent. No
-authoring syntax, CLI, wire shape, storage table, retained-resource or orphan-
-storage registry, compatibility algorithm, or broader resource taxonomy is
-chosen here.
-
-These remaining gates are formally assigned by the staged alignment: M6.5 owns
-ServiceStorage representation/runtime and target publication; M7 owns Cleanup,
-finalization and AbandonManagement operations. Broader non-ServiceStorage
-resource taxonomy remains deferred independently, not a blocker for M6.5.
+[Revision declarations](../spec/contracts/revision-canonical.md),
+[Session authority](../spec/contracts/hook-protocol.md), and
+[service execution](../spec/execution/m6-5-service-storage-execution.md).
 
 ### Persistence and concurrency encoding
 
-M2 fixes random 128-bit state tokens, token-first compare-and-set, per-Instance
-Mutate exclusivity, Observe coexistence, chunked payload persistence, and
-operation-local export acquisition in PR-REQ-0264 through PR-REQ-0270. These
-choices do not reopen the exact M1-D schema, typed metadata batch/CAS boundary,
-or deterministic comparator contract. Execution ownership, durable pins,
-recovery storage, checkpoints, history-sensitive metadata concurrency, metadata
-versions, and metadata ABA detection remain later work.
+[Persistence baseline](../spec/persistence/persistence-baseline.md) and
+[execution ownership](../spec/execution/execution-and-concurrency.md).
 
 ### CLI and structured output
 
-PR-REQ-0271 fixes the minimal M2 human spelling for Package ID generation,
-installation, Instance create/list/show, and Input list/set/export/delete. It
-has no install-time local-metadata options, force/overwrite export, or stable
-machine envelope. Snapshot export and declassification, recovery override,
-AbandonManagement, later lifecycle commands, completeness presentation details,
-and a versioned machine-output format remain future work.
+[Human commands](../spec/behavior/command-and-output-reference.md),
+[machine interface](../spec/contracts/cli-machine-interface.md), and
+[object selectors](../spec/contracts/cli-id-selectors.md).
 
 ## Deferred beyond the initial product scope
 
-- detailed Stack semantics;
-- cross-Package adoption or replacement;
-- operating-system sandbox, WASI, or containerized Hooks;
-- HostAccessRequest and EffectiveIsolation implementation;
-- registry, signing, and publisher trust selection;
-- encrypted Snapshot export;
-- advanced workflow profiles;
-- richer conditional or optional Migration output contracts.
+Detailed Stack semantics, cross-Package adoption/replacement, OS/WASI/container
+isolation, HostAccessRequest/EffectiveIsolation implementation, registry/signing
+and publisher trust selection, encrypted Snapshot export, advanced workflow
+profiles, and richer conditional/optional Migration outputs require separate
+scope and design. Completion of ServiceStorage does not authorize these features.

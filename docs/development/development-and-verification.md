@@ -50,11 +50,10 @@ Development guides and design syntheses link to owning rules without creating
 additional product requirements. Compatibility pages at old paths contain no
 independent normative definitions. See the [authority map](../spec/index.md).
 
-Usage documentation is deferred to a separately scoped phase. User and Pack
-Author pages retain placeholders, including operation-oriented agent guides.
-Development guides may be completed now. General usage guides must not expose
-internal test traceability or become a second specification. Agent development
-navigation is published as text, not as human website pages.
+F authorizes complete user and Pack Author documentation. General usage guides
+link to owning Spec and do not expose internal test traceability or create a
+second specification. Follow [documentation writing and maintenance](./documentation-style.md).
+Agent development navigation is published as text, not as human website pages.
 
 This documentation scope change does not change product semantics, Frozen
 formats, requirement IDs, or the implementation approval state of milestones.
@@ -206,9 +205,9 @@ presentation but must derive from canonical documentation and test metadata.
 
 ### Automated traceability enforcement
 
-Repository tooling and CI MUST enforce requirement-to-test traceability. During
-the current pre-implementation specification stage, tooling MAY report pending
-verification as a legitimate transitional state. Once corresponding
+Repository tooling and CI MUST enforce requirement-to-test traceability. For an
+approved specification whose implementation has not started, tooling MAY report
+pending verification as a legitimate transitional state. Once corresponding
 implementation exists, CI MUST fail implementation-completion checks when
 required automated verification is missing.
 
@@ -318,9 +317,11 @@ behavioral test must not depend on a milestone completion paragraph or the
 continued existence of a removable milestone record as its semantic authority.
 Use the owning product contract and actual behavior instead.
 
-This rule applies to new implementation and tests now. Existing occurrences are
-deferred to Versioning and Baseline Consolidation; do not perform unrelated mass
-renaming during other work. Preserve coverage when removing such dependencies.
+This rule applies to new implementation and tests. Review existing occurrences
+when working in the affected area; do not perform unrelated mass renaming.
+Preserve coverage when removing milestone dependencies. The
+[E delivery record](./e-implementation-status.md) owns the completed consolidation
+scope; it is not a future cleanup task.
 Actual protocol/format/schema version identities and stable PR-REQ/PR-TEST IDs
 are not milestone markers and MUST NOT be indiscriminately renamed or removed.
 Development history may retain milestone names without making shipping code

@@ -121,11 +121,14 @@ test('Complete baseline SQL remains identical to the owning Persistence specific
   assert.equal(spec.split('```sql\n')[1].split('```')[0].trim(), sql.trim());
 });
 
-test('usage guides are placeholders, not completed tutorials', () => {
+test('usage guides are substantive, linked, and non-normative', () => {
   const names = ['agents/use-pactrun.md', 'agents/author-packs.md', 'agents/integrate-hooks.md'];
   for (const [name, body] of docs) {
     if (!names.includes(name) && !name.startsWith('pactrun-users/') && !name.startsWith('package-authors/')) continue;
-    assert.match(body, /placeholder|reserves the\s+documentation structure|guidance is planned|guided example are planned/i, name);
+    if (!name.endsWith('.md')) continue; // JSON schemas have separate exact-source checks.
+    assert.doesNotMatch(body, /Planned usage-guide placeholder|guidance is planned|guided example are planned/i, name);
+    assert.ok(body.length > 300, name);
+    assert.match(body, /\[[^\]]+\]\([^)]+\.md(?:#[^)]*)?\)/, name);
     assert.doesNotMatch(body, /^### PR-REQ-\d+/m, name);
   }
 });
@@ -169,7 +172,7 @@ test('roadmap distinguishes historical V4 introduction from the current schema',
   assert.doesNotMatch(roadmap.replace(/\s+/g, ' '), /PersistenceSchemaV4 as the current canonical implemented internal schema/);
 });
 
-test('current entries reflect V11 integration while preserving earlier milestone history', async () => {
+test('historical baseline preserves V11 evidence while agent entry delegates current state', async () => {
   const document = name => docs.find(([file]) => file === 'development/' + name)[1];
   const roadmap = document('implementation-roadmap.md');
   const milestones = [...roadmap.matchAll(/^### (M6(?:\.5)?|M7|M8) - /gm)].map(match => match[1]);
@@ -177,29 +180,26 @@ test('current entries reflect V11 integration while preserving earlier milestone
   assert.match(roadmap, /### M6 - Recovery\s+\*\*State: Complete\.\*\*/);
   assert.match(roadmap, /### M6\.5 - ServiceStorage\s+\*\*State: Complete\./);
   assert.match(roadmap, /### M7 - Cleanup and deletion\s+\*\*State: Implemented, verified and integrated into local develop\./);
-  const current = roadmap.split('## Current baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
+  const current = roadmap.split('## Historical pre-E baseline')[1].split('## Milestone states')[0].replace(/\s+/g, ' ');
   assert.match(current, /PersistenceSchemaV11\]\([^)]*\) is the integrated `develop` persistence baseline, with explicit exact-V8\/V9\/V10 upgrade/);
   assert.match(current, /M7 Cleanup execution is implemented, verified and integrated into local `develop`/);
   assert.match(current, /M8 is rejected and archived; no next numbered milestone is selected/);
   assert.doesNotMatch(current, /Cleanup execution remains Proposed/);
   const agentEntry = docs.find(([file]) => file === 'agents/index.md')[1].replace(/\s+/g, ' ');
-  assert.match(agentEntry, /M5, bounded M6, M6\.5 ServiceStorage and M7 Cleanup\/deletion are implemented and integrated into local `develop`/);
-  assert.match(agentEntry, /integrated develop persistence baseline is V11, with explicit exact-V8\/V9\/V10 upgrade/);
+  assert.ok(agentEntry.includes('../development/next-milestone.md'));
+  assert.doesNotMatch(agentEntry, /V11|exact-V8\/V9\/V10/);
   const capacity = document('snapshot-capacity-and-restore-status.md');
   assert.match(capacity.replace(/\s+/g, ' '), /S0-S5 implemented, verified and integrated into local `develop`/);
   assert.match(capacity, /ead810f1a81e5a52e351e96b11987a8b3d766d36/);
   assert.match(capacity, /b99ffbd748f5417c0aa8537fe9c5e2234142a31c/);
-  assert.match(agentEntry, /Shell Adapter \/ Loader is implemented, verified and integrated into local develop/);
-  assert.match(agentEntry, /Hook diagnostic presentation was unresolved at Loader closeout/);
   const shell = document('shell-adapter-loader-status.md');
   assert.match(shell.replace(/\s+/g, ' '), /S0-S6 implemented, verified and integrated into local `develop`/);
   assert.match(shell, /4c294e0bfc3f6cb023d5a837764f898f1b0509d2/);
   assert.match(shell, /5d90472d99a57e33b49d9da712eee891b1861066/);
   assert.match(shell, /Known follow-up: usable Hook diagnostics/);
   assert.match(shell, /no live diagnostic presentation or diagnostic history consumer/);
-  assert.match(agentEntry, /The follow-up is implemented, verified and integrated by A into local develop/);
   assert.match(capacity, /reused evidence/);
-  for (const entry of [current, agentEntry]) {
+  for (const entry of [current]) {
     assert.match(entry, /M8 is rejected and archived; no next numbered milestone is selected/);
     assert.match(entry, /Release-readiness work has no assigned start/);
     assert.match(entry, /integration does not authorize publication/);
@@ -223,8 +223,12 @@ test('current entries reflect V11 integration while preserving earlier milestone
   assert.match(alignment, /broader taxonomy.*remain deferred and do not block/);
 
   for (const entry of ['index.md', 'reading-paths.md', 'next-milestone.md', 'implementation-guidance.md', 'design-notes/service-storage-semantic-baseline.md']) {
-    assert.match(document(entry), /service-storage-staged-design-alignment\.md/, entry);
-    assert.match(document(entry), /m6-recovery-implementation-baseline\.md/, entry);
+    const body = document(entry);
+    // Current task entries may route historical approvals through the reading map.
+    const context = body.includes('service-storage-staged-design-alignment.md') ? body : document('reading-paths.md');
+    if (context !== body) assert.ok(body.includes('reading-paths.md'), entry);
+    assert.match(context, /service-storage-staged-design-alignment\.md/, entry);
+    assert.match(context, /m6-recovery-implementation-baseline\.md/, entry);
   }
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/design-notes\/service-storage-staged-design-alignment/);
@@ -272,7 +276,9 @@ test('M6.5 design direction preserves the separate runtime and Freeze gates', as
       assert.match(rules[1].replace(/\s+/g, ' '), /do not implement M7 Cleanup/);
     }
     if (name === 'behavior/m6-5-service-storage-command-reference.md') {
-      assert.match(body, /available in the integrated M6\.5 baseline/);
+      assert.match(body, /Status: Implemented normative human CLI contract/);
+      assert.match(body, /current handoff.*next-milestone\.md/);
+      assert.match(body, /source-qualified delivery evidence/);
       assert.match(body, /CLI runtime coverage/);
       assert.match(body, /production V2 installation, cross-version retention and explicit reattachment/);
     }
@@ -377,7 +383,7 @@ test('M8 rejection retires Recipe obligations but preserves identity and interna
   assert.match(runtime, /Pactrun MUST materialize runtime content/);
   assert.match(authoring.replace(/\s+/g, ' '), /Every authoring frontend MUST ultimately produce a `RevisionCandidate`/);
   assert.match(authoring, /is not a public API/);
-  assert.match(handoff, /No next numbered milestone is selected/);
+  assert.match(handoff, /No next M-series milestone is selected/);
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   assert.match(sidebar, /development\/history\/m8-recipes-rejected/);
 });
@@ -421,18 +427,19 @@ test('historical completion plan preserves original scope without overriding the
   assert.match(sidebar, /development\/product-completion-milestones/);
 });
 
-test('approved remaining milestones assign gaps without silently implementing contracts or usage guides', async () => {
+test('approved milestones retain historical A-E scope and separately authorized F', async () => {
   const document = name => docs.find(([file]) => file === name)[1];
   const plan = document('development/remaining-capability-milestones.md');
   const text = plan.replace(/\s+/g, ' ');
   assert.match(text, /Approved remaining scope and work order on 2026-09-19/);
   assert.match(text, /authorized recording the plan only/);
-  assert.deepEqual([...plan.matchAll(/^## ([A-E])\. (.+)$/gm)].map(match => [match[1], match[2]]), [
+  assert.deepEqual([...plan.matchAll(/^## ([A-F])\. (.+)$/gm)].map(match => [match[1], match[2]]), [
     ['A', 'Execution Diagnostics and Instance State Observability'],
     ['B', 'Object Catalog, Historical Discovery and Metadata Operations'],
     ['C', 'Revision Bundle Export and Import'],
     ['D', 'Machine-readable CLI Output'],
     ['E', 'Versioning and Baseline Consolidation'],
+    ['F', 'Documentation and Documentation Site'],
   ]);
   assert.match(text, /D is no longer the immediately next capability/);
   assert.match(text, /not new M-series identifiers or versions/);
@@ -441,7 +448,8 @@ test('approved remaining milestones assign gaps without silently implementing co
   assert.match(text, /Import must not rerun authoring or regenerate runtime content/);
   assert.match(text, /85 `Pending automated coverage` markers; this is a dated observation/);
   assert.match(text, /Do not bulk-change Pending to Passed/);
-  assert.match(text, /Full user, Pack Author and Hook usage guides\/placeholders are excluded/);
+  assert.match(text, /Full user, Pack Author and Hook usage guides\/placeholders are excluded from the historical A-E implementation scope/);
+  assert.match(text, /That exclusion does not apply to F/);
   assert.match(text, /Necessary Spec, CLI help, implementation records and acceptance material still accompany/);
   assert.match(text, /Externally meaningful retention\/disclosure, CLI and bundle decisions remain S0 work/);
   for (const name of ['development/product-completion-milestones.md', 'development/implementation-roadmap.md',
@@ -450,11 +458,12 @@ test('approved remaining milestones assign gaps without silently implementing co
     assert.ok(document(name).includes('remaining-capability-milestones.md'), name);
   }
   const handoff = document('development/next-milestone.md').replace(/\s+/g, ' ');
-  assert.match(handoff, /A implementation and verification are complete/);
-  assert.match(handoff, /B is implemented, verified and integrated into local develop/);
-  assert.match(handoff, /C is implemented, verified and integrated into local develop/);
+  for (const name of ['execution-diagnostics-observability-status.md', 'object-catalog-history-metadata-status.md', 'pack-transport-status.md', 'cli-presentation-status.md', 'e-implementation-status.md']) {
+    assert.ok(handoff.includes(name), name);
+    const status = document('development/' + name).match(/\*\*Status:([\s\S]*?)\*\*/)?.[1];
+    assert.ok(status && /implemented|complete/i.test(status), name);
+  }
   assert.match(handoff, /Integration does not authorize publication/);
-  assert.match(handoff, /D is implemented, verified and integrated into local develop/);
   assert.ok(handoff.includes('pack-transport-baseline.md'));
   assert.ok(handoff.includes("object-catalog-history-metadata-baseline.md"));
   assert.doesNotMatch(handoff, /A's S0 is next/);
@@ -476,7 +485,10 @@ test('contributor rules preserve product naming, rationale and branch target dis
   const policy = docs.find(([name]) => name === 'development/development-and-verification.md')[1];
   const normalized = policy.replace(/\s+/g, ' ');
   assert.match(normalized, /New functions and tests MUST use product concepts, behavior or invariants/);
-  assert.match(normalized, /Existing occurrences are deferred to Versioning and Baseline Consolidation/);
+  assert.match(normalized, /Review existing occurrences when working in the affected area/);
+  assert.match(normalized, /do not perform unrelated mass renaming/);
+  assert.match(normalized, /Preserve coverage when removing milestone dependencies/);
+  assert.ok(policy.includes('e-implementation-status.md'));
   assert.match(normalized, /Actual protocol\/format\/schema version identities and stable PR-REQ\/PR-TEST IDs/);
   assert.match(normalized, /Contributors SHOULD record the rationale for each new or revised design rule/);
   assert.match(normalized, /If the original reason is unknown, say it was not recorded/);
@@ -553,5 +565,22 @@ test('E consolidated owners preserve incoming lifecycle and reading-map anchors'
     // Real headings are registered by Docusaurus's broken-anchor checker;
     // arbitrary JSX anchor elements are not a substitute for that metadata.
     for (const anchor of anchors) assert.ok(body.includes('## ' + heading[anchor]), name + '#' + anchor);
+  }
+});
+
+test('F authorizes documentation delivery while preserving publication and Git boundaries', () => {
+  const document = name => docs.find(([file]) => file === name)?.[1];
+  const plan = document('development/remaining-capability-milestones.md');
+  const f = plan.split('## F. Documentation and Documentation Site\n')[1]?.split('\n## ')[0];
+  assert.ok(f);
+  assert.match(f, /Authorized for implementation/);
+  assert.match(f, /uncommitted and unmerged/);
+  assert.match(f, /Git push, public Releases, package-source publication, Pages deployment/);
+  assert.match(f, /remote port 3000/);
+  for (const name of ['development/implementation-roadmap.md', 'development/next-milestone.md', 'development/index.md']) {
+    const body = document(name);
+    assert.ok(body.includes('Documentation and Documentation Site'), name);
+    assert.ok(body.includes('remaining-capability-milestones.md#f-documentation-and-documentation-site'), name);
+    assert.doesNotMatch(body, /E is the next design milestone|E implementation is authorized and in progress/);
   }
 });

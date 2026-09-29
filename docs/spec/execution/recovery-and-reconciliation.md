@@ -152,14 +152,15 @@ Pactrun MUST NOT expose a new Instance commit with recovery state still pointing
 at an earlier boundary. This atomicity is limited to Pactrun-owned authoritative
 state and recovery records. It MUST NOT be described as a single atomic
 transaction with a service filesystem, database, Docker volume, or external
-resource, and it does not predefine how future ServiceStorage-backed Managed
-Service Resource continuity or retention is durably represented.
+resource. ServiceStorage-backed Managed Service Resource continuity and retention
+are represented under the [ServiceStorage execution](./m6-5-service-storage-execution.md)
+and [persistence](../persistence/persistence-baseline.md) contracts.
 
 **Verification: PR-TEST-0085, PR-TEST-0326, PR-TEST-0330.**
 
 ### PR-REQ-0246 - Service transformation target-publication boundary
 
-For a future Revision transition that transforms a ServiceStorage-backed Managed
+For a Revision transition that transforms a ServiceStorage-backed Managed
 Service Resource across a service-owned coherence boundary, the durable recovery
 risk MUST remain `Open` after the service reaches target coherence until Pactrun
 can publish the target Pactrun-owned boundary. Target coherence by itself MUST
@@ -170,8 +171,10 @@ The target Revision, staged Managed Input state and disposition, new
 MUST be published as one Pactrun-owned target boundary. This atomic publication
 MUST NOT include the service-owned bytes or presume a persisted resource
 association, continuity, retention, or discard representation. A supporting
-future Hook Protocol or runtime coordination mechanism MUST acknowledge risk
-resolution consistently with this ordering without changing the Frozen V1 wire.
+Hook Protocol or runtime coordination mechanism MUST acknowledge risk
+resolution consistently with this ordering. The current
+[Hook Protocol](../contracts/hook-protocol.md) defines the target proposal and
+publication acknowledgement; retired wire versions remain unchanged.
 
 If execution is lost after the service may have reached target coherence but
 before that Pactrun-owned publication succeeds, the committed source boundary
@@ -249,9 +252,11 @@ pre-existing guard. Successful Instance deletion removes the object.
 
 **Verification: PR-TEST-0259, PR-TEST-0260, PR-TEST-0264, PR-TEST-0306, PR-TEST-0329, PR-TEST-0370.**
 
-Evidence covers existing Action/Capture/Migration overrides and Restore guard
-publication. The successful Instance deletion clause remains pending under M7;
-this mapping does not claim deletion support.
+The tests listed here cover Action/Capture/Migration overrides and Restore guard
+publication. Instance deletion has separate contract and evidence mappings in
+[M7 Instance retirement](./m7-instance-retirement.md). This list does not claim
+deletion coverage; use those mappings and the
+[M7 implementation record](../../development/m7-implementation-status.md) for its evidence.
 
 ### PR-REQ-0071 - Recovery provenance
 

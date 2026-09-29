@@ -183,5 +183,6 @@ This pinning model applies to the exact Revision and Pactrun-authoritative
 managed context. It does not freeze or linearize service-owned live bytes. A
 service may mutate a ServiceStorage-backed Managed Service Resource without
 Pactrun observing the change or publishing a new `InstanceStateVersion`;
-future authority and operation-prerequisite representations must account for
-that ownership boundary.
+authority and operation-prerequisite representations must account for that
+ownership boundary. The [ServiceStorage execution contract](../execution/m6-5-service-storage-execution.md)
+defines the current admission and publication rules.

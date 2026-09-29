@@ -16,7 +16,7 @@ owning contract for exact identity, representation, lifetime, and failure rules.
 | Instance | Long-lived managed object with stable identity and an active Revision | [Identity and state](./foundations/identity-and-state.md) |
 | Managed Input Binding | Detached value whose authoritative bytes are owned by Pactrun | [Identity and state](./foundations/identity-and-state.md), [Input behavior](./behavior/inputs-secrets-and-readiness.md) |
 | Secret | Protection and disclosure rules, not a claim that Pactrun is a secret vault | [System model](./foundations/system-model.md), [Input behavior](./behavior/inputs-secrets-and-readiness.md) |
-| ServiceStorage / Managed Service Resource | Provided storage lifetime and separately service-authoritative live state; runtime remains deferred | [Identity and state](./foundations/identity-and-state.md), [Migration](./contracts/migrations.md) |
+| ServiceStorage / Managed Service Resource | Provided storage lifetime and separately service-authoritative live state | [Identity and state](./foundations/identity-and-state.md), [ServiceStorage execution](./execution/m6-5-service-storage-execution.md) |
 | Workspace | Execution-scoped scratch under granted Hook authority | [Hooks and recovery](./contracts/hooks-recovery-and-cleanup.md) |
 | Plan | Compiled intent and checks, not a durable replay log | [Execution](./execution/execution-and-concurrency.md) |
 | Run | Durable execution-attempt record, distinct from an ephemeral Plan | [Execution](./execution/execution-and-concurrency.md), [behavior](./behavior/actions-plans-and-runs.md) |

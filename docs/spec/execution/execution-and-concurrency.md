@@ -224,8 +224,9 @@ Service-owned bytes of a ServiceStorage-backed Managed Service Resource are
 explicitly outside this immutable binding-snapshot guarantee. The service may
 mutate live contents while an execution is running, and Pactrun MUST NOT treat an
 `InstanceStateVersion`, mutation guard, or execution pin as proof that those
-bytes were frozen or linearized. How a future Plan binds resource declarations,
-associations, and operation prerequisites remains design work.
+bytes were frozen or linearized. Plans bind resource declarations, associations,
+and operation prerequisites under the
+[ServiceStorage execution contract](./m6-5-service-storage-execution.md).
 
 **Verification: PR-TEST-0094.**
 

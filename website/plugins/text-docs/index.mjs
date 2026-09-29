@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
+import {classify, contextNotice} from '../document-catalog/model.mjs';
 
 const omitted = new Set(['archive', 'proposals']);
 
@@ -24,8 +25,16 @@ export function markdownBody(source) {
   return source.replace(/^---\n[\s\S]*?\n---\n/, '').trimStart();
 }
 
-function textBody(name, source) {
-  return name.endsWith('.md') ? markdownBody(source) : source;
+export function textBody(name, source) {
+  if (!name.endsWith('.md')) return source;
+  const {state, role, audiences} = classify(name, source);
+  return [
+    '> Document context (generated): ' + state + ' | ' + role + ' | ' + audiences.join(', '),
+    '> Source: docs/' + name,
+    '> ' + contextNotice(state, role),
+    '> The original Markdown body follows unchanged after front-matter removal.',
+    '', markdownBody(source),
+  ].join('\n');
 }
 
 function linkProse(body) {
@@ -75,11 +84,12 @@ export async function exportText({docsDir, outDir}) {
   }
   await mkdir(target, {recursive: true});
   await writeFile(path.join(target, 'publication.json'), JSON.stringify({
-    edition: 2,
+    edition: 3,
     source_digest_algorithm: 'sha256',
     source_digest: digest,
     source_digest_input: 'JSON array of sorted [docs-relative path, LF-normalized source] pairs',
     status: 'Development documentation; not a release or installed-binary version assertion',
+    context_policy: 'Generated document context precedes the unchanged Markdown body; JSON schemas are byte-preserved.',
     authority_map: 'spec/index.md',
     implementation_status: 'development/next-milestone.md',
     documents: documents.map(([name]) => name),
@@ -87,12 +97,15 @@ export async function exportText({docsDir, outDir}) {
   await writeFile(path.join(outDir, 'llms.txt'), [
     '# Pactrun', '',
     '> Local-first Pack installation, managed Instances, and Pack-defined operations.', '',
-    'Spec and development documentation edition 2. Usage guides remain planned placeholders.',
+    'Product guides, specification, and development records from one English source.',
     'Task guides are informative; the linked specification defines behavior.', '',
     '## Start here', '',
-    '- [Agent development entry](./agent-docs/agents/index.md): establish authority and scope.',
+    '- [User guides](./agent-docs/guides/index.md): operating procedures and tutorials.',
+      '- [Pack author guide](./agent-docs/package-authors/index.md): prepare a workspace, then build and validate a Pack.',
+    '- [Document catalog](./document-catalog.json): generated source paths, roles, states, and source digest.',
+      '- [Agent task entry](./agent-docs/agents/index.md): choose operating, authoring, Hook integration, or development work.',
     '- [Development paths](./agent-docs/development/reading-paths.md): read the owning contracts by task.',
-    '- [Next milestone](./agent-docs/development/next-milestone.md): current baseline and M5 review gates.',
+    '- [Next milestone](./agent-docs/development/next-milestone.md): current baseline, implementation availability, and work status.',
     '- [Contract catalog](./agent-docs/spec/catalog.md): exact specification status.',
     '- [Develop Pactrun](./agent-docs/agents/develop-pactrun.md): project rules and verification.',
     '- [Specification](./agent-docs/spec/index.md): the sole normative product-rule tree.',

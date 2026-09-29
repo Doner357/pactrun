@@ -4,11 +4,12 @@ This is project navigation, not personal developer preferences or permission to
 commit, push, deploy, change machines, or perform service side effects.
 
 1. Read applicable repository instructions and CONTRIBUTING.md in a checkout.
-2. Read [the Spec map](../spec/index.md) and choose a [task path](../development/reading-paths.md).
-3. Check [the roadmap](../development/implementation-roadmap.md),
-   [current handoff](../development/next-milestone.md), and
-   [original completion plan](../development/product-completion-milestones.md), and
-   [current remaining A-E work order](../development/remaining-capability-milestones.md).
+2. Establish product context and scope with the [overview](../development/product-overview.md)
+   and [current handoff](../development/next-milestone.md).
+3. Read [the Spec map](../spec/index.md) and choose a [task path](../development/reading-paths.md).
+   Use the [original completion plan](../development/product-completion-milestones.md)
+   and [revised milestone record](../development/remaining-capability-milestones.md) when the handoff calls for their
+   historical decisions; they are not a mandatory cover-to-cover prerequisite.
 4. Read actual owning rules, including unnumbered constraints, definitions,
    exceptions, and the exact format/version scope. Use [the glossary](../spec/glossary.md)
    to find a term's owner, not as a replacement definition.

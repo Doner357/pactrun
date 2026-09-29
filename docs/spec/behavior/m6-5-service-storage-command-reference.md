@@ -2,16 +2,16 @@
 title: M6.5 ServiceStorage Commands
 ---
 
-# M6.5 ServiceStorage command proposal
+# ServiceStorage commands
 
 **Status: Implemented normative human CLI contract. Non-Frozen human output.**
 
 <!-- spec-navigation:start -->
 ## Reading map (informative)
 
-These commands are available in the integrated M6.5 baseline; their complete
-cross-platform and compatibility closeout remains in progress.
-Read [Core V2](../contracts/revision-canonical.md),
+These commands are available. The [current handoff](../../development/next-milestone.md)
+links the baseline and source-qualified delivery evidence.
+Read [Revision baseline](../contracts/revision-canonical.md),
 [execution](../execution/m6-5-service-storage-execution.md), and
 [S0 review](../../development/design-notes/m6-5-servicestorage-baseline.md).
 <!-- spec-navigation:end -->
@@ -28,10 +28,13 @@ pactrun resource locate <instance> <resource-id> --intent <read|write> [--retain
 
 Existing global storage-root selection, Instance reference resolution, human
 escaping and exit conventions apply. Unknown/duplicate flags and missing intent
-are syntax errors. No JSON envelope, raw-path piping guarantee, automatic tool
-launch, stdin/file-content import, read/write command, or resource-discard command
-is added. `pactrun storage upgrade` retains its existing command spelling and
-adopts the separately approved V7 gate only when V7 is implemented.
+are syntax errors. The resource operations do not add a raw-path piping guarantee, automatic tool
+launch, stdin/file-content import, read/write command, or resource-discard command.
+Current JSON/JSONL presentation is owned by the
+[CLI machine contract](../contracts/cli-machine-interface.md). The E
+[Persistence baseline](../persistence/persistence-baseline.md) retires the
+development-only `storage upgrade` command. Unsupported stores are refused
+without conversion or data deletion.
 
 Default selection is active only. `--retained` selects retained only, not an
 inclusive union and not fallback resolution. IDs use their exact typed spelling.
@@ -91,7 +94,7 @@ printed text. Output is human-escaped, not safe shell source. A successful locat
 is the only new command that emits native service paths; errors and ordinary
 Run inspection do not leak them, service contents or derived content hashes.
 
-### Proposed diagnostics and existing operations
+### Diagnostics and existing operations {#proposed-diagnostics-and-existing-operations}
 
 The following ErrorTaxonomyV1 entries use owner `service_storage`. S0 proposed
 them without registration; the integrated M6.5 implementation appends them to the
@@ -106,20 +109,22 @@ Existing error identities and fixed categories remain unchanged.
 | resource_absent | admission | requested read or presence requirement needs an existing object |
 | resource_kind_mismatch | admission | observed object cannot satisfy the declared access kind |
 | unsafe_path | admission | owned-root/prefix/link/path representation qualification failed |
-| mapping_conflict | relational_semantic_validation | wrong source role/association, implicit adoption or invalid continuity; intrinsic writer conflicts use the Core V2 owner |
+| mapping_conflict | relational_semantic_validation | wrong source role/association, implicit adoption or invalid continuity; intrinsic writer validation belongs to the Revision baseline |
 | allocation_unavailable | execution | protected allocation missing/unusable; no automatic recreation |
 | target_publication_rejected | execution | target proposal cannot publish under current owner/boundary/risk checks |
 | corrupt_storage_state | persistence | durable allocation/association invariants are violated |
 
-The Core V2 format owner is `revision_core_format_v2`, using the V1 validation
-code spellings with the V2 owner for corresponding failures and
-`invalid_service_declaration` / `invalid_service_mapping` for the new intrinsic
-rules. Hook V2 protocol codes are defined on its own page. Before implementation,
-approved references must enter the append-only registry with owning requirements
-and negative fixtures; do not map raw library strings to speculative stable codes.
+The E baseline uses the semantic error owners `revision_core` and `hook_protocol`
+under the [error taxonomy](../contracts/error-taxonomy-v1.md). Only registered
+owner/code pairs are stable error references. Intrinsic validation also uses
+internal codes such as `invalid_service_declaration` and `invalid_service_mapping`;
+their appearance in a validator or vector does not register a stable error.
+New stable references require owning requirements, catalog registration, and
+negative fixtures. Do not map raw library strings to speculative stable codes.
 
-Instance create uses the existing command, adding the approved eager allocation
-semantics for Core V2 only. Migration keeps the M5 path-ID/--plan/override/input
+Instance create uses the existing command with the eager allocation semantics
+of the current [Revision baseline](../contracts/revision-canonical.md).
+Migration keeps the path-ID/--plan/override/input
 spelling. Its Plan shows declared service mappings and unresolved runtime checks,
 not host paths or a service-state snapshot. Run show adds committed service-edge
 evidence and preserved target-allocation identities when present, explicitly

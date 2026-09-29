@@ -257,12 +257,15 @@ applies only source-projected portable metadata. Duplicate initial Input
 identities and multiple stdin sources fail before acquisition. File and stdin
 sources preserve exact bytes.
 
-The M2 `<reference>` grammar is closed to
+The `<reference>` grammar uses
 `label:<ReferenceLabel>`, `alias:<LocalAlias>`, or
-`exact:<PackageId>/sha256:<RevisionContentDigest-hex>`. Bare tokens, digest
-prefixes, uppercase spellings, missing Package identity or algorithm, and
-repository guessing are invalid. Resolution MUST produce one exact
-`RevisionIdentity` before the typed operation begins.
+`exact:<PackageId>/sha256:<RevisionContentDigest-hex>`. The
+[ID selector contract](../contracts/cli-id-selectors.md) permits unique lowercase
+hexadecimal prefixes of at least eight digits in either exact-reference component.
+Bare tokens, uppercase spellings, missing Package identity or algorithm, and
+repository guessing remain invalid. Resolution MUST produce one fixed exact
+`RevisionIdentity` before the typed operation begins. Labels, aliases, and
+state-version tokens retain their exact meanings.
 
 Every M2 `<instance>` operand accepts only exact `InstanceName`. Comparison
 uses the preserved UTF-8 bytes with no trimming, normalization, case folding,
@@ -278,8 +281,10 @@ no-clobber file publication, non-rollbackable raw stdout, and no force or
 overwrite spelling. `--authorize-secret-export` is the only M2 Secret export
 authorization and has the narrow meaning in PR-REQ-0268.
 
-M2 defines no machine-readable envelope, stable public error catalog, or
-automation API, and it does not change Frozen Error Taxonomy V1.
+The original M2 spelling did not define a machine-readable envelope or automation
+API. Current versioned output is owned by the
+[CLI machine interface](../contracts/cli-machine-interface.md); stable error
+identity remains owned by the [error taxonomy](../contracts/error-taxonomy-v1.md).
 
 **Verification: PR-TEST-0078, PR-TEST-0079.**
 
@@ -394,11 +399,12 @@ is deliberate, not a compatibility fallback or format-selection mechanism.
 
 **Verification: PR-TEST-0550, PR-TEST-0551, PR-TEST-0552.**
 
-## Remaining open spelling
+## Operation-specific spelling {#remaining-open-spelling}
 
-The approved [M4 Snapshot commands](./m4-snapshot-command-reference.md) now
-specify Snapshot and explicit storage-upgrade spelling, implemented and integrated
-into develop with M4. Snapshot deletion remains excluded from M4. The separately
+The [Snapshot commands](./m4-snapshot-command-reference.md) specify Capture,
+Restore, import, export, verification, and inspection. The development-only
+`storage upgrade` command is retired; unsupported stores are refused without
+conversion or data deletion. The separately
 approved [M5 Migration commands](./m5-migration-command-reference.md) provide
 path discovery, planning and implemented execution. Recovery uses
 PR-REQ-0287; Instance deletion and `AbandonManagement` use the

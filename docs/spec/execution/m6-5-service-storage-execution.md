@@ -174,24 +174,27 @@ never-published/unexposed preparation may be removed on confirmed owner loss,
 and then only by removing its known empty directory without traversal. Unexpected
 contents or an unsafe path preserve its durable record for diagnosis.
 
-M7 owns the later explicit lifecycle schema extension and APIs. Before M7 can
-delete an Instance or allocation, its approved design must add durable receipts
+The [M7 retirement contract](./m7-instance-retirement.md) owns the lifecycle
+extension and APIs. Instance or allocation deletion requires durable receipts
 for Cleanup-completed/do-not-replay, finalization retry and abandonment/handoff.
 The receipt must precede physical finalization; after it, only Pactrun-owned
 finalization retries. Ambiguous Cleanup completion authorizes neither replay
 nor finalization. No-Runner/no-Hook cleanup needs its own explicit receipt, not
 a fabricated Hook success.
 
-The V7 ownership boundary is fixed now: allocation IDs, origin identities and
+The ownership boundary established at M6.5 remains: allocation IDs, origin identities and
 last owner InstanceId outlive Instance removal; no FK or ordinary GC rule can
 erase them. M7 must durably preserve that custody and non-destruction obligation
 before removing Instance associations. Abandonment cannot be represented by
 deleting V7 allocation rows or losing their discoverability. Any later discard
 requires separately recorded explicit authority and a destructive finalization
-receipt. M7 adds that schema through an explicit versioned upgrade; V7 contains
-no speculative M7 operation ranks, nullable receipts or placeholder Deleting
-Instance states. This is a decided migration boundary, not permission to mutate
-V7 DDL silently when implementing M7.
+receipt. At the M6.5 stage, V7 contained no speculative M7 operation ranks,
+nullable receipts or placeholder Deleting Instance states; the planned M7
+extension required an explicit versioned upgrade. That is historical schema
+design context. The [current persistence baseline](../persistence/persistence-baseline.md)
+now owns the fresh schema, including retirement receipts. Development-era
+numeric schemas and their upgrade chains are retired; this paragraph does not
+authorize an upgrade from V7 or mutation of its retired DDL.
 
 **Verification: PR-TEST-0371, PR-TEST-0372, PR-TEST-0374, PR-TEST-0375, PR-TEST-0376, PR-TEST-0382, PR-TEST-0383.**
 
