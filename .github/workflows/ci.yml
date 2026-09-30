@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# Large executable fixtures are expensive at opt-level 0. Keep all checks on.
+env:
+  CARGO_PROFILE_TEST_OPT_LEVEL: '1'
+  CARGO_PROFILE_TEST_DEBUG_ASSERTIONS: 'true'
+  CARGO_PROFILE_TEST_OVERFLOW_CHECKS: 'true'
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -53,6 +59,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Rust
@@ -109,6 +116,12 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: website/build
+
+      - name: Verify public package definitions and immutable records
+        if: needs.scope.outputs.runtime == 'true'
+        run: |
+          python3 -m unittest tools.test_release_catalog
+          python3 tools/verify_release_catalog.py
 
   windows:
     name: Windows Rust verification

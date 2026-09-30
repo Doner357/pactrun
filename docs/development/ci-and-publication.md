@@ -42,6 +42,13 @@ history and initial pushes use the full scope.
   Windows job is accepted only when documentation-only scope was proved. Failed,
   cancelled or missing verification does not authorize deployment.
 
+CI uses test opt-level 1 with debug assertions and overflow checks explicitly
+enabled; it does not shorten timeouts or remove cases. The 2026-09-30 representative
+CLI/Hook fixture took about 40 seconds unoptimized and 10 seconds at opt-level 1
+on the qualified remote (excluding compilation). Release builds are unaffected.
+Runtime-scope CI also regenerates checked-in package definitions, rejects drift
+or non-public asset URLs, and compares previous published release identities.
+
 Configure branch protection/rulesets to require **CI gate**, not the conditional
 Windows job. Changing repository protection requires a separately authorized
 administrative action. This local workflow change does not configure it.
