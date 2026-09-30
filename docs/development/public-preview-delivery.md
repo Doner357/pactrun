@@ -4,11 +4,62 @@ title: Public Preview delivery
 
 # Public Preview delivery
 
-**Status: Implementation and qualification in progress.** On 2026-09-30 the owner
+**Status: Preview artifacts and native sources published; website acceptance in progress.** On 2026-09-30 the owner
 authorized the public `Doner357/pactrun` repository, MIT licensing, and the commits,
 merges, pushes, tags, GitHub Release, Pages and package publication needed for this
 milestone. This authorization is not a claim that publication or qualification has
 already succeeded. No formal 1.0.0 promotion is implied.
+
+## Published identity and evidence
+
+- Repository: [Doner357/pactrun](https://github.com/Doner357/pactrun), public, MIT,
+  with `main` as its default branch.
+- Release: [v1.0.0-alpha.1](https://github.com/Doner357/pactrun/releases/tag/v1.0.0-alpha.1),
+  explicitly marked Preview/prerelease. Stable remains unavailable.
+- Version tag: `2eb5b43107231dc10d3c8dc97cbe6aa54c6ed4f6`, the reviewed delivery record.
+- Binary source: `4e8366975d95e0fa6973c7a1fb9eea6a99dcf628`; both targets used
+  Rust 1.98.1. Later changes affect packaging, verification and documentation, not
+  the runtime/dependency inputs. The Release includes the exact build-source
+  archive, manifest, provenance and SHA256SUMS; no qualified binary was rebuilt
+  during public upload.
+
+| Verification | Result and boundary |
+| --- | --- |
+| Configured Linux complete gate | Passed `cargo xtask ci` plus catalog verification on source `4956d2b`, with opt-level 1, no debug symbols, debug assertions and overflow checks enabled |
+| Hosted integration CI | [Passed on Windows and Ubuntu](https://github.com/Doner357/pactrun/actions/runs/36703489016) for `1afbab6`; the only changes after the remote gate were Windows Node/checkout prerequisites |
+| Isolated native lifecycle | Passed 36 Windows and 34 Linux assertions, including update, hold/pin, exact switch, active Hook lifetime, checksum failure recovery and source relocation |
+| Actual public acquisition | Passed 18 Windows and 15 Linux assertions from the public main-branch source and actual Release URLs, including real Pack/Instance/Hook use and data-preserving reinstall/removal |
+| Documentation checks | Passed all 89 source, link, reading-path and traceability checks; production-site acceptance is recorded at closeout |
+| Pages | Deployment and public browser acceptance pending |
+| Hosted candidate rebuild procedure | [Passed on Windows 2025 and Ubuntu 24.04](https://github.com/Doner357/pactrun/actions/runs/36705688007); does not replace published assets |
+
+Assertion counts include artifact checks; they are not independent product-test or
+certification counts. Public testing used isolated native-manager prefixes and
+stores, not the operator's installed applications or real service data. The
+temporary Windows PATH entry was removed and its before/after fingerprint matched.
+Local/remote detailed receipts are retained in the delivery evidence workspace.
+
+Initial attempts exposed environment/setup issues rather than grounds to weaken
+contracts: an unsafe group-writable IPC temporary root, missing pinned-toolchain
+components, Windows CRLF Markdown and a preinstalled Node 22 instead of Node 24.
+Those prerequisites were corrected. Scoop's hook behavior also required using its
+explicit abort operation to reject a command conflict; the failed test was retained
+and the corrected native scenarios passed. Superseded/failed attempts are not
+counted as passing qualification.
+
+## Platform and remaining product limits
+
+Native artifact tests used Windows 11 build 26200 on NTFS and Debian 13 on ZFS.
+Linux product imports reach GLIBC_2.39; this is a library floor, not proof for every
+kernel, distribution or filesystem. Windows imports are OS DLLs, with no separate
+MSVC runtime dependency observed. No Windows 10, macOS, ARM64 or musl artifact is
+promised. Native tests used pinned Scoop/Homebrew revisions recorded in their
+receipts; arbitrary future manager versions are not certified.
+
+This delivery does not claim Authentik black-box acceptance, platform code signing,
+formal 1.0.0 promotion or general prerelease data downgrade compatibility. All eight
+format domains remain `1.0-alpha.1`. The alpha.2 software-only fixture was used only
+for isolated update testing and was not published.
 
 ## Approved delivery model
 
