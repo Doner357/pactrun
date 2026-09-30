@@ -143,6 +143,17 @@ jobs:
           components: rustfmt, clippy
           cache: true
 
+      - name: Set up the independent Node oracle
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: website/.node-version
+
+      - name: Verify Windows oracle and canonical source prerequisites
+        run: |
+          node --version
+          $spec = [IO.File]::ReadAllText('docs/spec/persistence/persistence-baseline.md')
+          if ($spec.Contains("`r`n")) { throw 'Canonical Markdown must be checked out with LF line endings.' }
+
       - name: Run Rust verification
         run: cargo xtask rust-ci
 
