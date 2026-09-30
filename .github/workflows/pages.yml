@@ -10,7 +10,7 @@ permissions:
 jobs:
   deploy:
     name: Deploy verified Pages artifact
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+    if: ${{ always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

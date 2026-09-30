@@ -8,6 +8,28 @@ const body = workflow.match(/\/\/ BEGIN PAGES GUARD([\s\S]*?)\/\/ END PAGES GUAR
 assert.ok(body, 'Missing executable Pages eligibility guard');
 const guard = new (Object.getPrototypeOf(async function () {}).constructor)('github', 'context', 'core', body);
 
+test('a passed docs-only gate deploys despite an intentionally skipped Windows ancestor', () => {
+  const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const caller = ci.split('\n  pages:\n')[1];
+  const expression = caller.match(/if: \$\{\{ (.*?) \}\}/)[1];
+  assert.match(expression, /always\(\)/);
+  assert.match(expression, /!cancelled\(\)/);
+  assert.match(expression, /needs\.gate\.result == 'success'/);
+  const eligible = new Function('always', 'cancelled', 'needs', 'github', 'vars', 'return ' + expression);
+  const base = {event_name: 'push', ref: 'refs/heads/main'};
+  const enabled = {PACTRUN_PAGES_ENABLED: 'true'};
+  assert.equal(eligible(() => true, () => false, {gate: {result: 'success'}, windows: {result: 'skipped'}}, base, enabled), true);
+  for (const result of ['failure', 'cancelled', 'skipped', '']) {
+    assert.equal(eligible(() => true, () => false, {gate: {result}}, base, enabled), false);
+  }
+  const passed = {gate: {result: 'success'}};
+  assert.equal(eligible(() => true, () => true, passed, base, enabled), false);
+  assert.equal(eligible(() => true, () => false, passed, {...base, event_name: 'pull_request'}, enabled), false);
+  assert.equal(eligible(() => true, () => false, passed, {...base, ref: 'refs/heads/develop'}, enabled), false);
+  assert.equal(eligible(() => true, () => false, passed, base, {PACTRUN_PAGES_ENABLED: 'false'}), false);
+  assert.match(workflow, /if: \$\{\{ always\(\) && !cancelled\(\)/);
+});
+
 for (const [name, eventName, ref, current, expected] of [
   ['current main push', 'push', 'refs/heads/main', 'tested', 'true'],
   ['superseded main push', 'push', 'refs/heads/main', 'newer', 'false'],
