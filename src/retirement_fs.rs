@@ -739,6 +739,35 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_removal_ends_only_the_qualified_lifetime_and_keeps_completed_evidence() {
+        // This proof needs an uncontended lock. Other parallel libtest cases can
+        // fork while removal owns its open-file-description lock; CLOEXEC only
+        // closes inherited descriptors at exec, not at fork. Isolate this proof
+        // instead of weakening production contention checks or retrying errors.
+        const CHILD: &str = "PACTRUN_TEST_RETIREMENT_LIFETIME_CHILD";
+        if std::env::var_os(CHILD).as_deref() != Some(std::ffi::OsStr::new("1")) {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "retirement_fs::tests::linux_removal_ends_only_the_qualified_lifetime_and_keeps_completed_evidence",
+                    "--nocapture",
+                    "--test-threads=1",
+                    "--color=never",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                String::from_utf8_lossy(&output.stdout).contains("1 passed; 0 failed"),
+                "the isolated proof must actually execute"
+            );
+            return;
+        }
         let (temp, path, id) = fixture();
         let outside = temp.path().join("outside");
         std::fs::write(&outside, b"outside bytes").unwrap();
