@@ -187,7 +187,8 @@ jobs:
   pages:
     name: Publish verified documentation
     needs: gate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+    # An intentionally skipped Windows ancestor must not suppress a passed gate.
+    if: ${{ always() && !cancelled() && needs.gate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true' }}
     permissions:
       contents: read
       pages: write
