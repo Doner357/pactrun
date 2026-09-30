@@ -24,6 +24,8 @@ not automatically isolate data from an existing normal installation. Read
 - Install and verify [Scoop](https://scoop.sh/) or
   [Homebrew](https://brew.sh/) first, following its own prerequisites. Do not run
   these instructions as administrator/root merely to bypass an error.
+- Git must be available for source setup. If Scoop reports that Git is missing,
+  install it with `scoop install git` before adding the Pactrun bucket.
 - The project-owned source is `https://github.com/Doner357/pactrun`. It is not a
   claim of endorsement or inclusion in either manager's official package catalog.
 - Packages download versioned Release assets and verify their SHA-256. The alpha

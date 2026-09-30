@@ -4,9 +4,9 @@ title: CI and publication operations
 
 # CI and publication operations
 
-**Status: CI/Pages configuration prepared locally; hosted execution and public
-activation are not yet verified.** This is an engineering procedure, not a product
-contract or an announcement that downloads or a public website are available.
+**Status: Operational CI/Pages procedure.** Actual activation and qualification
+results belong to [Public Preview delivery](./public-preview-delivery.md). This
+procedure is not a product contract or an independent certification claim.
 
 ## One project, distinct responsibilities
 
@@ -50,6 +50,13 @@ CLI/Hook fixture took about 40 seconds unoptimized and 10 seconds at opt-level 1
 on the qualified remote (excluding compilation). Release builds are unaffected.
 Runtime-scope CI also regenerates checked-in package definitions, rejects drift
 or non-public asset URLs, and compares previous published release identities.
+
+Linux libtest cases are scheduled serially: unrelated fork/exec activity can
+temporarily inherit another test's open-file-description lock even with CLOEXEC.
+The uncontended retirement-lifetime proof also runs in its own process and checks
+that exactly one proof executed. Explicit lock-contention and concurrent-operation
+tests still create their own competing threads/processes and retain their original
+assertions. No production lock behavior or timeout was changed to obtain a pass.
 
 Configure branch protection/rulesets to require **CI gate**, not the conditional
 Windows job. Changing repository protection requires a separately authorized
@@ -117,22 +124,27 @@ status before claiming the public site is healthy.
 
 ## Software delivery is a separate gate
 
-The approved direction is a Stable `pactrun` entry and a Preview `pactrun-preview`
-entry in the project's ordinary version history. Native installation/update should
-not require users to switch Git branches. The existing source-branch publisher
-and helper have not yet been replaced; this CI change does not claim that the new
-package entries are available or verified. See the existing
-[native delivery evidence](./native-package-delivery.md) and
+The delivery uses a Stable `pactrun` entry and a Preview `pactrun-preview` entry in
+the project's ordinary version history. Stable is absent until a formal release
+is eligible. Native installation/update does not require a Git branch switch;
+the old source-ref helper is not shipped. The legacy publisher remains only an
+engineering fixture. See the [public delivery evidence](./public-preview-delivery.md),
+[historical native delivery evidence](./native-package-delivery.md) and
 [release readiness gates](./release-readiness.md).
 
-Before automating public executable delivery, close and test the new package
-definitions, Major/exact selection, command conflicts, failed-switch recovery and
-data-preservation cases. Keep binary source SHA, tested archive hashes and the
+Before a later executable delivery, requalify affected package definitions,
+Major/exact selection, command conflicts, failed-switch recovery and data-preservation
+cases. Keep binary source SHA, tested archive hashes and the
 subsequent metadata commit linked in a delivery receipt: inserting archive hashes
 into package definitions does not justify silently rebuilding qualified binaries.
 Real releases require full candidate/artifact qualification, minimum-environment
 and trust/license review, and explicit publication authorization. Neither workflow
-currently uploads executable releases or updates package sources.
+automatically uploads executable releases or updates package sources. The manually
+dispatched **Release candidate** workflow builds source-qualified artifacts on
+Windows 2025 and Ubuntu 24.04 with Rust 1.98.1; its read-only token cannot publish
+them. Choose the binary source SHA from the delivery receipt, not a later metadata
+commit, when reproducing that source. Candidate artifacts are review inputs, not
+permission to overwrite an already published version with a different build.
 
 ## Validation limits
 
