@@ -180,7 +180,7 @@ downgrade or cross Major. No formal candidate MUST NOT fall back to prerelease.
 Changing saved eligibility alone MUST NOT replace the executable. Switching an
 executable and validating its data compatibility remain separate responsibilities.
 
-**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate.**
+**Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637, PR-TEST-0640, PR-TEST-0641; source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate.**
 
 ## Verification status
 

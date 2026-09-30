@@ -25,7 +25,7 @@ work = Path(tempfile.mkdtemp(prefix='install-journey-', dir=base))
 windows = os.name == 'nt'
 language = 'powershell' if windows else 'sh'
 shell = 'powershell.exe' if windows else 'sh'
-names = ['docs/guides/installation.md', 'docs/guides/data-location.md', 'docs/guides/use-pack.md']
+names = ['docs/guides/standalone-installation.md', 'docs/guides/data-location.md', 'docs/guides/use-pack.md']
 documents = {name: (root / name).read_text(encoding='utf-8') for name in names}
 
 def block(body, lang):

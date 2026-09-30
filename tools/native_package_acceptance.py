@@ -12,6 +12,7 @@ parser.add_argument('--manager', type=Path, required=True)
 parser.add_argument('--xtask', type=Path, required=True)
 parser.add_argument('--parts', type=Path, nargs=4, required=True)
 parser.add_argument('--allow-user-path-change', action='store_true')
+parser.add_argument('--public-source', help='Verify actual published acquisition instead of the isolated upgrade fixture')
 args = parser.parse_args()
 WIN = os.name == 'nt'
 if WIN and not args.allow_user_path_change:
@@ -84,11 +85,21 @@ for part in args.parts:
         release['artifacts'].append(artifact)
 assert sorted(RELEASES)==['1.0.0-alpha.1','1.0.0-alpha.2']
 VERSIONS=sorted(RELEASES)
-PUBLISHER=ROOT/'source.git'
+PUBLISHER=ROOT/'source'
+PACKAGES={'normal':'pactrun-preview','test':'pactrun-test-exact-1-0-0-alpha-1'}
 def publish(versions):
     source=ROOT/'releases.json'
     source.write_text(json.dumps([RELEASES[v] for v in versions]),encoding='utf-8')
-    run([args.xtask,'release-publish-local',source,PUBLISHER,'major-1-preview'],'publish-source')
+    output=ROOT/('catalog-'+str(len(COMMANDS)))
+    command=[args.xtask,'release-catalog',source,output]
+    if PUBLISHER.exists(): command.append(PUBLISHER/'releases/catalog.json')
+    run(command,'generate-catalog')
+    if not PUBLISHER.exists():
+        run(['git','init','--initial-branch=main',PUBLISHER],'init-source')
+        (PUBLISHER/'README.md').write_text('Ordinary project default branch fixture.\n',encoding='utf-8')
+    shutil.copytree(output,PUBLISHER,dirs_exist_ok=True)
+    run(['git','-C',PUBLISHER,'add','README.md','bucket','Formula','releases'],'stage-catalog')
+    run(['git','-C',PUBLISHER,'commit','-m','Publish reviewed package definitions'],'commit-catalog')
 
 ORIGINAL_PATH=None
 MANAGER=ROOT/('scoop' if WIN else 'brew')
@@ -133,26 +144,21 @@ def manager_setup():
         run(['git','-C',empty,'commit','--allow-empty','-m','isolated empty main bucket'],'empty-main-commit')
         run(['git','clone',empty,MANAGER/'buckets/main'],'empty-main-clone')
     run(PM+['--version'],'manager-version')
-    for flavor in ['normal','test']:
-        source=source_path(flavor)
-        run(['git','clone',PUBLISHER,source],'clone-'+flavor)
+    source_url=args.public_source or PUBLISHER.as_uri()
+    run(PM+(['bucket','add','pactrun',source_url] if WIN else ['tap','--custom-remote','doner357/pactrun',source_url]),'add-native-source')
     (ROOT/'evidence/manager-environment.json').write_text(json.dumps({k:v for k,v in ENV.items() if k.startswith(('SCOOP','HOMEBREW'))},indent=2),encoding='utf-8')
 def source_path(flavor):
-    return MANAGER/(('buckets/e-'+flavor) if WIN else ('Library/Taps/pactrun/homebrew-e-'+flavor))
+    return MANAGER/('buckets/pactrun' if WIN else 'Library/Taps/doner357/homebrew-pactrun')
 def app(flavor): return 'pactrun' if flavor=='normal' else 'pactrun-test'
-def qualified(flavor): return ('e-' if WIN else 'pactrun/e-')+flavor+'/'+app(flavor)
+def qualified(flavor): return ('pactrun/' if WIN else 'doner357/pactrun/')+PACKAGES[flavor]
 def pm(operation,flavor='normal',required=True,extra=()):
-    name=app(flavor) if WIN and operation in ['hold','unhold','cleanup','uninstall'] else qualified(flavor)
+    name=PACKAGES[flavor] if WIN and operation in ['hold','unhold','cleanup','uninstall'] else qualified(flavor)
     return run(PM+[operation,*extra,name],operation+'-'+flavor,required=required)
 def binary(flavor='normal'):
     return MANAGER/('shims/'+app(flavor)+'.exe' if WIN else 'bin/'+app(flavor))
 def observed(flavor='normal'):
     _,out=run([binary(flavor),'--format','json','--version'],'version-'+flavor)
     return json.loads(out)['result']['product_version']
-def selector(flavor='normal'):
-    return MANAGER/('shims/'+app(flavor)+'-source.exe' if WIN else 'bin/'+app(flavor)+'-source')
-def select(flavor,*selection,required=True):
-    return run([selector(flavor),'--source-root',source_path(flavor),*selection],'select-'+flavor,required=required)
 # Remaining scenario functions are appended below.
 
 DATA=ROOT/'data'
@@ -253,31 +259,41 @@ def immutable_state():
             'SELECT * FROM pactrun_metadata ORDER BY singleton']]
 
 def scenarios():
-    publish([VERSIONS[0]]); manager_setup()
+    if not args.public_source: publish([VERSIONS[0]])
+    manager_setup()
     pm('install'); pm('install','test')
     check('both real alpha.1 packages installed',observed()==VERSIONS[0] and observed('test')==VERSIONS[0])
     check('installation did not provision management data',not (DATA/'pactrun').exists() and not (DATA/'pactrun-test').exists())
     prepare_data()
     before=immutable_state()
-    select('test','--major','1','--stable')
-    check('formal channel has no prerelease fallback',(source_path('test')/'NO-ELIGIBLE-RELEASE.txt').exists())
-    check('metadata-only stable selection does not alter installed program',observed('test')==VERSIONS[0])
-    select('test','--exact',VERSIONS[0])
-    code,_=select('test','--major','2','--preview',required=False)
-    check('source cannot cross Major implicitly',code!=0)
+    stable=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun'
+    code,_=run(PM+['install',stable],'stable-unavailable',required=False)
+    check('stable cannot fall back to alpha',code!=0 and observed()==VERSIONS[0])
+    conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-1-0-0-alpha-1'
+    code,_=run(PM+['install',conflict],'command-conflict',required=False)
+    check('second package cannot take over the command',code!=0 and observed()==VERSIONS[0])
+    if args.public_source:
+        run(PM+['update'],'public-source-refresh')
+        check('public source stays on ordinary main',run(['git','-C',source_path('normal'),'branch','--show-current'],'public-source-branch')[1].strip()=='main')
+        live(lambda:pm('uninstall',required=False),'public-uninstall')
+        if binary().exists(): pm('uninstall')
+        pm('install')
+        check('public reinstall retains data',immutable_state()==before and observed()==VERSIONS[0])
+        pm('uninstall'); pm('uninstall','test')
+        check('public uninstall retains data',immutable_state()==before)
+        return
     pm('hold' if WIN else 'pin')
     if WIN:
-        info=json.loads((MANAGER/'apps/pactrun/current/install.json').read_text(encoding='utf-8-sig'))
-        check('Scoop installed record is actually held',info.get('hold') is True and info.get('bucket')=='e-normal')
+        info=json.loads((MANAGER/'apps'/PACKAGES['normal']/'current/install.json').read_text(encoding='utf-8-sig'))
+        check('Scoop installed record is actually held',info.get('hold') is True and info.get('bucket')=='pactrun')
     publish(VERSIONS)
-    select('normal','--major','1','--preview')
     run(PM+['update'],'native-source-refresh')
     manager_repo=MANAGER/'apps/scoop/current' if WIN else MANAGER
     expected='b588a06e41d920d2123ec70aee682bae14935939' if WIN else '570982948a8a194f0f42f43f4a5bce2d1c9f64cb'
     check('native metadata refresh keeps manager source pinned',run(['git','-C',manager_repo,'rev-parse','HEAD'],'manager-source-after-refresh')[1].strip()==expected)
-    check('native refresh preserves preview tracking',json.loads((source_path('normal')/'release.json').read_text())['product_version']==VERSIONS[1])
+    check('native refresh follows ordinary main',run(['git','-C',source_path('normal'),'branch','--show-current'],'source-branch')[1].strip()=='main')
     check('selection changes metadata only',observed()==VERSIONS[0])
-    check('independent exact test source did not follow preview',json.loads((source_path('test')/'release.json').read_text())['product_version']==VERSIONS[0])
+    check('exact package stays on its version',observed('test')==VERSIONS[0])
     pm('update' if WIN else 'upgrade',required=False)
     check('native hold or pin prevents upgrade',observed()==VERSIONS[0])
     pm('unhold' if WIN else 'unpin')
@@ -291,21 +307,16 @@ def scenarios():
     check('test installation unaffected',observed('test')==VERSIONS[0])
     live(lambda:pm('cleanup',required=False),'cleanup')
     pm('cleanup')
-    select('normal','--exact',VERSIONS[0])
-    run(PM+['update'],'native-exact-refresh')
-    check('native refresh preserves exact tracking',json.loads((source_path('normal')/'release.json').read_text())['product_version']==VERSIONS[0])
     pm('update' if WIN else 'upgrade',required=False)
     check('ordinary update never downgrades',observed()==VERSIONS[1])
-    if WIN:
-        # Cleanup intentionally removed old payload; native explicit reinstall reacquires it.
-        live(lambda:pm('uninstall',required=False),'explicit-switch-deferral')
-        if binary().exists(): pm('uninstall')
-        pm('install')
-    else: live(lambda:pm('reinstall'),'explicit-switch')
+    live(lambda:pm('uninstall',required=False),'explicit-switch')
+    if binary().exists(): pm('uninstall')
+    PACKAGES['normal']='pactrun-exact-1-0-0-alpha-1'
+    pm('install')
     check('explicit native reinstall can select older exact',observed()==VERSIONS[0])
     check('explicit switch does not rewrite object identity',immutable_state()==before)
     # Corrupt only this owned cloned source. Do not modify the immutable publisher.
-    definition=source_path('test')/('bucket/pactrun-test.json' if WIN else 'Formula/pactrun-test.rb')
+    definition=source_path('test')/(('bucket/'+PACKAGES['test']+'.json') if WIN else ('Formula/'+PACKAGES['test']+'.rb'))
     original=definition.read_text(encoding='utf-8')
     release=RELEASES[VERSIONS[0]]
     artifact=next(x for x in release['artifacts'] if x['flavor']=='test' and x['platform']==('windows-x86_64' if WIN else 'linux-x86_64'))
@@ -315,6 +326,13 @@ def scenarios():
     check('wrong checksum refuses installation',code!=0 and not binary('test').exists())
     definition.write_text(original,encoding='utf-8')
     pm('install','test')
+    check('failed installation can recover using the original package',observed('test')==VERSIONS[0] and immutable_state()==before)
+    relocated=ROOT/'relocated-source'
+    run(['git','clone',PUBLISHER,relocated],'relocate-source')
+    run(['git','-C',source_path('normal'),'remote','set-url','origin',relocated.as_uri()],'change-source-location')
+    PUBLISHER.rename(ROOT/'retired-source')
+    run(PM+['update'],'refresh-after-relocation')
+    check('source relocation needs neither reinstall nor data migration',observed()==VERSIONS[0] and immutable_state()==before)
     live(lambda:pm('uninstall',required=False),'uninstall')
     if binary().exists(): pm('uninstall')
     check('uninstall completes after active operation',not binary().exists())

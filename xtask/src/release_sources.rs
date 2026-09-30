@@ -259,6 +259,120 @@ fn load(input: &Path) -> Result<Vec<Release>, String> {
     Ok(releases)
 }
 
+fn package_base(major: u64, test: bool) -> String {
+    let flavor = if test { "pactrun-test" } else { "pactrun" };
+    if major == 1 {
+        flavor.to_owned()
+    } else {
+        format!("{flavor}-v{major}")
+    }
+}
+
+fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<String, String> {
+    let app = if test { "pactrun-test" } else { "pactrun" };
+    let flavor = if test { "test" } else { "normal" };
+    let mut files = BTreeMap::new();
+    let class = package
+        .split('-')
+        .map(|part| {
+            let mut chars = part.chars();
+            chars.next().unwrap().to_uppercase().collect::<String>() + chars.as_str()
+        })
+        .collect::<String>();
+    for artifact in release.artifacts.iter().filter(|a| a.flavor == flavor) {
+        if artifact.platform == "windows-x86_64" {
+            // Detect any already installed package owning this entrypoint, including
+            // exact versions not known when this immutable definition was published.
+            let guard = format!(
+                "$root = if ($global) {{ $globaldir }} else {{ $scoopdir }}; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object {{ $_.Name -ne $app }} | ForEach-Object {{ $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) {{ $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) {{ if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq '{app}') {{ abort \"Uninstall $($_.Name) before installing $app; managed data is retained.\" }} }} }} }}"
+            );
+            let manifest = json!({"version": release.product_version,
+                "description": "Pactrun immutable revisions and managed instances",
+                "homepage": "https://github.com/Doner357/pactrun", "license": "MIT",
+                "architecture": {"64bit": {"url": artifact.url, "hash": artifact.sha256}},
+                "bin": [[format!("bin/{app}.exe"), app]], "pre_install": guard});
+            files.insert(
+                format!("bucket/{package}.json"),
+                serde_json::to_string_pretty(&manifest).unwrap() + "\n",
+            );
+        } else {
+            files.insert(format!("Formula/{package}.rb"), format!(
+                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install 'bin', 'libexec', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
+                ruby(&artifact.url), ruby(&release.product_version), ruby(&artifact.sha256)));
+        }
+    }
+    files
+}
+
+fn catalog(releases: &[Release], previous: &[Release]) -> Result<BTreeMap<String, String>, String> {
+    let versions = validate(releases)?;
+    for (version, old) in validate(previous)? {
+        let new = versions
+            .get(&version)
+            .ok_or("published release cannot be removed")?;
+        if definitions(old) != definitions(new) {
+            return Err("published release identity cannot change; use a new version".into());
+        }
+    }
+    let mut files = BTreeMap::new();
+    for (version, release) in &versions {
+        files.insert(
+            format!("releases/{version}.json"),
+            serde_json::to_string_pretty(release).unwrap() + "\n",
+        );
+        for test in [false, true] {
+            let base = package_base(version.major(), test);
+            let exact = format!("{base}-exact-{}", version.to_string().replace('.', "-"));
+            files.extend(catalog_definition(release, &exact, test));
+        }
+    }
+    for major in versions.keys().map(|v| v.major()).collect::<BTreeSet<_>>() {
+        for (suffix, allow_prerelease) in [("", false), ("-preview", true)] {
+            if let Some(version) = (ReleaseSelection::Major {
+                major,
+                allow_prerelease,
+            })
+            .select(versions.keys().copied())
+            {
+                for test in [false, true] {
+                    let name = format!("{}{suffix}", package_base(major, test));
+                    files.extend(catalog_definition(versions[&version], &name, test));
+                }
+            }
+        }
+    }
+    let ordered = versions.into_values().collect::<Vec<_>>();
+    files.insert(
+        "releases/catalog.json".into(),
+        serde_json::to_string_pretty(&ordered).unwrap() + "\n",
+    );
+    Ok(files)
+}
+
+/// Produce ordinary project files, never branch/channel refs or installation state.
+pub(crate) fn generate_catalog(
+    input: &Path,
+    output: &Path,
+    previous: Option<&Path>,
+) -> Result<(), String> {
+    let previous = previous.map(load).transpose()?.unwrap_or_default();
+    let files = catalog(&load(input)?, &previous)?;
+    fs::create_dir(output).map_err(|e| e.to_string())?;
+    for (name, contents) in files {
+        let path = output.join(name);
+        fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.write_all(contents.as_bytes())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn generate(input: &Path, output: &Path) -> Result<(), String> {
     let releases = load(input)?;
     let plans = plans(&releases)?;
@@ -471,6 +585,64 @@ pub(crate) fn publish_local(input: &Path, repo: &Path, default_ref: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-ID: PR-TEST-0640
+    // Verifies: PR-REQ-0333
+    #[test]
+    fn ordinary_catalog_separates_channels_major_and_immutable_exact_entries() {
+        let first = release("1.0.0-alpha.1");
+        let second = release("1.0.0-alpha.2");
+        let old = catalog(std::slice::from_ref(&first), &[]).unwrap();
+        let new = catalog(&[first.clone(), second], std::slice::from_ref(&first)).unwrap();
+        assert!(!new.contains_key("bucket/pactrun.json"));
+        assert!(new["bucket/pactrun-preview.json"].contains("1.0.0-alpha.2"));
+        assert_eq!(
+            old["bucket/pactrun-exact-1-0-0-alpha-1.json"],
+            new["bucket/pactrun-exact-1-0-0-alpha-1.json"]
+        );
+        assert_eq!(
+            old["Formula/pactrun-exact-1-0-0-alpha-1.rb"],
+            new["Formula/pactrun-exact-1-0-0-alpha-1.rb"]
+        );
+        assert!(new["Formula/pactrun-preview.rb"].contains("class PactrunPreview < Formula"));
+        assert!(new.values().all(|value| !value.contains("pactrun-source")));
+        assert!(catalog(&[], std::slice::from_ref(&first)).is_err());
+        let mut rewritten = first.clone();
+        rewritten.artifacts[0].sha256 = "d".repeat(64);
+        assert!(catalog(&[rewritten], &[first]).is_err());
+        assert_eq!(package_base(1, false), "pactrun");
+        assert_eq!(package_base(2, false), "pactrun-v2");
+        assert_eq!(package_base(2, true), "pactrun-test-v2");
+    }
+
+    // Test-ID: PR-TEST-0641
+    // Verifies: PR-REQ-0333
+    #[test]
+    fn native_catalog_uses_formal_precedence_and_guards_command_ownership() {
+        let files = catalog(
+            &[
+                release("1.0.0-alpha.2"),
+                release("1.0.0"),
+                release("1.1.0-alpha.1"),
+            ],
+            &[],
+        )
+        .unwrap();
+        let stable: serde_json::Value =
+            serde_json::from_str(&files["bucket/pactrun.json"]).unwrap();
+        let preview: serde_json::Value =
+            serde_json::from_str(&files["bucket/pactrun-preview.json"]).unwrap();
+        assert_eq!(stable["version"], "1.0.0");
+        assert_eq!(preview["version"], "1.1.0-alpha.1");
+        assert_eq!(preview["bin"][0][1], "pactrun");
+        assert!(
+            preview["pre_install"]
+                .as_str()
+                .unwrap()
+                .contains("abort \"Uninstall")
+        );
+        assert!(files["Formula/pactrun-preview.rb"].contains("Formula.installed.each"));
+        assert!(!preview.to_string().contains("persist"));
+    }
     fn release(version: &str) -> Release {
         let formal = version.parse::<ProductVersion>().unwrap().is_formal();
         Release {

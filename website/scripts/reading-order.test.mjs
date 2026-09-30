@@ -49,7 +49,9 @@ test('independent tasks, references and records do not become an automatic execu
 
 test('installation promises an executable procedure and separates data-location work', () => {
   const install = docs.get('guides/installation.md');
-  for (const text of ['Get-FileHash', 'Expand-Archive', 'sha256sum', 'tar -xzf', 'PASTE_TRUSTED_SHA256', '--version', '--help']) assert.ok(install.includes(text), text);
+  for (const text of ['scoop bucket add pactrun', 'scoop install pactrun/pactrun-preview', 'brew tap doner357/pactrun', 'brew install doner357/pactrun/pactrun-preview', '--version', '--help']) assert.ok(install.includes(text), text);
+  const standalone = docs.get('guides/standalone-installation.md');
+  for (const text of ['Get-FileHash', 'Expand-Archive', 'sha256sum', 'tar -xzf', 'PASTE_TRUSTED_SHA256']) assert.ok(standalone.includes(text), text);
   assert.ok(install.includes('data-location.md'));
   assert.ok(install.includes('authoring workspace'));
   assert.ok(docs.get('guides/data-location.md').includes('XDG_DATA_HOME'));

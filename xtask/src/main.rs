@@ -15,6 +15,18 @@ mod snapshot_reference;
 fn main() -> ExitCode {
     let workspace_root = workspace_root();
     let result = match env::args().nth(1).as_deref() {
+        Some("release-catalog") => {
+            let args = env::args_os().skip(2).collect::<Vec<_>>();
+            if !(2..=3).contains(&args.len()) {
+                Err("usage: cargo xtask release-catalog RELEASES.json NEW_OUTPUT_DIRECTORY [PREVIOUS_RELEASES.json]".into())
+            } else {
+                release_sources::generate_catalog(
+                    Path::new(&args[0]),
+                    Path::new(&args[1]),
+                    args.get(2).map(Path::new),
+                )
+            }
+        }
         Some("release-publish-local") => {
             let args = env::args_os().skip(2).collect::<Vec<_>>();
             if args.len() != 3 {

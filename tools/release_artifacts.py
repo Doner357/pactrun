@@ -18,8 +18,8 @@ import subprocess
 import tarfile
 import zipfile
 
-PREFIXES = ("src/", "crates/", "xtask/", "tests/", "docs/", "website/", "tools/", ".cargo/")
-ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes"}
+PREFIXES = ("src/", "crates/", "xtask/", "tests/", "docs/", "website/", "tools/", ".cargo/", ".github/", "bucket/", "Formula/", "releases/")
+ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes", "LICENSE"}
 TARGETS = {"windows-x86_64": "x86_64-pc-windows-msvc", "linux-x86_64": "x86_64-unknown-linux-gnu"}
 FORBIDDEN = {".git", ".env", ".ssh", ".remote-sync", "node_modules", "__pycache__", "target", "dist", ".pactrun"}
 
@@ -65,7 +65,7 @@ def source(root: Path, output: Path):
             if not safe_name(member.name) or not member.isfile():
                 raise ValueError("release input must be a safe regular source file")
             files[member.name] = (archive.extractfile(member).read(), bool(member.mode & 0o111))
-    required = {"Cargo.toml", "Cargo.lock", "build.rs", "src/main.rs", "src/bin/pactrun-launcher.rs", "src/bin/pactrun-source.rs"}
+    required = {"Cargo.toml", "Cargo.lock", "build.rs", "LICENSE", "src/main.rs", "src/bin/pactrun-launcher.rs"}
     if not required.issubset(files):
         raise ValueError("source snapshot lacks required committed build inputs")
     manifest = "".join(hashlib.sha256(data).hexdigest() + "  " + name + "\n" for name, (data, _) in sorted(files.items())).encode()
@@ -137,14 +137,27 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     # No cross-environment execution claim: run this on the actual target host.
     with (output / "cargo-build.log").open("wb") as log:
         result = subprocess.run(["cargo", "build", "--offline", "--locked", "--release", "--target", target,
-                                 "--bin", "pactrun", "--bin", "pactrun-launcher", "--bin", "pactrun-source"],
+                                 "--bin", "pactrun", "--bin", "pactrun-launcher"],
                                 cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:
         raise RuntimeError("release build failed; inspect the local cargo-build.log")
     verify(root, snapshot / "source.sha256", provenance["source_manifest_sha256"])
     directory = output / "cargo-target" / target / "release"
     suffix = ".exe" if windows else ""
-    product, launcher, source_tool = [directory / (name + suffix) for name in ("pactrun", "pactrun-launcher", "pactrun-source")]
+    product, launcher = [directory / (name + suffix) for name in ("pactrun", "pactrun-launcher")]
+    metadata_graph = json.loads(execute(["cargo", "metadata", "--offline", "--locked", "--format-version", "1", "--filter-platform", target], root))
+    notices = output / "THIRD_PARTY_NOTICES.txt"
+    notices.write_text(dependency_notices(metadata_graph), encoding="utf-8")
+    legal = {"LICENSE": root / "LICENSE", "THIRD_PARTY_NOTICES.txt": notices}
+    sysroot = Path(execute(["rustc", "--print", "sysroot"], root).decode().strip())
+    rust_legal = sysroot / "share/doc/rust"
+    copyright_file = rust_legal / "COPYRIGHT-library.html"
+    if not copyright_file.is_file():
+        raise ValueError("Rust standard-library copyright material is required for distribution")
+    legal["rust-licenses/COPYRIGHT-library.html"] = copyright_file
+    for file in sorted((rust_legal / "licenses").rglob("*")):
+        if file.is_file() and not file.is_symlink():
+            legal["rust-licenses/" + file.relative_to(rust_legal).as_posix()] = file
     response = json.loads(execute([product, "--format", "json", "--version"], root, env))
     info = response["result"]
     if (response["status"] != "success" or info["build_target"] != target
@@ -162,15 +175,46 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     for flavor in ("normal", "test"):
         app = "pactrun" if flavor == "normal" else "pactrun-test"
         path = assets / f"{app}-{version}-{platform}{extension}"
-        archive_files(path, {f"bin/{app}{suffix}": launcher, f"bin/{app}-source{suffix}": source_tool,
-                             f"libexec/pactrun{suffix}": product}, windows)
+        archive_files(path, {f"bin/{app}{suffix}": launcher,
+                             f"libexec/pactrun{suffix}": product, **legal}, windows)
         metadata["artifacts"].append(dict(platform=platform, flavor=flavor, url=url_base.rstrip('/') + '/' + path.name,
                                           sha256=sha(path), bytes=path.stat().st_size))
     standalone = assets / f"pactrun-{version}-{platform}-standalone{extension}"
-    archive_files(standalone, {"pactrun" + suffix: product, "pactrun-source" + suffix: source_tool}, windows)
+    archive_files(standalone, {"pactrun" + suffix: product, **legal}, windows)
     (output / "release-part.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     (output / "binary-probe.json").write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
     (output / "artifact-checksums.json").write_text(json.dumps({p.name: dict(sha256=sha(p), bytes=p.stat().st_size) for p in sorted(assets.iterdir())}, indent=2)+"\n", encoding="utf-8")
+
+def dependency_notices(metadata):
+    packages = {p["id"]: p for p in metadata["packages"]}
+    nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
+    pending = [metadata["resolve"]["root"]]
+    seen = set()
+    while pending:
+        node = pending.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        pending.extend(d["pkg"] for d in nodes[node]["deps"] if any(k["kind"] != "dev" for k in d["dep_kinds"]))
+    text = ["Pactrun third-party notices\n\nDependency licenses remain their respective owners' licenses.\n"]
+    for key in sorted(seen, key=lambda k: (packages[k]["name"], packages[k]["version"])):
+        package = packages[key]
+        if package["source"] is None:
+            continue
+        base = Path(package["manifest_path"]).parent
+        candidates = set()
+        for pattern in ["*LICENSE*", "*LICENCE*", "COPYING*", "NOTICE*", "UNLICENSE*", "license*", "licenses/**/*"]:
+            candidates.update(p for p in base.glob(pattern) if p.is_file())
+        if package.get("license_file"):
+            candidates.add(base / package["license_file"])
+        if not candidates or not package.get("license"):
+            raise ValueError("review missing dependency license: " + package["name"])
+        text.append(f"\n=== {package['name']} {package['version']} ===\nLicense: {package['license']}\n")
+        for file in sorted(candidates):
+            if not file.resolve().is_relative_to(base.resolve()) or file.is_symlink() or file.stat().st_size > 2 * 1024 * 1024:
+                raise ValueError("unsafe dependency license file")
+            text.append(f"\n--- {file.relative_to(base).as_posix()} ---\n" + file.read_text(encoding="utf-8", errors="strict") + "\n")
+    return "".join(text)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

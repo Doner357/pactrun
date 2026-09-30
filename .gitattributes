@@ -1,2 +1,4 @@
 # The frozen Persistence DDL must embed identical bytes in every native build.
 *.sql text eol=lf
+# Markdown embeds normative DDL and must have the same fences/bytes on Windows.
+*.md text eol=lf

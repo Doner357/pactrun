@@ -101,6 +101,7 @@ test('repository README links and machine-format descriptions follow current con
   validateLinks([
     ['README.md', readme],
     ['CONTRIBUTING.md', contributing],
+    ['LICENSE', await readFile(path.join(root, 'LICENSE'), 'utf8')],
     ...documents.map(([name]) => ['docs/' + name, '']),
   ]);
   for (const file of ['cli-machine.schema.json', 'cli-events.schema.json']) {
