@@ -86,6 +86,14 @@ does not check out the repository, install dependencies or execute project build
 Build jobs have no Pages-write/OIDC permission; checkouts do not persist Git
 credentials. The deploy job uses the protected `github-pages` environment.
 
+The caller explicitly checks the successful aggregate gate and overrides implicit
+ancestor-success handling. Otherwise an intentionally skipped Windows job in a
+documentation-only run can suppress deployment despite a green gate. Cancellation,
+failed gates, non-main events and a disabled publication flag remain refusals.
+After deployment, compare the public `agent-docs/publication.json` source digest
+with the intended documentation sources; a green workflow alone does not prove
+that the latest document edition reached the public URL.
+
 Production deployments are serialized. Immediately before deploying, the job
 checks that its SHA is still the current remote `main` SHA; stale runs are skipped
 and an API failure stops deployment. Newer code may still reach main while a
