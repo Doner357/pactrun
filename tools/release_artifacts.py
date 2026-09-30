@@ -149,6 +149,15 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     notices = output / "THIRD_PARTY_NOTICES.txt"
     notices.write_text(dependency_notices(metadata_graph), encoding="utf-8")
     legal = {"LICENSE": root / "LICENSE", "THIRD_PARTY_NOTICES.txt": notices}
+    sysroot = Path(execute(["rustc", "--print", "sysroot"], root).decode().strip())
+    rust_legal = sysroot / "share/doc/rust"
+    copyright_file = rust_legal / "COPYRIGHT-library.html"
+    if not copyright_file.is_file():
+        raise ValueError("Rust standard-library copyright material is required for distribution")
+    legal["rust-licenses/COPYRIGHT-library.html"] = copyright_file
+    for file in sorted((rust_legal / "licenses").rglob("*")):
+        if file.is_file() and not file.is_symlink():
+            legal["rust-licenses/" + file.relative_to(rust_legal).as_posix()] = file
     response = json.loads(execute([product, "--format", "json", "--version"], root, env))
     info = response["result"]
     if (response["status"] != "success" or info["build_target"] != target

@@ -145,12 +145,12 @@ def manager_setup():
         run(['git','clone',empty,MANAGER/'buckets/main'],'empty-main-clone')
     run(PM+['--version'],'manager-version')
     source_url=args.public_source or PUBLISHER.as_uri()
-    run(PM+(['bucket','add','pactrun',source_url] if WIN else ['tap','--custom-remote','pactrun/pactrun',source_url]),'add-native-source')
+    run(PM+(['bucket','add','pactrun',source_url] if WIN else ['tap','--custom-remote','doner357/pactrun',source_url]),'add-native-source')
     (ROOT/'evidence/manager-environment.json').write_text(json.dumps({k:v for k,v in ENV.items() if k.startswith(('SCOOP','HOMEBREW'))},indent=2),encoding='utf-8')
 def source_path(flavor):
-    return MANAGER/('buckets/pactrun' if WIN else 'Library/Taps/pactrun/homebrew-pactrun')
+    return MANAGER/('buckets/pactrun' if WIN else 'Library/Taps/doner357/homebrew-pactrun')
 def app(flavor): return 'pactrun' if flavor=='normal' else 'pactrun-test'
-def qualified(flavor): return ('pactrun/' if WIN else 'pactrun/pactrun/')+PACKAGES[flavor]
+def qualified(flavor): return ('pactrun/' if WIN else 'doner357/pactrun/')+PACKAGES[flavor]
 def pm(operation,flavor='normal',required=True,extra=()):
     name=PACKAGES[flavor] if WIN and operation in ['hold','unhold','cleanup','uninstall'] else qualified(flavor)
     return run(PM+[operation,*extra,name],operation+'-'+flavor,required=required)
@@ -266,10 +266,10 @@ def scenarios():
     check('installation did not provision management data',not (DATA/'pactrun').exists() and not (DATA/'pactrun-test').exists())
     prepare_data()
     before=immutable_state()
-    stable=('pactrun/' if WIN else 'pactrun/pactrun/')+'pactrun'
+    stable=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun'
     code,_=run(PM+['install',stable],'stable-unavailable',required=False)
     check('stable cannot fall back to alpha',code!=0 and observed()==VERSIONS[0])
-    conflict=('pactrun/' if WIN else 'pactrun/pactrun/')+'pactrun-exact-1-0-0-alpha-1'
+    conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-1-0-0-alpha-1'
     code,_=run(PM+['install',conflict],'command-conflict',required=False)
     check('second package cannot take over the command',code!=0 and observed()==VERSIONS[0])
     if args.public_source:

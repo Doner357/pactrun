@@ -284,7 +284,7 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             // Detect any already installed package owning this entrypoint, including
             // exact versions not known when this immutable definition was published.
             let guard = format!(
-                "$root = if ($global) {{ $globaldir }} else {{ $scoopdir }}; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object {{ $_.Name -ne $app }} | ForEach-Object {{ $manifest = Join-Path $_.FullName 'current/manifest.json'; if (Test-Path -LiteralPath $manifest) {{ $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) {{ if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq '{app}') {{ throw \"Uninstall $($_.Name) before installing $app; managed data is retained.\" }} }} }} }}"
+                "$root = if ($global) {{ $globaldir }} else {{ $scoopdir }}; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object {{ $_.Name -ne $app }} | ForEach-Object {{ $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) {{ $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) {{ if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq '{app}') {{ throw \"Uninstall $($_.Name) before installing $app; managed data is retained.\" }} }} }} }}"
             );
             let manifest = json!({"version": release.product_version,
                 "description": "Pactrun immutable revisions and managed instances",
@@ -297,7 +297,7 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             );
         } else {
             files.insert(format!("Formula/{package}.rb"), format!(
-                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install 'bin', 'libexec', 'LICENSE', 'THIRD_PARTY_NOTICES.txt'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
+                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install 'bin', 'libexec', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
                 ruby(&artifact.url), ruby(&release.product_version), ruby(&artifact.sha256)));
         }
     }
