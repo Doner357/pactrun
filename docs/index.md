@@ -3,42 +3,57 @@ title: Pactrun
 slug: /
 ---
 
-# Pactrun
+# Manage Packs and Instances
 
-Pactrun is a local-first tool for installing immutable package revisions,
-managing long-lived service instances, and running package-defined operations.
-It gives package authors a consistent runtime contract while leaving
-service-specific behavior to trusted Hooks.
+Pactrun installs immutable Pack revisions and manages long-lived Instances on
+your local machine. Packs define Actions, Snapshots, Migrations, and Cleanup.
 
-:::warning Implementation status
+## Choose a starting point
 
-The repository currently contains a compile-oriented Rust modular-monolith
-scaffold. The Pactrun Developer documentation describes the normative product
-contract; it does not imply that the documented behavior is implemented yet.
-Pactrun User and Package Author documentation is reserved for completion after
-the initial release.
+| I want to… | Start here |
+| --- | --- |
+| Get Pactrun ready to run | [Install and verify Pactrun](./guides/installation.md) |
+| Try an already verified executable | [First Instance](./introduction.md) |
+| Install and operate a Pack | [User guides](./guides/index.md) |
+| Write a Pack or Hook | [Pack author guide](./package-authors/index.md) |
+| Look up commands and output | [Command reference](./pactrun-users/operations/command-and-output-reference.md) |
+| Understand an exact product rule | [Specification](./spec/index.md) |
+| Change Pactrun itself | [Development](./development/index.md) |
 
-:::
+## Find a document
 
-## Start here
+Use **Search** in the navigation bar to search commands, error text, concepts,
+and requirement IDs. Search starts with current documents. Select **All states**
+to include historical records and superseded compatibility pages. Filters and
+queries can be shared through the search URL.
 
-- [Introduction](./introduction.md) provides a short product tour and shared
-  vocabulary.
-- [Pactrun Developers](./pactrun-developers/architecture/system-model.md) covers
-  domain invariants, product behavior, Package contracts, execution,
-  persistence, recovery, and engineering policy.
-- [Pactrun Users](./pactrun-users/concepts/packages-revisions-and-instances.md)
-  is a planned guide to managed resources and user-visible operations.
-- [Package Authors](./package-authors/fundamentals/authoring-model.md) is a
-  planned authoring and integration guide.
+Users can stay in the [user reference](./pactrun-users/reference/index.md).
+Authors can look up [field values and defaults](./package-authors/reference/pack-fields.md)
+or [service and Migration fields](./package-authors/reference/service-fields.md)
+without leaving their section. Advanced reader references stay synchronized with
+the product rules; their maintainer sources are optional.
+
+## Before using managed data
+
+Run only Packs whose Hooks you trust. Hooks execute host programs and can affect
+service data. Use a separate storage root for experiments, inspect plans, and
+keep independent backups of important service data.
 
 ## Documentation authority
 
-The English Markdown under `docs/` is the canonical semantic source. The
-Docusaurus site is a presentation of those files, not another specification.
-Future Traditional Chinese (`zh-Hant`) documentation may translate this source,
-but a translation will not independently define Pactrun behavior.
+English Markdown is the source for both this website and the text interface.
+Users and authors can follow their own guides and references. This local
+candidate is not a public-release announcement; use the
+[installation guide](./guides/installation.md) to obtain a trusted executable.
 
-Developer pages identify their content as normative, informative, or
-implementation guidance. Public role guides will summarize observable behavior
-without exposing internal requirement or test traceability.
+<details>
+<summary>For Pactrun maintainers (optional)</summary>
+
+[Spec](./spec/index.md) owns product rules. Guides explain how to use them.
+[Current baseline and work status](./development/next-milestone.md) records
+implementation availability. Historical delivery records preserve the evidence
+for their own source revisions.
+
+See [release readiness](./development/release-readiness.md) before publishing Pactrun itself.
+
+</details>

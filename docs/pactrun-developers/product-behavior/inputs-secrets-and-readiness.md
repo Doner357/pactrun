@@ -1,75 +1,55 @@
 ---
-title: Inputs, Secrets, and Readiness
+title: Inputs, Secrets, and Readiness (moved)
 ---
 
-# Inputs, Secrets, and Readiness
+# Inputs, Secrets, and Readiness has moved
 
-**Status: Normative product behavior specification except where linked to an
-owning requirement.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Three input scopes
+Read [the current document](../../spec/behavior/inputs-secrets-and-readiness.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-Pactrun keeps three concepts separate:
+## Previous section links
 
-| Concept | Lifetime | Scope | Example |
-| --- | --- | --- | --- |
-| Instance Input or Secret | Persistent | Instance | Domain, password, configuration file |
-| Invocation Parameter | One invocation | Action or Snapshot operation | Tail count, follow mode, one-time credential |
-| Managed Input | One managed workflow | Workflow | Snapshot payload or Migration content |
+<a id="persistent-and-execution-data-scopes" />
+[Persistent and execution data scopes](../../spec/behavior/inputs-secrets-and-readiness.md#persistent-and-execution-data-scopes)
 
-They are not interchangeable generic maps.
+<a id="three-value-delivery-scopes" />
+[Three value-delivery scopes](../../spec/behavior/inputs-secrets-and-readiness.md#three-value-delivery-scopes)
 
-## PR-REQ-0090 - Ordinary execution context
+<a id="informative-live-file-example" />
+[Informative live-file example](../../spec/behavior/inputs-secrets-and-readiness.md#informative-live-file-example)
 
-An ordinary Action or Snapshot Capture MUST receive the active Revision's
-current active Input and Secret bindings as one Instance context. Retained
-bindings MUST NOT appear in ordinary execution context. Migration and Cleanup
-MAY receive typed active and retained contexts defined by their own contracts.
+<a id="pr-req-0090---ordinary-execution-context" />
+[PR-REQ-0090 - Ordinary execution context](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0090---ordinary-execution-context)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0091---readiness-admission" />
+[PR-REQ-0091 - Readiness admission](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0091---readiness-admission)
 
-## PR-REQ-0091 - Readiness admission
+<a id="managing-active-and-retained-bindings" />
+[Managing active and retained bindings](../../spec/behavior/inputs-secrets-and-readiness.md#managing-active-and-retained-bindings)
 
-Ordinary Actions and Snapshot Capture MUST require
-`RequiredInputsSatisfied == true` before launching a Hook. Missing bindings MUST
-produce actionable diagnostics. Migration and Cleanup MUST instead use their
-operation-specific requirements, and Restore MUST validate the staged Snapshot
-state rather than target pre-restore completeness.
+<a id="m2-persistent-payload-and-operation-boundaries" />
+[M2 persistent payload and operation boundaries](../../spec/behavior/inputs-secrets-and-readiness.md#m2-persistent-payload-and-operation-boundaries)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0264---managed-input-payload-and-binding-registry" />
+[PR-REQ-0264 - Managed Input payload and binding registry](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0264---managed-input-payload-and-binding-registry)
 
-## Managing active and retained bindings
+<a id="pr-req-0265---instance-creation-and-transient-payload-staging" />
+[PR-REQ-0265 - Instance creation and transient payload staging](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0265---instance-creation-and-transient-payload-staging)
 
-The normative mutation rules are
-[PR-REQ-0033](../architecture/identity-and-state.md#pr-req-0033---binding-mutation-invariants).
-In user terms:
+<a id="pr-req-0266---managed-input-mutation-export-and-reclamation" />
+[PR-REQ-0266 - Managed Input mutation, export, and reclamation](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0266---managed-input-mutation-export-and-reclamation)
 
-- a required Input can be absent initially, but cannot be ordinarily deleted
-  after it is bound under the active Revision;
-- optional active Inputs can be set, replaced, or removed;
-- retained Inputs can be inspected, exported, or deleted, but not directly set
-  or replaced;
-- Input mutations are management operations and do not create Runs.
+<a id="pr-req-0268---m2-secret-storage-and-disclosure-boundary" />
+[PR-REQ-0268 - M2 Secret storage and disclosure boundary](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0268---m2-secret-storage-and-disclosure-boundary)
 
-## PR-REQ-0092 - Explicit Secret export
+<a id="pr-req-0092---explicit-secret-export" />
+[PR-REQ-0092 - Explicit Secret export](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0092---explicit-secret-export)
 
-Export of a Secret Input MUST require an explicit sensitive-data operation and
-authorization. A generic confirmation option MUST NOT implicitly authorize
-Secret disclosure, Snapshot Secret export, or Secret declassification.
+<a id="pr-req-0093---secret-deletion-disclaimer" />
+[PR-REQ-0093 - Secret deletion disclaimer](../../spec/behavior/inputs-secrets-and-readiness.md#pr-req-0093---secret-deletion-disclaimer)
 
-**Verification: Pending automated coverage.**
-
-## PR-REQ-0093 - Secret deletion disclaimer
-
-Deleting or discarding a Secret MUST remove its managed reference according to
-the operation contract, but Pactrun MUST NOT claim physical secure erasure of
-underlying storage.
-
-**Verification: Pending automated coverage.**
-
-## UTF-8 and opaque Input data
-
-Input payloads are opaque bytes and may contain empty, binary, or UTF-8 data.
-Pactrun preserves them without interpreting their language or file extension.
-Textual Package metadata, parameters, and output interfaces that specify UTF-8
-must accept full Unicode, including symbols and emoji.
+<a id="utf-8-and-opaque-input-data" />
+[UTF-8 and opaque Input data](../../spec/behavior/inputs-secrets-and-readiness.md#utf-8-and-opaque-input-data)

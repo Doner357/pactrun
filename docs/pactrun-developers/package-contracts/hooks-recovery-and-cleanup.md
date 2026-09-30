@@ -1,146 +1,73 @@
 ---
-title: Hooks, Recovery, and Cleanup
+title: Hooks, Recovery, and Cleanup (moved)
 ---
 
-# Hooks, Recovery, and Cleanup
+# Hooks, Recovery, and Cleanup has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Hooks and the canonical protocol
+Read [the current document](../../spec/contracts/hooks-recovery-and-cleanup.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-### PR-REQ-0167 - Trusted external Hook
+## Previous section links
 
-A Hook MUST be treated as a trusted external program implementing
-Package-specific behavior. It MAY be written as a shell, PowerShell, Python,
-Node.js, Go, Rust, or another executable supported by the host.
+<a id="hooks-and-the-canonical-protocol" />
+[Hooks and the canonical protocol](../../spec/contracts/hooks-recovery-and-cleanup.md#hooks-and-the-canonical-protocol)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0167---trusted-external-hook" />
+[PR-REQ-0167 - Trusted external Hook](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0167---trusted-external-hook)
 
-### PR-REQ-0168 - One language-neutral protocol
+<a id="pr-req-0168---one-language-neutral-protocol" />
+[PR-REQ-0168 - One language-neutral protocol](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0168---one-language-neutral-protocol)
 
-Direct Hooks, helper CLIs, wrappers, and SDKs MUST converge on one versioned,
-language-neutral canonical Hook Protocol. An adapter MUST NOT define a second
-semantic API.
+<a id="pr-req-0169---session-authority" />
+[PR-REQ-0169 - Session authority](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0169---session-authority)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0244---persistent-storage-authority-and-prerequisites" />
+[PR-REQ-0244 - Persistent storage authority and prerequisites](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0244---persistent-storage-authority-and-prerequisites)
 
-### PR-REQ-0169 - Session authority
+<a id="pr-req-0170---session-authority-is-not-host-isolation" />
+[PR-REQ-0170 - Session authority is not host isolation](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0170---session-authority-is-not-host-isolation)
 
-A `HookSessionSpec` MUST provide only the Instance context, parameters, managed
-data authorities, protocol features, and I/O contract granted to that
-execution. Requests outside Pactrun-mediated authority MUST be rejected.
+<a id="pr-req-0171---future-isolation-must-be-enforced" />
+[PR-REQ-0171 - Future isolation must be enforced](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0171---future-isolation-must-be-enforced)
 
-The Session MUST NOT let a Hook browse arbitrary managed stores, read another
-Instance's managed data, delete arbitrary resources, invoke another Action,
-acquire a mutation guard, commit a Snapshot, rewrite a Run, switch the active
-Revision, enlarge authority, or redefine the workflow.
+<a id="pr-req-0172---terminal-and-protocol-channels" />
+[PR-REQ-0172 - Terminal and protocol channels](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0172---terminal-and-protocol-channels)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0280---hook-protocol-runtime-transport-discovery" />
+[PR-REQ-0280 - Hook Protocol runtime transport discovery](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0280---hook-protocol-runtime-transport-discovery)
 
-### PR-REQ-0170 - Session authority is not host isolation
+<a id="recovery-risk-duty" />
+[Recovery-risk duty](../../spec/contracts/hooks-recovery-and-cleanup.md#recovery-risk-duty)
 
-Canonical Session restrictions MUST be described as Pactrun-mediated authority,
-not operating-system confinement. A trusted native Hook may use its OS identity
-to access files, networks, processes, or another Pactrun CLI. Doing so outside
-the Session is a Package contract violation, not a sandbox escape.
+<a id="pr-req-0173---risk-entry-request" />
+[PR-REQ-0173 - Risk-entry request](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0173---risk-entry-request)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0174---risk-resolution-request" />
+[PR-REQ-0174 - Risk-resolution request](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0174---risk-resolution-request)
 
-### PR-REQ-0171 - Future isolation must be enforced
+<a id="pr-req-0175---no-nested-risk-taxonomy" />
+[PR-REQ-0175 - No nested risk taxonomy](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0175---no-nested-risk-taxonomy)
 
-If a future Package declares host-access requirements, effective isolation MUST
-combine that request with operator policy and an enforcing backend. When policy
-requires isolation and the backend cannot enforce it, execution MUST fail
-closed. Pactrun MUST NOT offer unenforced network or filesystem permission
-claims. A host-isolation requirement that affects runtime semantics MUST be
-identity-bearing RevisionCore content; the selected local backend and operator
-policy MUST NOT become Revision identity.
+<a id="cleanup" />
+[Cleanup](../../spec/contracts/hooks-recovery-and-cleanup.md#cleanup)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0176---cleanup-capability" />
+[PR-REQ-0176 - Cleanup capability](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0176---cleanup-capability)
 
-### PR-REQ-0172 - Terminal and protocol channels
+<a id="pr-req-0177---cleanup-requirements-and-context" />
+[PR-REQ-0177 - Cleanup requirements and context](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0177---cleanup-requirements-and-context)
 
-The user terminal channel and Hook Protocol channel MUST remain separate.
-Protocol messages MUST NOT be mixed into standard output. `IOContract` MUST
-describe channels and transition policy without pretending to be a complete
-host-device sandbox.
+<a id="pr-req-0178---missing-cleanup-requirements" />
+[PR-REQ-0178 - Missing Cleanup requirements](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0178---missing-cleanup-requirements)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0179---cleanup-risk-protocol" />
+[PR-REQ-0179 - Cleanup risk protocol](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0179---cleanup-risk-protocol)
 
-## Recovery-risk duty
+<a id="pr-req-0180---retry-guidance-without-magic-flags" />
+[PR-REQ-0180 - Retry guidance without magic flags](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0180---retry-guidance-without-magic-flags)
 
-### PR-REQ-0173 - Risk-entry request
-
-Before crossing a boundary after which permanent Hook loss may leave
-service-owned state incoherent, a Hook MUST request `EnterRecoveryRisk` and wait
-for Pactrun's durable acknowledgment.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0174 - Risk-resolution request
-
-After the Package has made service-owned state coherent for ordinary
-management, the Hook SHOULD request `ResolveRecoveryRisk`. Resolution does not
-mean rollback and does not require the overall operation to succeed.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0175 - No nested risk taxonomy
-
-The initial protocol MUST use a single `Clear | Open` risk state. Package
-authors MUST NOT depend on nested risk stacks or low, medium, and high risk
-levels.
-
-**Verification: Pending automated coverage.**
-
-## Cleanup
-
-### PR-REQ-0176 - Cleanup capability
-
-Cleanup MUST be an optional Package-defined implementation of Pactrun's
-Instance deletion lifecycle, not an Action. When present, normal deletion MUST
-run it before Pactrun removes Instance state.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0177 - Cleanup requirements and context
-
-Cleanup MAY declare typed requirements over active and retained bindings and
-MUST receive a corresponding Cleanup context. Those requirements govern
-admission rather than access control. Cleanup MUST NOT inherit the active
-Revision's whole ordinary readiness predicate.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0178 - Missing Cleanup requirements
-
-If a Cleanup requirement is absent, Pactrun MUST reject before Hook launch and
-leave the Instance unchanged. The user may supply the requirement, repair state,
-retry, or explicitly abandon management.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0179 - Cleanup risk protocol
-
-Cleanup MUST use the common recovery-risk protocol. Success with clear risk
-permits deletion; non-success with clear risk retains a Normal Instance; open
-risk on non-success or reported success retains the Instance in
-`ManualRecoveryRequired`.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0180 - Retry guidance without magic flags
-
-Package Cleanup SHOULD tolerate retries and already-absent external resources
-where practical. Pactrun MUST NOT replace this author responsibility with an
-`idempotent=true` or similarly magical correctness flag.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0181 - Abandonment skips Package code
-
-`AbandonManagement` MUST NOT launch the Cleanup Hook or claim external cleanup.
-It records explicit operator intent to stop management and remove Pactrun-owned
-Instance state while external resources may remain.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0181---abandonment-skips-package-code" />
+[PR-REQ-0181 - Abandonment skips Package code](../../spec/contracts/hooks-recovery-and-cleanup.md#pr-req-0181---abandonment-skips-package-code)

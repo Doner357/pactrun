@@ -1,81 +1,34 @@
 ---
-title: Authoring Model
+title: Authoring Model (moved)
 ---
 
-# Authoring Model
+# Authoring Model has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Low floor, high ceiling
+Read [the current document](../../spec/contracts/authoring-model.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-A minimal Pack can contain metadata, one Action, and one Hook. Structured
-parameters, persistent Inputs, managed outputs, Snapshots, Migration, Recipes,
-and interactive terminal behavior are optional capabilities and must not burden
-minimal Packs.
+## Previous section links
 
-Authors describe capabilities they provide. They are not required to enumerate
-large sets of negative `supports_x: false` flags.
+<a id="low-floor-high-ceiling" />
+[Low floor, high ceiling](../../spec/contracts/authoring-model.md#low-floor-high-ceiling)
 
-## PR-REQ-0121 - Revision Candidate output
+<a id="pr-req-0121---revision-candidate-output" />
+[PR-REQ-0121 - Revision Candidate output](../../spec/contracts/authoring-model.md#pr-req-0121---revision-candidate-output)
 
-Every authoring frontend MUST produce a `RevisionCandidate` containing a
-`NormalizedPackDefinition` and Pactrun-owned runtime content. Source YAML,
-Recipe ASTs, and SDK-specific values MUST NOT become installed execution
-contracts directly.
+<a id="pr-req-0122---normalized-projection-boundary" />
+[PR-REQ-0122 - Normalized projection boundary](../../spec/contracts/authoring-model.md#pr-req-0122---normalized-projection-boundary)
 
-**Verification: Pending automated coverage.**
+<a id="normalized-pack-definition" />
+[Normalized Pack Definition](../../spec/contracts/authoring-model.md#normalized-pack-definition)
 
-## PR-REQ-0122 - Normalized projection boundary
+<a id="pr-req-0123---explicit-normalized-semantics" />
+[PR-REQ-0123 - Explicit normalized semantics](../../spec/contracts/authoring-model.md#pr-req-0123---explicit-normalized-semantics)
 
-Before installation, Pactrun MUST validate the normalized definition and
-project it into identity-bearing `RevisionCore`, portable presentation
-observations, provenance observations, and local management metadata. The
-normalized authoring model MUST NOT itself be treated as the hash or persistence
-object.
+<a id="pr-req-0124---separate-authoring-capabilities" />
+[PR-REQ-0124 - Separate authoring capabilities](../../spec/contracts/authoring-model.md#pr-req-0124---separate-authoring-capabilities)
 
-**Verification: Pending automated coverage.**
-
-## Normalized Pack Definition
-
-The model may contain:
-
-```text
-NormalizedPackDefinition
-|- PackageIdentityDeclaration
-|- PresentationMetadata
-|- ProvenanceMetadata
-|- InputDeclarations
-|- Actions
-|- SnapshotCapability
-|- InboundMigrationEdges
-|- InstanceLifecycle.Cleanup
-`- RuntimeContentClosure
-```
-
-Each Action and lifecycle capability owns its own parameters, requirements, and
-implementation. Presentation may coexist with semantics in the authoring model,
-but the installation projection separates their identity roles.
-
-## PR-REQ-0123 - Explicit normalized semantics
-
-An authoring frontend MAY offer conservative shorthand, including implicit
-Carry for the same stable Input identity and Keep for a source-only Input.
-Normalization MUST materialize the explicit installed transition. Runtime
-execution MUST NOT guess authoring defaults again.
-
-**Verification: Pending automated coverage.**
-
-## PR-REQ-0124 - Separate authoring capabilities
-
-Action, Snapshot, Migration, and Cleanup MUST have separate author-facing
-models. A frontend MUST NOT expose a catch-all operation type with optional
-fields for every capability. Low-level execution primitives MAY be shared.
-
-**Verification: Pending automated coverage.**
-
-## Package quality
-
-Pactrun can lint, plan, warn, and provide actionable diagnostics, but it does
-not impose unnecessary framework bureaucracy merely to prevent every possible
-bad Pack. Authors remain responsible for service-specific correctness, accurate
-recovery-risk signaling, and practical retry behavior.
+<a id="package-quality" />
+[Package quality](../../spec/contracts/authoring-model.md#package-quality)

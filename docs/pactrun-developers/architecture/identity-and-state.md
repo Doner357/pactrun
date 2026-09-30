@@ -1,256 +1,169 @@
 ---
-title: Identity and State
+title: Identity and State (moved)
 ---
 
-# Identity and State
+# Identity and State has moved
 
-**Status: Normative architecture.**
+**Status: Informative compatibility entry; no independent specification.**
 
-This page owns internal identity, canonicalization, metadata, Instance state,
-and managed binding invariants. User-visible behavior is summarized in the
-[product behavior](../product-behavior/packages-revisions-and-instances.md).
+Read [the current document](../../spec/foundations/identity-and-state.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-## Revision identity
+## Previous section links
 
-### PR-REQ-0011 - Stable Package lineage
+<a id="revision-identity" />
+[Revision identity](../../spec/foundations/identity-and-state.md#revision-identity)
 
-`PackageId` MUST be opaque, stable, and independent of content. It MUST survive
-Revision changes, presentation or publisher changes, export, and import. A fork
-that becomes a new lineage MUST be explicitly re-identified.
+<a id="pr-req-0011---stable-package-lineage" />
+[PR-REQ-0011 - Stable Package lineage](../../spec/foundations/identity-and-state.md#pr-req-0011---stable-package-lineage)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0012---operational-content-digest" />
+[PR-REQ-0012 - Operational content digest](../../spec/foundations/identity-and-state.md#pr-req-0012---operational-content-digest)
 
-### PR-REQ-0012 - Operational content digest
+<a id="pr-req-0013---exact-revision-identity" />
+[PR-REQ-0013 - Exact Revision identity](../../spec/foundations/identity-and-state.md#pr-req-0013---exact-revision-identity)
 
-`RevisionContentDigest` MUST identify Pactrun-managed operational semantics and
-immutable owned runtime content. It MUST exclude `PackageId`, display content,
-publisher claims, labels, source location, install time, local aliases, notes,
-and local trust decisions.
+<a id="pr-req-0014---revisioncore-projection" />
+[PR-REQ-0014 - RevisionCore projection](../../spec/foundations/identity-and-state.md#pr-req-0014---revisioncore-projection)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0015---runtime-content-closure-identity" />
+[PR-REQ-0015 - Runtime content closure identity](../../spec/foundations/identity-and-state.md#pr-req-0015---runtime-content-closure-identity)
 
-### PR-REQ-0013 - Exact Revision identity
+<a id="pr-req-0016---semantic-normalization" />
+[PR-REQ-0016 - Semantic normalization](../../spec/foundations/identity-and-state.md#pr-req-0016---semantic-normalization)
 
-An exact `RevisionIdentity` MUST be the pair of `PackageId` and
-`RevisionContentDigest`. Equal content digests under different Package IDs MUST
-remain distinct Revision identities.
+<a id="pr-req-0017---revisioncoreformatv1-hash-contract" />
+[PR-REQ-0017 - RevisionCoreFormatV1 hash contract](../../spec/foundations/identity-and-state.md#pr-req-0017---revisioncoreformatv1-hash-contract)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0018---stable-published-identity" />
+[PR-REQ-0018 - Stable published identity](../../spec/foundations/identity-and-state.md#pr-req-0018---stable-published-identity)
 
-### PR-REQ-0014 - RevisionCore projection
+<a id="production-identity-and-revision-core-foundation" />
+[Production identity and Revision Core foundation](../../spec/foundations/identity-and-state.md#production-identity-and-revision-core-foundation)
 
-`RevisionCore` MUST be a versioned, identity-bearing semantic projection of a
-validated `NormalizedPackDefinition`. It MUST NOT be defined by serializing a
-Rust type, database row, authoring AST, or the entire normalized authoring
-model.
+<a id="pr-req-0225---production-opaque-identity-primitives" />
+[PR-REQ-0225 - Production opaque identity primitives](../../spec/foundations/identity-and-state.md#pr-req-0225---production-opaque-identity-primitives)
 
-The projection MUST include every field that can affect invocation semantics,
-parameter behavior, compiler or executor behavior, operation access, Hook
-Session authority, Inputs, Snapshot, Migration, Cleanup, failures, recovery, or
-service-facing runtime behavior. Presentation, attribution, provenance, and
-local-management data MUST remain outside it.
+<a id="pr-req-0226---production-revision-content-component-boundary" />
+[PR-REQ-0226 - Production Revision content component boundary](../../spec/foundations/identity-and-state.md#pr-req-0226---production-revision-content-component-boundary)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0227---production-revision-core-codec-conformance" />
+[PR-REQ-0227 - Production Revision Core codec conformance](../../spec/foundations/identity-and-state.md#pr-req-0227---production-revision-core-codec-conformance)
 
-### PR-REQ-0015 - Runtime content closure identity
+<a id="pr-req-0228---immutable-runtime-content-blob-store-boundary" />
+[PR-REQ-0228 - Immutable runtime-content blob-store boundary](../../spec/foundations/identity-and-state.md#pr-req-0228---immutable-runtime-content-blob-store-boundary)
 
-Runtime content identity MUST encode logical runtime location or role, object
-kind, immutable content identity, and runtime-semantic metadata. Hashing an
-unordered set of blob digests is insufficient. Source-only paths, timestamps,
-inodes, and ownership metadata MUST NOT affect identity unless Pactrun
-explicitly defines them as runtime semantics.
+<a id="pr-req-0229---verified-durable-blob-publication" />
+[PR-REQ-0229 - Verified durable blob publication](../../spec/foundations/identity-and-state.md#pr-req-0229---verified-durable-blob-publication)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0230---physical-runtime-content-availability" />
+[PR-REQ-0230 - Physical runtime-content availability](../../spec/foundations/identity-and-state.md#pr-req-0230---physical-runtime-content-availability)
 
-### PR-REQ-0016 - Semantic normalization
+<a id="pr-req-0231---sqlite-persistence-ownership-and-bootstrap" />
+[PR-REQ-0231 - SQLite persistence ownership and bootstrap](../../spec/foundations/identity-and-state.md#pr-req-0231---sqlite-persistence-ownership-and-bootstrap)
 
-Pactrun MUST apply semantic defaults, validate, and normalize equivalent forms
-before projecting and encoding `RevisionCore`. Unordered domain collections
-MUST be sorted by a stable semantic key; ordered collections MUST preserve their
-order; duplicate semantic keys MUST be rejected.
+<a id="pr-req-0232---exact-persisted-revision-content" />
+[PR-REQ-0232 - Exact persisted Revision content](../../spec/foundations/identity-and-state.md#pr-req-0232---exact-persisted-revision-content)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0233---durable-content-before-new-database-references" />
+[PR-REQ-0233 - Durable content before new database references](../../spec/foundations/identity-and-state.md#pr-req-0233---durable-content-before-new-database-references)
 
-### PR-REQ-0017 - RevisionCoreFormatV1 hash contract
+<a id="pr-req-0234---immutable-and-recoverable-revision-records" />
+[PR-REQ-0234 - Immutable and recoverable Revision records](../../spec/foundations/identity-and-state.md#pr-req-0234---immutable-and-recoverable-revision-records)
 
-`RevisionCoreFormatV1` MUST use a closed semantic schema, explicit domain
-separation and framing, RFC 8785 JSON Canonicalization Scheme bytes, and a fixed
-SHA-256 profile represented by a self-describing digest such as
-`sha256:<value>`. JCS MUST NOT replace Pactrun semantic normalization.
+<a id="references-and-non-identity-metadata" />
+[References and non-identity metadata](../../spec/foundations/identity-and-state.md#references-and-non-identity-metadata)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0019---human-label-ambiguity" />
+[PR-REQ-0019 - Human label ambiguity](../../spec/foundations/identity-and-state.md#pr-req-0019---human-label-ambiguity)
 
-### PR-REQ-0018 - Stable published identity
+<a id="pr-req-0020---metadata-observations" />
+[PR-REQ-0020 - Metadata observations](../../spec/foundations/identity-and-state.md#pr-req-0020---metadata-observations)
 
-Internal schema, type, serializer, library, and CLI changes MUST NOT alter the
-identity of an already published RevisionCore format. Unknown or unsupported
-format versions MUST be rejected instead of interpreted on a best-effort basis.
+<a id="pr-req-0021---portable-and-local-metadata" />
+[PR-REQ-0021 - Portable and local metadata](../../spec/foundations/identity-and-state.md#pr-req-0021---portable-and-local-metadata)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0022---repeat-revision-import" />
+[PR-REQ-0022 - Repeat Revision import](../../spec/foundations/identity-and-state.md#pr-req-0022---repeat-revision-import)
 
-## References and non-identity metadata
+<a id="instance-identity-and-state-publication" />
+[Instance identity and state publication](../../spec/foundations/identity-and-state.md#instance-identity-and-state-publication)
 
-### PR-REQ-0019 - Human label ambiguity
+<a id="pr-req-0023---stable-instance-identity" />
+[PR-REQ-0023 - Stable Instance identity](../../spec/foundations/identity-and-state.md#pr-req-0023---stable-instance-identity)
 
-Human labels and display versions MUST be associations rather than Revision
-identity. Multiple labels MAY refer to one Revision, and one label MAY refer to
-multiple exact Revisions. An ambiguous reference MUST fail resolution and MUST
-NOT implicitly choose the latest or overwrite an older association.
+<a id="pr-req-0024---instance-names-and-provenance" />
+[PR-REQ-0024 - Instance names and provenance](../../spec/foundations/identity-and-state.md#pr-req-0024---instance-names-and-provenance)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0025---opaque-instancestateversion" />
+[PR-REQ-0025 - Opaque InstanceStateVersion](../../spec/foundations/identity-and-state.md#pr-req-0025---opaque-instancestateversion)
 
-### PR-REQ-0020 - Metadata observations
+<a id="pr-req-0026---state-version-publication" />
+[PR-REQ-0026 - State-version publication](../../spec/foundations/identity-and-state.md#pr-req-0026---state-version-publication)
 
-Reference labels, presentation, provenance, publisher attribution, and local
-management metadata MUST remain separate from the immutable Revision body.
-Conflicting observations MAY coexist and MUST NOT create a new Revision,
-concatenate implicitly, or use last-write-wins semantics.
+<a id="pr-req-0027---non-versioned-observations" />
+[PR-REQ-0027 - Non-versioned observations](../../spec/foundations/identity-and-state.md#pr-req-0027---non-versioned-observations)
 
-Presentation observations MUST refer to semantic keys already present in
-`RevisionCore`; an observation for an unknown semantic key MUST be rejected.
-The initial product scope MUST NOT silently select one observation as a trusted
-preferred or canonical description.
+<a id="managed-input-state" />
+[Managed Input state](../../spec/foundations/identity-and-state.md#managed-input-state)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0028---stable-input-identity-and-opaque-bytes" />
+[PR-REQ-0028 - Stable Input identity and opaque bytes](../../spec/foundations/identity-and-state.md#pr-req-0028---stable-input-identity-and-opaque-bytes)
 
-### PR-REQ-0021 - Portable and local metadata
+<a id="pr-req-0029---one-managed-binding-registry" />
+[PR-REQ-0029 - One managed binding registry](../../spec/foundations/identity-and-state.md#pr-req-0029---one-managed-binding-registry)
 
-Revision export and import MUST preserve every portable non-identity
-association or observation that the relevant Export Bundle Format defines as
-part of the portable bundle. This MAY include human or reference labels,
-portable presentation observations, and portable provenance or publisher
-attribution claims. These fields MUST remain non-identity metadata.
+<a id="pr-req-0030---retained-binding-lifetime" />
+[PR-REQ-0030 - Retained binding lifetime](../../spec/foundations/identity-and-state.md#pr-req-0030---retained-binding-lifetime)
 
-Local install timestamps, source filesystem paths, local aliases, local notes,
-and local trust decisions MUST be excluded by default. Publisher claims and
-digests MUST NOT be presented as publisher authentication.
+<a id="pr-req-0031---requiredinputssatisfied" />
+[PR-REQ-0031 - RequiredInputsSatisfied](../../spec/foundations/identity-and-state.md#pr-req-0031---requiredinputssatisfied)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0032---initial-binding-acquisition-and-instance-publication" />
+[PR-REQ-0032 - Initial binding acquisition and Instance publication](../../spec/foundations/identity-and-state.md#pr-req-0032---initial-binding-acquisition-and-instance-publication)
 
-### PR-REQ-0022 - Repeat Revision import
+<a id="pr-req-0033---binding-mutation-invariants" />
+[PR-REQ-0033 - Binding mutation invariants](../../spec/foundations/identity-and-state.md#pr-req-0033---binding-mutation-invariants)
 
-Importing the same `PackageId` and digest MUST be identity-idempotent. Equivalent
-visible metadata associations MUST NOT accumulate duplicates; new distinct
-claims MAY be attached. Revision import MUST NOT be rejected solely because a
-human-readable label becomes ambiguous. If the Revision or bundle is otherwise
-valid, import MUST succeed, preserve both label associations, and MAY emit a
-warning. Later human reference resolution MUST report ambiguity and MUST NOT use
-last-write-wins or implicit latest selection.
+<a id="pr-req-0034---secret-protection" />
+[PR-REQ-0034 - Secret protection](../../spec/foundations/identity-and-state.md#pr-req-0034---secret-protection)
 
-**Verification: Pending automated coverage.**
+<a id="servicestorage-backed-semantic-closure" />
+[ServiceStorage-backed semantic closure](../../spec/foundations/identity-and-state.md#servicestorage-backed-semantic-closure)
 
-## Instance identity and state publication
+<a id="pr-req-0235---persistent-instance-data-ownership" />
+[PR-REQ-0235 - Persistent Instance-data ownership](../../spec/foundations/identity-and-state.md#pr-req-0235---persistent-instance-data-ownership)
 
-### PR-REQ-0023 - Stable Instance identity
+<a id="pr-req-0236---managed-service-resource-declaration-and-existence" />
+[PR-REQ-0236 - Managed Service Resource declaration and existence](../../spec/foundations/identity-and-state.md#pr-req-0236---managed-service-resource-declaration-and-existence)
 
-`InstanceId` MUST be Pactrun-generated, opaque, globally strong, stable, and
-non-reusable. Migration, Input mutation, and Snapshot Restore MUST NOT change
-it. Recreating a deleted Instance name MUST produce a new `InstanceId`.
+<a id="pr-req-0241---servicestorage-and-resource-semantic-identity" />
+[PR-REQ-0241 - ServiceStorage and resource semantic identity](../../spec/foundations/identity-and-state.md#pr-req-0241---servicestorage-and-resource-semantic-identity)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0242---declaration-existence-and-observation" />
+[PR-REQ-0242 - Declaration, existence, and observation](../../spec/foundations/identity-and-state.md#pr-req-0242---declaration-existence-and-observation)
 
-### PR-REQ-0024 - Instance names and provenance
+<a id="pr-req-0248---m1-d-metadata-boundary" />
+[PR-REQ-0248 - M1-D metadata boundary](../../spec/foundations/identity-and-state.md#pr-req-0248---m1-d-metadata-boundary)
 
-`InstanceName` MUST be a human reference that is unique among live Instances in
-one management environment. Names MAY be reused after deletion, but durable
-provenance MUST use `InstanceId` as its authoritative historical referent.
+<a id="pr-req-0272---m2-scope-and-anti-backdoor-boundary" />
+[PR-REQ-0272 - M2 scope and anti-backdoor boundary](../../spec/foundations/identity-and-state.md#pr-req-0272---m2-scope-and-anti-backdoor-boundary)
 
-**Verification: Pending automated coverage.**
+<a id="pre-m1-d-non-identity-metadata-closure" />
+[Pre-M1-D non-identity metadata closure](../../spec/foundations/identity-and-state.md#pre-m1-d-non-identity-metadata-closure)
 
-### PR-REQ-0025 - Opaque InstanceStateVersion
+<a id="pr-req-0249---typed-metadata-scope-and-authoritative-strings" />
+[PR-REQ-0249 - Typed metadata scope and authoritative strings](../../spec/foundations/identity-and-state.md#pr-req-0249---typed-metadata-scope-and-authoritative-strings)
 
-Every Instance MUST have one opaque, durable, non-revivable
-`InstanceStateVersion` representing a Pactrun-owned authoritative state
-publication event. It MUST NOT be an external-service hash. A rollback or
-recovery that recreates earlier field values MUST publish a new token to prevent
-ABA behavior.
+<a id="pr-req-0250---reference-label-binding-lookup-and-ordering" />
+[PR-REQ-0250 - Reference-label binding, lookup, and ordering](../../spec/foundations/identity-and-state.md#pr-req-0250---reference-label-binding-lookup-and-ordering)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0251---closed-current-presentation-model" />
+[PR-REQ-0251 - Closed current presentation model](../../spec/foundations/identity-and-state.md#pr-req-0251---closed-current-presentation-model)
 
-### PR-REQ-0026 - State-version publication
+<a id="pr-req-0252---typed-provenance-claims" />
+[PR-REQ-0252 - Typed provenance claims](../../spec/foundations/identity-and-state.md#pr-req-0252---typed-provenance-claims)
 
-Any committed Instance-state change that can affect future compilation,
-admission, execution-visible managed context, lifecycle, or recovery MUST
-atomically publish one new `InstanceStateVersion`. This includes active Revision
-changes, managed binding mutations, Restore commits, Migration edge commits,
-ManualRecoveryRequired transitions, and `ResolveManualRecovery`.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0027 - Non-versioned observations
-
-Hook-only external side effects, Snapshot object creation, Run and Artifact
-creation, and presentation-only metadata MUST NOT independently change an
-Instance's state version.
-
-**Verification: Pending automated coverage.**
-
-## Managed Input state
-
-### PR-REQ-0028 - Stable Input identity and opaque bytes
-
-Within one Package lineage, the same `InputIdentity` MUST always represent the
-same long-lived semantic Input and MUST NOT be reused for another meaning. Input
-payloads MUST be preserved byte-for-byte, including empty payloads; Pactrun MUST
-NOT infer format or semantics from content or filenames.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0029 - One managed binding registry
-
-An Instance MUST have at most one binding for each `InputIdentity`. `Active` and
-`retained` MUST be roles derived relative to the active Revision, not separate
-stores or historical value logs. A binding declared by the active Revision is
-active; an existing undeclared binding is retained.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0030 - Retained binding lifetime
-
-A retained binding MUST persist until it becomes active again, is explicitly
-discarded by Migration, is explicitly deleted by the operator, or the Instance
-is removed or abandoned. Historical Revision identity MAY be provenance but
-MUST NOT be part of binding identity.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0031 - RequiredInputsSatisfied
-
-`RequiredInputsSatisfied` MUST be derived from required declarations in the
-active Revision and current managed bindings. Empty bindings count as present.
-Missing required bindings MUST NOT invalidate the Instance or create a separate
-lifecycle state.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0032 - Initial binding acquisition and Instance publication
-
-Instance creation MAY commit an incomplete Instance. When a request explicitly
-supplies an initial binding, it MUST identify the Input and acquisition source
-explicitly and deterministically. The Instance and every explicitly supplied
-binding MUST be one atomic management commit. Any acquisition or validation
-failure for such a binding MUST fail the whole create request; Pactrun MUST NOT
-silently omit it and create an Instance more incomplete than requested.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0033 - Binding mutation invariants
-
-An active required binding MAY initially be absent, but once bound under that
-active Revision it MUST NOT be ordinarily unset or deleted. Active optional
-bindings MAY be set, replaced, or removed. Replacements MUST be atomic. Retained
-bindings MAY be inspected, explicitly exported, or deleted, but MUST NOT be
-directly set or replaced by the operator.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0034 - Secret protection
-
-Secret protection MUST be sticky. Normal data MAY be promoted to Secret
-automatically, but Secret data MUST NOT be implicitly downgraded. Declassification
-requires an explicit Migration transition and explicit operator authorization.
-Retained Secrets MUST retain protection, and ordinary inspection, diagnostics,
-Run records, and user-visible metadata MUST NOT disclose their values or
-value-derived digests.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0253---local-aliases-notes-and-trust" />
+[PR-REQ-0253 - Local aliases, notes, and trust](../../spec/foundations/identity-and-state.md#pr-req-0253---local-aliases-notes-and-trust)

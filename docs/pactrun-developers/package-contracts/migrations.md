@@ -1,139 +1,79 @@
 ---
-title: Migrations
+title: Migrations (moved)
 ---
 
-# Migrations
+# Migrations has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-Migration is a managed, staged transition along a Revision graph. It is owned
-by the target Revision and is not an Action.
+Read [the current document](../../spec/contracts/migrations.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-## Edge declaration
+## Previous section links
 
-### PR-REQ-0153 - Target-owned inbound edge
+<a id="edge-declaration" />
+[Edge declaration](../../spec/contracts/migrations.md#edge-declaration)
 
-A target Revision MUST declare every supported inbound edge from an exact
-source Revision in the same Package lineage. Each normalized edge MUST contain
-explicit Input transitions, source and target requirements, mandatory target
-outputs, and an optional Package Migration implementation.
+<a id="pr-req-0153---target-owned-inbound-edge" />
+[PR-REQ-0153 - Target-owned inbound edge](../../spec/contracts/migrations.md#pr-req-0153---target-owned-inbound-edge)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0154---separate-predicates" />
+[PR-REQ-0154 - Separate predicates](../../spec/contracts/migrations.md#pr-req-0154---separate-predicates)
 
-### PR-REQ-0154 - Separate predicates
+<a id="pr-req-0155---per-edge-commit" />
+[PR-REQ-0155 - Per-edge commit](../../spec/contracts/migrations.md#pr-req-0155---per-edge-commit)
 
-`MigrationRequirementsSatisfied`, `MigrationCompletionValid`, and target
-`RequiredInputsSatisfied` MUST remain distinct. Edge success MUST require the
-first two and MAY still leave the target ordinarily incomplete.
+<a id="pr-req-0156---whole-path-preflight" />
+[PR-REQ-0156 - Whole-path preflight](../../spec/contracts/migrations.md#pr-req-0156---whole-path-preflight)
 
-**Verification: Pending automated coverage.**
+<a id="input-transitions" />
+[Input transitions](../../spec/contracts/migrations.md#input-transitions)
 
-### PR-REQ-0155 - Per-edge commit
+<a id="pr-req-0157---canonical-transition-set" />
+[PR-REQ-0157 - Canonical transition set](../../spec/contracts/migrations.md#pr-req-0157---canonical-transition-set)
 
-Each edge in a Migration chain MUST establish a separate durable commit
-boundary. The active Revision and managed bindings remain at the source boundary
-until the edge commit atomically publishes target Revision, staged binding
-state, disposition, and a new Instance state version.
+<a id="pr-req-0158---conservative-shorthand" />
+[PR-REQ-0158 - Conservative shorthand](../../spec/contracts/migrations.md#pr-req-0158---conservative-shorthand)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0159---declarative-transition-scope" />
+[PR-REQ-0159 - Declarative transition scope](../../spec/contracts/migrations.md#pr-req-0159---declarative-transition-scope)
 
-### PR-REQ-0156 - Whole-path preflight
+<a id="pr-req-0160---declassification-contract" />
+[PR-REQ-0160 - Declassification contract](../../spec/contracts/migrations.md#pr-req-0160---declassification-contract)
 
-Before the first side effect, the Compiler SHOULD symbolically preflight the
-complete selected path for statically detectable missing requirements, illegal
-Secret transitions, target-writer conflicts, and unavailable resources.
+<a id="requirements-and-outputs" />
+[Requirements and outputs](../../spec/contracts/migrations.md#requirements-and-outputs)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0161---typed-source-and-target-requirements" />
+[PR-REQ-0161 - Typed source and target requirements](../../spec/contracts/migrations.md#pr-req-0161---typed-source-and-target-requirements)
 
-## Input transitions
+<a id="pr-req-0162---single-target-writer" />
+[PR-REQ-0162 - Single target writer](../../spec/contracts/migrations.md#pr-req-0162---single-target-writer)
 
-### PR-REQ-0157 - Canonical transition set
+<a id="pr-req-0163---mandatory-output-completion" />
+[PR-REQ-0163 - Mandatory output completion](../../spec/contracts/migrations.md#pr-req-0163---mandatory-output-completion)
 
-Normalized Migration semantics MUST use explicit `Carry(source -> target)`,
-`Declassify(source -> target)`, `Keep(source)`, and `Discard(source)`
-transitions. `Discard` is always explicit. Identity rename or change requires
-an explicit mapping.
+<a id="pr-req-0164---no-requires-produces-overlap" />
+[PR-REQ-0164 - No requires-produces overlap](../../spec/contracts/migrations.md#pr-req-0164---no-requires-produces-overlap)
 
-**Verification: Pending automated coverage.**
+<a id="ownership" />
+[Ownership](../../spec/contracts/migrations.md#ownership)
 
-### PR-REQ-0158 - Conservative shorthand
+<a id="pr-req-0165---pactrun-migration-responsibilities" />
+[PR-REQ-0165 - Pactrun Migration responsibilities](../../spec/contracts/migrations.md#pr-req-0165---pactrun-migration-responsibilities)
 
-An authoring frontend MAY default the same stable Input identity to `Carry` and
-a source-only Input to `Keep`, but normalization MUST materialize those choices.
-Existing unrelated retained bindings persist without repeated `Keep`
-declarations unless explicitly consumed, reactivated, or discarded.
+<a id="pr-req-0166---package-migration-responsibilities" />
+[PR-REQ-0166 - Package Migration responsibilities](../../spec/contracts/migrations.md#pr-req-0166---package-migration-responsibilities)
 
-**Verification: Pending automated coverage.**
+<a id="servicestorage-backed-resource-continuity" />
+[ServiceStorage-backed resource continuity](../../spec/contracts/migrations.md#servicestorage-backed-resource-continuity)
 
-### PR-REQ-0159 - Declarative transition scope
+<a id="pr-req-0237---service-resource-continuity-and-conservative-retention" />
+[PR-REQ-0237 - Service-resource continuity and conservative retention](../../spec/contracts/migrations.md#pr-req-0237---service-resource-continuity-and-conservative-retention)
 
-Declarative transitions MUST express binding continuity and disposition only.
-They MUST NOT perform one-to-many, many-to-one, or arbitrary payload
-transformation. Opaque transformation belongs to a typed Migration Hook output.
+<a id="pr-req-0238---service-transformation-and-recovery-boundary" />
+[PR-REQ-0238 - Service transformation and recovery boundary](../../spec/contracts/migrations.md#pr-req-0238---service-transformation-and-recovery-boundary)
 
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0160 - Declassification contract
-
-A Secret-to-Normal target MUST use explicit `Declassify` and require operator
-authorization at execution. `Keep` MUST preserve protection, and a Hook MUST
-NOT downgrade protection through its output.
-
-**Verification: Pending automated coverage.**
-
-## Requirements and outputs
-
-### PR-REQ-0161 - Typed source and target requirements
-
-An edge MAY require typed active or retained source bindings and staged target
-bindings. Requirements are admission prerequisites rather than ACLs. A Pack MAY
-use retained state for compatibility or recovery, and plan or lint output SHOULD
-make that dependence visible.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0162 - Single target writer
-
-Each target Input in one edge execution MUST have exactly zero or one effective
-writer: Carry, Declassify, operator-provided target binding, Hook-produced target
-binding, or absence. Multiple writers MUST fail validation or admission; hidden
-overwrite precedence is prohibited.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0163 - Mandatory output completion
-
-A Hook-produced target binding MUST use the typed canonical Session output and
-must be declared. Every `produces.target` binding MUST exist before a successful
-edge commit. Success with a missing mandatory output MUST fail completion
-validation.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0164 - No requires-produces overlap
-
-Without an explicit overwrite semantic, a target binding MUST NOT appear in
-both `requires.target` and `produces.target`. Such a normalized contract MUST be
-rejected.
-
-**Verification: Pending automated coverage.**
-
-## Ownership
-
-### PR-REQ-0165 - Pactrun Migration responsibilities
-
-Pactrun MUST own exact resolution, path selection, mutation guard, admission,
-pins, staged target state, continuity and protection policy, checkpoints,
-recovery directives, final atomic commits, active Revision switching, and Run
-and Instance consequences.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0166 - Package Migration responsibilities
-
-The Package MUST own database schema, application data formats, service
-configuration semantics, external resources, and arbitrary opaque payload
-transformation. A Migration Hook is optional when declarative state movement is
-sufficient.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0245---explicit-compatibility-and-resource-mapping" />
+[PR-REQ-0245 - Explicit compatibility and resource mapping](../../spec/contracts/migrations.md#pr-req-0245---explicit-compatibility-and-resource-mapping)

@@ -1,114 +1,70 @@
 ---
-title: Actions, Inputs, and Parameters
+title: Actions, Inputs, and Parameters (moved)
 ---
 
-# Actions, Inputs, and Parameters
+# Actions, Inputs, and Parameters has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Actions
+Read [the current document](../../spec/contracts/actions-inputs-and-parameters.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-### PR-REQ-0125 - Action semantics
+## Previous section links
 
-An Action MUST represent a Package-defined user operation. Pactrun MUST treat
-its stable identity, parameter schema, execution requirements, I/O contract,
-access requirement, implementation, and declared managed outputs as semantics;
-it MUST NOT infer service behavior from the Action's name.
+<a id="actions" />
+[Actions](../../spec/contracts/actions-inputs-and-parameters.md#actions)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0125---action-semantics" />
+[PR-REQ-0125 - Action semantics](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0125---action-semantics)
 
-### PR-REQ-0126 - Action is not Hook
+<a id="pr-req-0126---action-is-not-hook" />
+[PR-REQ-0126 - Action is not Hook](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0126---action-is-not-hook)
 
-An Action MUST remain the user operation and a Hook MUST remain one possible
-implementation mechanism. Snapshot, Migration, and Cleanup MUST NOT be authored
-as Actions even when they ultimately launch Hooks.
+<a id="input-declarations" />
+[Input declarations](../../spec/contracts/actions-inputs-and-parameters.md#input-declarations)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0127---stable-inputidentity" />
+[PR-REQ-0127 - Stable InputIdentity](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0127---stable-inputidentity)
 
-## Input declarations
+<a id="pr-req-0128---input-payload-opacity" />
+[PR-REQ-0128 - Input payload opacity](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0128---input-payload-opacity)
 
-### PR-REQ-0127 - Stable InputIdentity
+<a id="pr-req-0129---required-declaration-meaning" />
+[PR-REQ-0129 - Required declaration meaning](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0129---required-declaration-meaning)
 
-Every Input declaration MUST have a stable semantic `InputIdentity`. Within one
-Package lineage, an author MUST NOT reuse an identity for a different meaning.
-The exact authoring spelling remains open specification work.
+<a id="pr-req-0130---active-and-retained-contexts" />
+[PR-REQ-0130 - Active and retained contexts](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0130---active-and-retained-contexts)
 
-**Verification: Pending automated coverage.**
+<a id="servicestorage-backed-service-state-is-not-an-input" />
+[ServiceStorage-backed service state is not an Input](../../spec/contracts/actions-inputs-and-parameters.md#servicestorage-backed-service-state-is-not-an-input)
 
-### PR-REQ-0128 - Input payload opacity
+<a id="pr-req-0243---resource-exposure-and-mutation-route" />
+[PR-REQ-0243 - Resource exposure and mutation route](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0243---resource-exposure-and-mutation-route)
 
-Authors MUST treat Pactrun-managed Input payloads as opaque bytes. Pactrun MUST
-preserve zero-length and arbitrary payloads without parsing, converting, or
-inferring a type from file extensions.
+<a id="secrets" />
+[Secrets](../../spec/contracts/actions-inputs-and-parameters.md#secrets)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0131---secret-is-protection-metadata" />
+[PR-REQ-0131 - Secret is protection metadata](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0131---secret-is-protection-metadata)
 
-### PR-REQ-0129 - Required declaration meaning
+<a id="pr-req-0132---no-implicit-declassification" />
+[PR-REQ-0132 - No implicit declassification](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0132---no-implicit-declassification)
 
-An active Input marked required MUST mean that an ordinary Action or Snapshot
-Capture needs a binding in its Instance context. It MUST NOT mean that an
-Instance without the binding is illegal, and it MUST NOT automatically become a
-Migration or Cleanup requirement.
+<a id="invocation-parameters" />
+[Invocation Parameters](../../spec/contracts/actions-inputs-and-parameters.md#invocation-parameters)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0133---invocation-parameter-lifecycle" />
+[PR-REQ-0133 - Invocation-parameter lifecycle](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0133---invocation-parameter-lifecycle)
 
-### PR-REQ-0130 - Active and retained contexts
+<a id="pr-req-0134---initial-parameter-types" />
+[PR-REQ-0134 - Initial parameter types](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0134---initial-parameter-types)
 
-Ordinary Actions MUST receive active bindings only. Migration and Cleanup MAY
-use typed references to active and retained bindings under their own
-requirements. Authors SHOULD treat dependence on retained data as a visible
-compatibility or recovery smell, not as a prohibited capability.
+<a id="pr-req-0135---sensitive-parameter-channel" />
+[PR-REQ-0135 - Sensitive parameter channel](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0135---sensitive-parameter-channel)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0136---shared-machinery-is-not-shared-identity" />
+[PR-REQ-0136 - Shared machinery is not shared identity](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0136---shared-machinery-is-not-shared-identity)
 
-## Secrets
-
-### PR-REQ-0131 - Secret is protection metadata
-
-`Secret` MUST be Pactrun-owned protection metadata rather than a payload type.
-Authors and Hooks MUST NOT rely on Pactrun parsing the payload, providing a
-vault-grade guarantee, or securely erasing discarded bytes.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0132 - No implicit declassification
-
-An authoring model MUST NOT express an implicit Secret-to-Normal transition.
-Migration must use explicit `Declassify`, and execution additionally requires
-operator authorization. A Hook MUST NOT declassify output by choosing its own
-protection metadata.
-
-**Verification: Pending automated coverage.**
-
-## Invocation Parameters
-
-### PR-REQ-0133 - Invocation-parameter lifecycle
-
-Invocation Parameters MUST be typed, single-invocation values processed through
-parse, validation, normalization, and binding. They MUST NOT persist as Instance
-Inputs or become Managed Data.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0134 - Initial parameter types
-
-The initial parameter model MAY include integer, float, boolean, and string
-types and MAY mark parameters sensitive. Raw argument-vector passthrough MUST
-NOT be part of the initial contract.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0135 - Sensitive parameter channel
-
-A sensitive parameter value MUST NOT be recorded in Run history. The CLI MUST
-offer a value path that does not expose the value directly in command-line
-arguments, such as prompt, file, or standard-input binding.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0136 - Shared machinery is not shared identity
-
-Actions and Snapshot operations MAY reuse parameter parsing and binding
-machinery, but this MUST NOT turn them into the same domain operation.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0273---primitive-invocation-text-lexical-profile" />
+[PR-REQ-0273 - Primitive invocation-text lexical profile](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0273---primitive-invocation-text-lexical-profile)

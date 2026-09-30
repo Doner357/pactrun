@@ -1,0 +1,19 @@
+{
+  "architecture": {
+    "64bit": {
+      "hash": "90eabf158304908e17c97a4a7706a9c42611852a681217b76652b84aaafccaeb",
+      "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.1/pactrun-test-1.0.0-alpha.1-windows-x86_64.zip"
+    }
+  },
+  "bin": [
+    [
+      "bin/pactrun-test.exe",
+      "pactrun-test"
+    ]
+  ],
+  "description": "Pactrun immutable revisions and managed instances",
+  "homepage": "https://github.com/Doner357/pactrun",
+  "license": "MIT",
+  "pre_install": "$root = if ($global) { $globaldir } else { $scoopdir }; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object { $_.Name -ne $app } | ForEach-Object { $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) { $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) { if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq 'pactrun-test') { abort \"Uninstall $($_.Name) before installing $app; managed data is retained.\" } } } }",
+  "version": "1.0.0-alpha.1"
+}

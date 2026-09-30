@@ -7,6 +7,9 @@ const config: Config = {
   url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000',
   baseUrl: process.env.DOCUSAURUS_BASE_URL ?? '/',
   onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
+  staticDirectories: ['static', '.generated-text'],
+  plugins: ['./plugins/text-docs/index.mjs', './plugins/document-catalog/index.mjs'],
 
   presets: [
     [
@@ -14,6 +17,7 @@ const config: Config = {
       {
         docs: {
           path: '../docs',
+          exclude: ['agents/**', 'archive/**', 'proposals/**'],
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
         },
@@ -29,13 +33,25 @@ const config: Config = {
     navbar: {
       title: 'Pactrun',
       items: [
+        {to: '/guides/', label: 'Users', position: 'left'},
+        {to: '/package-authors/', label: 'Authors', position: 'left'},
+        {to: '/spec/', label: 'Spec', position: 'left'},
+        {to: '/commands', label: 'Commands', position: 'right'},
+        {to: '/search', label: 'Search', position: 'right'},
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Documentation',
+          label: 'Browse',
         },
       ],
+    },
+    footer: {
+      links: [{
+        title: 'Tools',
+        // Static asset, not a React Router page. Its existence is checked post-build.
+        items: [{label: 'AI tool documentation (text)', href: 'pathname:///llms.txt'}],
+      }],
     },
     colorMode: {
       defaultMode: 'light',

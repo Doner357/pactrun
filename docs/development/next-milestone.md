@@ -1,0 +1,133 @@
+---
+title: Current baseline and milestone handoff
+---
+
+# Current baseline and milestone handoff
+
+**Status: Informative current-state handoff.** Product behavior belongs to
+[Spec](../spec/index.md). Use [task reading paths](./reading-paths.md) for
+implementation context; verification belongs to the source-qualified delivery
+records linked below. Integration does not authorize publication.
+
+## Current baseline
+
+The [E delivery ledger](./e-implementation-status.md) records local engineering
+qualification and integration. The product candidate is `1.0.0-alpha.1`; the
+eight current format domains use `1.0-alpha.1`. These selections do not couple
+the independent version domains or authorize formal promotion.
+
+| Area | Effective owner and boundary |
+| --- | --- |
+| Installed Revision and Pack source | [Canonical Revision](../spec/contracts/revision-canonical.md) and [Pack source](../spec/contracts/pack-source.md); one complete baseline including service declarations and Shell Loader alternatives |
+| Hook Sessions | [Hook protocol](../spec/contracts/hook-protocol.md); explicit granted authorities, versioned independently of Revision identity |
+| Snapshots | [Integrity](../spec/contracts/snapshot-integrity.md) and [bundle](../spec/contracts/snapshot-bundle.md); the current string-marked baseline, with no development-era numeric readers |
+| Persistence | [Persistence baseline](../spec/persistence/persistence-baseline.md); unsupported stores are refused without conversion or data deletion |
+| CLI | [Versioned machine output](../spec/contracts/cli-machine-interface.md) and [ID selectors](../spec/contracts/cli-id-selectors.md); human and machine presentation use the same operation contracts |
+| Pack transport | [Distribution baseline](../spec/contracts/pack-distribution.md); imported bytes must satisfy the complete current contract |
+
+Development-era numeric formats and storage upgrade chains are retired. Updating
+the executable does not relabel, rehash, or rebind existing objects. No old
+milestone record authorizes restoring an obsolete reader or deleting real data.
+
+## F — Documentation and Documentation Site {#next-milestone-f--documentation-and-documentation-site}
+
+**State: Implementation and corrections complete; local commit and merge approved on 2026-09-29.**
+
+The operator authorized F implementation, verification and remote preview on
+port 3000. [F delivery](./f-documentation-status.md) owns its acceptance evidence.
+The [scope record](./remaining-capability-milestones.md#f-documentation-and-documentation-site)
+records English documentation, Docusaurus, reader/agent navigation, search and
+maintenance checks. Local integration into develop is authorized. Push, public
+deployment and package-source publication remain unauthorized. The operator
+deferred the Authentik black-box exercise until the release/download flow is
+complete; this does not authorize starting publication work.
+
+## What is already recorded as implemented
+
+| Delivery | Evidence owner |
+| --- | --- |
+| A: diagnostics and Instance observability | [A record](./execution-diagnostics-observability-status.md) |
+| B: object catalog, history and metadata | [B record](./object-catalog-history-metadata-status.md) and [approved design](./design-notes/object-catalog-history-metadata-baseline.md) |
+| C: Pack transport | [C record](./pack-transport-status.md) and [approved design](./design-notes/pack-transport-baseline.md) |
+| D: human and versioned machine presentation | [D record](./cli-presentation-status.md) |
+| E: baseline consolidation and native delivery | [E record](./e-implementation-status.md) and [approved scope](./design-notes/e-versioning-s0-plan.md) |
+| Managed-object lifecycle and GC | [Lifecycle record](./managed-object-lifecycle-status.md) |
+| Snapshot capacity and create-and-restore | [Workflow record](./snapshot-capacity-and-restore-status.md) |
+| Shell Adapter / Loader | [Loader record](./shell-adapter-loader-status.md); A supersedes its original diagnostic-presentation gap |
+
+These records describe their tested sources and integration; a table entry is
+not a fresh test run. Their original development format numbers do not define
+which formats the current product accepts.
+
+## M5 is implemented and integrated into develop
+
+Use the [Migration record](./m5-implementation-status.md) for historical delivery
+and the [current Migration contract](../spec/contracts/migrations.md) for new work.
+
+### Already defined: preserve these decisions
+
+Preserve target-owned edges, explicit writers, same-Package paths, protection
+rules and per-edge publication. Read the [execution owner](../spec/execution/m5-migration-execution.md)
+and [command owner](../spec/behavior/m5-migration-command-reference.md) before editing.
+
+### Handoff checks
+
+Recheck the effective contracts, the source-qualified evidence and the current
+Instance/resource state. A Plan reserves nothing, a completed edge is not a
+whole-path rollback promise, and managed publication does not establish service
+coherence. Use the [verification policy](./development-and-verification.md).
+
+## M6 is complete and integrated into develop
+
+The [M6 record](./m6-implementation-status.md) preserves the bounded recovery work.
+Current recovery duties are owned by [recovery](../spec/execution/recovery-and-reconciliation.md),
+including explicit risk handling and the prohibition on fabricated service repair.
+
+## M7 is integrated; M8 is rejected
+
+[ServiceStorage delivery](./m6-5-implementation-status.md) and
+[lifecycle delivery](./m7-implementation-status.md) have separate evidence.
+Their current owners are [ServiceStorage execution](../spec/execution/m6-5-service-storage-execution.md)
+and [Instance retirement](../spec/execution/m7-instance-retirement.md).
+[M8 Recipes were rejected](./history/m8-recipes-rejected.md), not deferred.
+A public Candidate API remains deferred until concrete demand.
+
+## Next planned scope and completion sequence
+
+The [original completion plan](./product-completion-milestones.md) and
+[remaining capability sequence](./remaining-capability-milestones.md) retain
+their approvals and ordering rationale. F has approval for local integration.
+No next M-series milestone is selected. A later task needs its own scope.
+
+The [handoff captured before consistency correction](./history/handoff-before-consistency-review-2026-09-28.md)
+preserves the overlapping earlier prose for audit. Use this page's current
+baseline table instead of that archived support matrix.
+
+## Release readiness is not the next milestone
+
+The 2026-09-30 follow-up authorizes local CI/Pages implementation and verification.
+[CI and publication operations](./ci-and-publication.md) records the prepared
+workflow, opt-in deployment boundary and remaining hosted acceptance. This does
+not authorize a push, public activation or software release, and does not claim
+completion of the newly selected native-package entry design.
+
+The owner subsequently authorized [Public Preview delivery](./public-preview-delivery.md)
+to the public `Doner357/pactrun` repository under MIT, including the necessary Git,
+Release, Pages and package-source publication. That milestone remains subject to
+its candidate/artifact and actual-public-acquisition checks; this is not a formal
+1.0.0 promotion or a statement that every publication gate has already passed.
+
+[Release readiness](./release-readiness.md) remains a separate acceptance and
+publication boundary. E engineering delivery and F review do not authorize a
+beta, RC, formal release or public website. Follow the
+[compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+for formal promotion and same-Major guarantees.
+
+## Evidence caveat
+
+Use the original delivery receipt when citing a test result. Later documentation
+edits do not turn an earlier pass into new runtime qualification. Configuration
+readiness, permission, successful process exit, durable Run outcome and service
+coherence remain distinct observations. Non-ServiceStorage resource taxonomy,
+OS isolation, encrypted export and other conditional future scope are not implied
+by completed ServiceStorage or lifecycle work.

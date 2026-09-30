@@ -10,21 +10,69 @@ on:
 permissions:
   contents: read
 
+# Large executable fixtures are expensive at opt-level 0. Keep all checks on.
+env:
+  CARGO_PROFILE_TEST_OPT_LEVEL: '1'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG_ASSERTIONS: 'true'
+  CARGO_PROFILE_TEST_OVERFLOW_CHECKS: 'true'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  ci:
-    name: Workspace verification
+  scope:
+    name: Select verification scope
     runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.scope.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lint workflow syntax and expressions
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml
+      - name: Verify CI policy tests
+        run: |
+          python3 -m unittest discover -s tools -p 'test_ci_policy.py'
+          node --test tools/test_pages_guard.mjs
+      - name: Classify the complete change
+        id: scope
+        run: python3 tools/ci_scope.py
+
+  ubuntu:
+    name: Ubuntu verification
+    needs: scope
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
 
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Rust
+        if: needs.scope.outputs.runtime == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: rustfmt, clippy
           cache: true
+
+      - name: Check PTY driver
+        run: python3 --version
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -41,5 +89,103 @@ jobs:
       - name: Install documentation dependencies
         run: pnpm --dir website install --frozen-lockfile
 
+      - name: Read the configured Pages destination
+        id: pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: false
+
       - name: Run the shared verification entry point
+        if: needs.scope.outputs.runtime == 'true'
         run: cargo xtask ci
+        env:
+          DOCUSAURUS_URL: ${{ steps.pages.outputs.origin || 'https://example.invalid' }}
+          DOCUSAURUS_BASE_URL: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
+
+      - name: Verify documentation-only changes
+        if: needs.scope.outputs.runtime == 'false'
+        run: |
+          pnpm --dir website run typecheck
+          pnpm --dir website run build
+        env:
+          DOCUSAURUS_URL: ${{ steps.pages.outputs.origin || 'https://example.invalid' }}
+          DOCUSAURUS_BASE_URL: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
+
+      - name: Upload the verified site without rebuilding
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/build
+
+      - name: Verify public package definitions and immutable records
+        if: needs.scope.outputs.runtime == 'true'
+        run: |
+          python3 -m unittest tools.test_release_catalog
+          python3 tools/verify_release_catalog.py
+
+  windows:
+    name: Windows Rust verification
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          cache: true
+
+      - name: Set up the independent Node oracle
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: website/.node-version
+
+      - name: Verify Windows oracle and canonical source prerequisites
+        run: |
+          node --version
+          $spec = [IO.File]::ReadAllText('docs/spec/persistence/persistence-baseline.md')
+          if ($spec.Contains("`r`n")) { throw 'Canonical Markdown must be checked out with LF line endings.' }
+
+      - name: Run Rust verification
+        run: cargo xtask rust-ci
+
+  gate:
+    name: CI gate
+    if: always()
+    needs: [scope, ubuntu, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable verification job
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          RUNTIME: ${{ needs.scope.outputs.runtime }}
+          UBUNTU_RESULT: ${{ needs.ubuntu.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+        run: |
+          # BEGIN CI GATE
+          test "$SCOPE_RESULT" = success
+          test "$UBUNTU_RESULT" = success
+          case "$RUNTIME" in
+            true) test "$WINDOWS_RESULT" = success ;;
+            false) test "$WINDOWS_RESULT" = skipped ;;
+            *) exit 1 ;;
+          esac
+          # END CI GATE
+
+  pages:
+    name: Publish verified documentation
+    needs: gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

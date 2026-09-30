@@ -1,0 +1,773 @@
+{
+  "format": "hook_protocol_baseline_fixtures",
+  "status": "baseline",
+  "preamble_hex": "7061637472756e2e686f6f6b2d70726f746f636f6c00000b312e302d616c7068612e31",
+  "session_specs": [
+    {
+      "name": "action_observe",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000001\",\"run_id\":\"00000000000000000000000000000002\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[{\"parameter_id\":\"limit\",\"value\":5}],\"workspace\":{\"handle\":\"10000000000000000000000000000001\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"output\"},\"operation\":{\"kind\":\"action\",\"action_id\":\"inspect\",\"access\":\"observe\",\"bindings\":[{\"handle\":\"20000000000000000000000000000001\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/input/config\"}],\"outputs\":[{\"handle\":\"30000000000000000000000000000001\",\"output_id\":\"report\",\"staged_path\":\"/pactrun/output/report\"},{\"handle\":\"30000000000000000000000000000002\",\"output_id\":\"trace\",\"staged_path\":\"/pactrun/output/trace\"}]}}"
+    },
+    {
+      "name": "action_mutate",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\",\"run_id\":\"00000000000000000000000000000012\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000011\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"action\",\"action_id\":\"apply\",\"access\":\"mutate\",\"bindings\":[],\"outputs\":[{\"handle\":\"30000000000000000000000000000011\",\"output_id\":\"crash_dump\",\"staged_path\":\"/pactrun/output/crash-dump\"}]}}"
+    },
+    {
+      "name": "capture",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\",\"run_id\":\"00000000000000000000000000000022\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000021\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"snapshot_capture\",\"access\":\"observe\",\"bindings\":[{\"handle\":\"20000000000000000000000000000021\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/input/config\"}],\"candidate\":{\"handle\":\"40000000000000000000000000000021\",\"root_path\":\"/pactrun/candidate\"}}}"
+    },
+    {
+      "name": "restore",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000031\",\"run_id\":\"00000000000000000000000000000032\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000031\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"snapshot_restore\",\"snapshot_id\":\"00000000000000000000000000000033\",\"bindings\":[{\"handle\":\"20000000000000000000000000000031\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/staged/config\"}],\"snapshot_content\":{\"handle\":\"50000000000000000000000000000031\",\"readonly_root_path\":\"/pactrun/snapshot\",\"logical_descriptors\":[{\"role\":\"database\",\"path\":\"db/main\",\"blob_digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"materialized_path\":\"objects/db-main\"}]}}}"
+    },
+    {
+      "name": "migration",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000041\",\"run_id\":\"00000000000000000000000000000042\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000041\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"migration\",\"source_revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"},\"source_bindings\":[{\"handle\":\"20000000000000000000000000000041\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/source/config\"},{\"handle\":\"20000000000000000000000000000042\",\"input_id\":\"legacy\",\"role\":\"retained\",\"readonly_path\":\"/pactrun/source/legacy\"}],\"target_bindings\":[{\"handle\":\"20000000000000000000000000000043\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/target/config\"}],\"target_outputs\":[{\"handle\":\"30000000000000000000000000000041\",\"input_id\":\"database\",\"staged_path\":\"/pactrun/target/database\"},{\"handle\":\"30000000000000000000000000000042\",\"input_id\":\"index\",\"staged_path\":\"/pactrun/target/index\"}]}}"
+    },
+    {
+      "name": "cleanup",
+      "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000051\",\"run_id\":\"00000000000000000000000000000052\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000051\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"cleanup\",\"bindings\":[{\"handle\":\"20000000000000000000000000000051\",\"input_id\":\"config\",\"role\":\"active\",\"readonly_path\":\"/pactrun/current/config\"},{\"handle\":\"20000000000000000000000000000052\",\"input_id\":\"legacy\",\"role\":\"retained\",\"readonly_path\":\"/pactrun/current/legacy\"}]}}"
+    }
+  ],
+  "valid": [
+    {
+      "name": "action_success_subset_observe_workspace",
+      "session": "action_observe",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000001\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"diagnostic\",\"severity\":\"info\",\"code\":\"report_ready\",\"message\":\"one declared artifact is ready\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"success\",\"produced_outputs\":[\"30000000000000000000000000000001\"]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "action",
+        "risk_state": "clear",
+        "submitted_outputs": [
+          "30000000000000000000000000000001"
+        ]
+      }
+    },
+    {
+      "name": "action_failure_artifact_subset",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"failure\",\"code\":\"service_failed\",\"message\":\"diagnostic artifact retained\",\"produced_outputs\":[\"30000000000000000000000000000011\"]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "action",
+        "risk_state": "clear",
+        "submitted_outputs": [
+          "30000000000000000000000000000011"
+        ]
+      }
+    },
+    {
+      "name": "recovery_risk_round_trip",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"request_ack\",\"request_id\":1,\"risk_state\":\"open\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":2,\"request\":{\"kind\":\"resolve_recovery_risk\"}}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"request_ack\",\"request_id\":2,\"risk_state\":\"clear\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"success\",\"produced_outputs\":[]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "action",
+        "risk_state": "clear",
+        "submitted_outputs": []
+      }
+    },
+    {
+      "name": "asynchronous_cancellation",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"cancel\",\"control_id\":1,\"reason\":\"requested\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"cancel_ack\",\"control_id\":1}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"failure\",\"code\":\"cancelled\",\"produced_outputs\":[]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "action",
+        "risk_state": "clear",
+        "submitted_outputs": []
+      }
+    },
+    {
+      "name": "failure_with_open_recovery_risk",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"request_ack\",\"request_id\":1,\"risk_state\":\"open\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"failure\",\"code\":\"service_incoherent\",\"produced_outputs\":[]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "action",
+        "risk_state": "open",
+        "submitted_outputs": []
+      }
+    },
+    {
+      "name": "hook_protocol_error",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"protocol_error\",\"code\":\"sdk_failure\",\"message\":\"the Hook cannot continue\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "protocol_error",
+        "operation": "action",
+        "risk_state": "clear"
+      }
+    },
+    {
+      "name": "capture_empty_service_content",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "snapshot_capture",
+        "risk_state": "clear",
+        "service_content": []
+      }
+    },
+    {
+      "name": "capture_service_content_order_a",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"logs\",\"path\":\"log/main\",\"candidate_path\":\"files/log-main\"},{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"files/db-main\"}]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "snapshot_capture",
+        "risk_state": "clear",
+        "service_content": [
+          {
+            "candidate_path": "files/db-main",
+            "path": "db/main",
+            "role": "database"
+          },
+          {
+            "candidate_path": "files/log-main",
+            "path": "log/main",
+            "role": "logs"
+          }
+        ]
+      }
+    },
+    {
+      "name": "capture_service_content_order_b",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"files/db-main\"},{\"role\":\"logs\",\"path\":\"log/main\",\"candidate_path\":\"files/log-main\"}]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "snapshot_capture",
+        "risk_state": "clear",
+        "service_content": [
+          {
+            "candidate_path": "files/db-main",
+            "path": "db/main",
+            "role": "database"
+          },
+          {
+            "candidate_path": "files/log-main",
+            "path": "log/main",
+            "role": "logs"
+          }
+        ]
+      }
+    },
+    {
+      "name": "restore_active_view_and_snapshot_content",
+      "session": "restore",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000031\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_restore\",\"status\":\"success\"}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "snapshot_restore",
+        "risk_state": "clear"
+      }
+    },
+    {
+      "name": "migration_source_roles_and_mandatory_outputs",
+      "session": "migration",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000041\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"migration\",\"status\":\"success\",\"produced_target_outputs\":[\"30000000000000000000000000000042\",\"30000000000000000000000000000041\"]}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "migration",
+        "risk_state": "clear",
+        "submitted_outputs": [
+          "30000000000000000000000000000041",
+          "30000000000000000000000000000042"
+        ]
+      }
+    },
+    {
+      "name": "cleanup_full_binding_context",
+      "session": "cleanup",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000051\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"cleanup\",\"status\":\"success\"}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"completion_accepted\"}"
+        }
+      ],
+      "expected_state": {
+        "completion": "accepted",
+        "operation": "cleanup",
+        "risk_state": "clear"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "wrong_preamble",
+      "transport": {
+        "kind": "preamble",
+        "hex": "7061637472756e2e686f6f6b2d70726f746f636f6c0000000002"
+      },
+      "expected_error": "invalid_preamble"
+    },
+    {
+      "name": "oversized_frame",
+      "transport": {
+        "kind": "declared_length",
+        "length": 16777217
+      },
+      "expected_error": "frame_too_large"
+    },
+    {
+      "name": "invalid_utf8_payload",
+      "transport": {
+        "kind": "payload_hex",
+        "hex": "7b22ff227d"
+      },
+      "expected_error": "invalid_utf8"
+    },
+    {
+      "name": "malformed_json",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{"
+        }
+      ],
+      "expected_error": "invalid_json"
+    },
+    {
+      "name": "duplicate_property",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"type\":\"session_start\",\"service_authorities\":[]}"
+        }
+      ],
+      "expected_error": "duplicate_property"
+    },
+    {
+      "name": "lone_high_surrogate",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"\\ud800\"}"
+        }
+      ],
+      "expected_error": "invalid_unicode_scalar"
+    },
+    {
+      "name": "unsupported_version",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.2\",\"session_id\":\"00000000000000000000000000000001\",\"run_id\":\"00000000000000000000000000000002\",\"revision\":{},\"parameters\":[],\"workspace\":{},\"io\":{},\"operation\":{}}"
+        }
+      ],
+      "expected_error": "unsupported_protocol_version"
+    },
+    {
+      "name": "features_field_removed",
+      "session": "action_observe",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000001\",\"features\":[]}"
+        }
+      ],
+      "expected_error": "unknown_field"
+    },
+    {
+      "name": "second_outstanding_request",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":2,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        }
+      ],
+      "expected_error": "request_in_flight"
+    },
+    {
+      "name": "request_ack_id_mismatch",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"request_ack\",\"request_id\":2,\"risk_state\":\"open\"}"
+        }
+      ],
+      "expected_error": "request_id_mismatch"
+    },
+    {
+      "name": "resolve_risk_while_clear",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"resolve_recovery_risk\"}}"
+        }
+      ],
+      "expected_error": "invalid_recovery_transition"
+    },
+    {
+      "name": "success_with_open_risk",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"request\",\"request_id\":1,\"request\":{\"kind\":\"enter_recovery_risk\"}}"
+        },
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"request_ack\",\"request_id\":1,\"risk_state\":\"open\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"success\",\"produced_outputs\":[]}"
+        }
+      ],
+      "expected_error": "completion_with_open_risk"
+    },
+    {
+      "name": "undeclared_action_output",
+      "session": "action_observe",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000001\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"action\",\"status\":\"failure\",\"produced_outputs\":[\"ffffffffffffffffffffffffffffffff\"]}"
+        }
+      ],
+      "expected_error": "invalid_authority"
+    },
+    {
+      "name": "migration_success_missing_output",
+      "session": "migration",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000041\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"migration\",\"status\":\"success\",\"produced_target_outputs\":[\"30000000000000000000000000000041\"]}"
+        }
+      ],
+      "expected_error": "invalid_completion"
+    },
+    {
+      "name": "migration_failure_submits_output",
+      "session": "migration",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000041\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"migration\",\"status\":\"failure\",\"produced_target_outputs\":[\"30000000000000000000000000000041\"]}"
+        }
+      ],
+      "expected_error": "invalid_completion"
+    },
+    {
+      "name": "capture_duplicate_role_path",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"files/a\"},{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"files/b\"}]}"
+        }
+      ],
+      "expected_error": "duplicate_semantic_key"
+    },
+    {
+      "name": "candidate_absolute_path",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"C:/data\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_leading_slash",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"/data\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_trailing_slash",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data/\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_empty_segment",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data//file\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_dot_segment",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data/./file\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_dot_dot_segment",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data/../file\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_backslash_separator",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data\\\\file\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_nul",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data/\\u0000file\"}]}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "candidate_malformed_unicode",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"success\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"data/\\udc00\"}]}"
+        }
+      ],
+      "expected_error": "invalid_unicode_scalar"
+    },
+    {
+      "name": "restore_retained_binding_exposed",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000031\",\"run_id\":\"00000000000000000000000000000032\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000031\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"snapshot_restore\",\"snapshot_id\":\"00000000000000000000000000000033\",\"bindings\":[{\"handle\":\"20000000000000000000000000000031\",\"input_id\":\"legacy\",\"role\":\"retained\",\"readonly_path\":\"/pactrun/staged/legacy\"}],\"snapshot_content\":{\"handle\":\"50000000000000000000000000000031\",\"readonly_root_path\":\"/pactrun/snapshot\",\"logical_descriptors\":[]}}}"
+        }
+      ],
+      "expected_error": "invalid_message"
+    },
+    {
+      "name": "restore_bad_materialized_path",
+      "messages": [
+        {
+          "direction": "pactrun_to_hook",
+          "raw_json": "{\"type\":\"session_start\",\"service_authorities\":[],\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000031\",\"run_id\":\"00000000000000000000000000000032\",\"revision\":{\"package_id\":\"00000000000000000000000000000003\",\"revision_content_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"parameters\":[],\"workspace\":{\"handle\":\"10000000000000000000000000000031\",\"root_path\":\"/pactrun/workspace\"},\"io\":{\"terminal\":\"none\"},\"operation\":{\"kind\":\"snapshot_restore\",\"snapshot_id\":\"00000000000000000000000000000033\",\"bindings\":[],\"snapshot_content\":{\"handle\":\"50000000000000000000000000000031\",\"readonly_root_path\":\"/pactrun/snapshot\",\"logical_descriptors\":[{\"role\":\"database\",\"path\":\"db/main\",\"blob_digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"materialized_path\":\"../object\"}]}}}"
+        }
+      ],
+      "expected_error": "invalid_session_relative_path"
+    },
+    {
+      "name": "capture_failure_submits_content",
+      "session": "capture",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000021\"}"
+        },
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"complete\",\"operation\":\"snapshot_capture\",\"status\":\"failure\",\"service_content\":[{\"role\":\"database\",\"path\":\"db/main\",\"candidate_path\":\"files/db-main\"}]}"
+        }
+      ],
+      "expected_error": "invalid_completion"
+    },
+    {
+      "name": "eof_before_completion",
+      "session": "action_mutate",
+      "messages": [
+        {
+          "direction": "hook_to_pactrun",
+          "raw_json": "{\"type\":\"session_ready\",\"protocol_version\":\"1.0-alpha.1\",\"session_id\":\"00000000000000000000000000000011\"}"
+        }
+      ],
+      "expected_error": "unexpected_message"
+    }
+  ]
+}

@@ -1,3 +1,3 @@
 fn main() {
-    // Phase 0 composition wiring will be added here with real behavior.
+    std::process::exit(pactrun::run_cli_from_env());
 }

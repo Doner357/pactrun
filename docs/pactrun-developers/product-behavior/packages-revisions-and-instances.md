@@ -1,69 +1,37 @@
 ---
-title: Packages, Revisions, and Instances
+title: Resource model specification moved
 ---
 
-# Packages, Revisions, and Instances
+# Resource model specification moved
 
-**Status: Normative product behavior specification except where marked
-informative.**
+This is an informative compatibility entry, not a second specification.
+The complete resource-model specification now lives in
+[Packages, Revisions, and Instances](../../spec/behavior/packages-revisions-and-instances.md).
+All existing requirement IDs, verification declarations, and product semantics
+were preserved. Other Developer specifications remain in place during edition 1.
 
-## The resource model
+For a plain-language explanation, read
+[the concept guide](../../pactrun-users/concepts/packages-revisions-and-instances.md).
 
-A **Package** is a stable product lineage. A **Revision** is one immutable
-operational definition and its owned runtime content. An **Instance** is the
-long-lived service object that a user manages against one active Revision.
+## Previous requirement links
 
-Installing a Package creates or reuses an immutable Revision; it does not create
-an Instance. Exact internal identity rules are defined in
-[Identity and State](../architecture/identity-and-state.md).
+<a id="pr-req-0086---exact-resolution-before-operation" />
+[PR-REQ-0086 - Exact resolution before operation](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0086---exact-resolution-before-operation)
 
-## PR-REQ-0086 - Exact resolution before operation
+<a id="pr-req-0087---instance-presentation" />
+[PR-REQ-0087 - Instance presentation](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0087---instance-presentation)
 
-Every operation that accepts a human Package, Revision, Instance, Snapshot, or
-Run reference MUST resolve it to the appropriate exact identity before
-compilation or mutation. An ambiguous Revision reference MUST fail with an
-actionable ambiguity error and MUST NOT silently select a newest or most
-recently installed candidate.
+<a id="pr-req-0088---historical-identity-after-name-reuse" />
+[PR-REQ-0088 - Historical identity after name reuse](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0088---historical-identity-after-name-reuse)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0089---revision-labels-remain-references" />
+[PR-REQ-0089 - Revision labels remain references](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0089---revision-labels-remain-references)
 
-## PR-REQ-0087 - Instance presentation
+<a id="pr-req-0261---revision-installation-publication" />
+[PR-REQ-0261 - Revision installation publication](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0261---revision-installation-publication)
 
-User-facing Instance inspection MUST distinguish the stable managed object, its
-human name, active exact Revision, current trust state, and configuration
-completeness. It MUST NOT represent missing required Inputs as an invalid object
-or invent a `NeedsConfiguration` lifecycle state.
+<a id="pr-req-0262---migration-relational-installation-policy" />
+[PR-REQ-0262 - Migration relational installation policy](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0262---migration-relational-installation-policy)
 
-**Verification: Pending automated coverage.**
-
-## PR-REQ-0088 - Historical identity after name reuse
-
-Run and Snapshot history MUST remain associated with the original opaque
-Instance identity after the Instance is deleted. Reusing the same human name
-MUST NOT make old history appear to belong to the new Instance. Rename is not
-required in the initial product scope; if added later, it MUST preserve
-`InstanceId`.
-
-**Verification: Pending automated coverage.**
-
-## PR-REQ-0089 - Revision labels remain references
-
-User-visible version strings and labels MUST be presented as human references,
-not immutable Revision identity. Inspection MUST be able to show every
-association and its provenance when more than one claim exists.
-
-**Verification: Pending automated coverage.**
-
-## Incomplete Instances
-
-An Instance may legally exist before all required Inputs are bound. This makes
-creation and Migration independent from immediate execution readiness. Use
-Instance inspection to discover missing Inputs, then bind them through Input
-management. Ordinary Actions and Snapshot Capture remain blocked until the
-active Revision's required bindings are present.
-
-## Package scope
-
-Pactrun currently manages Packs. A Stack is not a supported managed resource and
-has no implied installation, Revision, Instance, Action, Snapshot, Migration,
-or CLI behavior.
+<a id="pr-req-0263---instance-name-and-inspection-order" />
+[PR-REQ-0263 - Instance name and inspection order](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0263---instance-name-and-inspection-order)

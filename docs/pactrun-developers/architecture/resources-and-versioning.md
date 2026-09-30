@@ -1,144 +1,73 @@
 ---
-title: Resources and Versioning
+title: Resources and Versioning (moved)
 ---
 
-# Resources and Versioning
+# Resources and Versioning has moved
 
-**Status: Normative architecture.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Resource lifecycle
+Read [the current document](../../spec/foundations/resources-and-versioning.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-### PR-REQ-0072 - Snapshot lifetime
+## Previous section links
 
-A committed Snapshot MUST be a durable first-class object with no default
-expiry in the initial product scope. Instance and Revision deletion MUST NOT
-cascade-delete Snapshots, and Snapshot content MUST NOT depend on the creating
-Run or Run Artifact remaining available.
+<a id="resource-lifecycle" />
+[Resource lifecycle](../../spec/foundations/resources-and-versioning.md#resource-lifecycle)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0072---snapshot-lifetime" />
+[PR-REQ-0072 - Snapshot lifetime](../../spec/foundations/resources-and-versioning.md#pr-req-0072---snapshot-lifetime)
 
-### PR-REQ-0073 - Run, Artifact, and workspace lifetime
+<a id="pr-req-0073---run-artifact-and-workspace-lifetime" />
+[PR-REQ-0073 - Run, Artifact, and workspace lifetime](../../spec/foundations/resources-and-versioning.md#pr-req-0073---run-artifact-and-workspace-lifetime)
 
-A Run Artifact MUST belong to its Run and MAY expire independently of retained
-Run metadata. A Run Record MAY have a separate retention policy. Workspaces and
-uncommitted Snapshot Candidates MUST be execution-scoped and cleaned after
-terminal execution.
+<a id="pr-req-0282---execution-workspace-housekeeping-failures" />
+[PR-REQ-0282 - Execution-workspace housekeeping failures](../../spec/foundations/resources-and-versioning.md#pr-req-0282---execution-workspace-housekeeping-failures)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0074---checkpoint-and-pin-lifetime" />
+[PR-REQ-0074 - Checkpoint and pin lifetime](../../spec/foundations/resources-and-versioning.md#pr-req-0074---checkpoint-and-pin-lifetime)
 
-### PR-REQ-0074 - Checkpoint and pin lifetime
+<a id="pr-req-0075---revision-deletion-guards" />
+[PR-REQ-0075 - Revision deletion guards](../../spec/foundations/resources-and-versioning.md#pr-req-0075---revision-deletion-guards)
 
-Transition checkpoints and durable recovery state MUST remain until no recovery
-or reference obligation exists. Execution-only pins MAY be released only after
-the Run is terminal and no recovery state needs them.
+<a id="pr-req-0076---physical-content-reachability" />
+[PR-REQ-0076 - Physical content reachability](../../spec/foundations/resources-and-versioning.md#pr-req-0076---physical-content-reachability)
 
-**Verification: Pending automated coverage.**
+<a id="independent-version-domains" />
+[Independent version domains](../../spec/foundations/resources-and-versioning.md#independent-version-domains)
 
-### PR-REQ-0075 - Revision deletion guards
+<a id="pr-req-0077---separate-version-domains" />
+[PR-REQ-0077 - Separate version domains](../../spec/foundations/resources-and-versioning.md#pr-req-0077---separate-version-domains)
 
-Pactrun MUST reject deletion of a Revision referenced by an active Instance or
-durably pinned by an accepted Run. A compile-only Plan MUST NOT prevent
-deletion. Historical Run identity and Snapshot provenance MUST NOT permanently
-prevent Revision deletion.
+<a id="pr-req-0078---persistence-migrations" />
+[PR-REQ-0078 - Persistence migrations](../../spec/foundations/resources-and-versioning.md#pr-req-0078---persistence-migrations)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0079---revision-core-format-ownership" />
+[PR-REQ-0079 - Revision Core format ownership](../../spec/foundations/resources-and-versioning.md#pr-req-0079---revision-core-format-ownership)
 
-### PR-REQ-0076 - Physical content reachability
+<a id="pr-req-0080---snapshot-integrity-format-ownership" />
+[PR-REQ-0080 - Snapshot integrity format ownership](../../spec/foundations/resources-and-versioning.md#pr-req-0080---snapshot-integrity-format-ownership)
 
-Physical GC MUST NOT remove content reachable from any managed object,
-Snapshot, accepted-Run pin, checkpoint, or recovery state. GC MUST use strong
-references or reachability rather than interpreting operation names or service
-semantics.
+<a id="pr-req-0081---bundle-envelopes" />
+[PR-REQ-0081 - Bundle envelopes](../../spec/foundations/resources-and-versioning.md#pr-req-0081---bundle-envelopes)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0082---hook-protocol-version" />
+[PR-REQ-0082 - Hook Protocol version](../../spec/foundations/resources-and-versioning.md#pr-req-0082---hook-protocol-version)
 
-## Independent version domains
+<a id="pr-req-0240---future-servicestorage-version-gates" />
+[PR-REQ-0240 - Future ServiceStorage version gates](../../spec/foundations/resources-and-versioning.md#pr-req-0240---future-servicestorage-version-gates)
 
-### PR-REQ-0077 - Separate version domains
+<a id="pr-req-0083---structured-cli-version" />
+[PR-REQ-0083 - Structured CLI version](../../spec/foundations/resources-and-versioning.md#pr-req-0083---structured-cli-version)
 
-Internal persistence schema, Revision Core format and hash domain, Snapshot
-integrity format and hash domain, export bundle format, Hook Protocol, Recipe
-Authoring API, and structured CLI output MUST be independently versioned. They
-MUST NOT share one generalized Pactrun schema version.
+<a id="import-identity" />
+[Import identity](../../spec/foundations/resources-and-versioning.md#import-identity)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0084---revision-import-identity" />
+[PR-REQ-0084 - Revision import identity](../../spec/foundations/resources-and-versioning.md#pr-req-0084---revision-import-identity)
 
-### PR-REQ-0078 - Persistence migrations
+<a id="pr-req-0254---non-identity-metadata-portability-boundary" />
+[PR-REQ-0254 - Non-identity metadata portability boundary](../../spec/foundations/resources-and-versioning.md#pr-req-0254---non-identity-metadata-portability-boundary)
 
-Internal persistence migration MUST preserve Pactrun domain identities and
-MUST preserve or transform every non-terminal Run and unresolved recovery
-obligation. It MUST NOT be confused with Revision Migration.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0079 - Revision Core format ownership
-
-Each published Revision Core format MUST define its closed semantic schema,
-identity-affecting normalization, collection ordering, runtime-content
-descriptor, canonical byte profile, hash framing, domain separation, and hash
-algorithm.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0080 - Snapshot integrity format ownership
-
-Each Snapshot integrity format MUST define its integrity-bearing fields,
-SnapshotId binding, producer and provenance normalization, complete managed
-binding representation, service-content roles, collection ordering, canonical
-bytes, domain separation, and hash profile. It MUST hash a semantic manifest,
-not archive bytes. `SnapshotIntegrityFormatV1` MUST apply semantic normalization
-before RFC 8785 JCS encoding and use a fixed SHA-256 profile; its exact schema
-and framing remain open specification work.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0081 - Bundle envelopes
-
-Revision and Snapshot bundles MUST be self-describing, versioned envelopes that
-identify their kind, format version, manifest, and content. Unsupported formats
-MUST be rejected rather than guessed. Packaging or compression changes MUST NOT
-change contained domain identity.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0082 - Hook Protocol version
-
-The canonical Hook Protocol MUST have its own language-neutral version covering
-Session establishment, authority, I/O transitions, typed contexts and outputs,
-recovery-risk messages, cancellation, EOF, and protocol violations. SDKs and
-helpers MUST remain adapters to that protocol.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0083 - Structured CLI version
-
-Human-readable output MAY evolve for usability. Machine-readable CLI output
-MUST be a versioned interface, and breaking changes MUST require an explicit
-version change. Interactive Hook terminal streams MUST NOT be wrapped in the
-structured output envelope.
-
-**Verification: Pending automated coverage.**
-
-## Import identity
-
-### PR-REQ-0084 - Revision import identity
-
-Revision export and import MUST preserve `PackageId`,
-`RevisionContentDigest`, `RevisionCore`, and owned runtime content. The same
-Package ID and digest MUST be idempotent; a different digest under the same
-Package ID MUST form another Revision; the same digest under another Package ID
-MUST remain a distinct Revision identity. Export and import MUST also preserve
-the bundle-defined portable non-identity metadata required by
-[PR-REQ-0021](./identity-and-state.md#pr-req-0021---portable-and-local-metadata).
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0085 - Snapshot import identity
-
-Snapshot export and import MUST preserve `SnapshotId`, integrity format and
-digest, producer Revision identity, immutable provenance, complete managed
-binding state, and service recovery content. The same Snapshot ID and digest
-MUST be idempotent; the same ID with a different digest MUST be rejected as an
-identity collision.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0085---snapshot-import-identity" />
+[PR-REQ-0085 - Snapshot import identity](../../spec/foundations/resources-and-versioning.md#pr-req-0085---snapshot-import-identity)

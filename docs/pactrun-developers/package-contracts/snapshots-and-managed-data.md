@@ -1,96 +1,52 @@
 ---
-title: Snapshots and Managed Data
+title: Snapshots and Managed Data (moved)
 ---
 
-# Snapshots and Managed Data
+# Snapshots and Managed Data has moved
 
-**Status: Normative Package contract specification.**
+**Status: Informative compatibility entry; no independent specification.**
 
-## Managed data concepts
+Read [the current document](../../spec/contracts/snapshots-and-managed-data.md). That owner defines current rules and support; earlier contract status or delivery
+evidence does not establish current availability. This page preserves old link
+anchors only and adds no product rules.
 
-### PR-REQ-0143 - Workspace
+## Previous section links
 
-A Workspace MUST be execution-scoped staging and MUST NOT become committed
-managed content until the operation-specific validation and commit succeeds.
+<a id="managed-data-concepts" />
+[Managed data concepts](../../spec/contracts/snapshots-and-managed-data.md#managed-data-concepts)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0143---workspace" />
+[PR-REQ-0143 - Workspace](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0143---workspace)
 
-### PR-REQ-0144 - Run Artifact
+<a id="pr-req-0144---run-artifact" />
+[PR-REQ-0144 - Run Artifact](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0144---run-artifact)
 
-An ordinary Action's declared managed output MUST become a Run Artifact owned by
-that Run. The initial product scope MUST NOT expose Artifact as a global
-top-level resource taxonomy.
+<a id="pr-req-0145---snapshotcandidate" />
+[PR-REQ-0145 - SnapshotCandidate](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0145---snapshotcandidate)
 
-**Verification: Pending automated coverage.**
+<a id="snapshot-capability" />
+[Snapshot capability](../../spec/contracts/snapshots-and-managed-data.md#snapshot-capability)
 
-### PR-REQ-0145 - SnapshotCandidate
+<a id="pr-req-0146---snapshot-domain-boundary" />
+[PR-REQ-0146 - Snapshot domain boundary](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0146---snapshot-domain-boundary)
 
-Snapshot Capture output MUST first be a temporary `SnapshotCandidate`. Pactrun
-MUST validate it and commit a Snapshot without requiring the candidate to become
-a permanent Run Artifact. The Run needs only a reference to the committed
-Snapshot.
+<a id="pr-req-0147---snapshot-authoritative-body" />
+[PR-REQ-0147 - Snapshot authoritative body](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0147---snapshot-authoritative-body)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0148---snapshot-identity-roles" />
+[PR-REQ-0148 - Snapshot identity roles](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0148---snapshot-identity-roles)
 
-## Snapshot capability
+<a id="pr-req-0149---snapshot-integrity-domain" />
+[PR-REQ-0149 - Snapshot integrity domain](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0149---snapshot-integrity-domain)
 
-### PR-REQ-0146 - Snapshot domain boundary
+<a id="pr-req-0150---capture-view-consistency" />
+[PR-REQ-0150 - Capture view consistency](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0150---capture-view-consistency)
 
-Snapshot Capture and Restore MUST be authored as Pactrun-defined managed-state
-lifecycle capabilities, not Actions. A Capture Hook provides service recovery
-state; Pactrun supplies and records the complete managed binding state.
+<a id="pr-req-0239---servicestorage-backed-resource-capture-boundary" />
+[PR-REQ-0239 - ServiceStorage-backed resource capture boundary](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0239---servicestorage-backed-resource-capture-boundary)
 
-**Verification: Pending automated coverage.**
+<a id="pr-req-0151---restore-staged-context" />
+[PR-REQ-0151 - Restore staged context](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0151---restore-staged-context)
 
-### PR-REQ-0147 - Snapshot authoritative body
-
-A Snapshot's immutable authoritative body MUST contain a stable `SnapshotId`,
-integrity format and digest, exact producer Revision identity, authoritative
-origin Instance identity, capture time, complete active and retained managed
-binding state including absence and protection, and logical service Snapshot
-content.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0148 - Snapshot identity roles
-
-`SnapshotId` MUST identify the object, `SnapshotIntegrityDigest` MUST protect
-the exact authoritative body, and producer `RevisionIdentity` MUST control
-direct Restore compatibility. The digest MUST NOT replace object identity.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0149 - Snapshot integrity domain
-
-The integrity digest MUST bind `SnapshotId`, producer identity, authoritative
-origin identity, capture time, complete managed binding state, and service
-content roles and digests. It MUST exclude presentation-only origin names,
-local import metadata, labels, notes, trust decisions, compression, and archive
-representation.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0150 - Capture view consistency
-
-Pactrun MUST pin one binding view for the Capture Hook and the committed
-Snapshot. A Package MUST NOT observe one active binding version while the
-Snapshot records another.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0151 - Restore staged context
-
-The Restore Hook MUST receive the active Input view from the staged Snapshot
-binding state that Pactrun will commit on success. It MUST NOT receive the
-target's pre-Restore active bindings as though they were the resulting state.
-
-**Verification: Pending automated coverage.**
-
-### PR-REQ-0152 - Snapshot Secret handling
-
-Capture MUST include Secret bindings as ordinary managed recovery content and
-must not require a separate author flag. Package output and diagnostics MUST
-respect Secret redaction, while portable export remains an explicit operator
-sensitive-data boundary.
-
-**Verification: Pending automated coverage.**
+<a id="pr-req-0152---snapshot-secret-handling" />
+[PR-REQ-0152 - Snapshot Secret handling](../../spec/contracts/snapshots-and-managed-data.md#pr-req-0152---snapshot-secret-handling)
