@@ -52,6 +52,10 @@ jobs:
     name: Ubuntu verification
     needs: scope
     runs-on: ubuntu-latest
+    # Unrelated tests must not inherit each other's file locks across fork/exec.
+    # Explicit concurrency tests still create their own threads and processes.
+    env:
+      RUST_TEST_THREADS: '1'
     permissions:
       contents: read
       pages: read
