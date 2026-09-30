@@ -4,11 +4,11 @@ title: Public Preview delivery
 
 # Public Preview delivery
 
-**Status: Preview artifacts and native sources published; website acceptance in progress.** On 2026-09-30 the owner
+**Status: Completed and publicly published on 2026-09-30.** On 2026-09-30 the owner
 authorized the public `Doner357/pactrun` repository, MIT licensing, and the commits,
 merges, pushes, tags, GitHub Release, Pages and package publication needed for this
-milestone. This authorization is not a claim that publication or qualification has
-already succeeded. No formal 1.0.0 promotion is implied.
+milestone. The following records distinguish actual qualification and publication
+from the original authorization. No formal 1.0.0 promotion is implied.
 
 ## Published identity and evidence
 
@@ -27,10 +27,13 @@ already succeeded. No formal 1.0.0 promotion is implied.
 | --- | --- |
 | Configured Linux complete gate | Passed `cargo xtask ci` plus catalog verification on source `4956d2b`, with opt-level 1, no debug symbols, debug assertions and overflow checks enabled |
 | Hosted integration CI | [Passed on Windows and Ubuntu](https://github.com/Doner357/pactrun/actions/runs/36703489016) for `1afbab6`; the only changes after the remote gate were Windows Node/checkout prerequisites |
+| Published main CI | [Passed all required jobs and Pages deployment](https://github.com/Doner357/pactrun/actions/runs/36709027660) after the test-isolation correction |
 | Isolated native lifecycle | Passed 36 Windows and 34 Linux assertions, including update, hold/pin, exact switch, active Hook lifetime, checksum failure recovery and source relocation |
 | Actual public acquisition | Passed 18 Windows and 15 Linux assertions from the public main-branch source and actual Release URLs, including real Pack/Instance/Hook use and data-preserving reinstall/removal |
+| Retirement fixture follow-up | A repeated hosted run exposed transient lock contention consistent with fork inheritance; the uncontended proof was process-isolated, all 14 retirement tests passed, and five additional eight-thread runs passed without dropping contention assertions |
 | Documentation checks | Passed all 89 source, link, reading-path and traceability checks; production-site acceptance is recorded at closeout |
-| Pages | Deployment and public browser acceptance pending |
+| Public artifact bytes | All 11 Release assets downloaded anonymously and matched the retained size and SHA-256, including the checksum file and source receipts |
+| Pages | [Public website](https://doner357.github.io/pactrun/) deployed; all 18 browser checks passed on the actual GitHub Pages URL, including search, exact anchors, agent text, mobile layout and error recovery |
 | Hosted candidate rebuild procedure | [Passed on Windows 2025 and Ubuntu 24.04](https://github.com/Doner357/pactrun/actions/runs/36705688007); does not replace published assets |
 
 Assertion counts include artifact checks; they are not independent product-test or
@@ -46,6 +49,11 @@ Those prerequisites were corrected. Scoop's hook behavior also required using it
 explicit abort operation to reject a command conflict; the failed test was retained
 and the corrected native scenarios passed. Superseded/failed attempts are not
 counted as passing qualification.
+
+The post-publication retirement change is confined to test isolation and Linux CI
+scheduling. A controlled probe reproduced the fork-before-exec lock lifetime;
+production remains fail-closed on contention. No runtime code, artifact, checksum,
+format or published tag was replaced as part of that correction.
 
 ## Platform and remaining product limits
 

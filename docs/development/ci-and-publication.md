@@ -51,6 +51,13 @@ on the qualified remote (excluding compilation). Release builds are unaffected.
 Runtime-scope CI also regenerates checked-in package definitions, rejects drift
 or non-public asset URLs, and compares previous published release identities.
 
+Linux libtest cases are scheduled serially: unrelated fork/exec activity can
+temporarily inherit another test's open-file-description lock even with CLOEXEC.
+The uncontended retirement-lifetime proof also runs in its own process and checks
+that exactly one proof executed. Explicit lock-contention and concurrent-operation
+tests still create their own competing threads/processes and retain their original
+assertions. No production lock behavior or timeout was changed to obtain a pass.
+
 Configure branch protection/rulesets to require **CI gate**, not the conditional
 Windows job. Changing repository protection requires a separately authorized
 administrative action. This local workflow change does not configure it.

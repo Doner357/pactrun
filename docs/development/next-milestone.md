@@ -11,6 +11,13 @@ records linked below. Integration does not authorize publication.
 
 ## Current baseline
 
+The [Public Preview delivery](./public-preview-delivery.md) is published as
+`v1.0.0-alpha.1` in the public MIT-licensed `Doner357/pactrun` repository. Scoop and
+Homebrew use its ordinary main-branch package catalog; the Docusaurus website is
+published on GitHub Pages through verified CI artifacts. Public native acquisition
+and website checks are recorded in that delivery ledger. Stable and formal 1.0.0
+remain separate future gates; Authentik black-box acceptance is not claimed.
+
 The [E delivery ledger](./e-implementation-status.md) records local engineering
 qualification and integration. The product candidate is `1.0.0-alpha.1`; the
 eight current format domains use `1.0-alpha.1`. These selections do not couple
