@@ -1,0 +1,45 @@
+name: Pages
+
+# Reuse the current CI run's artifact. No cross-run artifact trust or rebuild.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy verified Pages artifact
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages-production
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Refuse stale publication
+        id: eligibility
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // BEGIN PAGES GUARD
+            const {data} = await github.rest.repos.getBranch({
+              ...context.repo, branch: 'main',
+            });
+            const eligible = context.eventName === 'push'
+              && context.ref === 'refs/heads/main'
+              && data.commit.sha === context.sha;
+            core.setOutput('publish', eligible ? 'true' : 'false');
+            if (!eligible) core.notice('Not the current main push; leaving the published site unchanged.');
+            // END PAGES GUARD
+
+      - name: Deploy the artifact verified by this CI run
+        id: deployment
+        if: steps.eligibility.outputs.publish == 'true'
+        uses: actions/deploy-pages@v4

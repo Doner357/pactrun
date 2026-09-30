@@ -30,7 +30,7 @@ class ReleaseArtifacts(unittest.TestCase):
         self.git('config','user.name','Pactrun artifact fixture')
         self.git('config','user.email','test@example.invalid')
         self.git('config','core.autocrlf','false')
-        for name in ['Cargo.toml','Cargo.lock','build.rs','src/main.rs','src/bin/pactrun-launcher.rs','src/bin/pactrun-source.rs']:
+        for name in ['Cargo.toml','Cargo.lock','build.rs','LICENSE','src/main.rs','src/bin/pactrun-launcher.rs','src/bin/pactrun-source.rs']:
             path=source/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'public fixture\n')
         self.git('add','.')
         self.git('commit','-m','isolated source fixture')
@@ -83,5 +83,22 @@ class ReleaseArtifacts(unittest.TestCase):
             with self.assertRaises(ValueError):release.verify(source,manifest,release.sha(manifest))
         self.assertFalse(release.selected('tools/__pycache__/generated.pyc'))
         self.assertFalse(release.safe_name('.env/ssh-connections/secret'))
+
+    def test_dependency_notices_include_runtime_license_text_and_refuse_missing_notices(self):
+        package=self.root/'dependency';package.mkdir()
+        (package/'MIT-LICENSE').write_text('Copyright fixture\nPermission fixture\n',encoding='utf-8')
+        metadata={'packages':[
+            {'id':'root','name':'pactrun','version':'1','source':None},
+            {'id':'dep','name':'example','version':'1','source':'registry','manifest_path':str(package/'Cargo.toml'),'license':'MIT'},
+            {'id':'dev','name':'development-only','version':'1','source':'registry'}],
+            'resolve':{'root':'root','nodes':[
+                {'id':'root','deps':[{'pkg':'dep','dep_kinds':[{'kind':None}]},{'pkg':'dev','dep_kinds':[{'kind':'dev'}]}]},
+                {'id':'dep','deps':[]},{'id':'dev','deps':[]}]}}
+        notice=release.dependency_notices(metadata)
+        self.assertIn('Copyright fixture',notice)
+        self.assertNotIn('development-only',notice)
+        self.assertNotIn(str(self.root),notice)
+        (package/'MIT-LICENSE').unlink()
+        with self.assertRaises(ValueError):release.dependency_notices(metadata)
 
 if __name__=='__main__':unittest.main()

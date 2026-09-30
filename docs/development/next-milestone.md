@@ -105,6 +105,12 @@ baseline table instead of that archived support matrix.
 
 ## Release readiness is not the next milestone
 
+The 2026-09-30 follow-up authorizes local CI/Pages implementation and verification.
+[CI and publication operations](./ci-and-publication.md) records the prepared
+workflow, opt-in deployment boundary and remaining hosted acceptance. This does
+not authorize a push, public activation or software release, and does not claim
+completion of the newly selected native-package entry design.
+
 [Release readiness](./release-readiness.md) remains a separate acceptance and
 publication boundary. E engineering delivery and F review do not authorize a
 beta, RC, formal release or public website. Follow the

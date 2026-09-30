@@ -33,6 +33,9 @@ not every urgent or small change. See the
 
 ## Documentation
 
+For CI scope, required checks, Pages activation and the separate software-release
+boundary, see [CI and publication operations](./docs/development/ci-and-publication.md).
+
 Canonical Markdown is maintained in `docs/`. The `website/` project is a
 presentation layer and must not rewrite those sources. Read the relevant
 [specification authority map](./docs/spec/index.md) and normative pages before changing behavior. English is the
