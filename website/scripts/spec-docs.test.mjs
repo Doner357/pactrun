@@ -331,7 +331,12 @@ test('release readiness separates work order from publication and implementation
   ]);
   assert.equal((policy.match(/\*\*Verification: Pending automated coverage\.\*\*/g) ?? []).length, 0);
   assert.match(normalizedPolicy, /Verification: PR-TEST-0618, PR-TEST-0619, PR-TEST-0625, PR-TEST-0632, PR-TEST-0633, PR-TEST-0634, PR-TEST-0638/);
-  assert.match(normalizedPolicy, /Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637; source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate/);
+  const deliveryEvidence = policy.split('### PR-REQ-0333')[1].match(/\*\*Verification: ([\s\S]*?)\*\*/)[1];
+  const deliveryTests = new Set(deliveryEvidence.match(/PR-TEST-\d+/g));
+  for (const id of ['0620', '0626', '0627', '0628', '0629', '0630', '0631', '0635', '0636', '0637', '0640', '0641']) {
+    assert.ok(deliveryTests.has('PR-TEST-' + id), 'Missing delivery coverage: ' + id);
+  }
+  assert.match(deliveryEvidence, /source-qualified alpha evidence is recorded in the E ledger; formal promotion remains a separate future gate/);
   assert.match(normalizedPolicy, /earlier published external contracts of that Major/);
   assert.match(normalizedPolicy, /does not promise compatibility with a previous Major's external formats/);
   assert.match(normalizedPolicy, /Development iterations are not earlier formal product releases/);

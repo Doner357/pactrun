@@ -9,13 +9,15 @@ import tempfile
 
 
 def compare_files(root, generated):
+    if any((root / name).is_symlink() for name in ('bucket', 'Formula', 'releases')):
+        raise ValueError('Package directories must not be symbolic links')
     expected = {p.relative_to(generated).as_posix(): p for p in generated.rglob('*') if p.is_file()}
     actual = {p.relative_to(root).as_posix(): p for directory in ('bucket', 'Formula', 'releases')
               for p in (root / directory).rglob('*') if p.is_file()}
     if actual.keys() != expected.keys():
         raise ValueError('Missing or extra generated package/catalog file')
     for name in expected:
-        if actual[name].is_symlink() or actual[name].read_text(encoding='utf-8') != expected[name].read_text(encoding='utf-8'):
+        if actual[name].is_symlink() or not actual[name].resolve().is_relative_to(root.resolve()) or actual[name].read_text(encoding='utf-8') != expected[name].read_text(encoding='utf-8'):
             raise ValueError('Generated package file differs: ' + name)
 
 
@@ -48,6 +50,14 @@ def main():
                     prior = work / 'previous.json'
                     prior.write_bytes(subprocess.check_output(['git', 'show', base + ':releases/catalog.json'], cwd=root))
                     command.append(str(prior))
+                    names = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', base, '--', 'bucket', 'Formula', 'releases'], cwd=root).decode().splitlines()
+                    for name in names:
+                        immutable = '-exact-' in name or (name.startswith('releases/') and name != 'releases/catalog.json')
+                        if immutable:
+                            old = subprocess.check_output(['git', 'show', base + ':' + name], cwd=root).decode('utf-8').replace('\r\n', '\n')
+                            current = root / name
+                            if not current.is_file() or current.is_symlink() or not current.resolve().is_relative_to(root.resolve()) or current.read_text(encoding='utf-8') != old:
+                                raise ValueError('Published exact definition/receipt is immutable: ' + name)
         subprocess.run(command, cwd=root, check=True)
         compare_files(root, work / 'generated')
     print('Public catalog, package definitions and previous release identities verified.')

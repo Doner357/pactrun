@@ -15,9 +15,12 @@ not automatically isolate data from an existing normal installation. Read
 
 ## Before you start
 
-- Use an x86-64 Windows or Linux host. This delivery does not include macOS,
-  ARM64 or musl builds. See the [delivery record](../development/public-preview-delivery.md)
-  for actual tested hosts and remaining support limits.
+- Use an x86-64 Windows or Linux host. Initial native qualification used Windows
+  11 and Debian 13; other OS versions are not yet qualified by that native test.
+  This delivery does not include macOS, ARM64 or musl builds.
+- The Linux executable requires glibc 2.39 or newer. This is a measured library
+  dependency floor, not certification of every distribution or kernel. The
+  native qualification host is Debian 13; Windows qualification uses Windows 11.
 - Install and verify [Scoop](https://scoop.sh/) or
   [Homebrew](https://brew.sh/) first, following its own prerequisites. Do not run
   these instructions as administrator/root merely to bypass an error.
@@ -75,3 +78,10 @@ create an Instance, choose a service data location, or migrate existing data.
   [install a supplied Pack](./use-pack.md).
 - **Updates and channel changes:** [Manage versions](./version-management.md).
 - **Offline/engineering fallback:** [Install a supplied standalone archive](./standalone-installation.md).
+
+<details>
+<summary>Maintainer sources (optional)</summary>
+
+[Public delivery evidence and platform limits](../development/public-preview-delivery.md).
+
+</details>
