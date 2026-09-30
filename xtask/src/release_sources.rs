@@ -284,7 +284,7 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             // Detect any already installed package owning this entrypoint, including
             // exact versions not known when this immutable definition was published.
             let guard = format!(
-                "$root = if ($global) {{ $globaldir }} else {{ $scoopdir }}; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object {{ $_.Name -ne $app }} | ForEach-Object {{ $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) {{ $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) {{ if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq '{app}') {{ throw \"Uninstall $($_.Name) before installing $app; managed data is retained.\" }} }} }} }}"
+                "$root = if ($global) {{ $globaldir }} else {{ $scoopdir }}; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object {{ $_.Name -ne $app }} | ForEach-Object {{ $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) {{ $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) {{ if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq '{app}') {{ abort \"Uninstall $($_.Name) before installing $app; managed data is retained.\" }} }} }} }}"
             );
             let manifest = json!({"version": release.product_version,
                 "description": "Pactrun immutable revisions and managed instances",
@@ -638,7 +638,7 @@ mod tests {
             preview["pre_install"]
                 .as_str()
                 .unwrap()
-                .contains("Uninstall")
+                .contains("abort \"Uninstall")
         );
         assert!(files["Formula/pactrun-preview.rb"].contains("Formula.installed.each"));
         assert!(!preview.to_string().contains("persist"));

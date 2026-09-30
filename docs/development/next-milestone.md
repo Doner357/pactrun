@@ -111,6 +111,12 @@ workflow, opt-in deployment boundary and remaining hosted acceptance. This does
 not authorize a push, public activation or software release, and does not claim
 completion of the newly selected native-package entry design.
 
+The owner subsequently authorized [Public Preview delivery](./public-preview-delivery.md)
+to the public `Doner357/pactrun` repository under MIT, including the necessary Git,
+Release, Pages and package-source publication. That milestone remains subject to
+its candidate/artifact and actual-public-acquisition checks; this is not a formal
+1.0.0 promotion or a statement that every publication gate has already passed.
+
 [Release readiness](./release-readiness.md) remains a separate acceptance and
 publication boundary. E engineering delivery and F review do not authorize a
 beta, RC, formal release or public website. Follow the

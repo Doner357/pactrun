@@ -4,7 +4,11 @@ title: Native Package Engineering Delivery
 
 # Native package engineering delivery
 
-**Status: E native candidate acceptance passed on the qualified Windows/Linux hosts. No public publication is authorized.**
+**Status: Historical E native engineering record.** The source-ref helper and
+branch layout below describe E's earlier local experiments, not the current public
+installation mechanism. See [Public Preview delivery](./public-preview-delivery.md)
+and [installation](../guides/installation.md) for the main-branch package catalog.
+Its later publication authorization supersedes the original local-only boundary.
 
 Scoop (Windows x86-64) and Homebrew (Linux x86-64) own download, checksum
 verification, extraction, installed inventory, activation, cleanup and uninstall.

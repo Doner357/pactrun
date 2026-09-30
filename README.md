@@ -5,15 +5,16 @@ operations on the local machine. It runs as a single executable on Linux and Win
 
 ## Get started
 
-1. [Install and verify the supplied Pactrun executable](./docs/guides/installation.md).
+1. [Install Pactrun with Scoop or Homebrew](./docs/guides/installation.md).
 2. [Create your first Instance](./docs/introduction.md) in an isolated environment.
 3. [Install a supplied Pack and create a usable Instance](./docs/guides/use-pack.md),
    then choose an operating task from the [user guide](./docs/guides/index.md).
 
 To write Packs instead, verify the executable first, then follow the
-[author route](./docs/package-authors/index.md). Public download/package-source
-publication is not announced here; the installation procedure uses an approved
-standalone delivery and checksum.
+[author route](./docs/package-authors/index.md). The first delivery is Preview
+`1.0.0-alpha.1`, not a Stable release. See [version management](./docs/guides/version-management.md)
+for updates, exact versions, and explicit channel switching. The project is
+[MIT licensed](./LICENSE); distributed dependencies retain their own licenses.
 
 ## What you can do
 
