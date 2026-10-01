@@ -4,9 +4,10 @@ title: Prepare an authoring workspace
 
 # Prepare an authoring workspace
 
-Use a Pactrun executable supplied with trusted delivery instructions and checksums.
-The current local candidate is not a public download announcement. The executable
-and managed storage are separate; do not use a real service store for experiments.
+Install the public Preview through the Scoop or Homebrew instructions in
+[shared installation](../guides/installation.md). The current published version
+is `1.0.0-alpha.1`, not a formal stable release. The executable and managed storage
+are separate; do not use a real service store for experiments.
 Run `pactrun --version` and `pactrun --help` to verify the selected executable.
 If those commands are unavailable or select the wrong installation, complete
 [shared installation](../guides/installation.md) before creating this workspace.
@@ -57,6 +58,11 @@ The [first Pack tutorial](./fundamentals/authoring-model.md) supplies a complete
 manifest and script for each platform, then installs and runs the Pack. Use
 [Pack fields](./reference/pack-fields.md) when changing declarations. Keep only
 synthetic data in this workspace and inspect a retirement plan before cleanup.
+
+For container-backed services, review the
+[first Preview's permission limitation](../guides/retirement.md#container-permissions-in-the-first-preview).
+Test retirement after the service has initialized real data: a successful Cleanup
+Hook does not prove that Pactrun can reclaim foreign-owned service directories.
 
 **Done:** `pactrun-demo/pack` exists, the selected store is isolated, and this
 terminal can run the verified executable. Creating the directories has not yet
