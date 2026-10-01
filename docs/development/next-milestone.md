@@ -16,7 +16,9 @@ The [Public Preview delivery](./public-preview-delivery.md) is published as
 Homebrew use its ordinary main-branch package catalog; the Docusaurus website is
 published on GitHub Pages through verified CI artifacts. Public native acquisition
 and website checks are recorded in that delivery ledger. Stable and formal 1.0.0
-remain separate future gates; Authentik black-box acceptance is not claimed.
+remain separate future gates. The Authentik evaluation is partially verified;
+ordinary-user retirement failed. See the
+[evaluated boundary and deferred documentation work](./public-preview-delivery.md#authentik-black-box-follow-up).
 
 The [E delivery ledger](./e-implementation-status.md) records local engineering
 qualification and integration. The product candidate is `1.0.0-alpha.1`; the
@@ -38,16 +40,21 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## F — Documentation and Documentation Site {#next-milestone-f--documentation-and-documentation-site}
 
-**State: Implementation and corrections complete; local commit and merge approved on 2026-09-29.**
+**State: Implementation complete; public Preview publication followed on 2026-09-30.**
 
 The operator authorized F implementation, verification and remote preview on
 port 3000. [F delivery](./f-documentation-status.md) owns its acceptance evidence.
 The [scope record](./remaining-capability-milestones.md#f-documentation-and-documentation-site)
 records English documentation, Docusaurus, reader/agent navigation, search and
-maintenance checks. Local integration into develop is authorized. Push, public
-deployment and package-source publication remain unauthorized. The operator
-deferred the Authentik black-box exercise until the release/download flow is
-complete; this does not authorize starting publication work.
+maintenance checks. F's original local-only authorization was superseded for the
+separate public Preview delivery on 2026-09-30; its publication evidence belongs
+to that delivery ledger, not to F's original local acceptance.
+
+On 2026-10-01 the operator authorized documentation corrections and verified
+integration first, followed by a separate alpha.2 fix branch for the Authentik
+black-box findings. The documentation correction does not claim a runtime fix.
+Visual redesign and versioned documentation snapshots remain deferred. Complete
+the authorized fixes and verification before requesting the next work item.
 
 ## What is already recorded as implemented
 
@@ -112,17 +119,13 @@ baseline table instead of that archived support matrix.
 
 ## Release readiness is not the next milestone
 
-The 2026-09-30 follow-up authorizes local CI/Pages implementation and verification.
-[CI and publication operations](./ci-and-publication.md) records the prepared
-workflow, opt-in deployment boundary and remaining hosted acceptance. This does
-not authorize a push, public activation or software release, and does not claim
-completion of the newly selected native-package entry design.
-
-The owner subsequently authorized [Public Preview delivery](./public-preview-delivery.md)
-to the public `Doner357/pactrun` repository under MIT, including the necessary Git,
-Release, Pages and package-source publication. That milestone remains subject to
-its candidate/artifact and actual-public-acquisition checks; this is not a formal
-1.0.0 promotion or a statement that every publication gate has already passed.
+The owner authorized [Public Preview delivery](./public-preview-delivery.md)
+to the public `Doner357/pactrun` repository under MIT on 2026-09-30, including
+Git, Release, Pages and package-source publication. Its ledger records completed
+candidate/artifact, public-acquisition and hosted Pages checks. This is not formal
+1.0.0 promotion or complete Authentik acceptance.
+[CI and publication operations](./ci-and-publication.md) owns the ongoing workflow
+and opt-in deployment policy; original local-only restrictions are historical.
 
 [Release readiness](./release-readiness.md) remains a separate acceptance and
 publication boundary. E engineering delivery and F review do not authorize a
