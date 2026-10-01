@@ -106,7 +106,8 @@ It does not qualify TLS trust, browser SSO, service upgrades, cross-host data
 movement or automatic repair of old foreign-owned storage. Docker daemon access
 is privileged capability; non-root Pactrun is not rootless Docker certification.
 The default gate's existing capacity/native-package opt-in tests were not rerun
-as new delivery acceptance. Alpha.2 artifact/native-manager publication remains
-a separate delivery task; alpha.1 binaries, tag and exact entries remain intact.
+as new delivery acceptance. The subsequent alpha.2 artifact/native-manager
+publication is recorded in the [separate delivery](./alpha2-publication.md);
+alpha.1 binaries, tag and exact entries remain intact.
 Visual redesign and documentation snapshots remain deferred in the
 [Preview ledger](./public-preview-delivery.md).
