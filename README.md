@@ -14,8 +14,8 @@ operations on the local machine. It runs as a single executable on Linux and Win
    then choose an operating task from the [user guide](./docs/guides/index.md).
 
 To write Packs instead, verify the executable first, then follow the
-[author route](./docs/package-authors/index.md). The first delivery is Preview
-`1.0.0-alpha.1`, not a Stable release. See [version management](./docs/guides/version-management.md)
+[author route](./docs/package-authors/index.md). The current delivery is Preview
+`1.0.0-alpha.2`, not a Stable release. See [version management](./docs/guides/version-management.md)
 for updates, exact versions, and explicit channel switching. The project is
 [MIT licensed](./LICENSE); distributed dependencies retain their own licenses.
 
