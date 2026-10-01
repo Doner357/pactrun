@@ -69,6 +69,85 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+// Test-ID: PR-TEST-0645
+// Verifies: PR-REQ-0359, PR-REQ-0336, PR-REQ-0337
+#[cfg(target_os = "linux")]
+#[test]
+fn permission_diagnostics_survive_failed_run_inspection_without_revealing_service_paths() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_temp, root, _, allocation, path) = fixture();
+    fs::create_dir(path.join("private-directory-sentinel")).unwrap();
+    let directory = fs::File::open(path.join("private-directory-sentinel")).unwrap();
+    directory
+        .set_permissions(fs::Permissions::from_mode(0o000))
+        .unwrap();
+    let (code, out, _) = invoke(&root, &["--format", "json", "instance", "delete", "retire"]);
+    assert_eq!(code, 1, "{out}");
+    let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+    schema_tests::assert_response(&value);
+    let run = value["result"]["run"]["run_id"].as_str().unwrap();
+    let failure = &value["result"]["run"]["state"]["primary_failure"];
+    assert_eq!(failure["reference"]["code"], "allocation_unavailable");
+    assert_eq!(failure["detail"], crate::retirement_fs::PERMISSION_DENIED);
+    assert_eq!(failure["step"], "finalize_storage");
+    let (code, history, _) = invoke(&root, &["--format", "json", "run", "show", run]);
+    assert_eq!(code, 0);
+    let historical: serde_json::Value = serde_json::from_str(&history).unwrap();
+    schema_tests::assert_response(&historical);
+    assert!(history.contains(crate::retirement_fs::PERMISSION_DENIED));
+    let (code, human, _) = invoke(&root, &["run", "show", run]);
+    assert_eq!(code, 0);
+    assert!(human.contains(crate::retirement_fs::PERMISSION_DENIED));
+    for text in [&out, &history, &human] {
+        assert!(!text.contains("private-directory-sentinel"));
+        assert!(!text.contains("service-owned-private-sentinel"));
+        assert!(!text.contains(&root.to_string_lossy().to_string()));
+    }
+    let (code, _, _) = invoke(&root, &["instance", "abandon", "retire"]);
+    assert_eq!(code, 0);
+    let id = allocation.to_string();
+    let (code, _, _) = invoke(
+        &root,
+        &[
+            "service-storage",
+            "detached",
+            "show",
+            &id,
+            "--reveal-location",
+        ],
+    );
+    assert_eq!(code, 0);
+    let (code, _, _) = invoke(
+        &root,
+        &[
+            "service-storage",
+            "detached",
+            "discard",
+            &id,
+            "--confirm-discard",
+        ],
+    );
+    assert_eq!(code, 1);
+    assert_eq!(
+        directory.metadata().unwrap().permissions().mode() & 0o777,
+        0
+    );
+    directory
+        .set_permissions(fs::Permissions::from_mode(0o700))
+        .unwrap();
+    let (code, _, _) = invoke(
+        &root,
+        &[
+            "service-storage",
+            "detached",
+            "discard",
+            &id,
+            "--confirm-discard",
+        ],
+    );
+    assert_eq!(code, 0);
+}
+
 // Test-ID: PR-TEST-0563
 // Verifies: PR-REQ-0359, PR-REQ-0360, PR-REQ-0120
 #[test]

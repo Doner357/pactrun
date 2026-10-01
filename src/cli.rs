@@ -3131,6 +3131,10 @@ fn failure_detail(record: &crate::domain::RunFailureRecord) -> Option<&str> {
         )
     {
         crate::hook::startup::safe_detail(&record.message)
+    } else if record.error.owner() == "service_storage"
+        && record.error.code() == "allocation_unavailable"
+    {
+        crate::retirement_fs::safe_failure_detail(&record.message)
     } else {
         None
     }

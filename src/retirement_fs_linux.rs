@@ -166,8 +166,19 @@ fn names(file: &File) -> io::Result<Vec<CString>> {
     Ok(names)
 }
 fn qualified(parent: &File, name: &CStr, key: &Key, directory: bool) -> io::Result<Option<File>> {
-    let flags = if directory {
+    qualified_access(parent, name, key, directory, true)
+}
+fn qualified_access(
+    parent: &File,
+    name: &CStr,
+    key: &Key,
+    directory: bool,
+    read: bool,
+) -> io::Result<Option<File>> {
+    let flags = if directory && read {
         OFlags::RDONLY | OFlags::DIRECTORY
+    } else if directory {
+        OFlags::PATH | OFlags::DIRECTORY
     } else {
         OFlags::PATH
     };
@@ -233,6 +244,7 @@ struct Seal {
 }
 
 struct Book {
+    read_only: bool,
     store: File,
     slot: File,
     records_dir: File,
@@ -292,6 +304,7 @@ impl Book {
             dir(&slot, "frames")?
         };
         let mut book = Self {
+            read_only: !write,
             store: store.try_clone()?,
             slot,
             records_dir,
@@ -551,7 +564,7 @@ impl Book {
             if self.seal(frame)?.is_some() {
                 return Err(invalid());
             }
-            if let Some(file) = qualified(
+            if let Some(file) = self.qualify(
                 &self.frame(frame)?,
                 &component(b"object")?,
                 &key,
@@ -580,7 +593,18 @@ impl Book {
         let Some((parent, name)) = self.source(r)? else {
             return Ok(None);
         };
-        qualified(&parent, &name, &key, r.directory)
+        self.qualify(&parent, &name, &key, r.directory)
+    }
+    fn qualify(
+        &self,
+        parent: &File,
+        name: &CStr,
+        key: &Key,
+        directory: bool,
+    ) -> io::Result<Option<File>> {
+        // Inspection validates identity and kind without reading service bytes.
+        // Mutating retirement keeps readable handles for traversal and fsync.
+        qualified_access(parent, name, key, directory, !self.read_only)
     }
     fn source(&self, r: &Record) -> io::Result<Option<(File, CString)>> {
         match &r.place {
@@ -893,7 +917,12 @@ pub(super) fn handoff(
         let Some(parent) = maybe(dir(&store, "service-storage"))? else {
             return Ok(vec![]);
         };
-        let Some(file) = maybe(dir(&parent, &name))? else {
+        let Some(file) = maybe(open_at(
+            &parent,
+            &component(name.as_bytes())?,
+            OFlags::PATH | OFlags::DIRECTORY,
+        ))?
+        else {
             return Ok(vec![]);
         };
         let actual = identity(&file)?;
@@ -939,13 +968,14 @@ pub(super) fn handoff(
 fn location_path(book: &Book, root: &Path, base: &Path, id: &str) -> io::Result<PathBuf> {
     let r = book.nodes.get(id).ok_or_else(invalid)?;
     if let Some(frame) = &r.claim
-        && qualified(
-            &book.frame(frame)?,
-            c"object",
-            &decode_key(&r.key)?,
-            r.directory,
-        )?
-        .is_some()
+        && book
+            .qualify(
+                &book.frame(frame)?,
+                c"object",
+                &decode_key(&r.key)?,
+                r.directory,
+            )?
+            .is_some()
     {
         return Ok(base.join(frame).join("object"));
     }

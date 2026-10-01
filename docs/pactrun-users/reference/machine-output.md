@@ -71,10 +71,17 @@ of existing members, requiredness or existing enum values requires an explicit
 interface version change. The CLI version is independent of product, persistence,
 Pack, Core, Snapshot and Hook versions.
 
-The two Core-owned initialization errors defined by PR-REQ-0361/0362 additionally
-expose nullable `detail` on failure projections. Only their safely classified,
-Core-generated stored reason is eligible; arbitrary stored messages and paths
-remain withheld. Existing historical identities and steps are not rewritten.
+Failure projections expose nullable `detail`. The two Core-owned initialization
+errors defined by PR-REQ-0361/0362 and `service_storage:allocation_unavailable`
+MAY provide an exactly allowlisted, safely classified Core-generated reason.
+For allocation unavailability, only filesystem permission denial and allocation
+contention are eligible. Arbitrary stored messages, native paths, service content
+and raw OS error strings MUST remain withheld. An unrecognized stored reason
+MUST yield null; matching a prefix or appending arbitrary text is insufficient.
+Historical identities and steps MUST NOT be rewritten. Detail is explanatory,
+not a new error identity or an assertion that retry, Cleanup replay, permission
+repair or privilege escalation is authorized. Human and machine inspection MUST
+apply the same disclosure boundary, independently of Hook-text retention.
 
 ### Capability presentation at inspection boundaries {#pr-req-0363---capability-presentation-at-inspection-boundaries}
 

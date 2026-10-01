@@ -288,14 +288,21 @@ fn finalize_storage(
     match p.finalize_next_allocation(run, owner) {
         Ok(false) => Ok(false),
         Ok(true) => p.finish_instance_retirement(run, owner, finish),
-        Err(PersistenceError::ServiceStorageUnavailable(_)) => {
+        Err(PersistenceError::ServiceStorageUnavailable(reason)) => {
             let failure = RunFinish {
                 outcome: RunOutcome::Failed,
                 primary_failure: Some(RunPrimaryFailure {
-                    failure: RunFailureRecord { error: PactrunErrorRef::new("service_storage", "allocation_unavailable").expect("registered error"), message: "storage finalization could not complete safely; the obligation is retained".to_owned() },
-                    step: RunFailedStep::DeletionPlan(crate::domain::DeletionPlanStep::FinalizeStorage),
+                    failure: RunFailureRecord {
+                        error: PactrunErrorRef::new("service_storage", "allocation_unavailable")
+                            .expect("registered error"),
+                        message: reason.to_owned(),
+                    },
+                    step: RunFailedStep::DeletionPlan(
+                        crate::domain::DeletionPlanStep::FinalizeStorage,
+                    ),
                 }),
-                secondary_failures: finish.secondary_failures.clone(), hook_completion: finish.hook_completion.clone(),
+                secondary_failures: finish.secondary_failures.clone(),
+                hook_completion: finish.hook_completion.clone(),
             };
             p.finish_run_owned(owner, run, &failure, &[], &mut [])?;
             Ok(true)

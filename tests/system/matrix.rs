@@ -108,6 +108,14 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     scenario.wait_for_marker("ready:hold_observe");
     let _ = owner.terminate();
 
+    let before = scenario.run(["run", "show", &orphan]);
+    assert_success(&before);
+    assert!(
+        String::from_utf8_lossy(&before.stdout).contains("phase: running"),
+        "crash fixture did not leave an orphan: {}",
+        String::from_utf8_lossy(&before.stdout)
+    );
+
     let inspected = scenario.run(["action", "show", "node", "parameters"]);
     assert_success(&inspected);
     let planned = scenario.run(["invoke", "node", "fast_observe", "--plan"]);
@@ -120,7 +128,11 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     assert!(planned.contains("Mode: preview"));
     let running = scenario.run(["run", "show", &orphan]);
     assert_success(&running);
-    assert!(String::from_utf8_lossy(&running.stdout).contains("phase: running"));
+    assert!(
+        String::from_utf8_lossy(&running.stdout).contains("phase: running"),
+        "read-only inspection changed the orphan: {}",
+        String::from_utf8_lossy(&running.stdout)
+    );
     assert_eq!(scenario.hook_launches(), 1);
 }
 

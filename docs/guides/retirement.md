@@ -80,6 +80,20 @@ lifecycle together, including initialized database data rather than only an empt
 directory. No generally validated permission-handoff recipe is supplied by this
 Preview.
 
+### Alpha.2 source correction boundary
+
+The alpha.2 source correction allows identity-qualified read-only handoff without
+requiring directory-content read access, and reports safe permission/busy reasons
+without revealing paths. It does not grant permission to delete foreign-owned
+data or replay Cleanup. Filesystem traversal and identity prerequisites still
+apply, so handoff is not guaranteed for every inaccessible or replaced location.
+
+A corrected disposable Authentik evaluation Pack keeps PostgreSQL/Redis data
+under the invoking host user's UID/GID from initial deployment. Its initialized
+data passed normal retirement; this is not a migration or ownership-repair recipe
+for existing data. The public package-manager release remains alpha.1 until a
+separate alpha.2 artifact delivery is announced.
+
 ## Remove retained objects deliberately
 
 Snapshot, Run, Artifact, and Revision deletion have separate commands and
@@ -102,6 +116,7 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <summary>Maintainer sources (optional)</summary>
 
 Evaluation: [Authentik black-box follow-up](../development/public-preview-delivery.md#authentik-black-box-follow-up).
+Correction evidence: [alpha.2 retirement qualification](../development/alpha2-retirement-fix.md).
 Contracts: [managed-object lifecycle](../spec/behavior/managed-object-lifecycle.md)
 and [Instance retirement](../spec/execution/m7-instance-retirement.md).
 
