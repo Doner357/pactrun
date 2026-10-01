@@ -13,6 +13,8 @@ parser.add_argument('--xtask', type=Path, required=True)
 parser.add_argument('--parts', type=Path, nargs=4, required=True)
 parser.add_argument('--allow-user-path-change', action='store_true')
 parser.add_argument('--public-source', help='Verify actual published acquisition instead of the isolated upgrade fixture')
+parser.add_argument('--public-version', choices=['1.0.0-alpha.1','1.0.0-alpha.2'], default='1.0.0-alpha.1',
+                    help='Expected moving package version for public acquisition; exact test package stays alpha.1')
 args = parser.parse_args()
 WIN = os.name == 'nt'
 if WIN and not args.allow_user_path_change:
@@ -259,26 +261,27 @@ def immutable_state():
             'SELECT * FROM pactrun_metadata ORDER BY singleton']]
 
 def scenarios():
+    initial = args.public_version if args.public_source else VERSIONS[0]
     if not args.public_source: publish([VERSIONS[0]])
     manager_setup()
     pm('install'); pm('install','test')
-    check('both real alpha.1 packages installed',observed()==VERSIONS[0] and observed('test')==VERSIONS[0])
+    check('moving and exact packages match selected published versions',observed()==initial and observed('test')==VERSIONS[0])
     check('installation did not provision management data',not (DATA/'pactrun').exists() and not (DATA/'pactrun-test').exists())
     prepare_data()
     before=immutable_state()
     stable=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun'
     code,_=run(PM+['install',stable],'stable-unavailable',required=False)
-    check('stable cannot fall back to alpha',code!=0 and observed()==VERSIONS[0])
+    check('stable cannot fall back to alpha',code!=0 and observed()==initial)
     conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-1-0-0-alpha-1'
     code,_=run(PM+['install',conflict],'command-conflict',required=False)
-    check('second package cannot take over the command',code!=0 and observed()==VERSIONS[0])
+    check('second package cannot take over the command',code!=0 and observed()==initial)
     if args.public_source:
         run(PM+['update'],'public-source-refresh')
         check('public source stays on ordinary main',run(['git','-C',source_path('normal'),'branch','--show-current'],'public-source-branch')[1].strip()=='main')
         live(lambda:pm('uninstall',required=False),'public-uninstall')
         if binary().exists(): pm('uninstall')
         pm('install')
-        check('public reinstall retains data',immutable_state()==before and observed()==VERSIONS[0])
+        check('public reinstall retains data',immutable_state()==before and observed()==initial)
         pm('uninstall'); pm('uninstall','test')
         check('public uninstall retains data',immutable_state()==before)
         return

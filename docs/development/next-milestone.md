@@ -12,7 +12,9 @@ records linked below. Integration does not authorize publication.
 ## Current baseline
 
 The [Public Preview delivery](./public-preview-delivery.md) is published as
-`v1.0.0-alpha.1` in the public MIT-licensed `Doner357/pactrun` repository. Scoop and
+`v1.0.0-alpha.1` in the public MIT-licensed `Doner357/pactrun` repository. The
+[alpha.2 delivery](./alpha2-publication.md) advances Preview while preserving
+alpha.1's immutable artifacts and exact entries. Scoop and
 Homebrew use its ordinary main-branch package catalog; the Docusaurus website is
 published on GitHub Pages through verified CI artifacts. Public native acquisition
 and website checks are recorded in that delivery ledger. Stable and formal 1.0.0

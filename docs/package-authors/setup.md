@@ -6,7 +6,7 @@ title: Prepare an authoring workspace
 
 Install the public Preview through the Scoop or Homebrew instructions in
 [shared installation](../guides/installation.md). The current published version
-is `1.0.0-alpha.1`, not a formal stable release. The executable and managed storage
+is `1.0.0-alpha.2`, not a formal stable release. The executable and managed storage
 are separate; do not use a real service store for experiments.
 Run `pactrun --version` and `pactrun --help` to verify the selected executable.
 If those commands are unavailable or select the wrong installation, complete

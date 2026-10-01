@@ -1,4 +1,4 @@
-class PactrunPreview < Formula
+class PactrunExact100Alpha2 < Formula
   desc 'Pactrun immutable revisions and managed instances'
   homepage 'https://github.com/Doner357/pactrun'
   license 'MIT'

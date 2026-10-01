@@ -70,5 +70,77 @@
         "bytes": 4052519
       }
     ]
+  },
+  {
+    "product_version": "1.0.0-alpha.2",
+    "source_commit": "26c44462aa02a5278db0a8b8771190205c921d18",
+    "source_manifest_sha256": "23049e8867f13198481bdf0af1fcea9a40493fd4c89dc28f34a746450709ee2f",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "supported_formats": {
+      "cli_machine_interface": [
+        "1.0-alpha.1"
+      ],
+      "hook_protocol": [
+        "1.0-alpha.1"
+      ],
+      "pack_distribution": [
+        "1.0-alpha.1"
+      ],
+      "pack_source": [
+        "1.0-alpha.1"
+      ],
+      "persistence": [
+        "1.0-alpha.1"
+      ],
+      "revision_canonical": [
+        "1.0-alpha.1"
+      ],
+      "snapshot_bundle": [
+        "1.0-alpha.1"
+      ],
+      "snapshot_integrity": [
+        "1.0-alpha.1"
+      ]
+    },
+    "default_formats": {
+      "cli_machine_interface": "1.0-alpha.1",
+      "hook_protocol": "1.0-alpha.1",
+      "pack_distribution": "1.0-alpha.1",
+      "pack_source": "1.0-alpha.1",
+      "persistence": "1.0-alpha.1",
+      "revision_canonical": "1.0-alpha.1",
+      "snapshot_bundle": "1.0-alpha.1",
+      "snapshot_integrity": "1.0-alpha.1"
+    },
+    "artifacts": [
+      {
+        "platform": "windows-x86_64",
+        "flavor": "normal",
+        "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.2/pactrun-1.0.0-alpha.2-windows-x86_64.zip",
+        "sha256": "e52747b95ae0214f5270841d459a2b80c0d1fa2d7e08a0aff35164e2e8bbf94c",
+        "bytes": 3906736
+      },
+      {
+        "platform": "windows-x86_64",
+        "flavor": "test",
+        "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.2/pactrun-test-1.0.0-alpha.2-windows-x86_64.zip",
+        "sha256": "2e9a751074e40ea9dde247e43b6a290ad018565d33800f366153428a74d1458d",
+        "bytes": 3906746
+      },
+      {
+        "platform": "linux-x86_64",
+        "flavor": "normal",
+        "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.2/pactrun-1.0.0-alpha.2-linux-x86_64.tar.gz",
+        "sha256": "5b7047a941d009c871974ba919513519b3490ec861f9f83707b6d0a88c263ff8",
+        "bytes": 4014558
+      },
+      {
+        "platform": "linux-x86_64",
+        "flavor": "test",
+        "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.2/pactrun-test-1.0.0-alpha.2-linux-x86_64.tar.gz",
+        "sha256": "28dba6c4c8eb2685096f6499853851b78e6a0235a2534a46920df47a2c9f56dd",
+        "bytes": 4014557
+      }
+    ]
   }
 ]

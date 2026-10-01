@@ -91,8 +91,10 @@ apply, so handoff is not guaranteed for every inaccessible or replaced location.
 A corrected disposable Authentik evaluation Pack keeps PostgreSQL/Redis data
 under the invoking host user's UID/GID from initial deployment. Its initialized
 data passed normal retirement; this is not a migration or ownership-repair recipe
-for existing data. The public package-manager release remains alpha.1 until a
-separate alpha.2 artifact delivery is announced.
+for existing data. These Core corrections are included in the public alpha.2
+Preview; use the [version update instructions](./version-management.md) to move
+an existing alpha.1 Preview installation forward. Updating the executable alone
+does not rewrite an installed Pack or repair existing foreign-owned data.
 
 ## Remove retained objects deliberately
 
