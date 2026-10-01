@@ -64,10 +64,56 @@ MSVC runtime dependency observed. No Windows 10, macOS, ARM64 or musl artifact i
 promised. Native tests used pinned Scoop/Homebrew revisions recorded in their
 receipts; arbitrary future manager versions are not certified.
 
-This delivery does not claim Authentik black-box acceptance, platform code signing,
+This delivery does not claim complete Authentik black-box acceptance, platform code signing,
 formal 1.0.0 promotion or general prerelease data downgrade compatibility. All eight
 format domains remain `1.0-alpha.1`. The alpha.2 software-only fixture was used only
 for isolated update testing and was not published.
+
+## Authentik black-box follow-up
+
+The 2026-09-30 external evaluation is **Partially verified**, not full acceptance.
+Its Linux executable hash matched the released alpha.1 artifact. It demonstrated
+public Homebrew acquisition, formal Pack export/import with exact Revision
+preservation, Hooks without the author source present, four healthy services,
+authenticated API access, stop/start persistence of an API-created user, and
+independent startup in a second fresh management store on the same host.
+This proves Pack portability in that environment, not service-data migration.
+
+Three deletion cases failed at `finalize_storage` with
+`service_storage/allocation_unavailable` despite successful Cleanup. Inspection
+of two initialized deployments showed foreign-owned PostgreSQL directories that
+the CLI user could not list or write and Redis directories it could not write.
+This strongly supports a filesystem-permission cause; the handoff did not capture
+a raw OS error proving the cause of every failure. Retained obligations and
+partial-finalization evidence remained. Administrator-assisted discard completed
+cleanup separately; it does not qualify ordinary-user retirement.
+
+The evaluation did not qualify trusted TLS (certificate checks were disabled),
+browser SSO, Windows, cross-host data movement, Snapshot/Restore, upgrades or
+credential rotation. Expected negative cases must not be counted as product
+failures or converted into a statistical pass rate. The supplied archive remains
+private local evidence; this summary does not publish its service data or scripts.
+
+The [retirement guide](../guides/retirement.md#container-permissions-in-the-first-preview)
+records safe interpretation and recovery boundaries. Runtime follow-up must
+reproduce cross-UID access failures, review Core/Pack responsibilities, investigate
+safe diagnostics and read-only handoff permission coupling, and rerun the real
+service lifecycle. Documentation correction alone does not resolve that failure.
+
+## Deferred documentation experience
+
+Recorded on 2026-10-01: retain Docusaurus for now. A future visual redesign may
+use the Kano Proxy documentation's restrained reading layout as a reference;
+framework migration is not approved or required by this record.
+
+Also deferred: release-aligned documentation snapshots, starting with a clearly
+identified alpha.1 view, distinct unpublished development content, and corrections
+that preserve each version's applicability. Stable/Preview installation channels
+are not documentation versions. Decide snapshot granularity and validate old
+URLs/anchors, version-aware search, command references, agent text and publication
+digests before enabling this feature. Use version directories in the same
+repository, not permanent package-channel branches. Neither deferred item is part
+of the documentation correction or alpha.2 runtime fix.
 
 ## Approved delivery model
 

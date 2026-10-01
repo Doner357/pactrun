@@ -34,6 +34,10 @@ attempt and state token shown by inspection.
 
 ## Abandon and retain service data
 
+Before choosing abandonment as recovery from a failed finalization, read the
+[container-permission limitation](#container-permissions-in-the-first-preview).
+Abandonment does not repair filesystem permissions or guarantee later discard.
+
 ```text
 pactrun instance abandon demo --plan
 pactrun instance abandon demo
@@ -47,6 +51,34 @@ from ordinary garbage collection.
 `service-storage detached discard <allocation-id> --confirm-discard` is
 irreversible disposal of the selected allocation. Inspect it, stop dependent
 service use, and verify your backups before invoking it.
+
+## Container permissions in the first Preview
+
+The `1.0.0-alpha.1` Authentik evaluation exposed a retirement limitation:
+container-created PostgreSQL and Redis directories had ownership or permissions
+that prevented the ordinary Pactrun user from completing storage finalization.
+ServiceStorage authority does not grant operating-system access to service files.
+
+Cleanup can report `hook_completion_status: success` while deletion reports
+`outcome: failed` with `service_storage/allocation_unavailable` at
+`finalize_storage`. This is not successful retirement. Inspect the retained
+deletion attempt and Run; `recovery_risk: clear` does not mean all storage was
+reclaimed or that an earlier Instance recovery guard was cleared.
+
+Do not replay completed Cleanup, guess old service paths, or recursively delete
+an original Compose directory: partial finalization may already have moved some
+locations. Abandonment and detached discard do not bypass filesystem permissions;
+even detached inspection can fail when access is unavailable. Preserve the
+records and evidence and obtain administrator-assisted inspection of the exact
+retained allocation before considering irreversible recovery. Do not run a
+blanket ownership change, permissive chmod, or privileged retry as routine setup.
+Administrator cleanup in the evaluation was a separate recovery outcome, not a
+passing ordinary-user deletion path.
+
+Pack authors must evaluate the service's UID, directory permissions and Cleanup
+lifecycle together, including initialized database data rather than only an empty
+directory. No generally validated permission-handoff recipe is supplied by this
+Preview.
 
 ## Remove retained objects deliberately
 
@@ -69,6 +101,7 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
+Evaluation: [Authentik black-box follow-up](../development/public-preview-delivery.md#authentik-black-box-follow-up).
 Contracts: [managed-object lifecycle](../spec/behavior/managed-object-lifecycle.md)
 and [Instance retirement](../spec/execution/m7-instance-retirement.md).
 
