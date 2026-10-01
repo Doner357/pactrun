@@ -53,8 +53,10 @@ to that delivery ledger, not to F's original local acceptance.
 On 2026-10-01 the operator authorized documentation corrections and verified
 integration first, followed by a separate alpha.2 fix branch for the Authentik
 black-box findings. The documentation correction does not claim a runtime fix.
-Visual redesign and versioned documentation snapshots remain deferred. Complete
-the authorized fixes and verification before requesting the next work item.
+Visual redesign and versioned documentation snapshots remain deferred.
+The [alpha.2 correction record](./alpha2-retirement-fix.md) owns the implemented
+fixes, qualification and integration receipts. After verified integration, stop
+for the owner's next instruction; no deferred redesign starts automatically.
 
 ## What is already recorded as implemented
 
