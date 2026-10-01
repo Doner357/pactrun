@@ -18,12 +18,14 @@ alpha.1's immutable artifacts and exact entries. Scoop and
 Homebrew use its ordinary main-branch package catalog; the Docusaurus website is
 published on GitHub Pages through verified CI artifacts. Public native acquisition
 and website checks are recorded in that delivery ledger. Stable and formal 1.0.0
-remain separate future gates. The Authentik evaluation is partially verified;
-ordinary-user retirement failed. See the
+remain separate future gates. The alpha.1 Authentik evaluation was partially
+verified; ordinary-user retirement failed in that evaluation. The corrected
+alpha.2 evaluation Pack passed ordinary-user retirement with the released Linux
+payload; this does not qualify all Authentik features or repair old data. See the
 [evaluated boundary and deferred documentation work](./public-preview-delivery.md#authentik-black-box-follow-up).
 
 The [E delivery ledger](./e-implementation-status.md) records local engineering
-qualification and integration. The current fix candidate is `1.0.0-alpha.2`; the
+qualification and integration. The current published product is `1.0.0-alpha.2`; the
 eight current format domains use `1.0-alpha.1`. These selections do not couple
 the independent version domains or authorize formal promotion.
 

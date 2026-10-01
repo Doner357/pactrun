@@ -374,7 +374,8 @@ test('current handoff uses the product version and effective owners rather than 
   assert.match(handoff.replace(/\s+/g, ' '), /Development-era numeric formats and storage upgrade chains are retired/);
   const prose = handoff.replace(/\s+/g, ' ');
   assert.match(prose, /published on GitHub Pages through verified CI artifacts/);
-  assert.match(prose, /Authentik evaluation is partially verified; ordinary-user retirement failed/);
+  assert.match(prose, /alpha\.1 Authentik evaluation was partially verified; ordinary-user retirement failed in that evaluation/);
+  assert.match(prose, /corrected alpha\.2 evaluation Pack passed ordinary-user retirement with the released Linux payload/);
   assert.match(prose, /Visual redesign and versioned documentation snapshots remain deferred/);
   assert.doesNotMatch(prose, /Push, public deployment and package-source publication remain unauthorized/);
   assert.doesNotMatch(handoff, /Uncommitted review candidate|No commit, merge, push/);
