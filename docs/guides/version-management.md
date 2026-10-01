@@ -43,19 +43,22 @@ manager's hold/pin state. To resume updates, use `scoop unhold pactrun-preview` 
 
 ## Install an exact published version
 
-Exact entries do not move when a new Preview is published. For the first alpha:
+Exact entries do not move when a new Preview is published. For alpha.2:
 
 ```powershell
 scoop uninstall pactrun-preview
-scoop install pactrun/pactrun-exact-1-0-0-alpha-1
+scoop install pactrun/pactrun-exact-1-0-0-alpha-2
 pactrun --version
 ```
 
 ```sh
 brew uninstall doner357/pactrun/pactrun-preview
-brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-1
+brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-2
 pactrun --version
 ```
+
+The alpha.1 exact entries remain available as `pactrun-exact-1-0-0-alpha-1`;
+publishing alpha.2 does not rewrite those definitions or their assets.
 
 Before switching, record the installed package/version, confirm no Pactrun operation
 is in flight, check target data compatibility and preserve needed backups. Do not

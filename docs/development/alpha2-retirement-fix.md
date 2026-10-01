@@ -9,7 +9,9 @@ the black-box follow-up on 2026-10-01 after the documentation corrective closeou
 and explicitly approved the bounded CLI diagnostic disclosure extension after
 reviewing its compatibility implications. Git integration and hosted checks are
 recorded in [PR #8](https://github.com/Doner357/pactrun/pull/8). This correction
-does not publish an alpha.2 executable or replace the alpha.1 release.
+did not itself publish an alpha.2 executable or replace the alpha.1 release.
+The separately authorized [alpha.2 delivery](./alpha2-publication.md) owns public
+artifacts, native acquisition and publication receipts.
 
 ## Scope and responsibility
 
