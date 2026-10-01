@@ -81,10 +81,19 @@ Pack, Core, Snapshot and Hook versions.
 
 **Verification: PR-TEST-0554, PR-TEST-0556, PR-TEST-0557, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0562, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565, PR-TEST-0566, PR-TEST-0567, PR-TEST-0568, PR-TEST-0569.**
 
-The two Core-owned initialization errors defined by PR-REQ-0361/0362 additionally
-expose nullable `detail` on failure projections. Only their safely classified,
-Core-generated stored reason is eligible; arbitrary stored messages and paths
-remain withheld. Existing historical identities and steps are not rewritten.
+Failure projections expose nullable `detail`. The two Core-owned initialization
+errors defined by PR-REQ-0361/0362 and `service_storage:allocation_unavailable`
+MAY provide an exactly allowlisted, safely classified Core-generated reason.
+For allocation unavailability, only filesystem permission denial and allocation
+contention are eligible. Arbitrary stored messages, native paths, service content
+and raw OS error strings MUST remain withheld. An unrecognized stored reason
+MUST yield null; matching a prefix or appending arbitrary text is insufficient.
+Historical identities and steps MUST NOT be rewritten. Detail is explanatory,
+not a new error identity or an assertion that retry, Cleanup replay, permission
+repair or privilege escalation is authorized. Human and machine inspection MUST
+apply the same disclosure boundary, independently of Hook-text retention.
+
+**Verification: PR-TEST-0572, PR-TEST-0644, PR-TEST-0645.**
 
 ### PR-REQ-0363 - Capability presentation at inspection boundaries
 

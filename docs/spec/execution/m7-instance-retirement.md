@@ -99,6 +99,8 @@ maintenance MUST preserve detached bytes.
 
 **Verification: PR-TEST-0406, PR-TEST-0408, PR-TEST-0409, PR-TEST-0413, PR-TEST-0414, PR-TEST-0416, PR-TEST-0417, PR-TEST-0420, PR-TEST-0422, PR-TEST-0423, PR-TEST-0426, PR-TEST-0428, PR-TEST-0429, PR-TEST-0430, PR-TEST-0431, PR-TEST-0432, PR-TEST-0433, PR-TEST-0434, PR-TEST-0435, PR-TEST-0436, PR-TEST-0438, PR-TEST-0439, PR-TEST-0440, PR-TEST-0441, PR-TEST-0442, PR-TEST-0443, PR-TEST-0444, PR-TEST-0445, PR-TEST-0446, PR-TEST-0447.**
 
+**Verification: PR-TEST-0642, PR-TEST-0643, PR-TEST-0645.**
+
 ### PR-REQ-0337 - Detached handoff and discard
 
 Detached allocations MUST remain discoverable by immutable ID after Instance
@@ -121,6 +123,8 @@ receipts do not authorize removal of later objects at the same path. Discard
 does not claim to stop service processes or clean external resources.
 
 **Verification: PR-TEST-0409, PR-TEST-0410, PR-TEST-0411, PR-TEST-0412, PR-TEST-0414, PR-TEST-0415, PR-TEST-0417, PR-TEST-0419, PR-TEST-0427, PR-TEST-0429, PR-TEST-0430, PR-TEST-0431, PR-TEST-0432, PR-TEST-0433, PR-TEST-0434, PR-TEST-0435, PR-TEST-0437, PR-TEST-0438, PR-TEST-0439, PR-TEST-0440, PR-TEST-0441, PR-TEST-0442, PR-TEST-0443, PR-TEST-0444, PR-TEST-0445.**
+
+**Verification: PR-TEST-0642, PR-TEST-0643, PR-TEST-0645.**
 
 ### PR-REQ-0340 - Human retirement commands
 

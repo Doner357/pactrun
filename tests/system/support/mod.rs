@@ -386,6 +386,10 @@ impl OwnedChild {
     }
 
     fn terminate_tree_and_reap(&mut self) {
+        // Windows taskkill /T can kill the Hook while its owner is still alive,
+        // allowing normal terminal publication instead of the intended crash.
+        // Kill/reap the exact owner handle first; then clean recorded Hook trees.
+        #[cfg(not(windows))]
         terminate_process_tree(self.child.id());
         let _ = self.child.kill();
         let _ = self.child.wait();
