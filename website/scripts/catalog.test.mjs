@@ -372,8 +372,11 @@ test('current handoff uses the product version and effective owners rather than 
     assert.ok(handoff.includes(owner), owner);
   }
   assert.match(handoff.replace(/\s+/g, ' '), /Development-era numeric formats and storage upgrade chains are retired/);
-  assert.match(handoff, /Local integration into develop is authorized/);
-  assert.match(handoff.replace(/\s+/g, ' '), /Push, public deployment and package-source publication remain unauthorized/);
+  const prose = handoff.replace(/\s+/g, ' ');
+  assert.match(prose, /published on GitHub Pages through verified CI artifacts/);
+  assert.match(prose, /Authentik evaluation is partially verified; ordinary-user retirement failed/);
+  assert.match(prose, /Visual redesign and versioned documentation snapshots remain deferred/);
+  assert.doesNotMatch(prose, /Push, public deployment and package-source publication remain unauthorized/);
   assert.doesNotMatch(handoff, /Uncommitted review candidate|No commit, merge, push/);
   assert.ok(handoff.includes('handoff-before-consistency-review-2026-09-28.md'));
 });
