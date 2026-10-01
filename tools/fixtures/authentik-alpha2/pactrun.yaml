@@ -1,0 +1,72 @@
+source_format: "1.0-alpha.1"
+package_id: "c5db0e627956645236b74e53a2334086"
+revision:
+  inputs:
+    - {id: config, required: true, protection: normal}
+    - {id: credentials, required: true, protection: secret}
+  service_storages:
+    - {id: state}
+  service_resources:
+    - {id: deployment, storage_id: state, locator: deployment, kind: directory}
+  actions:
+    - id: check
+      access: observe
+      parameters: []
+      outputs: []
+      hook:
+        protocol_version: "1.0-alpha.1"
+        launch: {kind: shell_loader, shell: sh, command: sh, script: launcher}
+        args: [check]
+        io: {terminal: output}
+    - id: start
+      access: mutate
+      parameters: []
+      outputs: []
+      hook:
+        protocol_version: "1.0-alpha.1"
+        launch: {kind: shell_loader, shell: sh, command: sh, script: launcher}
+        args: [start]
+        io: {terminal: output}
+        service_access:
+          - {reference: {view: current, role: active, kind: storage, id: state}, mode: write}
+    - id: stop
+      access: mutate
+      parameters: []
+      outputs: []
+      hook:
+        protocol_version: "1.0-alpha.1"
+        launch: {kind: shell_loader, shell: sh, command: sh, script: launcher}
+        args: [stop]
+        io: {terminal: output}
+        service_access:
+          - {reference: {view: current, role: active, kind: storage, id: state}, mode: write}
+    - id: status
+      access: observe
+      parameters: []
+      outputs: []
+      hook:
+        protocol_version: "1.0-alpha.1"
+        launch: {kind: shell_loader, shell: sh, command: sh, script: launcher}
+        args: [status]
+        io: {terminal: output}
+        service_access:
+          - {reference: {view: current, role: active, kind: storage, id: state}, mode: read}
+  cleanup:
+    requires: []
+    hook:
+      protocol_version: "1.0-alpha.1"
+      launch: {kind: shell_loader, shell: sh, command: sh, script: launcher}
+      args: [cleanup]
+      io: {terminal: output}
+      service_access:
+        - {reference: {view: current, role: active, kind: storage, id: state}, mode: write}
+runtime_content:
+  files:
+    - {id: launcher, source: launch.sh, path: launch.sh, executable: false}
+    - {id: driver, source: driver.py, path: driver.py, executable: false}
+    - {id: empty-env, source: empty.env, path: empty.env, executable: false}
+portable_metadata:
+  presentation:
+    - target: {kind: revision}
+      field: display_name
+      value: Authentik isolated Linux black-box trial

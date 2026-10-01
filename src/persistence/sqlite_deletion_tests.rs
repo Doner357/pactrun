@@ -273,6 +273,88 @@ fn legacy_incarnation_evidence_is_upgraded_before_new_backend_progress() {
     );
 }
 
+// Test-ID: PR-TEST-0643
+// Verifies: PR-REQ-0336, PR-REQ-0337
+#[cfg(target_os = "linux")]
+#[test]
+fn permission_failure_preserves_obligation_and_supports_read_only_detached_handoff() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_temp, p, instance, roots) = service_fixture();
+    let directories: Vec<_> = roots
+        .iter()
+        .map(|(_, path)| std::fs::File::open(path.join("nested")).unwrap())
+        .collect();
+    for directory in &directories {
+        directory
+            .set_permissions(std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+    }
+    let plan = compile(&p, &instance, DeletionMode::ManagedCleanup);
+    let run = accept(&p, &plan);
+    let owner = p.staging_session().unwrap().owner();
+    p.admit_deletion(run, &owner, &plan, false, &|_| Ok(()))
+        .unwrap()
+        .unwrap();
+    p.prepare_deletion_finalization(run, &owner).unwrap();
+    let error = p.finalize_next_allocation(run, &owner).unwrap_err();
+    assert!(
+        matches!(&error, PersistenceError::ServiceStorageUnavailable(reason)
+        if reason.contains("permission denied") && !reason.contains("/") && !reason.contains("nested"))
+    );
+    assert_eq!(
+        p.deletion_obligation(instance.id).unwrap().unwrap().phase,
+        DeletionPhase::FinalizationAuthorized
+    );
+    assert!(
+        p.finish_instance_retirement(run, &owner, &success())
+            .is_err()
+    );
+    p.finish_run_owned(
+        &owner,
+        run,
+        &RunFinish {
+            outcome: RunOutcome::Failed,
+            ..success()
+        },
+        &[],
+        &mut [],
+    )
+    .unwrap();
+    abandon(&p, &instance);
+    for (id, _) in &roots {
+        assert!(!p.detached_handoff(*id).unwrap().is_empty());
+        assert!(
+            p.discard_detached_allocation(*id, true)
+                .unwrap_err()
+                .to_string()
+                .contains("permission denied")
+        );
+        assert!(!p.detached_handoff(*id).unwrap().is_empty());
+        assert_eq!(
+            p.detached_allocation(*id).unwrap().unwrap().state,
+            DetachedAllocationState::DiscardPending
+        );
+    }
+    // Explicit external repair is test-owned, not automatic permission mutation.
+    for directory in &directories {
+        assert_eq!(
+            directory.metadata().unwrap().permissions().mode() & 0o777,
+            0
+        );
+        directory
+            .set_permissions(std::fs::Permissions::from_mode(0o700))
+            .unwrap();
+    }
+    for (id, _) in roots {
+        assert!(p.discard_detached_allocation(id, false).is_err());
+        assert!(p.discard_detached_allocation(id, true).unwrap());
+        assert_eq!(
+            p.detached_allocation(id).unwrap().unwrap().state,
+            DetachedAllocationState::Discarded
+        );
+    }
+}
+
 // Test-ID: PR-TEST-0432
 // Verifies: PR-REQ-0336, PR-REQ-0337
 #[cfg(target_os = "linux")]

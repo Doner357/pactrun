@@ -7,6 +7,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub(crate) const PERMISSION_DENIED: &str = "filesystem permission denied; inspect service ownership and directory access before an explicit retry; completed Cleanup must not be replayed";
+pub(crate) const BUSY: &str =
+    "allocation is busy; wait for its current owner before an explicit retry";
+
+pub(crate) fn safe_failure_detail(message: &str) -> Option<&'static str> {
+    match message {
+        PERMISSION_DENIED => Some(PERMISSION_DENIED),
+        BUSY => Some(BUSY),
+        _ => None,
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct HandoffLocation {
     pub(crate) path: PathBuf,
@@ -227,6 +239,82 @@ mod tests {
         std::fs::create_dir_all(path.join("nested")).unwrap();
         std::fs::write(path.join("nested/data"), b"service bytes").unwrap();
         (temp, path, id)
+    }
+
+    // Test-ID: PR-TEST-0642
+    // Verifies: PR-REQ-0336, PR-REQ-0337
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_read_only_handoff_does_not_require_service_directory_read_access() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let (temp, path, id) = fixture();
+        let key = *open(temp.path(), id).unwrap().unwrap().identity();
+        let directory = File::open(path.join("nested")).unwrap();
+        let before = directory.metadata().unwrap();
+        directory
+            .set_permissions(std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+        let removal = open_qualified(temp.path(), id, Some(&key))
+            .unwrap()
+            .unwrap()
+            .remove();
+        let inspection = handoff(temp.path(), id, Some(&key));
+        let after = directory.metadata().unwrap();
+        // Restore through the captured descriptor, never a guessed pre-retirement path.
+        directory
+            .set_permissions(std::fs::Permissions::from_mode(0o700))
+            .unwrap();
+        assert_eq!(
+            removal.unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied,
+            "run the permission regression as an unprivileged user"
+        );
+        assert_eq!(after.mode() & 0o777, 0);
+        assert_eq!(before.ino(), after.ino());
+        let locations =
+            inspection.expect("read-only handoff must not open service content for reading");
+        assert!(locations.iter().any(|location| {
+            location.original_relative_path == Path::new("nested")
+                && std::fs::metadata(&location.path).unwrap().ino() == before.ino()
+        }));
+        assert_eq!(
+            std::fs::read(
+                locations
+                    .iter()
+                    .find(|location| location.original_relative_path == Path::new("nested"))
+                    .unwrap()
+                    .path
+                    .join("data")
+            )
+            .unwrap(),
+            b"service bytes"
+        );
+        open_qualified(temp.path(), id, Some(&key))
+            .unwrap()
+            .unwrap()
+            .remove()
+            .unwrap();
+        assert!(handoff(temp.path(), id, Some(&key)).unwrap().is_empty());
+        // Also cover a live allocation before any physical journal exists.
+        let (temp, path, id) = fixture();
+        let key = *open(temp.path(), id).unwrap().unwrap().identity();
+        let root = File::open(&path).unwrap();
+        root.set_permissions(std::fs::Permissions::from_mode(0o000))
+            .unwrap();
+        let locations = handoff(temp.path(), id, Some(&key));
+        let mode = root.metadata().unwrap().mode() & 0o777;
+        root.set_permissions(std::fs::Permissions::from_mode(0o700))
+            .unwrap();
+        assert_eq!(mode, 0);
+        let locations = locations.unwrap();
+        assert_eq!(locations.len(), 1);
+        assert_eq!(locations[0].path, path);
+        assert_eq!(locations[0].original_relative_path, Path::new("."));
+        open_qualified(temp.path(), id, Some(&key))
+            .unwrap()
+            .unwrap()
+            .remove()
+            .unwrap();
     }
 
     #[cfg(target_os = "linux")]

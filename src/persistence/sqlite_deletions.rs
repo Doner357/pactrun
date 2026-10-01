@@ -7,6 +7,16 @@ use super::{PactrunPersistence, PersistenceError};
 use crate::domain::*;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+fn retirement_io_error(error: std::io::Error, fallback: &'static str) -> PersistenceError {
+    // Never expose native paths or service-controlled OS error strings.
+    let message = match error.kind() {
+        std::io::ErrorKind::PermissionDenied => crate::retirement_fs::PERMISSION_DENIED,
+        std::io::ErrorKind::WouldBlock => crate::retirement_fs::BUSY,
+        _ => fallback,
+    };
+    PersistenceError::ServiceStorageUnavailable(message)
+}
+
 fn invalid(message: &'static str) -> PersistenceError {
     PersistenceError::InvalidRunTransition(message.to_owned())
 }
@@ -228,12 +238,9 @@ impl PactrunPersistence {
         }
         require_discard_unreferenced(&tx, id)?;
         let saved = detached_physical_key(&tx, id)?;
-        let root =
-            crate::retirement_fs::open_qualified(root_path, id, saved.as_ref()).map_err(|_| {
-                PersistenceError::ServiceStorageUnavailable(
-                    "detached allocation cannot be safely qualified",
-                )
-            })?;
+        let root = crate::retirement_fs::open_qualified(root_path, id, saved.as_ref()).map_err(
+            |error| retirement_io_error(error, "detached allocation cannot be safely qualified"),
+        )?;
         let key = match &root {
             Some(root) => {
                 if saved.as_ref().is_some_and(|saved| {
@@ -278,8 +285,9 @@ impl PactrunPersistence {
             return Err(corrupt());
         }
         if let Some(root) = root {
-            root.remove().map_err(|_| {
-                PersistenceError::ServiceStorageUnavailable(
+            root.remove().map_err(|error| {
+                retirement_io_error(
+                    error,
                     "discard could not safely end the allocation lifetime",
                 )
             })?;
@@ -315,10 +323,8 @@ impl PactrunPersistence {
             .and_then(|p| p.parent())
             .ok_or_else(corrupt)?;
         let saved = detached_physical_key(&tx, id)?;
-        let locations =
-            crate::retirement_fs::handoff(root_path, id, saved.as_ref()).map_err(|_| {
-                PersistenceError::ServiceStorageUnavailable("detached location is unavailable")
-            })?;
+        let locations = crate::retirement_fs::handoff(root_path, id, saved.as_ref())
+            .map_err(|error| retirement_io_error(error, "detached location is unavailable"))?;
         if locations.is_empty() {
             return Err(PersistenceError::ServiceStorageUnavailable(
                 "detached directory is absent",
@@ -378,8 +384,9 @@ impl PactrunPersistence {
         let saved = physical_key(saved)?;
         let allocation = ServiceAllocationId::from_bytes(id.try_into().map_err(|_| corrupt())?);
         let root = crate::retirement_fs::open_qualified(root_path, allocation, saved.as_ref())
-            .map_err(|_| {
-                PersistenceError::ServiceStorageUnavailable(
+            .map_err(|error| {
+                retirement_io_error(
+                    error,
                     "allocation root cannot be safely qualified for retirement",
                 )
             })?;
@@ -410,8 +417,9 @@ impl PactrunPersistence {
         }
         drop(db);
         if let Some(root) = root {
-            root.remove().map_err(|_| {
-                PersistenceError::ServiceStorageUnavailable(
+            root.remove().map_err(|error| {
+                retirement_io_error(
+                    error,
                     "allocation storage lifetime could not be ended safely",
                 )
             })?;

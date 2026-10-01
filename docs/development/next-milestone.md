@@ -21,7 +21,7 @@ ordinary-user retirement failed. See the
 [evaluated boundary and deferred documentation work](./public-preview-delivery.md#authentik-black-box-follow-up).
 
 The [E delivery ledger](./e-implementation-status.md) records local engineering
-qualification and integration. The product candidate is `1.0.0-alpha.1`; the
+qualification and integration. The current fix candidate is `1.0.0-alpha.2`; the
 eight current format domains use `1.0-alpha.1`. These selections do not couple
 the independent version domains or authorize formal promotion.
 

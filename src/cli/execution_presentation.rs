@@ -7,8 +7,33 @@ use serde::Serialize;
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-ID: PR-TEST-0644
+    // Verifies: PR-REQ-0359
+    #[test]
+    fn retirement_details_allow_only_exact_path_free_core_reasons() {
+        for safe in [
+            crate::retirement_fs::PERMISSION_DENIED,
+            crate::retirement_fs::BUSY,
+        ] {
+            let mut record = crate::domain::RunFailureRecord {
+                error: crate::domain::PactrunErrorRef::new(
+                    "service_storage",
+                    "allocation_unavailable",
+                )
+                .unwrap(),
+                message: safe.into(),
+            };
+            assert_eq!(Failure::new(&record, None).detail.as_deref(), Some(safe));
+            record.message.push_str(" /private/service secret-sentinel");
+            assert!(Failure::new(&record, None).detail.is_none());
+            record.message = safe.into();
+            record.error =
+                crate::domain::PactrunErrorRef::new("execution", "launch_failed").unwrap();
+            assert!(Failure::new(&record, None).detail.is_none());
+        }
+    }
     // Test-ID: PR-TEST-0572
-    // Verifies: PR-REQ-0361, PR-REQ-0362
+    // Verifies: PR-REQ-0359, PR-REQ-0361, PR-REQ-0362
     #[test]
     fn initialization_details_are_safe_core_messages_only() {
         let safe = "IPC initialization: permission denied; check execution-owner access to the temporary location.";
