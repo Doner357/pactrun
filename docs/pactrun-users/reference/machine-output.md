@@ -83,6 +83,31 @@ not a new error identity or an assertion that retry, Cleanup replay, permission
 repair or privilege escalation is authorized. Human and machine inspection MUST
 apply the same disclosure boundary, independently of Hook-text retention.
 
+For Migration operator Input acquisition failures before Run acceptance, `error`
+MAY additionally contain `diagnostic`. New producers MUST provide it when the
+compiled target/Input context and acquisition failure are known. This explicit
+projection contains `kind: migration_input_acquisition`, complete `instance_id`,
+`target_revision` (Package ID and Revision digest), `input_id`, `phase`
+(`open_source` or `stage_input`), `reason` (`not_found`, `permission_denied`,
+`too_large`, `io_error` or `unavailable`), and `run_acceptance: not_accepted`.
+The existing kind/message/reference fields retain their meanings; these reason
+categories are not new Pactrun error-owner/code identities or retry authority.
+Unclassified I/O remains `io_error`; unavailable staging reasons must not expose
+arbitrary internal text. IDs may identify Secret Inputs but no value, host path,
+actual byte length, payload digest or raw OS message may be disclosed. Target
+Revision digests identify Pack code, not acquired Input values.
+
+The diagnostic is omitted for other failures and older responses may omit it.
+Absence does not imply no Run, safe retry, or a particular reason. A guard refusal
+may instead contain an accepted Run and existing inspection facts. Consumers MUST
+use the applicable typed result, current recovery guard and last committed
+boundary rather than assuming a common result.run shape or parsing prose.
+Human diagnostic facts MUST have equivalent machine facts; complete machine IDs
+and applicable states MUST NOT be reduced to human display abbreviations.
+Public additions are demand-driven, not dumps of internal state. Human advice
+does not add operation authority; neither format may silently repair a service,
+clear a guard, or turn unknown state into a negative assertion.
+
 ### Capability presentation at inspection boundaries {#pr-req-0363---capability-presentation-at-inspection-boundaries}
 
 Action list/show, revision show, migration-paths and Action/Capture/Restore/

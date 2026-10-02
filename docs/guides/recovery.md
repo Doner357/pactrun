@@ -48,6 +48,19 @@ operation. A stale token is a conflict: reinspect rather than automatically
 substituting a new token. A recovery override bypasses only its named trust guard,
 not identity, ownership, readiness, capacity, or other checks.
 
+## Migration blocked by a recovery guard
+
+Inspect the triggering Run identified by the current recovery guard, not only
+the newly refused operation. A refusal can have an accepted Run whose admission
+failed before a Hook started. JSON inspection supplies `current_recovery_guard`
+and, when available, `migration_progress`; do not assume every failure has the
+same result wrapper or that a null progress means all earlier work rolled back.
+The reported guard is current state, not a preserved copy of the historical
+blocking guard; it may have changed or been cleared since that Run failed.
+Check the last committed boundary and current Instance, then follow the Pack's
+service-specific recovery procedure. Neither an explanatory error nor a
+successful repair Action automatically authorizes retry or clears an old guard.
+
 ## Failed deletion
 
 Use [retirement](./retirement.md) and its
