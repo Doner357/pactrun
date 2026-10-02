@@ -44,7 +44,7 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current approved work: Retirement failure diagnostics and Cleanup guidance
 
-**State: Implementation in progress; develop-only integration authorized.**
+**State: Implemented, verified and integrated into develop; not publicly released.**
 
 The [retirement diagnostic milestone](./retirement-diagnostics.md) improves safe
 reason classification, unresolved deletion-obligation guidance and Pack Cleanup
