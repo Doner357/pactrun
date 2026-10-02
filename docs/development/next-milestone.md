@@ -14,7 +14,9 @@ records linked below. Integration does not authorize publication.
 The [Public Preview delivery](./public-preview-delivery.md) is published as
 `v1.0.0-alpha.1` in the public MIT-licensed `Doner357/pactrun` repository. The
 [alpha.2 delivery](./alpha2-publication.md) advances Preview while preserving
-alpha.1's immutable artifacts and exact entries. Scoop and
+alpha.1's immutable artifacts and exact entries. The
+[alpha.3 delivery](./alpha3-publication.md) adds the verified CLI/help and retirement
+diagnostics improvements without changing format domains. Scoop and
 Homebrew use its ordinary main-branch package catalog; the Docusaurus website is
 published on GitHub Pages through verified CI artifacts. Public native acquisition
 and website checks are recorded in that delivery ledger. Stable and formal 1.0.0
@@ -25,7 +27,7 @@ payload; this does not qualify all Authentik features or repair old data. See th
 [evaluated boundary and deferred documentation work](./public-preview-delivery.md#authentik-black-box-follow-up).
 
 The [E delivery ledger](./e-implementation-status.md) records local engineering
-qualification and integration. The current published product is `1.0.0-alpha.2`; the
+qualification and integration. The current published product is `1.0.0-alpha.3`; the
 eight current format domains use `1.0-alpha.1`. These selections do not couple
 the independent version domains or authorize formal promotion.
 
@@ -44,10 +46,10 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current approved work: Alpha.3 Preview delivery
 
-**State: Release preparation and artifact qualification authorized on 2026-10-02.**
+**State: Artifacts published and qualified; package-source activation and public verification in progress.**
 
-The candidate product is `1.0.0-alpha.3`; the currently published product remains
-`1.0.0-alpha.2` until the separately authorized delivery completes.
+The published product is `1.0.0-alpha.3`; the alpha.1/alpha.2 exact downloads
+remain immutable. Public catalog/Pages checks are recorded in the delivery ledger.
 
 The [alpha.3 delivery record](./alpha3-publication.md) owns candidate qualification,
 main integration, prerelease publication, Preview package catalog and Pages
@@ -56,7 +58,7 @@ promotion or documentation redesign is included.
 
 ## Previous work: Retirement failure diagnostics and Cleanup guidance
 
-**State: Implemented, verified and integrated into develop; not publicly released.**
+**State: Originally integrated into develop; subsequently shipped in alpha.3.**
 
 The [retirement diagnostic milestone](./retirement-diagnostics.md) improves safe
 reason classification, unresolved deletion-obligation guidance and Pack Cleanup
@@ -65,7 +67,7 @@ No main merge, public release, Pages publication or package update is included.
 
 ## Previous work: Migration CLI diagnostics and help
 
-**State: Implemented, verified and integrated into develop; not publicly released.**
+**State: Originally integrated into develop; subsequently shipped in alpha.3.**
 
 On 2026-10-02 the owner authorized the
 [Migration CLI diagnostics/help milestone](./migration-cli-ux.md), including
