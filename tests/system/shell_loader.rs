@@ -515,6 +515,84 @@ fi
     }
 }
 
+// Test-ID: PR-TEST-0651
+// Verifies: PR-REQ-0310, PR-REQ-0359, PR-REQ-0364
+#[test]
+fn service_migration_preview_is_readable_unobserved_and_machine_complete() {
+    let (shell, executable) = shells()[0];
+    let mut yaml=source(shell,executable,&[]).replace("revision:\n", "revision:\n  service_storages: [{id: state}]\n  service_resources: [{id: data, storage_id: state, locator: data, kind: file}]\n");
+    let scenario = Scenario::new(7651, &yaml);
+    fs::write(scenario.source.join("script.txt"), "exit 99\n").unwrap();
+    let old = scenario.install_and_create("sample");
+    let digest = old.rsplit('/').next().unwrap();
+    yaml = yaml.replace("{package_id}", &format!("{:032x}", 7651));
+    let migration = format!(
+        r#"  migrations:
+    - source_revision_digest: '{digest}'
+      transitions: []
+      requires_source: []
+      requires_target: []
+      produces_target: []
+      storage_transitions:
+        - {{kind: reuse, source: {{role: active, storage_id: state}}, target_storage_id: state}}
+      resource_transitions:
+        - {{kind: transform, sources: [{{role: active, resource_id: data}}], targets: [data]}}
+      hook:
+        protocol_version: 1.0-alpha.1
+        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}
+        args: []
+        io: {{terminal: none}}
+        service_access:
+          - {{reference: {{view: source, role: active, kind: resource, id: data}}, mode: read}}
+          - {{reference: {{view: target, role: active, kind: resource, id: data}}, mode: write}}
+        service_requires:
+          - {{reference: {{view: source, role: active, kind: resource, id: data}}, presence: present}}
+"#
+    );
+    yaml = yaml.replace("runtime_content:", &format!("{migration}runtime_content:"));
+    fs::write(scenario.source.join("pactrun.yaml"), yaml).unwrap();
+    let target = scenario.install();
+    let before = execute(&scenario, &["instance", "show", "sample"]);
+    assert_success(&before);
+    let human = execute(
+        &scenario,
+        &["instance", "migrate", "sample", "--to", &target, "--plan"],
+    );
+    assert_success(&human);
+    let text = String::from_utf8(human.stdout).unwrap();
+    assert!(
+        text.contains("source/active resource data: required present"),
+        "{text}"
+    );
+    assert!(text.contains("live_service_observation: not_performed"));
+    assert!(text.contains("Binding consumption does not delete service bytes"));
+    assert!(!text.contains("ServiceReferenceV2") && !text.contains("InputIdentity("));
+    let machine = execute(
+        &scenario,
+        &[
+            "--format", "json", "instance", "migrate", "sample", "--to", &target, "--plan",
+        ],
+    );
+    assert_success(&machine);
+    let value: serde_json::Value = serde_json::from_slice(&machine.stdout).unwrap();
+    let plan = &value["result"];
+    assert_eq!(plan["operator_input_acquisition"], "not_performed");
+    let service = &plan["edges"][0]["service"];
+    assert_eq!(service["live_observation"], "not_performed");
+    assert_eq!(service["requirements"][0]["view"], "source");
+    assert_eq!(service["requirements"][0]["role"], "active");
+    assert_eq!(service["requirements"][0]["scope"]["resource_id"], "data");
+    assert_eq!(service["requirements"][0]["presence"], "present");
+    assert_eq!(
+        execute(&scenario, &["instance", "show", "sample"]).stdout,
+        before.stdout
+    );
+    let runs = execute(&scenario, &["--format", "json", "run", "list", "sample"]);
+    assert_success(&runs);
+    let value: serde_json::Value = serde_json::from_slice(&runs.stdout).unwrap();
+    assert!(value["result"]["items"].as_array().unwrap().is_empty());
+}
+
 // Test-ID: PR-TEST-0490
 // Verifies: PR-REQ-0349
 #[test]

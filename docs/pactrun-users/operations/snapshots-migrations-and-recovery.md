@@ -81,6 +81,18 @@ its authorization is not a general permission to bypass protection.
 A multi-edge failure may leave an earlier edge committed. Inspect the Run and
 current Instance before retrying; do not assume automatic rollback to the source.
 
+In the development CLI, operator file acquisition errors identify the target
+Revision, Input ID, acquisition phase and a bounded safe reason. JSON/JSONL expose
+these facts as `error.diagnostic`, with `kind: migration_input_acquisition` and
+`run_acceptance: not_accepted`. No host path or Input value is included. Older
+executables and other error kinds may omit this diagnostic; absence is not proof
+that no Run exists. Do not parse explanatory text into retry authorization.
+
+A successful plan does not acquire operator files or observe a live service.
+`operator_input_acquisition: not_performed` makes that explicit in current machine
+plans; older plans may omit it. Service prerequisites remain symbolic. Consumed
+resource/storage bindings do not mean their service bytes were deleted.
+
 ## After failure
 
 Inspect `run show` and the Instance's current Revision, readiness, and recovery

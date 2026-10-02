@@ -1,5 +1,49 @@
 {
   "$defs": {
+    "AcquisitionDiagnostic": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "migration_input_acquisition"
+        },
+        "phase": {
+          "enum": [
+            "open_source",
+            "stage_input"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not_found",
+            "permission_denied",
+            "too_large",
+            "io_error",
+            "unavailable"
+          ]
+        },
+        "run_acceptance": {
+          "const": "not_accepted"
+        },
+        "target_revision": {
+          "$ref": "#/$defs/Revision"
+        }
+      },
+      "required": [
+        "kind",
+        "phase",
+        "instance_id",
+        "target_revision",
+        "input_id",
+        "reason",
+        "run_acceptance"
+      ],
+      "type": "object"
+    },
     "Action": {
       "properties": {
         "access": {
@@ -2931,6 +2975,9 @@
         },
         "expected_state_version": {
           "type": "string"
+        },
+        "operator_input_acquisition": {
+          "const": "not_performed"
         },
         "path_id": {
           "type": "string"
@@ -5949,6 +5996,9 @@
         },
         {
           "properties": {
+            "diagnostic": {
+              "$ref": "#/$defs/AcquisitionDiagnostic"
+            },
             "kind": {
               "enum": [
                 "usage",

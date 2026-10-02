@@ -42,6 +42,17 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
+## Current approved work: Migration CLI diagnostics and help
+
+On 2026-10-02 the owner authorized the
+[Migration CLI diagnostics/help milestone](./migration-cli-ux.md), including
+bounded structured diagnostics, guard guidance, readable symbolic plans and
+descriptions in existing help. Machine facts must not be poorer than human
+diagnostics; additions are demand-driven and remain subject to disclosure and
+compatibility rules. Delivery ends at verified `develop` integration. Do not
+merge this work to `main`, publish Pages or issue a new Release without a separate
+instruction. The public alpha.2 artifacts remain unchanged.
+
 ## F — Documentation and Documentation Site {#next-milestone-f--documentation-and-documentation-site}
 
 **State: Implementation complete; public Preview publication followed on 2026-09-30.**

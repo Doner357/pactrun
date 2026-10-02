@@ -30,6 +30,8 @@ mod catalog_presentation;
 mod definitions;
 mod execution_presentation;
 mod export_paths;
+#[cfg(test)]
+mod help_tests;
 mod lifecycle;
 mod migration_presentation;
 mod migrations;
@@ -69,71 +71,155 @@ Usage:\n\
   human: readable output (default). json: complete response. jsonl: live events.\n\
 \nPackages and Revisions:\n\
   pactrun pack generate-id\n\
+    \tGenerate a new Package ID without opening managed storage.\n\
   pactrun pack install <directory-or-pack-file> [--metadata-conflict overwrite|keep]\n\
+    \tValidate and install immutable Pack content; does not start a service.\n\
   pactrun revision export <revision-reference> --output <base-path> [--include-portable-metadata]\n\
+    \tExport an installed Revision as a portable .pack archive.\n\
     Always appends .pack: rv -> rv.pack; rv.pack -> rv.pack.pack.\n\
   pactrun hook <command> [options] (Shell Loader helpers; see pactrun hook --help)\n\
+    \tAccess helpers for an active Shell Loader Session; see hook --help.\n\
 \nInstances:\n\
   pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
+    \tCreate a managed Instance from an installed Revision and optional initial Inputs.\n\
   pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]\n\
+    \tCreate an Instance and execute the declared restore capability from a Snapshot.\n\
   pactrun instance list\n\
+    \tList currently managed Instances.\n\
   pactrun instance show <instance>\n\
+    \tInspect current Revision, readiness, bindings and recovery guard.\n\
   pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]\n\
+    \tRun declared Cleanup and reclaim owned service storage; irreversible.\n\
   pactrun instance abandon <instance> [--plan] [--if-version <token>]\n\
+    \tEnd management and retain remaining service data; does not stop the service.\n\
   pactrun instance deletion show <instance-id>\n\
+    \tInspect the retained deletion attempt and remaining obligations by Instance ID.\n\
   pactrun instance deletion confirm-complete <instance-id> --attempt <run-id> --if-version <token> --assert-cleanup-complete\n\
+    \tAssert externally verified Cleanup completion for the exact attempt.\n\
   pactrun instance migration-paths <instance> --to <reference> [--limit <1..100>] [--after <path-id>] [--no-trunc]\n\
+    \tList declared migration routes without acquiring files or observing services.\n\
   pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]\n\
+    \tMigrate along the selected declared path; --plan only previews the operation.\n\
   pactrun instance resolve-manual-recovery <instance> [--if-version <token>]\n\
+    \tAcknowledge externally verified recovery; does not itself repair the service.\n\
   pactrun input list <instance>\n\
+    \tList active and retained Input bindings without exporting their values.\n\
 \nService storage and resources:\n\
   pactrun service-storage list <instance> [--retained]\n\
+    \tList declared service storage bindings; include retained bindings with --retained.\n\
   pactrun service-storage detached list [--no-trunc]\n\
+    \tList allocations retained after Instance management ended.\n\
   pactrun service-storage detached show <allocation-id> [--reveal-location]\n\
+    \tInspect a detached allocation; reveal native locations only when requested.\n\
   pactrun service-storage detached discard <allocation-id> --confirm-discard\n\
+    \tIrreversibly reclaim the selected detached allocation with explicit consent.\n\
   pactrun resource list <instance> [--retained]\n\
+    \tList declared service resource associations.\n\
   pactrun resource show <instance> <resource-id> [--retained]\n\
+    \tInspect a resource association without observing the live service.\n\
   pactrun resource observe <instance> <resource-id> [--retained]\n\
+    \tObserve the selected live resource without changing the service.\n\
   pactrun resource locate <instance> <resource-id> --intent <read|write> [--retained]\n\
+    \tRequest an explicitly read- or write-intended native resource location.\n\
   pactrun input set <instance> <input-id> (--file <path> | --stdin) [--if-version <token>]\n\
+    \tAcquire and bind supplied bytes; this does not deploy or restart a service.\n\
   pactrun input export <instance> <input-id> --output <path|-> [--authorize-secret-export]\n\
+    \tExport a binding to a new file or stdout; Secret export requires authorization.\n\
   pactrun input delete <instance> <input-id> [--if-version <token>]\n\
+    \tRemove the selected Input binding; does not delete service-owned data.\n\
   pactrun action list <instance>\n\
+    \tList the Actions declared by the active Revision.\n\
   pactrun action show <instance> <action>\n\
+    \tInspect an Action declaration, parameters and execution requirements.\n\
   pactrun invoke <instance> <action> [options]\n\
+    \tExecute a declared Action, or preview it with --plan.\n\
 \nHistory and metadata:\n\
   pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]\n\
+    \tList Run history for all Instances or a selected exact Instance.\n\
   pactrun run show <run-id>\n\
+    \tInspect a Run outcome, failure, progress and current recovery guard.\n\
   pactrun run reconcile\n\
+    \tTerminalize confirmed lost owners without replaying Hooks.\n\
   pactrun run delete <run-id> [--delete-artifacts]\n\
+    \tDelete eligible Run history; associated artifacts need explicit deletion intent.\n\
   pactrun revision list [--limit <1..500>] [--after <exact-reference>] [--no-trunc]\n\
+    \tList installed immutable Revisions.\n\
   pactrun revision show <revision-reference>\n\
+    \tInspect an installed Revision and its public declarations.\n\
   pactrun revision metadata show <revision-reference>\n\
+    \tInspect presentation and local metadata for a Revision.\n\
   pactrun revision alias show <alias>\n\
+    \tResolve a local alias without changing it.\n\
   pactrun revision alias set <alias> <exact-reference> (--expect-absent | --expect <exact-reference>)\n\
+    \tSet a local alias with an explicit expected previous value.\n\
   pactrun revision alias clear <alias> --expect <exact-reference>\n\
+    \tClear a local alias only if its current target matches the expectation.\n\
   pactrun revision note show <revision-reference>\n\
+    \tRead a Revision local note.\n\
   pactrun revision note set <exact-reference> --value <text> (--expect-absent | --expect <text>)\n\
+    \tSet a local note with an explicit expected previous value.\n\
   pactrun revision note clear <exact-reference> (--expect-absent | --expect <text>)\n\
+    \tClear a local note with an explicit expected previous value.\n\
   pactrun revision trust show <revision-reference>\n\
+    \tInspect the local trust label; it is not publisher authentication.\n\
   pactrun revision trust set <exact-reference> <trusted|distrusted> (--expect-absent | --expect <trusted|distrusted>)\n\
+    \tSet a local trust label with an explicit expected previous value.\n\
   pactrun revision trust clear <exact-reference> (--expect-absent | --expect <trusted|distrusted>)\n\
+    \tClear a local trust label with an explicit expected previous value.\n\
   pactrun instance history list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
+    \tList live and retired Instance identities.\n\
   pactrun instance history show <instance-id>\n\
+    \tInspect historical Instance facts without rebinding its former name.\n\
   pactrun instance deletion list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
+    \tList retained deletion attempts and retirement facts.\n\
   pactrun revision delete <revision-reference>\n\
+    \tDelete an eligible unreferenced Revision.\n\
   pactrun snapshot delete <snapshot-id>\n\
+    \tDelete an eligible Snapshot.\n\
   pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export\n\
+    \tExport a retained Run Artifact with explicit sensitive-export authorization.\n\
   pactrun run artifact delete <run-id> <output-id>\n\
+    \tDelete the selected retained Run Artifact.\n\
   pactrun snapshot capture <instance> [execution-options]\n\
+    \tExecute the Pack-defined capture capability to create a Snapshot.\n\
   pactrun snapshot restore <instance> <snapshot-id> [execution-options]\n\
+    \tExecute the Pack-defined restore capability against a selected Snapshot.\n\
   pactrun snapshot list [--instance <instance>] [--no-trunc]\n\
+    \tList Snapshots, optionally filtered by Instance.\n\
   pactrun snapshot show <snapshot-id>\n\
+    \tInspect Snapshot identity and recorded metadata.\n\
   pactrun snapshot verify <snapshot-id>\n\
+    \tCheck the selected Snapshot against its integrity contract.\n\
   pactrun snapshot import <bundle-path>\n\
+    \tValidate and import a Snapshot bundle; does not restore a service.\n\
   pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export\n\
+    \tExport a Snapshot bundle with explicit sensitive-export authorization.\n\
     Always appends .snapshot: backup -> backup.snapshot; backup.snapshot -> backup.snapshot.snapshot.\n\
   pactrun storage gc [--plan]\n\
+    \tCollect eligible unreferenced managed content; --plan only previews collection.\n\
+\n\
+Common options (only where listed above):\n\
+  --plan: Preview without execution; Migration previews do not acquire operator files or observe services.\n\
+  --if-version: Require the exact observed state token; stale state is refused.\n\
+  --to / --path: Choose the target Revision and an explicit declared migration route.\n\
+  --input-file / --input-stdin: Supply operator Input bytes; migration files are target-qualified.\n\
+  --metadata-conflict: Explicitly choose overwrite or keep for imported metadata conflicts.\n\
+  --include-portable-metadata: Include eligible portable metadata, not local notes or trust labels.\n\
+  --limit / --after: Bound and continue a listing using its returned cursor.\n\
+  --no-trunc: Show complete identifiers instead of shortened human display IDs.\n\
+  --retained: Include or select retained bindings rather than only active bindings.\n\
+  --reveal-location / --intent: Explicitly request native location disclosure and access intent.\n\
+  --authorize-secret-export / --authorize-sensitive-export: Explicitly authorize protected export.\n\
+  --authorize-declassification: Allow only declared Secret declassification on the selected path.\n\
+  --authorize-recovery-override: Bypass only the initial guard; does not repair or acknowledge recovery.\n\
+  --confirm-discard: Explicitly authorize irreversible detached-allocation disposal.\n\
+  --attempt / --assert-cleanup-complete: Identify the attempt and assert externally verified Cleanup.\n\
+  --delete-artifacts: Include associated Artifacts when deleting eligible Run history.\n\
+  --value / --expect / --expect-absent: Supply metadata and an exact compare-and-set expectation.\n\
+  --param / --param-file / --param-stdin: Supply declared typed parameters from one chosen source.\n\
+  --startup-timeout-ms / --execution-timeout-ms: Set invocation deadlines; omitted values are unlimited.\n\
+  --action-timeout-ms: Bound Action execution (unlimited when omitted); other operations use --execution-timeout-ms.\n\
+  --termination-grace-ms: Set the termination grace period; the default is 5000ms.\n\
 \n\
 Hook execution options: --no-retain-hook-text omits saved Hook text; live output stays enabled.\n\
 JSONL execution: --cancel-on-output-close requests cancellation when the receiver closes stdout.\n\
@@ -277,6 +363,7 @@ struct CliError {
     kind: presentation::ErrorKind,
     reference: Option<presentation::ErrorReference>,
     partial: Option<presentation::PartialResult>,
+    diagnostic: Option<Box<presentation::AcquisitionDiagnostic>>,
 }
 
 trait CancellationHandlerInstaller {
@@ -311,6 +398,7 @@ impl CliError {
             kind: presentation::ErrorKind::Usage,
             reference: None,
             partial: None,
+            diagnostic: None,
         }
     }
 
@@ -321,6 +409,7 @@ impl CliError {
             kind: presentation::ErrorKind::Operation,
             reference: None,
             partial: None,
+            diagnostic: None,
         }
     }
 }
@@ -2531,6 +2620,12 @@ fn write_run_state(
             guard.entered_at_unix_ms
         )
         .map_err(io_operation)?;
+        writeln!(
+            output,
+            "Inspect the triggering Run: pactrun run show {}",
+            guard.run
+        )
+        .map_err(io_operation)?;
     } else {
         writeln!(output, "current_recovery_guard: none").map_err(io_operation)?;
     }
@@ -2973,6 +3068,9 @@ fn app_error(error: ApplicationError) -> CliError {
 }
 
 fn preserve_error_facts(error: &ApplicationError, result: &mut CliError) {
+    if let ApplicationError::MigrationInputAcquisition(failure) = error {
+        result.diagnostic = Some(Box::new(failure.as_ref().into()));
+    }
     if let ApplicationError::Publication {
         destination,
         destination_published,
@@ -3142,6 +3240,9 @@ fn failure_detail(record: &crate::domain::RunFailureRecord) -> Option<&str> {
 
 fn failure_explanation(error: &crate::domain::PactrunErrorRef) -> &'static str {
     match (error.owner(), error.code()) {
+        ("admission", "recovery_guard_active") => {
+            "Admission was refused because a recovery guard was active. Inspect the reported current guard and its triggering Run, if available, plus the last committed boundary and current Instance. This refusal can have an accepted Run without starting a Hook; it does not authorize override, acknowledgment or retry."
+        }
         ("execution", "ipc_initialization_failed") => {
             "IPC could not be initialized before the user Hook started."
         }

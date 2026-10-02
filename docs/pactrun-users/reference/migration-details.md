@@ -135,6 +135,15 @@ read-only success MUST NOT be presented as successful Migration execution.
 Operator file inputs and invocation limits follow PR-REQ-0315 and PR-REQ-0316;
 plan output is symbolic and MUST NOT acquire those files.
 
+Human previews MUST use task-facing view/role/resource/presence terms rather than
+implementation Debug wrappers. Where applicable they MUST explicitly state that
+operator files are unacquired and live service requirements unobserved. Consuming a binding
+MUST NOT be presented as deleting service bytes. Machine plans retain per-service
+`live_observation: not_performed` and additionally emit the additive
+`operator_input_acquisition: not_performed` field. Older plans may omit that field;
+absence does not mean acquisition succeeded. No file stat/read or service probe
+is authorized to enrich a symbolic plan.
+
 ### Declarative execution CLI and retained ownership {#pr-req-0314---declarative-execution-cli-and-retained-ownership}
 
 Omitting --plan from instance migrate executes the selected path. Declarative
@@ -190,6 +199,12 @@ single writers, declassification and sticky continuity retain their independent
 rules. File paths, payload bytes and value-derived digests MUST NOT appear in
 plans or structural Run inspection. Operator acquisition creates no separate
 retained store and grants no Hook output authority.
+
+Acquisition failures with known compiled context MUST preserve safe target/Input
+and phase/reason facts for the CLI diagnostic projection in PR-REQ-0359. This
+does not change preflight ordering, the bounded acquisition policy or the
+requirement to fail before Run acceptance. Never infer an unavailable reason by
+parsing arbitrary OS messages or payload data.
 
 <details>
 <summary>Maintainer sources (optional)</summary>

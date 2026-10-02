@@ -87,6 +87,7 @@ fn generated() -> Value {
     cases.push(("instance migrate", json!({"anyOf":[plan,completed]})));
     let partial = shape::<p::PartialResult>(&mut generator);
     let reference = shape::<p::ErrorReference>(&mut generator);
+    let acquisition = shape::<p::AcquisitionDiagnostic>(&mut generator);
     let delivery = shape::<streaming::DeliveryResult>(&mut generator);
     let commands: Vec<_> = cases.iter().map(|(name, _)| *name).collect();
     let branches: Vec<_> = cases
@@ -110,7 +111,7 @@ fn generated() -> Value {
             "result":{"type":["object","null"]},
             "delivery":delivery,
             "error":{"anyOf":[{"type":"null"},{"type":"object","required":["kind","message","reference"],"properties":{
-                "kind":{"enum":["usage","operation","output","startup"]},"message":{"type":"string"},"reference":{"anyOf":[reference,{"type":"null"}]}
+                "kind":{"enum":["usage","operation","output","startup"]},"message":{"type":"string"},"reference":{"anyOf":[reference,{"type":"null"}]},"diagnostic":acquisition
             }}]}
         },
         "oneOf":[
@@ -121,6 +122,27 @@ fn generated() -> Value {
         "$defs": generator.take_definitions(true)
     });
     // Error identities retain the owning Frozen lexical boundary.
+    let acquisition = &mut schema["$defs"]["AcquisitionDiagnostic"]["properties"];
+    acquisition["kind"] = json!({"const":"migration_input_acquisition"});
+    acquisition["phase"] = json!({"enum":["open_source","stage_input"]});
+    acquisition["reason"] =
+        json!({"enum":["not_found","permission_denied","too_large","io_error","unavailable"]});
+    acquisition["run_acceptance"] = json!({"const":"not_accepted"});
+    // Additive producer fact: older valid plans may omit it, never infer observed
+    // state from that absence. New producers always emit the explicit value.
+    for definition in schema["$defs"].as_object_mut().unwrap().values_mut() {
+        if definition["properties"]
+            .get("operator_input_acquisition")
+            .is_some()
+        {
+            definition["properties"]["operator_input_acquisition"] =
+                json!({"const":"not_performed"});
+            definition["required"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|name| name != "operator_input_acquisition");
+        }
+    }
     for name in ["owner", "code"] {
         schema["$defs"]["ErrorReference"]["properties"][name] = json!({"type":"string","minLength":1,"maxLength":128,"pattern":"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"});
     }
@@ -231,4 +253,35 @@ fn cli_json_schema_contract_matches_explicit_projections() {
     let mut additive = success;
     additive["future_field"] = true.into();
     assert!(validator.is_valid(&additive));
+    let mut acquisition = json!({"format":"pactrun.cli","format_version":"1.0-alpha.1","command":"instance migrate","status":"failure","result":null,"error":{"kind":"operation","message":"safe explanation","reference":null,"diagnostic":{"kind":"migration_input_acquisition","phase":"open_source","instance_id":"00000000000000000000000000000001","target_revision":{"package_id":"00000000000000000000000000000002","content_digest":format!("sha256:{}","0".repeat(64))},"input_id":"credentials","reason":"permission_denied","run_acceptance":"not_accepted"}}});
+    assert!(validator.is_valid(&acquisition));
+    let mut previous = checked.clone();
+    previous["properties"]["error"]["anyOf"][1]["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("diagnostic");
+    for definition in previous["$defs"].as_object_mut().unwrap().values_mut() {
+        if let Some(properties) = definition
+            .get_mut("properties")
+            .and_then(Value::as_object_mut)
+        {
+            properties.remove("operator_input_acquisition");
+        }
+    }
+    assert!(
+        jsonschema::validator_for(&previous)
+            .unwrap()
+            .is_valid(&acquisition),
+        "the pre-extension open error projection must accept new diagnostic members"
+    );
+    acquisition["error"]["diagnostic"]["reason"] = "unreviewed_reason".into();
+    assert!(!validator.is_valid(&acquisition));
+    acquisition["error"]
+        .as_object_mut()
+        .unwrap()
+        .remove("diagnostic");
+    assert!(
+        validator.is_valid(&acquisition),
+        "older failure responses remain valid"
+    );
 }

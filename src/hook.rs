@@ -597,7 +597,7 @@ pub(crate) fn execute_capture_with_risk_failures(
         fn set_recovery_risk(&self, run: RunId, risk: RecoveryRiskState) -> Result<(), ()> {
             if self
                 .failures
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
                 .is_ok()
             {
                 return Err(());
@@ -659,7 +659,7 @@ pub(crate) fn execute_admitted_action_with_risk_failures(
         fn set_recovery_risk(&self, run: RunId, requested: RecoveryRiskState) -> Result<(), ()> {
             if self
                 .remaining_failures
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     remaining.checked_sub(1)
                 })
                 .is_ok()

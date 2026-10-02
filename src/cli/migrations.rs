@@ -451,9 +451,18 @@ pub(super) fn execute(
                 let inputs = inputs
                     .into_iter()
                     .map(|(key, path)| {
-                        std::fs::File::open(path)
-                            .map(|file| (key, file))
-                            .map_err(|_| CliError::operation("Migration Input acquisition failed"))
+                        let file = std::fs::File::open(path).map_err(|error| {
+                            use crate::application::migration_input::{Failure, Phase, Reason};
+                            app_error(ApplicationError::MigrationInputAcquisition(Box::new(
+                                Failure::new(
+                                    &plan,
+                                    &key,
+                                    Phase::OpenSource,
+                                    Reason::from_io(&error),
+                                ),
+                            )))
+                        })?;
+                        Ok((key, file))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 let run = match writer.accept_migration_inputs(
@@ -577,6 +586,10 @@ pub(super) fn execute(
             )
             .map_err(io_operation)?;
             capability_presentation::write(output, &author, false)?;
+            if !plan.operator_inputs().is_empty() {
+                writeln!(output, "operator_input_acquisition: not_performed")
+                    .map_err(io_operation)?;
+            }
             let timeout = |duration: Option<Duration>| {
                 duration
                     .map(|d| d.as_millis().to_string())
@@ -603,6 +616,17 @@ pub(super) fn execute(
                 if let Some(service) = &edge.service {
                     writeln!(output, "  service_transform: {}", service.transform)
                         .map_err(io_operation)?;
+                    writeln!(output, "  live_service_observation: not_performed")
+                        .map_err(io_operation)?;
+                    if !service.consumed_storages.is_empty()
+                        || !service.consumed_resources.is_empty()
+                    {
+                        writeln!(
+                            output,
+                            "  Binding consumption does not delete service bytes."
+                        )
+                        .map_err(io_operation)?;
+                    }
                     for id in &service.created_storages {
                         writeln!(output, "  create_storage: {}", id.as_str())
                             .map_err(io_operation)?;
@@ -618,16 +642,37 @@ pub(super) fn execute(
                     for (presence, resource) in &service.create_presence {
                         writeln!(
                             output,
-                            "  create_resource: {} presence={presence:?}",
-                            resource.declaration.id.as_str()
+                            "  create_resource: {} presence={}",
+                            resource.declaration.id.as_str(),
+                            match presence {
+                                ServiceCreatePresence::Any => "any",
+                                ServiceCreatePresence::Present => "present",
+                                ServiceCreatePresence::Absent => "absent",
+                            }
                         )
                         .map_err(io_operation)?;
                     }
                     for (requirement, _) in &service.requires {
                         writeln!(
                             output,
-                            "  service_requires: {:?} {:?}",
-                            requirement.reference, requirement.presence
+                            "  service_requires: {}/{} {}: required {}",
+                            match requirement.reference.view {
+                                ServiceView::Current => "current",
+                                ServiceView::Source => "source",
+                                ServiceView::Target => "target",
+                            },
+                            match requirement.reference.role {
+                                ServiceRole::Active => "active",
+                                ServiceRole::Retained => "retained",
+                            },
+                            match &requirement.reference.scope {
+                                ServiceScope::Resource(id) => format!("resource {}", id.as_str()),
+                                ServiceScope::Storage(id) => format!("storage {}", id.as_str()),
+                            },
+                            match requirement.presence {
+                                ServicePresenceRequirement::Present => "present",
+                                ServicePresenceRequirement::Absent => "absent",
+                            }
                         )
                         .map_err(io_operation)?;
                     }
@@ -643,8 +688,11 @@ pub(super) fn execute(
                 for source in &bindings.declaration().requires_source {
                     writeln!(
                         output,
-                        "  requires_source: {:?}/{}",
-                        source.role,
+                        "  requires_source: {}/{}",
+                        match source.role {
+                            InputBindingRoleV1::Active => "active",
+                            InputBindingRoleV1::Retained => "retained",
+                        },
                         source.input_id.as_str()
                     )
                     .map_err(io_operation)?;
@@ -662,8 +710,11 @@ pub(super) fn execute(
                     };
                     writeln!(
                         output,
-                        "  transition: {kind} {:?}/{} -> {}",
-                        transition.source().role,
+                        "  transition: {kind} {}/{} -> {}",
+                        match transition.source().role {
+                            InputBindingRoleV1::Active => "active",
+                            InputBindingRoleV1::Retained => "retained",
+                        },
                         transition.source().input_id.as_str(),
                         transition
                             .target()

@@ -1,6 +1,7 @@
 // Real Frozen Migration Hooks use the same native test worker and supervisor.
 use super::*;
 use crate::domain::*;
+use std::ffi::OsString;
 const WORKER: &str = "hook::tests::migration_runtime::migration_hook_worker";
 
 fn declaration(id: &str, required: bool, secret: bool) -> InputDeclarationV1 {
@@ -63,6 +64,45 @@ fn start_with_policy(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, 
     // The original host path is never authoritative once acquisition succeeds.
     fs::remove_file(request).unwrap();
     run
+}
+
+// Test-ID: PR-TEST-0648
+// Verifies: PR-REQ-0314, PR-REQ-0359
+#[test]
+fn guard_refusal_explains_the_existing_boundary_without_replaying_a_hook() {
+    let f = RuntimeFixture::new();
+    let path = chain(&f);
+    let original = start(&f, &path, "open_failure", ActionCancellation::default());
+    assert_eq!(finish(&f, original).outcome, RunOutcome::Failed);
+    let request = f.marker("guard-request.json");
+    fs::write(&request, b"{}").unwrap();
+    let target = path.last().unwrap();
+    let reference = format!("exact:{}/{}", target.package_id, target.content_digest);
+    let input = format!("{}/request={}", path[2].content_digest, request.display());
+    let name = f.instance.name.as_str();
+    let args = ["--format", "json", "instance", "migrate", name, "--to", &reference, "--input-file", &input];
+    let mut out = vec![]; let mut err = vec![];
+    let exit = crate::cli::run(args.iter().map(OsString::from).collect(), Some(f.storage.as_os_str().to_owned()),
+        &mut io::empty(), &mut out, &mut err);
+    assert_eq!(exit, 1, "{}", String::from_utf8_lossy(&out));
+    let value: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    let result = &value["result"];
+    assert_eq!(result["run"]["state"]["boundary"], "accepted");
+    assert_eq!(result["run"]["state"]["primary_failure"]["reference"]["code"], "recovery_guard_active");
+    assert!(result["run"]["state"]["primary_failure"]["explanation"].as_str().unwrap().contains("triggering Run"));
+    assert!(result["run"]["state"]["primary_failure"]["detail"].is_null());
+    assert_eq!(result["current_recovery_guard"]["run_id"], original.to_string());
+    assert!(value["error"].get("diagnostic").is_none());
+    assert_eq!(fs::read(f.marker("invoked")).unwrap(), b"once\n");
+    assert_eq!(persistence(&f.storage).load_instance_by_id(f.instance.id).unwrap().unwrap().active_revision, path[1]);
+    out.clear(); err.clear();
+    let rejected = result["run"]["run_id"].as_str().unwrap();
+    assert_eq!(crate::cli::run(["run", "show", rejected].iter().map(OsString::from).collect(),
+        Some(f.storage.as_os_str().to_owned()), &mut io::empty(), &mut out, &mut err), 0);
+    let human = String::from_utf8(out).unwrap();
+    assert!(human.contains(&format!("pactrun run show {original}")));
+    assert!(human.contains("triggering Run"));
+    assert_eq!(fs::read(f.marker("invoked")).unwrap(), b"once\n");
 }
 
 fn finish(f: &RuntimeFixture, run: RunId) -> RunOutcomeView {
