@@ -46,6 +46,9 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 **State: Release preparation and artifact qualification authorized on 2026-10-02.**
 
+The candidate product is `1.0.0-alpha.3`; the currently published product remains
+`1.0.0-alpha.2` until the separately authorized delivery completes.
+
 The [alpha.3 delivery record](./alpha3-publication.md) owns candidate qualification,
 main integration, prerelease publication, Preview package catalog and Pages
 updates. Preserve alpha.1/alpha.2 immutable assets and exact entries. No Stable
