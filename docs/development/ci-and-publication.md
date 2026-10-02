@@ -154,6 +154,13 @@ them. Choose the binary source SHA from the delivery receipt, not a later metada
 commit, when reproducing that source. Candidate artifacts are review inputs, not
 permission to overwrite an already published version with a different build.
 
+For pre-main qualification, manually dispatch the workflow from
+`release/<version>` and supply that exact dispatch-head SHA and Cargo version.
+The source guard rejects a mismatched version branch, a different source commit,
+and other dispatch branches. Main dispatch retains the existing main-ancestry
+check. This permits artifact acceptance before main integration without granting
+the build token publication permissions or bypassing protected merge checks.
+
 ## Validation limits
 
 Local unit tests, workflow lint and remote documentation builds are preflight

@@ -42,7 +42,16 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
-## Current approved work: Retirement failure diagnostics and Cleanup guidance
+## Current approved work: Alpha.3 Preview delivery
+
+**State: Release preparation and artifact qualification authorized on 2026-10-02.**
+
+The [alpha.3 delivery record](./alpha3-publication.md) owns candidate qualification,
+main integration, prerelease publication, Preview package catalog and Pages
+updates. Preserve alpha.1/alpha.2 immutable assets and exact entries. No Stable
+promotion or documentation redesign is included.
+
+## Previous work: Retirement failure diagnostics and Cleanup guidance
 
 **State: Implemented, verified and integrated into develop; not publicly released.**
 
