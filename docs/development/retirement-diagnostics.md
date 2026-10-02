@@ -4,7 +4,8 @@ title: Retirement failure diagnostics and Cleanup guidance
 
 # Retirement failure diagnostics and Cleanup guidance
 
-**Status: Implementation in progress; not publicly released.**
+**Status: Implemented, verified and integrated into develop on 2026-10-02;
+not publicly released.**
 
 On 2026-10-02 the owner approved safe retirement failure classification,
 deletion-obligation guidance, author/operator documentation and regression tests.
@@ -51,6 +52,43 @@ Cleanup replay or new public lifecycle state is added.
 
 ## Verification
 
-Pending the focused Windows/Linux checks, schema compatibility and disclosure
-checks, full persistent-remote integration gate and hosted CI. Results and final
-integration evidence will be recorded before closing this milestone.
+- Runtime candidate: `6107e88c281d4df88dd490ac4294856e87a36de4`.
+  PR #16 integrated it into develop at
+  `6a5d5bd0dd726d150efb0c4695cdbb01df732a4c` through the protected merge flow.
+- Full configured Linux `cargo xtask ci` passed with Rust 1.99.0 on the persistent
+  ZFS workspace. All 529 source files matched the candidate commit and were
+  checksum-verified before and after the gate. The executable was compiled from
+  this workspace, not reused from another checkout.
+- Linux: 531 library tests passed (four existing capacity opt-ins ignored),
+  17 Migration CLI tests, three retirement CLI tests, 76 system tests, other
+  workspace/conformance suites, 89 documentation tests, site typecheck and build
+  passed. The existing opt-in native package acceptance test remained ignored;
+  no new package or published binary was produced.
+- Windows Rust 1.98.1: 70 CLI unit tests, 16 Migration CLI tests, two retirement
+  process tests and workspace/all-target/all-feature Clippy passed. Earlier
+  focused retirement checks also passed. The enlarged diagnostic context was
+  boxed to retain the small CLI error boundary; no lint was suppressed.
+- Hosted CI `37014205462` passed complete Windows and Ubuntu verification on the
+  candidate. Pages publication was skipped. No protected-branch bypass was used.
+- PR-TEST-0652 exercises a real stale Unix socket: Cleanup succeeds, finalization
+  fails with the safe reason, JSON/JSONL and history preserve the facts, Action
+  and Migration stay blocked without a recovery guard, recovery override does
+  not bypass the obligation, and finalization-only retry does not replay Cleanup.
+  Abandon/discard still need explicit intent; only the test owner repairs its
+  own socket. No automatic socket deletion occurs.
+- PR-TEST-0653/0654 cover typed classification, exact-message disclosure limits,
+  historical versus current evidence and unrelated errors. PR-TEST-0655 covers
+  old/new optional-member compatibility. Removing only the three added members
+  and their new definition yields the exact previous schema; existing enums and
+  types are unchanged. Existing permission/busy details retain their semantics.
+- This is a synthetic native-socket regression, not a rerun or certification of
+  the external Caddy Pack. The original handoff, services and untracked user
+  artifacts were not modified. Runtime behavior beyond the approved diagnostics
+  remains unchanged.
+
+The documentation-only closeout reuses the identical qualified runtime and
+requires its own documentation/traceability, typecheck/build and hosted checks
+before merge. It does not claim another fresh product-wide run. Local evidence
+is retained under `target/retirement-diagnostics-20261002/`; the configured
+persistent remote retains the matching source, logs and built documentation.
+No new preview server was started; pre-existing preview resources were untouched.
