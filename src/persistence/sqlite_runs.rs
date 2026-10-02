@@ -1344,9 +1344,7 @@ fn admission_decision(
     }
 
     if super::sqlite_deletions::obligation_from(transaction, header.instance)?.is_some() {
-        return Ok(Err(AdmissionRefusal::PlanInvalidated(
-            "Instance has a deletion obligation".to_owned(),
-        )));
+        return Ok(Err(AdmissionRefusal::DeletionObligation(header.instance)));
     }
 
     // 2. Stale compilation or state facts.

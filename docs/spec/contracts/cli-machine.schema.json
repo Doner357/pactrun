@@ -717,6 +717,21 @@
       ],
       "type": "object"
     },
+    "DeletionObligationDiagnostic": {
+      "properties": {
+        "instance_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instance_id",
+        "run_id"
+      ],
+      "type": "object"
+    },
     "DeliveryResult": {
       "properties": {
         "complete": {
@@ -1009,6 +1024,14 @@
         },
         "explanation": {
           "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "permission_denied",
+            "allocation_busy",
+            "unsupported_entry_kind",
+            "deletion_obligation"
+          ]
         },
         "reference": {
           "$ref": "#/$defs/ErrorReference"
@@ -5996,6 +6019,9 @@
         },
         {
           "properties": {
+            "deletion_obligation": {
+              "$ref": "#/$defs/DeletionObligationDiagnostic"
+            },
             "diagnostic": {
               "$ref": "#/$defs/AcquisitionDiagnostic"
             },
@@ -6018,6 +6044,13 @@
                 {
                   "type": "null"
                 }
+              ]
+            },
+            "retirement_reason": {
+              "enum": [
+                "permission_denied",
+                "allocation_busy",
+                "unsupported_entry_kind"
               ]
             }
           },

@@ -917,6 +917,9 @@ pub(super) fn safe_error(error: ApplicationError) -> CliError {
     use crate::snapshot_integrity::SnapshotCodecError as C;
     let mut result = CliError::operation("");
     preserve_error_facts(&error, &mut result);
+    if result.details.deletion_obligation.is_some() {
+        return result;
+    }
     match &error {
         ApplicationError::SnapshotCompilation(SnapshotPlanError::UnsupportedProtocol(version)) => {
             result.message = crate::domain::VersionDomain::Hook.unsupported_message(*version);

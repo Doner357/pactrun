@@ -42,7 +42,16 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
-## Current approved work: Migration CLI diagnostics and help
+## Current approved work: Retirement failure diagnostics and Cleanup guidance
+
+**State: Implementation in progress; develop-only integration authorized.**
+
+The [retirement diagnostic milestone](./retirement-diagnostics.md) improves safe
+reason classification, unresolved deletion-obligation guidance and Pack Cleanup
+documentation. Existing retirement/recovery authority and behavior stay intact.
+No main merge, public release, Pages publication or package update is included.
+
+## Previous work: Migration CLI diagnostics and help
 
 **State: Implemented, verified and integrated into develop; not publicly released.**
 

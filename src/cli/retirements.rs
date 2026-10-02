@@ -743,6 +743,9 @@ fn safe_error(error: ApplicationError) -> CliError {
     use crate::{domain::DeletionPlanError, persistence::PersistenceError};
     let mut result = CliError::operation("");
     preserve_error_facts(&error, &mut result);
+    if result.details.deletion_obligation.is_some() {
+        return result;
+    }
     let message = match error {
         ApplicationError::DeletionCompilation(DeletionPlanError::UnresolvedAttempt(run)) => {
             return CliError::operation(format!(

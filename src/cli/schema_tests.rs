@@ -88,6 +88,7 @@ fn generated() -> Value {
     let partial = shape::<p::PartialResult>(&mut generator);
     let reference = shape::<p::ErrorReference>(&mut generator);
     let acquisition = shape::<p::AcquisitionDiagnostic>(&mut generator);
+    let deletion_obligation = shape::<p::DeletionObligationDiagnostic>(&mut generator);
     let delivery = shape::<streaming::DeliveryResult>(&mut generator);
     let commands: Vec<_> = cases.iter().map(|(name, _)| *name).collect();
     let branches: Vec<_> = cases
@@ -111,7 +112,7 @@ fn generated() -> Value {
             "result":{"type":["object","null"]},
             "delivery":delivery,
             "error":{"anyOf":[{"type":"null"},{"type":"object","required":["kind","message","reference"],"properties":{
-                "kind":{"enum":["usage","operation","output","startup"]},"message":{"type":"string"},"reference":{"anyOf":[reference,{"type":"null"}]},"diagnostic":acquisition
+                "kind":{"enum":["usage","operation","output","startup"]},"message":{"type":"string"},"reference":{"anyOf":[reference,{"type":"null"}]},"diagnostic":acquisition,"deletion_obligation":deletion_obligation,"retirement_reason":{"enum":["permission_denied","allocation_busy","unsupported_entry_kind"]}
             }}]}
         },
         "oneOf":[
@@ -128,6 +129,7 @@ fn generated() -> Value {
     acquisition["reason"] =
         json!({"enum":["not_found","permission_denied","too_large","io_error","unavailable"]});
     acquisition["run_acceptance"] = json!({"const":"not_accepted"});
+    schema["$defs"]["Failure"]["properties"]["reason"] = json!({"enum":["permission_denied","allocation_busy","unsupported_entry_kind","deletion_obligation"]});
     // Additive producer fact: older valid plans may omit it, never infer observed
     // state from that absence. New producers always emit the explicit value.
     for definition in schema["$defs"].as_object_mut().unwrap().values_mut() {
@@ -284,4 +286,49 @@ fn cli_json_schema_contract_matches_explicit_projections() {
         validator.is_valid(&acquisition),
         "older failure responses remain valid"
     );
+}
+
+// Test-ID: PR-TEST-0655
+// Verifies: PR-REQ-0359
+#[test]
+fn retirement_extensions_are_optional_members_not_existing_enum_changes() {
+    let current = generated();
+    let validator = jsonschema::validator_for(&current).unwrap();
+    let mut previous = current.clone();
+    let error_properties = previous["properties"]["error"]["anyOf"][1]["properties"]
+        .as_object_mut()
+        .unwrap();
+    error_properties.remove("deletion_obligation");
+    error_properties.remove("retirement_reason");
+    previous["$defs"]["Failure"]["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("reason");
+    let previous_validator = jsonschema::validator_for(&previous).unwrap();
+    let mut response = json!({"format":"pactrun.cli","format_version":"1.0-alpha.1","command":"invoke","status":"failure","result":{"run_id":"00000000000000000000000000000001"},"error":{"kind":"operation","message":"safe guidance","reference":{"owner":"admission","code":"plan_invalidated"},"deletion_obligation":{"instance_id":"00000000000000000000000000000002","run_id":"00000000000000000000000000000001"}}});
+    assert!(validator.is_valid(&response));
+    assert!(previous_validator.is_valid(&response));
+    response["error"]
+        .as_object_mut()
+        .unwrap()
+        .remove("deletion_obligation");
+    assert!(validator.is_valid(&response));
+    response["command"] = "service-storage detached discard".into();
+    response["result"] = Value::Null;
+    response["error"]["retirement_reason"] = "unsupported_entry_kind".into();
+    assert!(validator.is_valid(&response));
+    assert!(previous_validator.is_valid(&response));
+    response["error"]["retirement_reason"] = "unreviewed_reason".into();
+    assert!(!validator.is_valid(&response));
+    let failure_schema = json!({"$ref":"#/$defs/Failure","$defs":current["$defs"]});
+    let old_failure_schema = json!({"$ref":"#/$defs/Failure","$defs":previous["$defs"]});
+    let validator = jsonschema::validator_for(&failure_schema).unwrap();
+    let old_validator = jsonschema::validator_for(&old_failure_schema).unwrap();
+    let mut failure = json!({"reference":{"owner":"service_storage","code":"allocation_unavailable"},"explanation":"safe explanation","detail":"safe detail","step":"finalize_storage","reason":"unsupported_entry_kind"});
+    assert!(validator.is_valid(&failure));
+    assert!(old_validator.is_valid(&failure));
+    failure["reason"] = "unreviewed_reason".into();
+    assert!(!validator.is_valid(&failure));
+    failure.as_object_mut().unwrap().remove("reason");
+    assert!(validator.is_valid(&failure));
 }

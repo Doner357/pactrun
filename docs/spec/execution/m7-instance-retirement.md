@@ -72,6 +72,13 @@ object identity is uncertain. Record completion so a retry cannot destroy an
 unrelated replacement. Filesystem and SQL operations are not one atomic commit.
 Instance removal and deletion success require all lifetime obligations to end.
 
+Implementation note: the current Linux finalizer traverses regular files and
+directories, rejecting other entry kinds, including Unix sockets. Pack Cleanup
+that creates such runtime artifacts needs to remove them before successful
+completion. A safe unsupported-entry diagnostic does not relax qualification
+or authorize Core to remove those artifacts. Cleanup success and successful
+physical finalization are separate facts.
+
 Qualification and removal MUST remain attached to the authorized objects despite
 namespace replacement or reparenting. Rechecking a mutable name alone is not
 sufficient. Windows uses namespace-pinned handles through the affected ancestry;
@@ -99,9 +106,11 @@ maintenance MUST preserve detached bytes.
 
 **Verification: PR-TEST-0406, PR-TEST-0408, PR-TEST-0409, PR-TEST-0413, PR-TEST-0414, PR-TEST-0416, PR-TEST-0417, PR-TEST-0420, PR-TEST-0422, PR-TEST-0423, PR-TEST-0426, PR-TEST-0428, PR-TEST-0429, PR-TEST-0430, PR-TEST-0431, PR-TEST-0432, PR-TEST-0433, PR-TEST-0434, PR-TEST-0435, PR-TEST-0436, PR-TEST-0438, PR-TEST-0439, PR-TEST-0440, PR-TEST-0441, PR-TEST-0442, PR-TEST-0443, PR-TEST-0444, PR-TEST-0445, PR-TEST-0446, PR-TEST-0447.**
 
-**Verification: PR-TEST-0642, PR-TEST-0643, PR-TEST-0645.**
+**Verification: PR-TEST-0642, PR-TEST-0643, PR-TEST-0645, PR-TEST-0652, PR-TEST-0654.**
 
 ### PR-REQ-0337 - Detached handoff and discard
+
+**Verification: PR-TEST-0652.**
 
 Detached allocations MUST remain discoverable by immutable ID after Instance
 removal. Explicit handoff may reveal their native location; ordinary diagnostics

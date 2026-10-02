@@ -10,11 +10,31 @@ use std::{
 pub(crate) const PERMISSION_DENIED: &str = "filesystem permission denied; inspect service ownership and directory access before an explicit retry; completed Cleanup must not be replayed";
 pub(crate) const BUSY: &str =
     "allocation is busy; wait for its current owner before an explicit retry";
+pub(crate) const UNSUPPORTED_ENTRY: &str = "storage contains an unsupported entry kind; inspect the deletion obligation with pactrun instance deletion show <instance-id>; Cleanup must remove its runtime sockets and other unsupported entries before finalization; completed Cleanup must not be replayed and remaining data may be incomplete";
+
+#[derive(Debug)]
+pub(crate) struct UnsupportedEntry;
+impl std::fmt::Display for UnsupportedEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(UNSUPPORTED_ENTRY)
+    }
+}
+impl std::error::Error for UnsupportedEntry {}
+
+pub(crate) fn failure_reason(message: &str) -> Option<&'static str> {
+    match message {
+        PERMISSION_DENIED => Some("permission_denied"),
+        BUSY => Some("allocation_busy"),
+        UNSUPPORTED_ENTRY => Some("unsupported_entry_kind"),
+        _ => None,
+    }
+}
 
 pub(crate) fn safe_failure_detail(message: &str) -> Option<&'static str> {
     match message {
         PERMISSION_DENIED => Some(PERMISSION_DENIED),
         BUSY => Some(BUSY),
+        UNSUPPORTED_ENTRY => Some(UNSUPPORTED_ENTRY),
         _ => None,
     }
 }
