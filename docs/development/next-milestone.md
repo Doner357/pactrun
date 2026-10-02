@@ -44,6 +44,8 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current approved work: Migration CLI diagnostics and help
 
+**State: Implemented, verified and integrated into develop; not publicly released.**
+
 On 2026-10-02 the owner authorized the
 [Migration CLI diagnostics/help milestone](./migration-cli-ux.md), including
 bounded structured diagnostics, guard guidance, readable symbolic plans and
