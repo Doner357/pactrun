@@ -183,6 +183,44 @@ struct Error<'a> {
     kind: ErrorKind,
     message: &'a str,
     reference: &'a Option<ErrorReference>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<&'a AcquisitionDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deletion_obligation: Option<&'a DeletionObligationDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retirement_reason: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct DeletionObligationDiagnostic {
+    pub(super) instance_id: String,
+    pub(super) run_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct AcquisitionDiagnostic {
+    kind: &'static str,
+    phase: &'static str,
+    instance_id: String,
+    target_revision: Revision,
+    input_id: String,
+    reason: &'static str,
+    run_acceptance: &'static str,
+}
+impl From<&crate::application::migration_input::Failure> for AcquisitionDiagnostic {
+    fn from(failure: &crate::application::migration_input::Failure) -> Self {
+        Self {
+            kind: "migration_input_acquisition",
+            phase: failure.phase.code(),
+            instance_id: failure.instance.to_string(),
+            target_revision: (&failure.target).into(),
+            input_id: failure.input.as_str().into(),
+            reason: failure.reason.code(),
+            run_acceptance: "not_accepted",
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -261,6 +299,9 @@ pub(super) fn failure<T: Serialize>(
                 kind: error.kind,
                 message: &error.message,
                 reference: &error.reference,
+                diagnostic: error.details.diagnostic.as_ref(),
+                deletion_obligation: error.details.deletion_obligation.as_ref(),
+                retirement_reason: error.details.retirement_reason,
             }),
         },
     )
@@ -427,7 +468,7 @@ pub(super) struct ArtifactResult {
     pub(super) outcome: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Revision {
     package_id: String,

@@ -42,6 +42,40 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
+## Current approved work: Alpha.3 Preview delivery
+
+**State: Release preparation and artifact qualification authorized on 2026-10-02.**
+
+The candidate product is `1.0.0-alpha.3`; the currently published product remains
+`1.0.0-alpha.2` until the separately authorized delivery completes.
+
+The [alpha.3 delivery record](./alpha3-publication.md) owns candidate qualification,
+main integration, prerelease publication, Preview package catalog and Pages
+updates. Preserve alpha.1/alpha.2 immutable assets and exact entries. No Stable
+promotion or documentation redesign is included.
+
+## Previous work: Retirement failure diagnostics and Cleanup guidance
+
+**State: Implemented, verified and integrated into develop; not publicly released.**
+
+The [retirement diagnostic milestone](./retirement-diagnostics.md) improves safe
+reason classification, unresolved deletion-obligation guidance and Pack Cleanup
+documentation. Existing retirement/recovery authority and behavior stay intact.
+No main merge, public release, Pages publication or package update is included.
+
+## Previous work: Migration CLI diagnostics and help
+
+**State: Implemented, verified and integrated into develop; not publicly released.**
+
+On 2026-10-02 the owner authorized the
+[Migration CLI diagnostics/help milestone](./migration-cli-ux.md), including
+bounded structured diagnostics, guard guidance, readable symbolic plans and
+descriptions in existing help. Machine facts must not be poorer than human
+diagnostics; additions are demand-driven and remain subject to disclosure and
+compatibility rules. Delivery ends at verified `develop` integration. Do not
+merge this work to `main`, publish Pages or issue a new Release without a separate
+instruction. The public alpha.2 artifacts remain unchanged.
+
 ## F — Documentation and Documentation Site {#next-milestone-f--documentation-and-documentation-site}
 
 **State: Implementation complete; public Preview publication followed on 2026-09-30.**

@@ -270,6 +270,188 @@ fn json_migration_discovery_plan_and_execution_use_one_complete_response() {
     assert!(ok);
     assert_eq!(shown["result"]["run"], run["result"]["inspection"]["run"]);
 }
+// Test-ID: PR-TEST-0646
+// Verifies: PR-REQ-0310, PR-REQ-0315, PR-REQ-0359, PR-REQ-0360
+#[test]
+fn acquisition_diagnostics_are_typed_redacted_and_never_accept_a_run() {
+    let f = setup(false);
+    let before = successful(&f.root, &["instance", "show", "demo"]);
+    let missing = f.source.join("private-host-path-and-secret-sentinel");
+    let digest = f.b.rsplit('/').next().unwrap();
+    let input = format!("{digest}/config={}", missing.display());
+    let base = [
+        "instance",
+        "migrate",
+        "demo",
+        "--to",
+        &f.b,
+        "--input-file",
+        &input,
+    ];
+    let human = command(&f.root, &base);
+    assert_eq!(human.status.code(), Some(1));
+    let text = String::from_utf8(human.stderr).unwrap();
+    for expected in [
+        digest,
+        "config",
+        "not_found",
+        "open_source",
+        "No Run was accepted",
+    ] {
+        assert!(text.contains(expected), "{text}");
+    }
+    assert!(!text.contains("private-host-path-and-secret-sentinel"));
+    for format in ["json", "jsonl"] {
+        let mut args = vec!["--format", format];
+        args.extend(base);
+        let output = command(&f.root, &args);
+        assert_eq!(output.status.code(), Some(1));
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(!text.contains("private-host-path-and-secret-sentinel"));
+        assert!(output.stderr.is_empty());
+        let value: serde_json::Value = if format == "json" {
+            serde_json::from_str(&text).unwrap()
+        } else {
+            let records: Vec<serde_json::Value> = text
+                .lines()
+                .map(|l| serde_json::from_str(l).unwrap())
+                .collect();
+            assert!(!records.iter().any(|r| r["type"] == "run_accepted"));
+            records.last().unwrap()["response"].clone()
+        };
+        assert_eq!(value["status"], "failure");
+        assert!(value["result"].is_null());
+        let diagnostic = &value["error"]["diagnostic"];
+        assert_eq!(diagnostic["kind"], "migration_input_acquisition");
+        assert_eq!(diagnostic["target_revision"]["content_digest"], digest);
+        assert_eq!(
+            diagnostic["target_revision"]["package_id"],
+            "00000000000000000000000000000077"
+        );
+        assert_eq!(diagnostic["input_id"], "config");
+        assert_eq!(diagnostic["phase"], "open_source");
+        assert_eq!(diagnostic["reason"], "not_found");
+        assert_eq!(diagnostic["run_acceptance"], "not_accepted");
+        assert!(value["error"]["reference"].is_null());
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../docs/spec/contracts/cli-machine.schema.json"
+        ))
+        .unwrap();
+        assert!(jsonschema::validator_for(&schema).unwrap().is_valid(&value));
+    }
+    assert_no_execution(&f.root, &before);
+    let plan = command(
+        &f.root,
+        &[
+            "--format",
+            "json",
+            "instance",
+            "migrate",
+            "demo",
+            "--to",
+            &f.b,
+            "--input-file",
+            &input,
+            "--plan",
+        ],
+    );
+    assert!(plan.status.success());
+    let mut value: serde_json::Value = serde_json::from_slice(&plan.stdout).unwrap();
+    assert_eq!(
+        value["result"]["operator_input_acquisition"],
+        "not_performed"
+    );
+    assert_eq!(value["result"]["preview"], "not_admitted");
+    value["result"]
+        .as_object_mut()
+        .unwrap()
+        .remove("operator_input_acquisition");
+    let schema: serde_json::Value = serde_json::from_str(include_str!(
+        "../docs/spec/contracts/cli-machine.schema.json"
+    ))
+    .unwrap();
+    assert!(
+        jsonschema::validator_for(&schema).unwrap().is_valid(&value),
+        "old plans remain valid"
+    );
+    assert_no_execution(&f.root, &before);
+}
+
+// Test-ID: PR-TEST-0647
+// Verifies: PR-REQ-0315, PR-REQ-0359
+#[cfg(target_os = "linux")]
+#[test]
+fn acquisition_distinguishes_open_permissions_and_staging_read_failure() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = setup(false);
+    let before = successful(&f.root, &["instance", "show", "demo"]);
+    let private = f.source.join("private-source-sentinel");
+    fs::write(&private, b"secret-value-sentinel").unwrap();
+    fs::set_permissions(&private, fs::Permissions::from_mode(0o000)).unwrap();
+    let input = format!(
+        "{}/config={}",
+        f.b.rsplit('/').next().unwrap(),
+        private.display()
+    );
+    let output = command(
+        &f.root,
+        &[
+            "--format",
+            "json",
+            "instance",
+            "migrate",
+            "demo",
+            "--to",
+            &f.b,
+            "--input-file",
+            &input,
+        ],
+    );
+    fs::set_permissions(&private, fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "permission test must run unprivileged"
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["error"]["diagnostic"]["reason"], "permission_denied");
+    assert_eq!(value["error"]["diagnostic"]["phase"], "open_source");
+    let input = format!(
+        "{}/config={}",
+        f.b.rsplit('/').next().unwrap(),
+        f.source.display()
+    );
+    let staged = command(
+        &f.root,
+        &[
+            "--format",
+            "json",
+            "instance",
+            "migrate",
+            "demo",
+            "--to",
+            &f.b,
+            "--input-file",
+            &input,
+        ],
+    );
+    assert_eq!(staged.status.code(), Some(1));
+    let value: serde_json::Value = serde_json::from_slice(&staged.stdout).unwrap();
+    assert_eq!(value["error"]["diagnostic"]["phase"], "stage_input");
+    assert_eq!(value["error"]["diagnostic"]["reason"], "io_error");
+    for bytes in [&output.stdout, &staged.stdout] {
+        let text = String::from_utf8_lossy(bytes);
+        for hidden in [
+            "private-source-sentinel",
+            "secret-value-sentinel",
+            f.source.to_str().unwrap(),
+        ] {
+            assert!(!text.contains(hidden));
+        }
+    }
+    assert_no_execution(&f.root, &before);
+}
+
 fn ids(text: &str) -> Vec<String> {
     text.lines()
         .filter_map(|line| line.strip_prefix("path_id: ").map(str::to_owned))

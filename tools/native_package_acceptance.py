@@ -13,9 +13,13 @@ parser.add_argument('--xtask', type=Path, required=True)
 parser.add_argument('--parts', type=Path, nargs=4, required=True)
 parser.add_argument('--allow-user-path-change', action='store_true')
 parser.add_argument('--public-source', help='Verify actual published acquisition instead of the isolated upgrade fixture')
-parser.add_argument('--public-version', choices=['1.0.0-alpha.1','1.0.0-alpha.2'], default='1.0.0-alpha.1',
-                    help='Expected moving package version for public acquisition; exact test package stays alpha.1')
+parser.add_argument('--versions', nargs=2, default=['1.0.0-alpha.1','1.0.0-alpha.2'],
+                    metavar=('BASELINE', 'CANDIDATE'), help='Explicit baseline and candidate artifact versions')
+parser.add_argument('--public-version', default='1.0.0-alpha.1',
+                    help='Expected moving package version for public acquisition; exact test package stays on the baseline')
 args = parser.parse_args()
+if len(set(args.versions)) != 2 or (args.public_source and args.public_version not in args.versions):
+    parser.error('Choose two distinct artifact versions and a matching public version')
 WIN = os.name == 'nt'
 if WIN and not args.allow_user_path_change:
     parser.error('Scoop needs explicit authorization for a temporary user PATH entry')
@@ -85,10 +89,11 @@ for part in args.parts:
             shutil.copyfile(file,ROOT/'assets'/name)
         artifact['url']=URL+'/'+name
         release['artifacts'].append(artifact)
-assert sorted(RELEASES)==['1.0.0-alpha.1','1.0.0-alpha.2']
-VERSIONS=sorted(RELEASES)
+assert set(RELEASES)==set(args.versions)
+VERSIONS=list(args.versions)
+BASELINE_EXACT=VERSIONS[0].replace('.', '-').replace('+', '-')
 PUBLISHER=ROOT/'source'
-PACKAGES={'normal':'pactrun-preview','test':'pactrun-test-exact-1-0-0-alpha-1'}
+PACKAGES={'normal':'pactrun-preview','test':'pactrun-test-exact-'+BASELINE_EXACT}
 def publish(versions):
     source=ROOT/'releases.json'
     source.write_text(json.dumps([RELEASES[v] for v in versions]),encoding='utf-8')
@@ -272,7 +277,7 @@ def scenarios():
     stable=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun'
     code,_=run(PM+['install',stable],'stable-unavailable',required=False)
     check('stable cannot fall back to alpha',code!=0 and observed()==initial)
-    conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-1-0-0-alpha-1'
+    conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-'+BASELINE_EXACT
     code,_=run(PM+['install',conflict],'command-conflict',required=False)
     check('second package cannot take over the command',code!=0 and observed()==initial)
     if args.public_source:
@@ -302,7 +307,7 @@ def scenarios():
     pm('unhold' if WIN else 'unpin')
     live(lambda:pm('update' if WIN else 'upgrade',required=False),'upgrade')
     if observed()!=VERSIONS[1]: pm('update' if WIN else 'upgrade')
-    check('real alpha.2 upgrade completes',observed()==VERSIONS[1])
+    check('real candidate upgrade completes',observed()==VERSIONS[1])
     run([binary(),'instance','show','normal'],'existing-instance-after-upgrade')
     check('upgrade preserves existing identities and canonical bytes',immutable_state()==before)
     run([binary(),'pack','install',DATA/'pack'],'pack-origin-independent-after-upgrade')
@@ -314,7 +319,7 @@ def scenarios():
     check('ordinary update never downgrades',observed()==VERSIONS[1])
     live(lambda:pm('uninstall',required=False),'explicit-switch')
     if binary().exists(): pm('uninstall')
-    PACKAGES['normal']='pactrun-exact-1-0-0-alpha-1'
+    PACKAGES['normal']='pactrun-exact-'+BASELINE_EXACT
     pm('install')
     check('explicit native reinstall can select older exact',observed()==VERSIONS[0])
     check('explicit switch does not rewrite object identity',immutable_state()==before)

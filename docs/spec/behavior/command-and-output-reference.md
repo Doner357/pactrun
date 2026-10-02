@@ -215,6 +215,14 @@ M2 has no `--storage-root` spelling or platform default. `pack generate-id`,
 root `--help`, and root `--version` do not need the variable; the variable is
 process configuration and is not an Input acquisition channel.
 
+Root help MUST describe each listed public command form and the important listed
+options in concise task-facing language, including destructive and explicit
+authorization boundaries. Human and machine help MUST expose the same complete
+documentation text (machine `result.usage`), without opening storage or launching
+a Hook. Descriptions do not introduce new command spellings or options.
+
+**Verification: PR-TEST-0649.**
+
 These operations are not a stable public Rust API. In particular,
 `InstallPackSource(..., explicit_local_metadata)` is an intentional internal
 orchestration capability for a typed M1-D batch. Source YAML cannot carry local

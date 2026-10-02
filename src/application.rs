@@ -3,6 +3,7 @@
 mod catalog;
 mod deletions;
 mod installation;
+pub(crate) mod migration_input;
 mod migrations;
 mod service_storage;
 mod snapshots;
@@ -78,6 +79,7 @@ pub(crate) enum ApplicationError {
     Authoring(AuthoringError),
     SourceAcquisition(SourceAcquisitionError),
     Staging(StagingError),
+    MigrationInputAcquisition(Box<migration_input::Failure>),
     Revision(RevisionError),
     RevisionContent(crate::revision_content::RevisionContentError),
     Persistence(PersistenceError),
@@ -112,6 +114,7 @@ impl fmt::Display for ApplicationError {
             Self::Authoring(source) => write!(formatter, "Pack source: {source}"),
             Self::SourceAcquisition(source) => write!(formatter, "Pack source: {source}"),
             Self::Staging(source) => write!(formatter, "staging: {source}"),
+            Self::MigrationInputAcquisition(failure) => failure.fmt(formatter),
             Self::Revision(source) => write!(formatter, "Revision candidate: {source}"),
             Self::RevisionContent(source) => write!(formatter, "Revision candidate: {source}"),
             Self::Persistence(source) => write!(formatter, "persistence: {source}"),
@@ -140,6 +143,7 @@ impl std::error::Error for ApplicationError {
             Self::Authoring(source) => Some(source),
             Self::SourceAcquisition(source) => Some(source),
             Self::Staging(source) => Some(source),
+            Self::MigrationInputAcquisition(failure) => Some(failure.as_ref()),
             Self::Revision(source) => Some(source),
             Self::RevisionContent(source) => Some(source),
             Self::Persistence(source) => Some(source),

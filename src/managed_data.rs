@@ -72,7 +72,7 @@ impl ExecutionDirectory {
     pub(crate) fn cleanup(&self) -> Result<(), StagingError> {
         #[cfg(test)]
         if CLEANUP_FAILURES
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                 remaining.checked_sub(1)
             })
             .is_ok()

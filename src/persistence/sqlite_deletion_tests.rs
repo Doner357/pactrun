@@ -1,6 +1,30 @@
 use super::*;
 use crate::persistence::UnconditionalAcceptance;
 
+// Test-ID: PR-TEST-0653
+// Verifies: PR-REQ-0359
+#[test]
+fn unsupported_entry_diagnostic_requires_a_typed_core_marker() {
+    let typed = std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        crate::retirement_fs::UnsupportedEntry,
+    );
+    assert!(matches!(
+        retirement_io_error(typed, "safe fallback"),
+        PersistenceError::ServiceStorageUnavailable(crate::retirement_fs::UNSUPPORTED_ENTRY)
+    ));
+    for text in [
+        "private-path secret-sentinel",
+        crate::retirement_fs::UNSUPPORTED_ENTRY,
+    ] {
+        let untrusted = std::io::Error::new(std::io::ErrorKind::Unsupported, text);
+        assert!(matches!(
+            retirement_io_error(untrusted, "safe fallback"),
+            PersistenceError::ServiceStorageUnavailable("safe fallback")
+        ));
+    }
+}
+
 fn fixture() -> (tempfile::TempDir, PactrunPersistence, InstanceView) {
     fixture_with_cleanup(false)
 }

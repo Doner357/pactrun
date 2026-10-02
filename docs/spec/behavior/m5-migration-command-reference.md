@@ -143,7 +143,16 @@ read-only success MUST NOT be presented as successful Migration execution.
 Operator file inputs and invocation limits follow PR-REQ-0315 and PR-REQ-0316;
 plan output is symbolic and MUST NOT acquire those files.
 
-**Verification: PR-TEST-0290, PR-TEST-0291, PR-TEST-0292, PR-TEST-0318.**
+Human previews MUST use task-facing view/role/resource/presence terms rather than
+implementation Debug wrappers. Where applicable they MUST explicitly state that
+operator files are unacquired and live service requirements unobserved. Consuming a binding
+MUST NOT be presented as deleting service bytes. Machine plans retain per-service
+`live_observation: not_performed` and additionally emit the additive
+`operator_input_acquisition: not_performed` field. Older plans may omit that field;
+absence does not mean acquisition succeeded. No file stat/read or service probe
+is authorized to enrich a symbolic plan.
+
+**Verification: PR-TEST-0290, PR-TEST-0291, PR-TEST-0292, PR-TEST-0318, PR-TEST-0646, PR-TEST-0651.**
 
 ### PR-REQ-0314 - Declarative execution CLI and retained ownership
 
@@ -174,7 +183,7 @@ Machine presentation uses the [CLI machine contract](../contracts/cli-machine-in
 No daemon, generic DAG executor or public Rust API is added.
 
 **Verification: PR-TEST-0305, PR-TEST-0307, PR-TEST-0308, PR-TEST-0310,
-PR-TEST-0311, PR-TEST-0316.**
+PR-TEST-0311, PR-TEST-0316, PR-TEST-0648.**
 
 ### PR-REQ-0315 - Target-qualified detached operator file acquisition
 
@@ -204,4 +213,10 @@ rules. File paths, payload bytes and value-derived digests MUST NOT appear in
 plans or structural Run inspection. Operator acquisition creates no separate
 retained store and grants no Hook output authority.
 
-**Verification: PR-TEST-0312, PR-TEST-0318, PR-TEST-0319, PR-TEST-0320, PR-TEST-0324.**
+Acquisition failures with known compiled context MUST preserve safe target/Input
+and phase/reason facts for the CLI diagnostic projection in PR-REQ-0359. This
+does not change preflight ordering, the bounded acquisition policy or the
+requirement to fail before Run acceptance. Never infer an unavailable reason by
+parsing arbitrary OS messages or payload data.
+
+**Verification: PR-TEST-0312, PR-TEST-0318, PR-TEST-0319, PR-TEST-0320, PR-TEST-0324, PR-TEST-0646, PR-TEST-0647, PR-TEST-0650.**

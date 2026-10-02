@@ -84,8 +84,10 @@ Pack, Core, Snapshot and Hook versions.
 Failure projections expose nullable `detail`. The two Core-owned initialization
 errors defined by PR-REQ-0361/0362 and `service_storage:allocation_unavailable`
 MAY provide an exactly allowlisted, safely classified Core-generated reason.
-For allocation unavailability, only filesystem permission denial and allocation
-contention are eligible. Arbitrary stored messages, native paths, service content
+For allocation unavailability, filesystem permission denial, allocation
+contention and positively classified unsupported entry kinds are eligible.
+The last classification MUST NOT be inferred from a generic OS error or an old
+unclassified failure. Arbitrary stored messages, native paths, service content
 and raw OS error strings MUST remain withheld. An unrecognized stored reason
 MUST yield null; matching a prefix or appending arbitrary text is insufficient.
 Historical identities and steps MUST NOT be rewritten. Detail is explanatory,
@@ -93,7 +95,58 @@ not a new error identity or an assertion that retry, Cleanup replay, permission
 repair or privilege escalation is authorized. Human and machine inspection MUST
 apply the same disclosure boundary, independently of Hook-text retention.
 
-**Verification: PR-TEST-0572, PR-TEST-0644, PR-TEST-0645.**
+Failure projections MAY additionally contain `reason`: `permission_denied`,
+`allocation_busy`, or `unsupported_entry_kind` for the exact safe allocation
+reasons, or `deletion_obligation` for the exactly recognized Core-owned
+`admission:plan_invalidated` deletion-obligation refusal. New producers MUST
+provide the applicable reason with these recognized facts. Unknown/older reasons
+MUST omit it, not imply that the condition is absent. The latter refusal MAY
+provide safe `detail` explaining its historical admission boundary, independently
+of the current recovery guard. Neither a historical refusal nor this projection
+asserts that an obligation is still active; inspect current deletion evidence.
+
+When a CLI error carries a typed admission refusal identifying the obligation
+and Instance (rather than returning an operation inspection result),
+`error` MUST additionally provide optional `deletion_obligation` with full
+`instance_id` and the refused accepted `run_id`. This Run is not necessarily the
+deletion attempt Run; obtain that from `instance deletion show`. Existing partial
+Run results, error identities and acceptance boundaries remain unchanged. A
+Migration returning an inspection result uses its Run's failure reason and
+existing full Instance/Run identities instead of duplicating that result. A
+direct retirement storage error (for example detached discard) MUST provide
+optional `error.retirement_reason` when the safe allocation reason is known,
+using the three allocation reason values above. Unknown reasons omit it.
+These are additional object members; they do not extend the existing
+`error.diagnostic.kind` domain or change any existing enum/type/meaning.
+
+**Verification: PR-TEST-0572, PR-TEST-0644, PR-TEST-0645, PR-TEST-0652, PR-TEST-0653, PR-TEST-0654, PR-TEST-0655.**
+
+For Migration operator Input acquisition failures before Run acceptance, `error`
+MAY additionally contain `diagnostic`. New producers MUST provide it when the
+compiled target/Input context and acquisition failure are known. This explicit
+projection contains `kind: migration_input_acquisition`, complete `instance_id`,
+`target_revision` (Package ID and Revision digest), `input_id`, `phase`
+(`open_source` or `stage_input`), `reason` (`not_found`, `permission_denied`,
+`too_large`, `io_error` or `unavailable`), and `run_acceptance: not_accepted`.
+The existing kind/message/reference fields retain their meanings; these reason
+categories are not new Pactrun error-owner/code identities or retry authority.
+Unclassified I/O remains `io_error`; unavailable staging reasons must not expose
+arbitrary internal text. IDs may identify Secret Inputs but no value, host path,
+actual byte length, payload digest or raw OS message may be disclosed. Target
+Revision digests identify Pack code, not acquired Input values.
+
+The diagnostic is omitted for other failures and older responses may omit it.
+Absence does not imply no Run, safe retry, or a particular reason. A guard refusal
+may instead contain an accepted Run and existing inspection facts. Consumers MUST
+use the applicable typed result, current recovery guard and last committed
+boundary rather than assuming a common result.run shape or parsing prose.
+Human diagnostic facts MUST have equivalent machine facts; complete machine IDs
+and applicable states MUST NOT be reduced to human display abbreviations.
+Public additions are demand-driven, not dumps of internal state. Human advice
+does not add operation authority; neither format may silently repair a service,
+clear a guard, or turn unknown state into a negative assertion.
+
+**Verification: PR-TEST-0646, PR-TEST-0647, PR-TEST-0648, PR-TEST-0649, PR-TEST-0650, PR-TEST-0651.**
 
 ### PR-REQ-0363 - Capability presentation at inspection boundaries
 
@@ -122,6 +175,8 @@ existing raw inspection interface.
 
 ### PR-REQ-0360 - Payload and terminal preservation
 
+**Verification: PR-TEST-0652.**
+
 Presentation MUST NOT transform raw Input/Artifact bytes, transport archives or
 Hook terminal streams. A raw Input export to stdout MUST NOT gain a JSON success
 envelope; its Pactrun-owned errors use stderr in the selected format. Other
@@ -137,7 +192,7 @@ begun, an implementation MUST NOT append a replacement envelope to damaged outpu
 Broken pipes and forced process termination cannot guarantee a complete response.
 Formatting MUST NOT introduce additional sensitive disclosure or authorization.
 
-**Verification: PR-TEST-0555, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0561, PR-TEST-0562, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565, PR-TEST-0566, PR-TEST-0567, PR-TEST-0568, PR-TEST-0569.**
+**Verification: PR-TEST-0555, PR-TEST-0558, PR-TEST-0559, PR-TEST-0560, PR-TEST-0561, PR-TEST-0562, PR-TEST-0563, PR-TEST-0564, PR-TEST-0565, PR-TEST-0566, PR-TEST-0567, PR-TEST-0568, PR-TEST-0569, PR-TEST-0646, PR-TEST-0649.**
 
 ## Baseline representation rules
 
@@ -152,7 +207,7 @@ to ordinary output. Diagnostic inspection retains technical context and real gap
 Author content retains its meaning; terminal-control characters remain escaped in
 Pactrun-rendered text. Raw Hook terminal streams retain their channel contract.
 
-**Verification: PR-TEST-0578.**
+**Verification: PR-TEST-0578, PR-TEST-0651.**
 
 ### PR-REQ-0365 - Complete public machine projections
 

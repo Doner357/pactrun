@@ -7,6 +7,46 @@ use serde::Serialize;
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-ID: PR-TEST-0654
+    // Verifies: PR-REQ-0359, PR-REQ-0336
+    #[test]
+    fn deletion_obligation_is_safe_historical_evidence_not_current_state() {
+        let instance = crate::domain::InstanceId::from_bytes([31; 16]);
+        let run = crate::domain::RunId::from_bytes([32; 16]);
+        let refusal = crate::domain::AdmissionRefusal::DeletionObligation(instance);
+        let mut record = refusal.primary_failure().failure;
+        assert_eq!(record.message, crate::domain::DELETION_OBLIGATION_MESSAGE);
+        assert_eq!(
+            Failure::new(&record, None).reason,
+            Some("deletion_obligation")
+        );
+        assert_eq!(
+            Failure::new(&record, None).detail.as_deref(),
+            Some(DELETION_OBLIGATION_GUIDANCE)
+        );
+        record.message.push_str(" private-path secret-sentinel");
+        assert!(Failure::new(&record, None).reason.is_none());
+        assert!(Failure::new(&record, None).detail.is_none());
+        let make_error = || {
+            ApplicationError::Execution(ExecutorError::Refused {
+                run,
+                refusal: refusal.clone(),
+            })
+        };
+        for error in [app_error(make_error()), snapshots::safe_error(make_error())] {
+            assert!(error.message.contains(DELETION_OBLIGATION_GUIDANCE));
+            let facts = error.details.deletion_obligation.unwrap();
+            assert_eq!(facts.instance_id, instance.to_string());
+            assert_eq!(facts.run_id, run.to_string());
+            assert_eq!(error.reference.unwrap().code, "plan_invalidated");
+            assert!(error.details.diagnostic.is_none());
+        }
+        let unrelated = app_error(ApplicationError::Execution(ExecutorError::Refused {
+            run,
+            refusal: crate::domain::AdmissionRefusal::PlanInvalidated("other cause".into()),
+        }));
+        assert!(unrelated.details.deletion_obligation.is_none());
+    }
     // Test-ID: PR-TEST-0644
     // Verifies: PR-REQ-0359
     #[test]
@@ -14,6 +54,7 @@ mod tests {
         for safe in [
             crate::retirement_fs::PERMISSION_DENIED,
             crate::retirement_fs::BUSY,
+            crate::retirement_fs::UNSUPPORTED_ENTRY,
         ] {
             let mut record = crate::domain::RunFailureRecord {
                 error: crate::domain::PactrunErrorRef::new(
@@ -24,8 +65,13 @@ mod tests {
                 message: safe.into(),
             };
             assert_eq!(Failure::new(&record, None).detail.as_deref(), Some(safe));
+            assert_eq!(
+                Failure::new(&record, None).reason,
+                crate::retirement_fs::failure_reason(safe)
+            );
             record.message.push_str(" /private/service secret-sentinel");
             assert!(Failure::new(&record, None).detail.is_none());
+            assert!(Failure::new(&record, None).reason.is_none());
             record.message = safe.into();
             record.error =
                 crate::domain::PactrunErrorRef::new("execution", "launch_failed").unwrap();
@@ -113,6 +159,8 @@ pub(super) struct Failure {
     reference: presentation::ErrorReference,
     explanation: &'static str,
     detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<&'static str>,
     step: Option<String>,
 }
 
@@ -128,6 +176,13 @@ impl Failure {
             },
             explanation: failure_explanation(&record.error),
             detail: failure_detail(record).map(str::to_owned),
+            reason: failure_detail(record).and_then(|detail| {
+                if detail == DELETION_OBLIGATION_GUIDANCE {
+                    Some("deletion_obligation")
+                } else {
+                    crate::retirement_fs::failure_reason(detail)
+                }
+            }),
             step: step.map(format_failed_step),
         }
     }

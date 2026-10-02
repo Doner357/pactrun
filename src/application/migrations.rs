@@ -28,7 +28,20 @@ impl PactrunApplication {
             if cancellation.is_requested() {
                 return Err(crate::executor::ExecutorError::CancelledBeforeAcceptance.into());
             }
-            staged.insert(key, self.staging()?.stage_managed_input(&mut source)?);
+            let bytes = self
+                .staging()?
+                .stage_managed_input(&mut source)
+                .map_err(|error| {
+                    super::ApplicationError::MigrationInputAcquisition(Box::new(
+                        super::migration_input::Failure::new(
+                            &plan,
+                            &key,
+                            super::migration_input::Phase::StageInput,
+                            super::migration_input::Reason::from_staging(&error),
+                        ),
+                    ))
+                })?;
+            staged.insert(key, bytes);
         }
         let lock = self.mutation_lock(plan.instance())?;
         let _guard = lock

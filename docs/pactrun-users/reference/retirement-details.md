@@ -70,6 +70,13 @@ object identity is uncertain. Record completion so a retry cannot destroy an
 unrelated replacement. Filesystem and SQL operations are not one atomic commit.
 Instance removal and deletion success require all lifetime obligations to end.
 
+Implementation note: the current Linux finalizer traverses regular files and
+directories, rejecting other entry kinds, including Unix sockets. Pack Cleanup
+that creates such runtime artifacts needs to remove them before successful
+completion. A safe unsupported-entry diagnostic does not relax qualification
+or authorize Core to remove those artifacts. Cleanup success and successful
+physical finalization are separate facts.
+
 Qualification and removal MUST remain attached to the authorized objects despite
 namespace replacement or reparenting. Rechecking a mutable name alone is not
 sufficient. Windows uses namespace-pinned handles through the affected ancestry;

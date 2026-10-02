@@ -772,7 +772,7 @@ impl Book {
                 let child = open_at(&file, &name, OFlags::PATH)?;
                 let kind = FileType::from_raw_mode(fstat(&child)?.st_mode);
                 if !matches!(kind, FileType::Directory | FileType::RegularFile) {
-                    return Err(invalid());
+                    return Err(io::Error::new(io::ErrorKind::Unsupported, UnsupportedEntry));
                 }
                 let child_id = token()?;
                 self.save(

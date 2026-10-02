@@ -224,17 +224,14 @@ pub(super) fn validate_collection_catalog(db: &Connection) -> Result<(), Persist
             })?),
         )?;
     }
-    for sql in [
-        "SELECT EXISTS(SELECT 1 FROM managed_input_payloads p WHERE (content_digest IS NOT NULL AND EXISTS(SELECT 1 FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)) OR (content_digest IS NULL AND byte_length != (SELECT coalesce(sum(length(chunk_bytes)),0) FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)))",
-    ] {
-        if db
-            .query_row::<bool, _, _>(sql, [], |r| r.get(0))
-            .map_err(|e| PersistenceError::sqlite("validate immutable data representation", e))?
-        {
-            return Err(PersistenceError::CorruptSnapshot(
-                "unreliable immutable data reference catalog",
-            ));
-        }
+    let sql = "SELECT EXISTS(SELECT 1 FROM managed_input_payloads p WHERE (content_digest IS NOT NULL AND EXISTS(SELECT 1 FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)) OR (content_digest IS NULL AND byte_length != (SELECT coalesce(sum(length(chunk_bytes)),0) FROM managed_input_payload_chunks c WHERE c.instance_id=p.instance_id AND c.payload_id=p.payload_id)))";
+    if db
+        .query_row::<bool, _, _>(sql, [], |r| r.get(0))
+        .map_err(|e| PersistenceError::sqlite("validate immutable data representation", e))?
+    {
+        return Err(PersistenceError::CorruptSnapshot(
+            "unreliable immutable data reference catalog",
+        ));
     }
     Ok(())
 }
