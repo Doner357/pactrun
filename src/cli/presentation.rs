@@ -185,6 +185,17 @@ struct Error<'a> {
     reference: &'a Option<ErrorReference>,
     #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<&'a AcquisitionDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deletion_obligation: Option<&'a DeletionObligationDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retirement_reason: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct DeletionObligationDiagnostic {
+    pub(super) instance_id: String,
+    pub(super) run_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -288,7 +299,9 @@ pub(super) fn failure<T: Serialize>(
                 kind: error.kind,
                 message: &error.message,
                 reference: &error.reference,
-                diagnostic: error.diagnostic.as_deref(),
+                diagnostic: error.details.diagnostic.as_ref(),
+                deletion_obligation: error.details.deletion_obligation.as_ref(),
+                retirement_reason: error.details.retirement_reason,
             }),
         },
     )

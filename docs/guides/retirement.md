@@ -32,6 +32,45 @@ Manual completion confirmation is an explicit assertion of completed Cleanup.
 Use it only after verifying the required external work, with the matching
 attempt and state token shown by inspection.
 
+## When Cleanup succeeds but deletion fails
+
+Cleanup success only records completion of the Pack's service work. Pactrun must
+also finish reclaiming owned storage before retirement succeeds. For example,
+a service can leave a Unix admin socket behind after its container stops; the
+current Linux finalizer refuses entries other than regular files and directories.
+This is different from a file-permission failure.
+
+In the unreleased develop diagnostics, `allocation_unavailable` can include the
+safe reason `unsupported_entry_kind`. Published alpha.2 may instead report
+`detail: null`; do not infer a socket solely from that older generic error.
+No filename, native path or file content is disclosed by this reason.
+
+If an operation reports an unresolved deletion obligation, inspect:
+
+```text
+pactrun instance deletion show <instance-id>
+pactrun run show <run-id>
+```
+
+No recovery guard does **not** mean there is no deletion obligation. Recovery
+override does not bypass that obligation. The refused operation may have an
+accepted Run without a Hook; its Run ID is not the original deletion attempt ID.
+In newer machine output, `error.deletion_obligation` identifies the refused Run
+and Instance; deletion inspection identifies the actual attempt and current phase.
+
+Do not automatically retry, replay completed Cleanup, change permissions, or
+assume migration can restore the service. Finalization may already have removed
+files or moved surviving data. Fixing a Pack by migration **before retirement**
+is different from handling an Instance that has already been partially deleted.
+An explicit finalization-only retry does not replay completed Cleanup.
+
+If you deliberately choose Abandon, it preserves only remaining data. Handoff
+does not recreate deleted bytes or promise a complete, startable service tree.
+Use only the explicit handoff locations for any separately authorized external
+inspection/repair, never guessed pre-deletion paths. Detached discard is another
+explicit destructive operation and may encounter the same blocker; newer machine
+output reports its safe classification in `error.retirement_reason` when known.
+
 ## Abandon and retain service data
 
 Before choosing abandonment as recovery from a failed finalization, read the

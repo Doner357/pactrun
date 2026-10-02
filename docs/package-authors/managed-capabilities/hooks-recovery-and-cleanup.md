@@ -55,6 +55,42 @@ Test normal completion, failure, cancellation, and interrupted execution against
 disposable resources. Cleanup confirmation by an operator is an assertion of
 completed work, not an automatic second attempt.
 
+### Runtime artifacts are part of the promised Cleanup lifecycle
+
+Stopping a daemon or removing its container may leave Unix sockets or FIFOs in
+ServiceStorage. Current Linux finalization accepts regular files and directories;
+it refuses other entry kinds rather than treating them as ordinary files. Do not
+assume caller ownership alone makes every object reclaimable by the finalizer.
+Where your Pack creates such artifacts, its Cleanup must handle them before
+reporting successful completion. This does not require Packs that do not need
+Cleanup, Snapshot or Migration to declare those optional capabilities.
+
+For a Pack-owned Unix admin socket, use this controlled lifecycle test:
+
+1. Start the service against disposable ServiceStorage; verify its admin socket.
+2. Stop it and wait for the service to exit. Check whether the socket remains.
+3. Have Cleanup qualify the exact expected socket: owned scope, expected type
+   and ownership, no symlink traversal, and no live listener. Reject ambiguous
+   or unexpected objects rather than recursively deleting an arbitrary path.
+4. Remove only that qualified stale socket, then report Cleanup completion.
+5. Verify **both** successful Hook completion and successful overall deletion.
+   Also test an active socket, wrong object type and interrupted Cleanup.
+
+A connection refusal alone is not an atomic ownership/deletion guarantee.
+A check followed by pathname unlink can race with replacement; a cooperative
+test fixture is not proof of safety against malicious concurrent writers. Choose
+an isolation/coordination strategy appropriate to the actual service and retain
+Pactrun's storage authority boundary. Do not copy an arbitrary privileged cleanup
+helper or expose the full admin API merely to simplify retirement.
+
+The alpha.2 Caddy evaluation left a socket after successful Cleanup; finalization
+then failed. A new Pack Revision that cleaned its stale socket passed normal
+retirement in a fresh controlled case. Fixing a still-managed Instance by
+Migration **before** retirement is not a repair recipe for an already partially
+deleted Instance. Completed Cleanup is not replayed on finalization-only retry.
+Abandon/handoff preserves surviving bytes, not a complete service backup. See
+[retirement guidance](../../guides/retirement.md#when-cleanup-succeeds-but-deletion-fails).
+
 ## Direct protocol implementations
 
 Implement framing, Session startup, readiness, requests, completion, cancellation,

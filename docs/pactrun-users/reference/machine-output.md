@@ -74,14 +74,40 @@ Pack, Core, Snapshot and Hook versions.
 Failure projections expose nullable `detail`. The two Core-owned initialization
 errors defined by PR-REQ-0361/0362 and `service_storage:allocation_unavailable`
 MAY provide an exactly allowlisted, safely classified Core-generated reason.
-For allocation unavailability, only filesystem permission denial and allocation
-contention are eligible. Arbitrary stored messages, native paths, service content
+For allocation unavailability, filesystem permission denial, allocation
+contention and positively classified unsupported entry kinds are eligible.
+The last classification MUST NOT be inferred from a generic OS error or an old
+unclassified failure. Arbitrary stored messages, native paths, service content
 and raw OS error strings MUST remain withheld. An unrecognized stored reason
 MUST yield null; matching a prefix or appending arbitrary text is insufficient.
 Historical identities and steps MUST NOT be rewritten. Detail is explanatory,
 not a new error identity or an assertion that retry, Cleanup replay, permission
 repair or privilege escalation is authorized. Human and machine inspection MUST
 apply the same disclosure boundary, independently of Hook-text retention.
+
+Failure projections MAY additionally contain `reason`: `permission_denied`,
+`allocation_busy`, or `unsupported_entry_kind` for the exact safe allocation
+reasons, or `deletion_obligation` for the exactly recognized Core-owned
+`admission:plan_invalidated` deletion-obligation refusal. New producers MUST
+provide the applicable reason with these recognized facts. Unknown/older reasons
+MUST omit it, not imply that the condition is absent. The latter refusal MAY
+provide safe `detail` explaining its historical admission boundary, independently
+of the current recovery guard. Neither a historical refusal nor this projection
+asserts that an obligation is still active; inspect current deletion evidence.
+
+When a CLI error carries a typed admission refusal identifying the obligation
+and Instance (rather than returning an operation inspection result),
+`error` MUST additionally provide optional `deletion_obligation` with full
+`instance_id` and the refused accepted `run_id`. This Run is not necessarily the
+deletion attempt Run; obtain that from `instance deletion show`. Existing partial
+Run results, error identities and acceptance boundaries remain unchanged. A
+Migration returning an inspection result uses its Run's failure reason and
+existing full Instance/Run identities instead of duplicating that result. A
+direct retirement storage error (for example detached discard) MUST provide
+optional `error.retirement_reason` when the safe allocation reason is known,
+using the three allocation reason values above. Unknown reasons omit it.
+These are additional object members; they do not extend the existing
+`error.diagnostic.kind` domain or change any existing enum/type/meaning.
 
 For Migration operator Input acquisition failures before Run acceptance, `error`
 MAY additionally contain `diagnostic`. New producers MUST provide it when the

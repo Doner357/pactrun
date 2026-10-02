@@ -10,6 +10,12 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 fn retirement_io_error(error: std::io::Error, fallback: &'static str) -> PersistenceError {
     // Never expose native paths or service-controlled OS error strings.
     let message = match error.kind() {
+        _ if error
+            .get_ref()
+            .is_some_and(|e| e.is::<crate::retirement_fs::UnsupportedEntry>()) =>
+        {
+            crate::retirement_fs::UNSUPPORTED_ENTRY
+        }
         std::io::ErrorKind::PermissionDenied => crate::retirement_fs::PERMISSION_DENIED,
         std::io::ErrorKind::WouldBlock => crate::retirement_fs::BUSY,
         _ => fallback,

@@ -520,9 +520,7 @@ impl PactrunPersistence {
                 return Ok(Some(AdmissionRefusal::RecoveryGuardActive));
             }
             if super::sqlite_deletions::obligation_from(&tx, view.instance)?.is_some() {
-                return Ok(Some(AdmissionRefusal::PlanInvalidated(
-                    "Instance has a deletion obligation".to_owned(),
-                )));
+                return Ok(Some(AdmissionRefusal::DeletionObligation(view.instance)));
             }
             let (_, active, version) = match instance_header(&tx, view.instance) {
                 Ok(header) => header,

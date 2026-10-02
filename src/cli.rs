@@ -363,7 +363,14 @@ struct CliError {
     kind: presentation::ErrorKind,
     reference: Option<presentation::ErrorReference>,
     partial: Option<presentation::PartialResult>,
-    diagnostic: Option<Box<presentation::AcquisitionDiagnostic>>,
+    details: Box<ErrorDetails>,
+}
+
+#[derive(Debug, Default)]
+struct ErrorDetails {
+    diagnostic: Option<presentation::AcquisitionDiagnostic>,
+    deletion_obligation: Option<presentation::DeletionObligationDiagnostic>,
+    retirement_reason: Option<&'static str>,
 }
 
 trait CancellationHandlerInstaller {
@@ -398,7 +405,7 @@ impl CliError {
             kind: presentation::ErrorKind::Usage,
             reference: None,
             partial: None,
-            diagnostic: None,
+            details: Box::default(),
         }
     }
 
@@ -409,7 +416,7 @@ impl CliError {
             kind: presentation::ErrorKind::Operation,
             reference: None,
             partial: None,
-            diagnostic: None,
+            details: Box::default(),
         }
     }
 }
@@ -3068,8 +3075,14 @@ fn app_error(error: ApplicationError) -> CliError {
 }
 
 fn preserve_error_facts(error: &ApplicationError, result: &mut CliError) {
+    if let ApplicationError::Persistence(
+        crate::persistence::PersistenceError::ServiceStorageUnavailable(message),
+    ) = error
+    {
+        result.details.retirement_reason = crate::retirement_fs::failure_reason(message);
+    }
     if let ApplicationError::MigrationInputAcquisition(failure) = error {
-        result.diagnostic = Some(Box::new(failure.as_ref().into()));
+        result.details.diagnostic = Some(failure.as_ref().into());
     }
     if let ApplicationError::Publication {
         destination,
@@ -3107,6 +3120,16 @@ fn preserve_error_facts(error: &ApplicationError, result: &mut CliError) {
         code: r.code().into(),
     });
     if let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) = &error {
+        if let crate::domain::AdmissionRefusal::DeletionObligation(instance) = refusal {
+            result.message = format!(
+                "{} Instance: {instance}. Run: {run}.",
+                DELETION_OBLIGATION_GUIDANCE
+            );
+            result.details.deletion_obligation = Some(presentation::DeletionObligationDiagnostic {
+                instance_id: instance.to_string(),
+                run_id: run.to_string(),
+            });
+        }
         let reference = refusal.error_ref();
         result.reference = Some(presentation::ErrorReference {
             owner: reference.owner().into(),
@@ -3221,7 +3244,15 @@ fn write_diagnostics(
     Ok(())
 }
 
+const DELETION_OBLIGATION_GUIDANCE: &str = "Admission was refused because a deletion obligation was unresolved, independently of recovery guard state. Inspect pactrun instance deletion show <instance-id> for current evidence. Finalization may already have removed data; do not assume an intact service or replay completed Cleanup. This diagnostic does not authorize retry, repair or abandonment.";
+
 fn failure_detail(record: &crate::domain::RunFailureRecord) -> Option<&str> {
+    if record.error.owner() == "admission"
+        && record.error.code() == "plan_invalidated"
+        && record.message == crate::domain::DELETION_OBLIGATION_MESSAGE
+    {
+        return Some(DELETION_OBLIGATION_GUIDANCE);
+    }
     if record.error.owner() == "execution"
         && matches!(
             record.error.code(),

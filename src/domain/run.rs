@@ -472,12 +472,16 @@ pub(crate) struct AdmissionFacts<'a> {
     )>,
 }
 
+pub(crate) const DELETION_OBLIGATION_MESSAGE: &str =
+    "the Plan is invalidated: Instance has a deletion obligation";
+
 /// The typed Admission refusal, evaluated in the precedence of PR-REQ-0279.
 /// The conflicting `RunId` is typed detail; messages carry no normative
 /// content.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AdmissionRefusal {
     RecoveryGuardActive,
+    DeletionObligation(InstanceId),
     PlanInvalidated(String),
     MutationConflict(RunId),
 }
@@ -486,7 +490,7 @@ impl AdmissionRefusal {
     pub(crate) fn error_ref(&self) -> PactrunErrorRef {
         let code = match self {
             Self::RecoveryGuardActive => "recovery_guard_active",
-            Self::PlanInvalidated(_) => "plan_invalidated",
+            Self::PlanInvalidated(_) | Self::DeletionObligation(_) => "plan_invalidated",
             Self::MutationConflict(_) => "mutation_conflict",
         };
         PactrunErrorRef::new(ADMISSION_ERROR_OWNER, code)
@@ -500,6 +504,7 @@ impl AdmissionRefusal {
                     .to_owned()
             }
             Self::PlanInvalidated(reason) => format!("the Plan is invalidated: {reason}"),
+            Self::DeletionObligation(_) => DELETION_OBLIGATION_MESSAGE.to_owned(),
             Self::MutationConflict(_) => {
                 "another Mutate execution is admitted on this Instance".to_owned()
             }
