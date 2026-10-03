@@ -4,11 +4,14 @@ title: Alpha.3 public Preview delivery
 
 # Alpha.3 public Preview delivery
 
-**Status: Qualified artifacts published as a public prerelease on 2026-10-02;
-package-source activation and public acquisition/Pages closeout in progress.**
+**Status: Public prerelease published on 2026-10-02; package-source activation,
+public acquisition and Pages verified on 2026-10-03.**
 
 On 2026-10-02 the owner authorized alpha.3 candidate qualification, main
 integration, GitHub prerelease publication, Preview bucket/tap updates and Pages.
+On 2026-10-03 the owner explicitly reconfirmed main/develop merges, public
+package-source and Pages activation, verification and closeout before those
+remaining operations resumed. No branch protection was bypassed.
 Alpha.1/alpha.2 assets, tags and exact package definitions remain immutable.
 Stable promotion, extra platforms, signing, documentation redesign and versioned
 documentation snapshots are outside this delivery.
@@ -76,7 +79,7 @@ user PATH entry was removed and its before/after fingerprint matched.
 The first unpublished candidate at `1ed5a74` failed the full-version-label
 handoff documentation check (run `37019679379`); runtime checks passed. Correcting
 the handoff produced the final source above, fresh candidate artifacts and fresh
-artifact/native/standalone acceptance. No failed candidate was publicly uploaded,
+artifact/native/standalone acceptance. No rejected candidate was published as a Release asset,
 no test was weakened, and no existing release was replaced.
 
 Linux imports GLIBC symbols through 2.39. Windows imports are OS DLLs, with no
@@ -87,8 +90,31 @@ remain; no user installation or real service store was used for acceptance.
 
 Preview normal/test entries advance to alpha.3; alpha.3 exact entries are added.
 All alpha.1/alpha.2 exact definitions and release records remain byte-identical.
-Anonymous download, real public bucket/tap acquisition and the deployed Pages
-digest are verified separately after activation and recorded at closeout.
+All 11 Release assets were downloaded anonymously and matched qualified size and
+SHA-256; the server-reported asset digests also matched. Public native acquisition
+then passed 20 Windows and 19 Linux assertions against the real GitHub bucket/tap
+and Release URLs: alpha.3 moving selection, retained alpha.2 exact test selection,
+real Hook execution, command conflicts and data-preserving reinstall/uninstall.
+Scoop's temporary PATH entry was again removed with matching fingerprints.
+
+PR #19 activated the catalog on main at
+`24a73da3e6b8671c6cfe4e5b531341141307f9a3`; PR #20 synchronized the identical
+tree into develop at `2d70614a67009ad0f79b52279d8429abdfa19731`.
+Catalog/backmerge CI runs `37027561182` and `37027567490` passed. Main
+CI/Pages run `37094121913` passed and deployed the artifact from that same run.
+The browser checked the qualified publication digest
+`0109ea8c9d98170ef5aeb6914e92757e3bfdce8bd8880d61725c5a6f478587b0`,
+eight actual public routes, mobile viewport containment and absence of page
+errors (11 checks). This digest identifies the activation publication; a later
+documentation-only closeout has its own digest and deployment receipt.
+
+Final closeout changes only informative delivery records. It reuses unchanged
+runtime/artifact qualification, reruns documentation tests/typecheck/build and
+protected CI/Pages checks, then synchronizes develop and removes the temporary
+release branch. This is not another product-wide test run or binary rebuild.
+Local evidence is retained in `target/alpha3-publication-20261002-final/`; the
+configured persistent remote retains source, native-test and publication evidence.
+No new preview server was started and existing user work/artifacts were untouched.
 The source snapshot preserves build-time documentation; main carries the later
 publication instructions and receipts. Visual redesign and documentation version
 snapshots remain deferred.

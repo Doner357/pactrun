@@ -46,7 +46,7 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current approved work: Alpha.3 Preview delivery
 
-**State: Artifacts published and qualified; package-source activation and public verification in progress.**
+**State: Published and verified; public acquisition and Pages verified on 2026-10-03.**
 
 The published product is `1.0.0-alpha.3`; the alpha.1/alpha.2 exact downloads
 remain immutable. Public catalog/Pages checks are recorded in the delivery ledger.
