@@ -33,8 +33,8 @@ def block(body, lang):
 
 installation = block(documents[names[0]], language)
 storage = block(documents[names[1]], language)
-archive_name = ('pactrun-1.0.0-alpha.2-windows-x86_64-standalone.zip' if windows
-                else 'pactrun-1.0.0-alpha.2-linux-x86_64-standalone.tar.gz')
+archive_name = ('pactrun-1.0.0-alpha.3-windows-x86_64-standalone.zip' if windows
+                else 'pactrun-1.0.0-alpha.3-linux-x86_64-standalone.tar.gz')
 environment = dict(os.environ)
 environment.pop('PACTRUN_STORAGE_ROOT', None)
 if windows:

@@ -20,8 +20,8 @@ supplied bytes, not an unknown publisher's trustworthiness.
 
 | Platform | Archive used by this procedure | Tools |
 | --- | --- | --- |
-| Windows x86-64 | `pactrun-1.0.0-alpha.2-windows-x86_64-standalone.zip` | PowerShell with `Get-FileHash` and `Expand-Archive` |
-| Linux x86-64 | `pactrun-1.0.0-alpha.2-linux-x86_64-standalone.tar.gz` | POSIX shell, `sha256sum`, `tar` |
+| Windows x86-64 | `pactrun-1.0.0-alpha.3-windows-x86_64-standalone.zip` | PowerShell with `Get-FileHash` and `Expand-Archive` |
+| Linux x86-64 | `pactrun-1.0.0-alpha.3-linux-x86_64-standalone.tar.gz` | POSIX shell, `sha256sum`, `tar` |
 
 Use the actual supplied filename if your delivery differs. These standalone
 archives contain the executable at the archive root. The normal/test native
@@ -40,7 +40,7 @@ It refuses an existing `pactrun-bin` directory and only changes this terminal's 
 ```powershell
 & {
     $ErrorActionPreference = 'Stop'
-    $archive = (Resolve-Path -LiteralPath './pactrun-1.0.0-alpha.2-windows-x86_64-standalone.zip').Path
+    $archive = (Resolve-Path -LiteralPath './pactrun-1.0.0-alpha.3-windows-x86_64-standalone.zip').Path
     $expected = 'PASTE_TRUSTED_SHA256'
     if ($expected -notmatch '^[0-9a-fA-F]{64}$') { throw 'Supply the trusted SHA-256 checksum first.' }
     if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) { throw 'Checksum mismatch; do not extract or run this archive.' }
@@ -68,7 +68,7 @@ directory unchanged.
 
 ```sh
 pactrun_install() {
-    archive="$PWD/pactrun-1.0.0-alpha.2-linux-x86_64-standalone.tar.gz"
+    archive="$PWD/pactrun-1.0.0-alpha.3-linux-x86_64-standalone.tar.gz"
     expected='PASTE_TRUSTED_SHA256'
     case "$expected" in ''|*[!0-9a-fA-F]*) printf '%s\n' 'Supply the trusted SHA-256 checksum first.' >&2; return 1 ;; esac
     [ "${#expected}" -eq 64 ] || { printf '%s\n' 'The checksum must contain 64 hexadecimal digits.' >&2; return 1; }

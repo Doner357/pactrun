@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
@@ -45,6 +46,23 @@ def execute(args, cwd=None, env=None) -> bytes:
         # out of publication records; detailed local Cargo logs remain local.
         raise RuntimeError(f"{Path(str(args[0])).name} failed with exit {result.returncode}")
     return result.stdout
+
+def qualify_candidate_source(root: Path, commit: str, version: str,
+                             workflow_ref: str, workflow_sha: str):
+    """Read-only manual builds: main ancestry or the exact versioned release head."""
+    if not re.fullmatch('[0-9a-f]{40}', commit):
+        raise ValueError('Use a full source SHA')
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?', version):
+        raise ValueError('Invalid candidate version')
+    if execute(['git', 'rev-parse', 'HEAD'], root).decode().strip() != commit:
+        raise ValueError('Checkout differs from candidate source')
+    if workflow_ref == 'refs/heads/release/' + version:
+        if commit != workflow_sha:
+            raise ValueError('Release candidate must be the exact dispatched source')
+    elif workflow_ref == 'refs/heads/main':
+        execute(['git', 'merge-base', '--is-ancestor', commit, 'origin/main'], root)
+    else:
+        raise ValueError('Dispatch from main or the exact versioned release branch')
 
 def source(root: Path, output: Path):
     root = root.resolve()

@@ -50,6 +50,31 @@ class ReleaseArtifacts(unittest.TestCase):
             else:
                 with tarfile.open(a) as archive:self.assertEqual(set(archive.getnames()),set(files))
             with self.assertRaises(FileExistsError):release.archive_files(a,files,windows)
+
+    def test_candidate_source_requires_main_ancestry_or_exact_release_head(self):
+        root=self.source_fixture(); old=self.git('rev-parse','HEAD').decode().strip()
+        self.git('update-ref','refs/remotes/origin/main',old)
+        release.qualify_candidate_source(root,old,'1.0.0-alpha.3','refs/heads/main',old)
+        (root/'src/main.rs').write_text('new reviewed candidate\n',encoding='utf8')
+        self.git('add','src/main.rs');self.git('commit','-m','candidate')
+        current=self.git('rev-parse','HEAD').decode().strip()
+        with self.assertRaises(RuntimeError):
+            release.qualify_candidate_source(root,current,'1.0.0-alpha.3','refs/heads/main',old)
+        release.qualify_candidate_source(root,current,'1.0.0-alpha.3','refs/heads/release/1.0.0-alpha.3',current)
+        for ref,sha,commit in [('refs/heads/develop',current,current),
+                               ('refs/heads/release/1.0.0-alpha.2',current,current),
+                               ('refs/heads/release/1.0.0-alpha.3',old,current),
+                               ('refs/heads/release/1.0.0-alpha.3',old,old)]:
+            with self.subTest(ref=ref,sha=sha,commit=commit),self.assertRaises(ValueError):
+                release.qualify_candidate_source(root,commit,'1.0.0-alpha.3',ref,sha)
+
+    def test_candidate_workflow_remains_manual_read_only_and_qualifies_source(self):
+        workflow=(Path(__file__).resolve().parents[1]/'.github/workflows/release-candidate.yml').read_text()
+        self.assertIn('workflow_dispatch:',workflow)
+        self.assertIn('contents: read',workflow)
+        self.assertIn("qualify_candidate_source(root, sha, version, os.environ['GITHUB_REF'], os.environ['GITHUB_SHA'])",workflow)
+        self.assertNotIn('contents: write',workflow)
+        self.assertNotIn('gh release',workflow)
     def test_source_capture_is_committed_exact_and_preserves_unrelated_work(self):
         source=self.source_fixture();unrelated=source/'unrelated.zip';unrelated.write_bytes(b'leave alone')
         output=self.root/'snapshot';release.source(source,output)

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       source_commit:
-        description: Reviewed full source SHA already in main
+        description: Reviewed full SHA in main or exact dispatched release/<version> head
         required: true
         type: string
       version:
@@ -56,7 +56,9 @@ jobs:
           version = os.environ['REQUESTED_VERSION']
           assert re.fullmatch('[0-9a-f]{40}', sha), 'Use a full source SHA'
           assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == sha
-          subprocess.run(['git','merge-base','--is-ancestor',sha,'origin/main'], check=True)
+          sys.path.insert(0, str(root/'tools'))
+          from release_artifacts import qualify_candidate_source
+          qualify_candidate_source(root, sha, version, os.environ['GITHUB_REF'], os.environ['GITHUB_SHA'])
           actual = tomllib.loads((root/'Cargo.toml').read_text())['package']['version']
           assert actual == version, 'Do not relabel a binary with a different version'
           assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?', version)

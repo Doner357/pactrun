@@ -5,13 +5,17 @@ title: Retirement failure diagnostics and Cleanup guidance
 # Retirement failure diagnostics and Cleanup guidance
 
 **Status: Implemented, verified and integrated into develop on 2026-10-02;
-not publicly released.**
+subsequently shipped in alpha.3.**
 
 On 2026-10-02 the owner approved safe retirement failure classification,
 deletion-obligation guidance, author/operator documentation and regression tests.
 Delivery ends at verified integration into `develop`, with temporary remote work
 branches removed. No merge to main, tag, Release, Pages publication or native
 package catalog update is included. Published alpha.2 artifacts stay immutable.
+
+**Subsequent publication:** The separately authorized [alpha.3 delivery](./alpha3-publication.md)
+ships these changes. The develop-only authorization and evidence below describe
+this original milestone, not the current public availability.
 
 ## Evidence and scope
 
