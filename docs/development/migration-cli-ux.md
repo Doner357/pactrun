@@ -11,6 +11,10 @@ and descriptions in existing help. Delivery stops at verified integration into
 `develop`. No main merge, Pages publication, product release/tag or package update
 is authorized by this milestone. Work branches are removed remotely after merge.
 
+**Subsequent publication:** The separately authorized [alpha.3 delivery](./alpha3-publication.md)
+ships these changes. The develop-only authorization and evidence below describe
+this original milestone, not the current public availability.
+
 ## Approved information policy
 
 Expose the minimum sufficient, explicitly needed public facts, with machine
@@ -88,7 +92,7 @@ final candidate was fully checked on 1.99 rather than relying on the older pass.
 ## Delivery boundary
 
 Main, published alpha.2 assets, tags, native package definitions and the public
-website were not updated. The improvements are in develop only and are not
+website were not updated. At the original closeout the improvements were in develop only; they are not
 features newly shipped in the existing alpha.2 download. Local/remote test and
 build evidence remains; no real service deployment was required. Larger author
 tutorials and all previously deferred work remain separate tasks.

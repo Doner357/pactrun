@@ -40,7 +40,7 @@ a service can leave a Unix admin socket behind after its container stops; the
 current Linux finalizer refuses entries other than regular files and directories.
 This is different from a file-permission failure.
 
-In the unreleased develop diagnostics, `allocation_unavailable` can include the
+In alpha.3, `allocation_unavailable` can include the
 safe reason `unsupported_entry_kind`. Published alpha.2 may instead report
 `detail: null`; do not infer a socket solely from that older generic error.
 No filename, native path or file content is disclosed by this reason.
