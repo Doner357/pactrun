@@ -136,6 +136,7 @@ jobs:
           runuser -u pactrun-ci -- git -C /home/linuxbrew/.linuxbrew/Homebrew checkout --detach FETCH_HEAD
           test "$(git -c safe.directory=/home/linuxbrew/.linuxbrew/Homebrew -C /home/linuxbrew/.linuxbrew/Homebrew rev-parse HEAD)" = 570982948a8a194f0f42f43f4a5bce2d1c9f64cb
           runuser -u pactrun-ci -- mkdir /home/linuxbrew/.linuxbrew/bin
+          runuser -u pactrun-ci -- mkdir -p /home/linuxbrew/.linuxbrew/Cellar /home/linuxbrew/.linuxbrew/opt /home/linuxbrew/.linuxbrew/var
           runuser -u pactrun-ci -- ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew
       - name: Install staged formula normally, record dependencies, and test exact payload
         run: |

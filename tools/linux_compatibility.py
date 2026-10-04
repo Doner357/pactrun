@@ -260,6 +260,9 @@ def brew(artifacts, work, manager):
     env.pop('PACTRUN_STORAGE_ROOT', None)
     for key in ['LD_LIBRARY_PATH', 'LD_PRELOAD', 'LD_AUDIT']:
         env.pop(key, None)
+    prefix_observed = run([manager, '--prefix'], env=env).stdout.decode().strip()
+    if prefix_observed != '/home/linuxbrew/.linuxbrew':
+        raise ValueError('Homebrew must use its standard Linux prefix, not the resolved repository path')
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(
         http.server.SimpleHTTPRequestHandler, directory=str(artifacts / 'output/assets')))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -274,10 +277,10 @@ def brew(artifacts, work, manager):
                         ['-c', 'user.name=Pactrun CI', '-c', 'user.email=ci@example.invalid', 'commit', '-m', 'Candidate transport only']]:
             run(['git', '-C', tap, *command], env=env)
         run([manager, 'tap', 'pactrun-ci/acceptance', tap.as_uri()], env=env)
-        before = run([manager, 'list', '--versions'], env=env).stdout.decode()
+        before = run([manager, 'list', '--formula', '--versions'], env=env).stdout.decode()
         (work / 'dependencies-before.txt').write_text(before)
         run([manager, 'install', 'pactrun-ci/acceptance/pactrun-preview'], env=env, log=work / 'install.log')
-        after = run([manager, 'list', '--versions'], env=env).stdout.decode()
+        after = run([manager, 'list', '--formula', '--versions'], env=env).stdout.decode()
         (work / 'dependencies-after.txt').write_text(after)
         prefix = Path(run([manager, '--prefix', 'pactrun-ci/acceptance/pactrun-preview'], env=env).stdout.decode().strip())
         if release.sha(prefix / 'libexec/pactrun') != audit['binaries']['pactrun']['sha256']:
@@ -315,7 +318,8 @@ def main():
     elif args.operation == 'direct':
         direct(args.artifacts.resolve(), args.work.resolve())
     else:
-        brew(args.artifacts.resolve(), args.work.resolve(), args.manager.resolve())
+        # Homebrew derives its prefix from the entrypoint; preserve its bin shim.
+        brew(args.artifacts.resolve(), args.work.resolve(), args.manager.absolute())
 
 
 if __name__ == '__main__':

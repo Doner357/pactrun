@@ -1,9 +1,14 @@
 """Fast, offline checks for ABI gates and the shared candidate workflow."""
 import io
+import json
+import os
+import sys
+import subprocess
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tools import linux_compatibility as linux
 
@@ -11,6 +16,46 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LinuxCompatibility(unittest.TestCase):
+    def test_shared_smoke_uses_supplied_binary_without_package_manager_or_rebuild(self):
+        parent = ROOT / 'target/linux-ci-unit'
+        parent.mkdir(parents=True, exist_ok=True)
+        part = dict(product_version='1.0.0-alpha.3', source_commit='a'*40,
+                    source_manifest_sha256='b'*64, supported_formats={}, default_formats={})
+        with tempfile.TemporaryDirectory(dir=parent) as directory:
+            root = Path(directory)
+            binary = root/'candidate'
+            def respond(args, **kwargs):
+                self.assertEqual(args[0], binary)
+                command = list(map(str,args[1:]))
+                out = '{}'
+                if command == ['--format','json','--version']: out = json.dumps({'result':part})
+                elif command == ['--format','json','--help']: out = json.dumps({'result':{'usage':'help\n'}})
+                elif command == ['--help']: out = 'help\n'
+                elif command[:2] == ['pack','install']: out = 'exact:fixture\n'
+                elif command[:1] == ['invoke']: out = 'debian12-hook-ok\n'
+                elif command[:4] == ['--format','json','instance','delete']: out = json.dumps({'result':{'run':{'state':{'outcome':'succeeded'}}}})
+                return subprocess.CompletedProcess(args, kwargs.get('code',0), out.encode(), b'')
+            with patch.object(linux,'run',side_effect=respond):
+                result = linux.smoke(binary,root/'work',part)
+            self.assertTrue(any(x['exit_code']==1 for x in result))
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX Homebrew entrypoint semantics')
+    def test_homebrew_entrypoint_is_not_dereferenced_into_repository_prefix(self):
+        parent = ROOT / 'target/linux-ci-unit'
+        parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=parent) as directory:
+            root = Path(directory)
+            actual = root / 'Homebrew/bin/brew'
+            actual.parent.mkdir(parents=True)
+            actual.touch()
+            entry = root / 'bin/brew'
+            entry.parent.mkdir()
+            entry.symlink_to(actual)
+            with patch.object(sys, 'argv', ['linux', 'brew', '--work', str(root/'work'), '--artifacts', str(root/'artifacts'), '--manager', str(entry)]), patch.object(linux, 'brew') as invoked:
+                linux.main()
+            self.assertEqual(invoked.call_args.args[2], entry)
+            self.assertNotEqual(invoked.call_args.args[2], actual)
+
     def test_glibc_requirements_include_weak_newer_symbols_and_sort_numerically(self):
         self.assertEqual(linux.needed_glibc('Name: GLIBC_2.9\nName: GLIBC_2.36\nName: GLIBC_2.2.5'),
                          ['2.2.5', '2.9', '2.36'])
