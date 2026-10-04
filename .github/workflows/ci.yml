@@ -161,10 +161,16 @@ jobs:
       - name: Run Rust verification
         run: cargo xtask rust-ci
 
+  debian12:
+    name: Debian 12 artifact verification
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
+    uses: ./.github/workflows/linux-compatibility.yml
+
   gate:
     name: CI gate
     if: always()
-    needs: [scope, ubuntu, windows]
+    needs: [scope, ubuntu, windows, debian12]
     runs-on: ubuntu-latest
     steps:
       - name: Require every applicable verification job
@@ -173,13 +179,14 @@ jobs:
           RUNTIME: ${{ needs.scope.outputs.runtime }}
           UBUNTU_RESULT: ${{ needs.ubuntu.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
+          DEBIAN12_RESULT: ${{ needs.debian12.result }}
         run: |
           # BEGIN CI GATE
           test "$SCOPE_RESULT" = success
           test "$UBUNTU_RESULT" = success
           case "$RUNTIME" in
-            true) test "$WINDOWS_RESULT" = success ;;
-            false) test "$WINDOWS_RESULT" = skipped ;;
+            true) test "$WINDOWS_RESULT" = success; test "$DEBIAN12_RESULT" = success ;;
+            false) test "$WINDOWS_RESULT" = skipped; test "$DEBIAN12_RESULT" = skipped ;;
             *) exit 1 ;;
           esac
           # END CI GATE
