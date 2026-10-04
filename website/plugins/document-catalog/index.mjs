@@ -2,6 +2,7 @@ import {readFile, writeFile, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {readDocuments, markdownBody, documentDigest} from '../text-docs/index.mjs';
 import {classify} from './model.mjs';
+import {editions} from '../editions.mjs';
 export {classify} from './model.mjs';
 
 export function documentRoute(name, source) {
@@ -68,30 +69,63 @@ export async function commandHelp(root) {
   if (!text.startsWith('Pactrun ' + version + '\nUsage:')) throw new Error('Unexpected CLI help');
   return {version, source: 'src/cli.rs', text};
 }
-export async function exportCatalog(siteDir) {
-  const docs = await readDocuments(path.resolve(siteDir, '../docs'));
+export async function editionCatalog(siteDir, edition) {
+  const docs = await readDocuments(edition.docsDir);
   const catalog = makeCatalog(docs);
-  const output = path.join(siteDir, '.generated-text');
+  catalog.version = edition.id;
+  catalog.pages = catalog.pages.map(page => ({...page, version: edition.id, url: '/' + edition.path + page.url}));
+  const help = edition.id === 'current' ? await commandHelp(path.resolve(siteDir, '..'))
+    : JSON.parse(await readFile(path.join(siteDir, 'versioned_help', edition.id + '.json'), 'utf8'));
+  if (edition.id !== 'current' && help.version !== edition.id) throw new Error('CLI snapshot version mismatch');
+  return {...catalog, help};
+}
+export async function exportCatalog(siteDir, edition) {
+  const catalog = await editionCatalog(siteDir, edition);
+  const output = path.join(siteDir, '.generated-text', edition.path);
   await mkdir(output, {recursive: true});
   await writeFile(path.join(output, 'document-catalog.json'), JSON.stringify(catalog));
-  await writeFile(path.join(output, 'command-help.json'), JSON.stringify(await commandHelp(path.resolve(siteDir, '..'))));
+  await writeFile(path.join(output, 'command-help.json'), JSON.stringify(catalog.help));
   return catalog;
 }
 export default function documentCatalog(context) {
   return {
     name: 'pactrun-document-catalog',
-    async loadContent() { return exportCatalog(context.siteDir); },
-    async contentLoaded({content, actions}) { actions.setGlobalData({source_digest: content.source_digest, help: await commandHelp(path.resolve(context.siteDir, '..')), pages: content.pages.map(({text, ...page}) => page)}); },
+    async loadContent() {
+      return Promise.all((await editions(context.siteDir)).map(async edition => ({
+        ...edition, ...await exportCatalog(context.siteDir, edition),
+      })));
+    },
+    async contentLoaded({content, actions}) {
+      actions.setGlobalData({editions: content.map(({id, label, path: routePath, help, pages}) => ({
+        id, label, path: routePath, help, pages: pages.map(({text, ...page}) => page),
+      }))});
+      const base = context.siteConfig.baseUrl;
+      for (const edition of content) {
+        for (const name of ['search', 'commands']) actions.addRoute({
+          path: base + edition.path + '/' + name,
+          component: '@site/src/pages/' + name + '.tsx', exact: true,
+        });
+      }
+      // Keep published unversioned bookmarks (including fragments) working.
+      for (const page of content[0].pages) {
+        const oldPath = page.url.slice(content[0].path.length + 1) || '/';
+        const data = await actions.createData('redirect-' + page.source.replaceAll('/', '_') + '.json', JSON.stringify({to: page.url}));
+        actions.addRoute({path: base + oldPath.slice(1), exact: true,
+          component: '@site/src/components/LegacyRedirect.tsx', modules: {target: data}});
+      }
+    },
     async postBuild({outDir, routesPaths}) {
-      const expected = makeCatalog(await readDocuments(path.resolve(context.siteDir, '../docs')));
-      const actual = JSON.parse(await readFile(path.join(outDir, 'document-catalog.json'), 'utf8'));
-      if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Document catalog is stale');
       const normalize = route => route.replace(/\/$/, '') || '/';
       const routes = new Set(routesPaths.map(normalize));
-      for (const page of actual.pages) if (!routes.has(normalize(context.siteConfig.baseUrl + page.url.slice(1)))) throw new Error('Unpublished search result: ' + page.source);
-      await validateRequirementAnchors(outDir, actual.pages);
-      const help = JSON.parse(await readFile(path.join(outDir, 'command-help.json'), 'utf8'));
-      if (JSON.stringify(help) !== JSON.stringify(await commandHelp(path.resolve(context.siteDir, '..')))) throw new Error('Generated CLI help is stale');
+      for (const edition of await editions(context.siteDir)) {
+        const expected = await editionCatalog(context.siteDir, edition);
+        const actual = JSON.parse(await readFile(path.join(outDir, edition.path, 'document-catalog.json'), 'utf8'));
+        if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Document catalog is stale');
+        for (const page of actual.pages) if (!routes.has(normalize(context.siteConfig.baseUrl + page.url.slice(1)))) throw new Error('Unpublished search result: ' + page.source);
+        await validateRequirementAnchors(outDir, actual.pages);
+        const help = JSON.parse(await readFile(path.join(outDir, edition.path, 'command-help.json'), 'utf8'));
+        if (JSON.stringify(help) !== JSON.stringify(expected.help)) throw new Error('Generated CLI help is stale');
+      }
     },
   };
 }

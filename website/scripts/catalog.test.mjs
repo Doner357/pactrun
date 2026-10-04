@@ -276,7 +276,7 @@ test('new guides use complete fences, live owner links, and no invented normativ
 test('search and text discovery are integrated without authorizing Pages', async () => {
   const config = await readFile(path.join(root, 'website/docusaurus.config.ts'), 'utf8');
   assert.match(config, /document-catalog\/index.mjs/);
-  assert.match(config, /to: '\/search'/);
+  assert.match(config, /type: 'custom-editionLink', target: '\/search'/);
 });
 
 

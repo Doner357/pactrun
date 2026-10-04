@@ -2,13 +2,15 @@ import React, {useEffect, useMemo, useState} from 'react';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
-import {useHistory, useLocation} from '@docusaurus/router';
+import {Redirect, useHistory, useLocation} from '@docusaurus/router';
 import {searchPages, type SearchPage} from '../lib/search.mjs';
+import {useEdition} from '../lib/edition';
 
 export default function Search(): React.JSX.Element {
   const location = useLocation();
   const history = useHistory();
-  const indexUrl = useBaseUrl('/document-catalog.json');
+  const {edition, prefix, docBase} = useEdition();
+  const indexUrl = useBaseUrl(prefix + '/document-catalog.json');
   const [pages, setPages] = useState<SearchPage[]>([]);
   const [status, setStatus] = useState('loading');
   const [attempt, setAttempt] = useState(0);
@@ -26,12 +28,12 @@ export default function Search(): React.JSX.Element {
       if (!response.ok) throw new Error('Search index unavailable');
       return response.json();
     }).then(data => {
-      if (data.edition !== 2 || !Array.isArray(data.pages)) throw new Error('Invalid index');
+      if (data.edition !== 2 || data.version !== edition.id || !Array.isArray(data.pages)) throw new Error('Invalid index');
       setPages(data.pages);
       setStatus('ready');
     }).catch(error => { if (error.name !== 'AbortError') setStatus('error'); });
     return () => controller.abort();
-  }, [indexUrl, attempt]);
+  }, [indexUrl, attempt, edition.id]);
 
   const results = useMemo(() => searchPages(pages, {q, state, role, audience}), [pages, q, state, role, audience]);
   const broader = useMemo(() => searchPages(pages, {q, state: ''}), [pages, q]);
@@ -49,10 +51,12 @@ export default function Search(): React.JSX.Element {
   const limit = Math.max(20, Math.min(1000, Number(params.get('limit')) || 20));
   const scope = [state ? state.charAt(0).toUpperCase() + state.slice(1) : 'All states', audience || 'All audiences', role || 'All roles'].join(' · ');
 
+  if (!location.pathname.startsWith(docBase)) return <Redirect to={docBase + 'search' + location.search + location.hash} />;
+
   return <Layout title="Search documentation" description="Search current documentation and historical records.">
     <main className="container search-page">
       <h1>Search documentation</h1>
-      <p>Find commands, concepts, and requirement IDs. Search runs in your browser.</p>
+      <p>Search {edition.label} for commands, concepts, and requirement IDs. Search runs in your browser.</p>
       <label htmlFor="doc-query">Search documentation</label>
       <input id="doc-query" type="search" className="doc-query" value={q}
         placeholder="Try restore, --param-file, or PR-REQ-0258" onChange={e => update('q', e.target.value)} />
