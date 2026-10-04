@@ -5,7 +5,7 @@ title: Install Pactrun
 # Install Pactrun
 
 Install through **Scoop on Windows** or **Homebrew on Linux**. The current product
-is `1.0.0-alpha.3`, available through the Preview entry. There is no Stable release
+is `1.0.0-alpha.4`, available through the Preview entry. There is no Stable release
 yet: `pactrun` is reserved for Major 1 stable and does not silently install alpha.
 The package you install is named `pactrun-preview`; the command you run is `pactrun`.
 
@@ -15,12 +15,18 @@ not automatically isolate data from an existing normal installation. Read
 
 ## Before you start
 
-- Use an x86-64 Windows or Linux host. Initial native qualification used Windows
-  11 and Debian 13; other OS versions are not yet qualified by that native test.
-  This delivery does not include macOS, ARM64 or musl builds.
-- The Linux executable requires glibc 2.39 or newer. This is a measured library
-  dependency floor, not certification of every distribution or kernel. The
-  native qualification host is Debian 13; Windows qualification uses Windows 11.
+- Use an x86-64 Windows or Linux host. Alpha.4 qualification covers Windows 11,
+  Debian 12 userland with glibc 2.36 in CI, and the same Linux payload on a native
+  Debian 13/glibc 2.41 host. Container tests share a hosted kernel; not every
+  kernel, filesystem or service is certified. No macOS, ARM64 or musl build is included.
+- Use glibc 2.36 or newer for the supported Linux qualification baseline.
+  Alpha.4's highest measured symbol requirement is 2.34, but this is not a claim
+  that every glibc 2.34 distribution is supported. Older alpha.1/alpha.2/alpha.3
+  Linux downloads retain their glibc 2.39 requirement; update Pactrun rather than
+  replacing the system libc or setting a global LD_LIBRARY_PATH.
+- Homebrew may still install its own glibc, GCC and related dependencies. That
+  does not automatically change which libc an arbitrary prebuilt program loads.
+  Alpha.4 is verified directly on system glibc 2.36 as well as through Homebrew.
 - Install and verify [Scoop](https://scoop.sh/) or
   [Homebrew](https://brew.sh/) first, following its own prerequisites. Do not run
   these instructions as administrator/root merely to bypass an error.
@@ -66,7 +72,7 @@ launcher; do not copy the internal `libexec` executable into another directory.
 ## Verify and continue
 
 Both version and help commands must succeed. Expect the installed package's
-version, currently `1.0.0-alpha.3`. These checks do not require a managed store.
+version, currently `1.0.0-alpha.4`. These checks do not require a managed store.
 If command resolution, download, checksum or launch fails, stop and inspect the
 error; do not delete service data or disable checksum verification to proceed.
 

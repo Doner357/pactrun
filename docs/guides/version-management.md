@@ -43,23 +43,25 @@ manager's hold/pin state. To resume updates, use `scoop unhold pactrun-preview` 
 
 ## Install an exact published version
 
-Exact entries do not move when a new Preview is published. For alpha.3:
+Exact entries do not move when a new Preview is published. For alpha.4:
 
 ```powershell
 scoop uninstall pactrun-preview
-scoop install pactrun/pactrun-exact-1-0-0-alpha-3
+scoop install pactrun/pactrun-exact-1-0-0-alpha-4
 pactrun --version
 ```
 
 ```sh
 brew uninstall doner357/pactrun/pactrun-preview
-brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-3
+brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-4
 pactrun --version
 ```
 
-The alpha.1 and alpha.2 exact entries remain available as
-`pactrun-exact-1-0-0-alpha-1` and `pactrun-exact-1-0-0-alpha-2`; publishing
-alpha.3 does not rewrite those definitions or their assets.
+The alpha.1, alpha.2 and alpha.3 exact entries remain available as
+`pactrun-exact-1-0-0-alpha-1`, `pactrun-exact-1-0-0-alpha-2` and
+`pactrun-exact-1-0-0-alpha-3`; publishing alpha.4 does not rewrite their assets.
+The older Linux builds retain their glibc 2.39 requirement; selecting an older
+exact version is not a workaround for Debian 12 compatibility.
 
 Before switching, record the installed package/version, confirm no Pactrun operation
 is in flight, check target data compatibility and preserve needed backups. Do not
