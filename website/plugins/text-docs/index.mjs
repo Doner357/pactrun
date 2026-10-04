@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {mkdir, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {classify, contextNotice} from '../document-catalog/model.mjs';
+import {editions} from '../editions.mjs';
 
 const omitted = new Set(['archive', 'proposals']);
 
@@ -25,15 +26,31 @@ export function markdownBody(source) {
   return source.replace(/^---\n[\s\S]*?\n---\n/, '').trimStart();
 }
 
-export function textBody(name, source) {
+export function scopeTextLinks(body, prefix) {
+  let fence = null;
+  return body.split('\n').map(line => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      return line;
+    }
+    if (fence) return line;
+    return line.replace(/(`+).*?\1|\[[^\]\n]*\]\((\/(?!\/)[^)\s]*)\)/g,
+      (match, code, href) => code ? match : match.replace('](' + href + ')', '](' + prefix + href + ')'));
+  }).join('\n');
+}
+
+export function textBody(name, source, version = 'current', baseUrl = '/') {
   if (!name.endsWith('.md')) return source;
   const {state, role, audiences} = classify(name, source);
   return [
     '> Document context (generated): ' + state + ' | ' + role + ' | ' + audiences.join(', '),
+    '> Documentation version: ' + (version === 'current' ? 'Development (unreleased)' : version),
     '> Source: docs/' + name,
     '> ' + contextNotice(state, role),
-    '> The original Markdown body follows unchanged after front-matter removal.',
-    '', markdownBody(source),
+    '> Markdown follows with front matter removed and root-relative website links scoped to this edition; contract text and code remain unchanged.',
+    '', scopeTextLinks(markdownBody(source), baseUrl + (version === 'current' ? 'next' : version)),
   ].join('\n');
 }
 
@@ -69,7 +86,7 @@ export function documentDigest(documents) {
   return createHash('sha256').update(JSON.stringify(documents)).digest('hex');
 }
 
-export async function exportText({docsDir, outDir}) {
+export async function exportText({docsDir, outDir, version = 'current', baseUrl = '/'}) {
   const documents = await readDocuments(docsDir);
   validateLinks(documents);
   const digest = documentDigest(documents);
@@ -80,7 +97,7 @@ export async function exportText({docsDir, outDir}) {
   for (const [name, source] of documents) {
     const destination = path.join(target, name);
     await mkdir(path.dirname(destination), {recursive: true});
-    await writeFile(destination, textBody(name, source));
+    await writeFile(destination, textBody(name, source, version, baseUrl));
   }
   await mkdir(target, {recursive: true});
   await writeFile(path.join(target, 'publication.json'), JSON.stringify({
@@ -88,14 +105,15 @@ export async function exportText({docsDir, outDir}) {
     source_digest_algorithm: 'sha256',
     source_digest: digest,
     source_digest_input: 'JSON array of sorted [docs-relative path, LF-normalized source] pairs',
-    status: 'Development documentation; not a release or installed-binary version assertion',
-    context_policy: 'Generated document context precedes the unchanged Markdown body; JSON schemas are byte-preserved.',
+    documentation_version: version,
+    status: version === 'current' ? 'Development documentation (unreleased)' : 'Documentation for Pactrun ' + version,
+    context_policy: 'Generated context precedes Markdown with edition-scoped root-relative website links. Contract text, code and JSON schemas are preserved.',
     authority_map: 'spec/index.md',
     implementation_status: 'development/next-milestone.md',
     documents: documents.map(([name]) => name),
   }, null, 2) + '\n');
   await writeFile(path.join(outDir, 'llms.txt'), [
-    '# Pactrun', '',
+    '# Pactrun — ' + (version === 'current' ? 'Development (unreleased)' : version), '',
     '> Local-first Pack installation, managed Instances, and Pack-defined operations.', '',
     'Product guides, specification, and development records from one English source.',
     'Task guides are informative; the linked specification defines behavior.', '',
@@ -117,32 +135,33 @@ export async function exportText({docsDir, outDir}) {
 export default function textDocs(context) {
   return {
     name: 'pactrun-text-docs',
-    injectHtmlTags() {
-      return {headTags: [{tagName: 'link', attributes: {
-        rel: 'describedby', type: 'text/plain',
-        href: context.siteConfig.baseUrl + 'llms.txt',
-      }}]};
-    },
     async postBuild({outDir, routesPaths}) {
       const base = context.siteConfig.baseUrl;
       for (const route of routesPaths) {
-        if (route.startsWith(base + 'agents/') || route === base + 'agents') {
+        if (/^(?:[^/]+\/)?agents(?:\/|$)/.test(route.slice(base.length))) {
           throw new Error('Agent source unexpectedly became an HTML route: ' + route);
         }
       }
-      const documents = await readDocuments(path.resolve(context.siteDir, '../docs'));
-      const metadata = JSON.parse(await readFile(path.join(outDir, 'agent-docs/publication.json'), 'utf8'));
-      const textEntry = await readFile(path.join(outDir, 'llms.txt'), 'utf8');
-      if (!textEntry.includes('./agent-docs/agents/index.md')) {
-        throw new Error('Text discovery entry is missing or invalid');
-      }
-      if (metadata.source_digest !== documentDigest(documents)) {
-        throw new Error('Text publication is stale; rebuild from unchanged sources');
-      }
-      for (const [name, source] of documents) {
-        const published = await readFile(path.join(outDir, 'agent-docs', name), 'utf8');
-        if (published !== textBody(name, source)) throw new Error('Text publication drift: ' + name);
+      for (const edition of await editions(context.siteDir)) {
+        await verifyText({docsDir: edition.docsDir, outDir: path.join(outDir, edition.path), version: edition.id, baseUrl: base});
       }
     },
   };
+}
+
+export async function verifyText({docsDir, outDir, version = 'current', baseUrl = '/'}) {
+  const documents = await readDocuments(docsDir);
+  const metadata = JSON.parse(await readFile(path.join(outDir, 'agent-docs/publication.json'), 'utf8'));
+  if (metadata.documentation_version !== version) throw new Error('Text edition mismatch');
+  const textEntry = await readFile(path.join(outDir, 'llms.txt'), 'utf8');
+  if (!textEntry.includes('./agent-docs/agents/index.md')) {
+    throw new Error('Text discovery entry is missing or invalid');
+  }
+  if (metadata.source_digest !== documentDigest(documents)) {
+    throw new Error('Text publication is stale; rebuild from unchanged sources');
+  }
+  for (const [name, source] of documents) {
+    const published = await readFile(path.join(outDir, 'agent-docs', name), 'utf8');
+    if (published !== textBody(name, source, version, baseUrl)) throw new Error('Text publication drift: ' + name);
+  }
 }

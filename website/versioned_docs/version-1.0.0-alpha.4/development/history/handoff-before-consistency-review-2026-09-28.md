@@ -1,0 +1,262 @@
+---
+title: Handoff before the full-site consistency review
+---
+
+# Handoff before the full-site consistency review
+
+**Status: Historical source snapshot captured on 2026-09-28.**
+
+This preserves the overlapping milestone descriptions found by the full-site
+review, including claims that were already obsolete at capture time. It is not
+an independent approval record or a statement of current support. Use the
+[current document](../next-milestone.md) and its owning contracts for new work.
+
+The captured source SHA-256 (LF-normalized Markdown, including front matter) is
+`8fefc5d37c60354cc15ce2e93dc2a8b758b9cc03c92a79e5a1294f5cea04c842`. Prose is preserved;
+relative links are rebased and the original document title is a level-two heading.
+
+---
+
+## Current baseline and next milestone
+
+> **E engineering handoff:** E runtime contracts and native delivery machinery
+> are implemented. The [E ledger](../e-implementation-status.md) owns the exact
+> qualification and local integration status. The candidate is 1.0.0-alpha.1,
+> with all eight format domains at 1.0-alpha.1; development upgrade chains are
+> not supported. Earlier milestone descriptions below are historical context,
+> not permission to restore those readers or publish the candidate.
+
+**Status: Informative handoff derived from the roadmap and owning contracts.**
+Document migration is complete for existing normative pages. M5 was separately
+approved on 2026-09-13; documentation migration itself granted no implementation
+approval. Implementation evidence is recorded separately from design approval.
+
+Current integrated work: [Execution Diagnostics and Instance Observability](../execution-diagnostics-observability-status.md) and B (Object Catalog/History/Metadata) are integrated into local develop; see the [B implementation record](../object-catalog-history-metadata-status.md). The former V11 baseline and its V8/V9/V10 upgrades are historical; E uses the clean string-versioned Persistence baseline instead. C is implemented, verified and integrated into local develop; see the [C record](../pack-transport-status.md). D is implemented, verified and integrated into local develop under the [approved S0-S4 presentation baseline](../design-notes/cli-presentation-baseline.md); see its [implementation record](../cli-presentation-status.md) for verification and integration evidence. Integration does not authorize publication.
+
+## Next milestone: F — Documentation and Documentation Site
+
+**State: F implemented and verified; uncommitted candidate awaiting operator review.**
+
+[F — Documentation and Documentation Site](../remaining-capability-milestones.md#f-documentation-and-documentation-site)
+is the current work. The operator authorized completion, verification, and remote
+preview on port 3000. [F delivery](../f-documentation-status.md) owns its scope and
+source-qualified evidence. No commit, merge, push, or public deployment is authorized.
+
+## What is already recorded as implemented
+
+For E design rationale, use the [versioning redesign decisions](../design-notes/e-versioning-redesign-decisions.md).
+The subsequent implementation ledger supersedes the earlier planning-only
+status; formal promotion and public publication still require separate gates.
+
+The approved [E S0 whole-milestone plan](../design-notes/e-versioning-s0-plan.md)
+governs retained safety boundaries, historical support removal, native package
+preparation and the acceptance matrix. The operator authorized the entire local
+implementation and integration, including the SQLite read-coordination
+clarification; slices are not new approval gates.
+
+D (CLI presentation and versioned JSON) is implemented, verified and integrated
+into local develop after authorized commit and merge; see its
+[delivery record](../cli-presentation-status.md). E subsequently received its own
+implementation and local integration authorization. Neither integration
+authorizes push or publication.
+
+The [2026-09-23 obligation audit](../obligation-audit-2026-09-23.md) records the
+current Pending-block census, concrete evidence follow-ups, later added rules
+and explicit exclusions. Completing that documentation inventory does not close
+the outstanding verification or approve E S0 representations/runtime work.
+The separately authorized [verification follow-up](../verification-gap-closure.md)
+records the subsequent closure work without starting E implementation.
+The [pre-E readiness review](../pre-e-readiness.md) records verified prerequisite
+closure and local develop integration. That review established readiness for E; its earlier S0-only authorization
+boundary was superseded by the whole-E approval and implementation record.
+
+The [M4 closeout](../m4-implementation-status.md) records integration through M4:
+installation and managed Instances, Action execution, Capture and exact-compatible
+Restore, Snapshot inspection/verification, bundle import/export, and explicit
+storage upgrade on V5. It is a historical implementation record, not a substitute
+for validating a new code change.
+
+The integrated baseline adds [M5 Managed Input Migration](../m5-implementation-status.md):
+path IDs, operator file acquisition, Frozen Migration Hooks, per-edge atomic
+publication and bounded interruption/reconciliation. The authorized local merge
+is recorded in the closeout; remote publication is separate from integration.
+
+[M6 bounded recovery](../m6-implementation-status.md) is also implemented and
+integrated into local develop. It closes existing-operation recovery evidence
+on V6 without adding a new recovery engine, schema or service rollback.
+[M6.5 ServiceStorage](../m6-5-implementation-status.md) is now implemented and
+integrated into local develop, including V7, V2 installation and service
+execution. [M7 lifecycle](../m7-implementation-status.md) is implemented, verified
+and integrated into local develop under separate operator authorization.
+
+- Current integrated persistence: [V11](../../spec/persistence/persistence-baseline.md), internal and non-Frozen, with explicit exact-V8/V9/V10 upgrade.
+- Current capture writer: [Snapshot integrity V2](../../spec/contracts/snapshot-integrity.md).
+- Existing Snapshot compatibility: [V1](../../spec/contracts/snapshot-integrity.md) remains Frozen and supported as specified.
+- Pack source spelling: explicitly selected [Candidate V1](../../spec/contracts/pack-source.md) or [Candidate V2](../../spec/contracts/pack-source.md), not a public compatibility promise.
+- Frozen [Core](../../spec/contracts/revision-canonical.md), [Hook protocol](../../spec/contracts/hook-protocol.md), and [error identity](../../spec/contracts/error-taxonomy-v1.md) retain their existing scope.
+- [Core V2](../../spec/contracts/revision-canonical.md) and [Hook V2](../../spec/contracts/hook-protocol.md) are independently Frozen; their format numbers do not force one another.
+
+## M5 is implemented and integrated into develop
+
+The [M5 roadmap section](../implementation-roadmap.md#m5---migration) is
+**Implemented and integrated into develop** under the
+[approved baseline](../design-notes/m5-migration-implementation-baseline.md).
+[Implementation status](../m5-implementation-status.md) records the typed compiler,
+V6 upgrade, declarative/operator/Hook execution, regression evidence and exact-tree
+verification discipline. The delivery report must include the final post-integration
+cargo xtask ci result and source-manifest check. A remote push still needs its
+configured destination and a non-force branch-state check.
+
+### Already defined: preserve these decisions
+
+- [Target-owned Migration edges and transitions](../../spec/contracts/migrations.md), including source roles and single-writer rules.
+- [Intrinsic versus relational validation](../../spec/behavior/packages-revisions-and-instances.md#pr-req-0262---migration-relational-installation-policy); installing a target is different from admitting an executable edge.
+- Managed Input transitions, staged targets, incomplete intermediate state, and per-edge commit behavior as bounded in the roadmap.
+- The shared [acceptance/concurrency](../../spec/execution/execution-and-concurrency.md), [risk/recovery](../../spec/execution/recovery-and-reconciliation.md), and [Hook protocol](../../spec/contracts/hook-protocol.md) contracts.
+
+### Handoff checks
+
+| Review item | Required outcome before the affected implementation |
+| --- | --- |
+| Scope and work order | M5, bounded M6, M6.5 and approved M7 S0-S7 are implemented and integrated into local develop; M8 is rejected and archived |
+| Runtime/persistence integration | One owner/Run, whole-path pins, detached staging, independent Hook Sessions and per-edge atomic publication; no replay or service rollback |
+| Command and diagnostic surface | [Migration spelling](../../spec/behavior/m5-migration-command-reference.md), including path IDs, qualified operator files and per-invocation limits; no new stable JSON or public Rust API |
+| Verification plan | Preserve valid/invalid sources, writer conflicts, absence, staging, intermediate states, final atomic success and fresh-process interruption tests; require full CI after any later edit |
+| Contract conflict, if discovered | Name the conflicting rules and obtain semantic review instead of weakening a Frozen expectation |
+
+The owning Spec pages define the approved new command and V6 direction. Frozen
+HookProtocolV1 remains unchanged. The handoff is not a replacement for the
+exact-source validation report.
+
+## M6 is complete and integrated into develop
+
+After the initial scheduling approval, the operator approved continuous bounded
+M6 S0-S4 implementation on 2026-09-14. This does not approve ServiceStorage
+representation or runtime. Start with the
+[staged ServiceStorage alignment](../design-notes/service-storage-staged-design-alignment.md)
+and [approved M6 bounded baseline](../design-notes/m6-recovery-implementation-baseline.md).
+S0's operation/boundary/evidence audit retains exact V6. The
+[M6 implementation record](../m6-implementation-status.md) identifies the added
+cross-operation evidence and authorized local integration. M6 is `Complete`;
+the delivery report records final post-closeout full CI and exact-source
+verification. No push was authorized or performed.
+
+M6 covers existing Action, Capture, Restore and Migration recovery, reusing
+M3-M5 owner leases, continuations, risk handshake, exact pins and committed
+boundaries. Its slices are S0 contract/evidence review, S1 owner/reconciliation,
+S2 durable evidence/publication, S3 guard/diagnostics and S4 crash verification.
+No replay, resumed Interrupted Run, uncommitted-output salvage, new CLI spelling
+or silent V6 change is authorized.
+
+<a id="m7-implementation-is-verified-integration-is-separate" />
+
+## M7 is integrated; M8 is rejected
+
+The completed sequence is **Pre-M6 -> M6 -> M6.5 -> M7**. M8 was removed by the
+[2026-09-16 rejection decision](m8-recipes-rejected.md), not postponed.
+No next M-series milestone is selected. F is the next lettered milestone after E.
+A public Candidate API is deferred until
+concrete demand; YAML remains the built-in frontend. M6.5 is the dedicated
+[ServiceStorage milestone](../implementation-roadmap.md#m65---servicestorage),
+not an indefinitely deferred runtime. It is now `Complete` under its own
+reviewed Core, authority, persistence, access, compatibility and upgrade
+contracts. M6 completion removed the work-order prerequisite; the separate
+2026-09-15 M6.5 approval authorized these representations.
+
+The [M6.5 S0 design package](../design-notes/m6-5-servicestorage-baseline.md)
+was reviewed and the user authorized continued S1-S7 implementation on
+2026-09-15. Mapped sources are consumed atomically; only unmapped source-only
+associations are retained, with no persistent alias mechanism. Core/YAML V2
+conformance, V7 persistence and runtime paths are integrated into local develop.
+Public V2 installation and the Core/Hook V2 Freeze gate are implemented;
+final-source verification, Git integration and release remain distinct claims.
+See [M6.5 implementation status](../m6-5-implementation-status.md) for runtime
+evidence and the authorized integration record. This is not a release or push.
+
+M6.5 closes the retention, finalization and abandonment ownership boundary:
+V7 preserves custody, and M7 must add explicit versioned durable receipts before
+destructive operations. M7 delivers actual Cleanup coordination,
+do-not-replay/finalization, deletion and AbandonManagement operations. M6 does
+not claim their runtime coverage or wait for Cleanup to exist; M6.5 must not
+expose deletion that bypasses M7. The retired M8 number is not reused.
+
+The [M7 closeout](../m7-implementation-status.md) now records V8, real Cleanup,
+identity-bound physical finalization, explicit operator assertion, Abandon and
+detached handoff/discard, together with the fresh remote full gate and Windows
+evidence. The operator separately authorized the completed local commit and
+merge. This does not grant permission to push or publish. That historical
+integration initialized V8 and explicitly upgraded exact V7. The subsequent
+managed-object lifecycle integration introduced V9 with exact-V8 upgrade. The
+Snapshot capacity integration introduced V10 with explicit V8/V9 upgrade.
+The subsequent diagnostics integration initializes V11 and explicitly upgrades V8/V9/V10.
+
+[Closed ServiceStorage semantics](../design-notes/service-storage-semantic-baseline.md)
+remain authoritative. Inputs, metadata and Workspace are not live-service
+mirrors, and a Pactrun commit is not atomic with service bytes. The
+[remaining design gates](../implementation-roadmap.md#deferred-servicestorage-representation-and-runtime-gates)
+are assigned stages, not implied design approval. Snapshot deletion was outside
+the M7 runtime scope and is now implemented in the managed-object lifecycle closeout.
+The broader non-ServiceStorage resource taxonomy remains outside that scope;
+it does not block bounded M6.5.
+
+## Next planned scope and completion sequence
+
+The [original product completion plan](../product-completion-milestones.md) retains
+the earlier scope/rationale. The operator approved the
+[remaining A-E sequence](../remaining-capability-milestones.md) on 2026-09-19:
+execution diagnostics/Instance observability; object catalog/history/metadata;
+Revision bundles; machine-readable CLI output; then Versioning and Baseline
+Consolidation. A implementation and verification are complete and integrated
+into local develop; its [delivery record](../execution-diagnostics-observability-status.md)
+records the verified source and exact Git integration. B is implemented, verified
+and integrated into local develop under its
+[separately approved S0-S4 baseline](../design-notes/object-catalog-history-metadata-baseline.md).
+C is implemented, verified and integrated into local develop under the separately approved
+[Pack transport baseline](../design-notes/pack-transport-baseline.md), including the
+export naming follow-up. D is implemented, verified and integrated into local develop under the approved [S0-S4 presentation baseline](../design-notes/cli-presentation-baseline.md); its [implementation record](../cli-presentation-status.md) records verification and authorized integration.
+E subsequently received full local engineering and integration authorization;
+its current evidence is in the E ledger. The original grouping alone had
+only authorized planning. Full usage-guide work was excluded from A-E; F now
+selects complete documentation as its direction, with details deferred until entry.
+The [lifecycle implementation record](../managed-object-lifecycle-status.md)
+now tracks all lifecycle slices, including V9 activation, object deletion and GC,
+implemented, verified and integrated into local develop after authorized commit
+and merge. Snapshot Capacity and Restore Workflow is also implemented, verified
+and integrated into local develop after authorization on 2026-09-18; see the
+[implementation record](../snapshot-capacity-and-restore-status.md). Its V10
+adjustment, full CI and real beyond-ceiling round trips are complete.
+Shell Adapter / Loader is now [implemented, verified and integrated into local develop](../shell-adapter-loader-status.md)
+after separately authorized commit/merge, with scoped full-CI and platform
+evidence. Hook diagnostic presentation was not completed by the prior Loader
+closeout; the subsequent A milestone implemented, verified and integrated it. D's machine-readable
+models follow A-C rather than wrapping incomplete user workflows. No implementation
+is started by recording this plan. Push, release and publication remain separately authorized.
+No new M-series identifiers are assigned and M8 is not revived.
+
+The final milestone removes development-only compatibility and chronology from
+the shipping baseline, while retaining useful Freeze/evolution history separately.
+Data fully conforming to the final contracts is accepted regardless of development
+origin; no historical-generation exclusion is required. Current contracts remain
+binding until their reviewed implementation changes. Follow the
+[updated contributor rules](../development-and-verification.md) for all new work;
+historical terminology does not authorize development-only compatibility.
+
+## Release readiness is not the next milestone
+
+[Pre-release readiness work](../release-readiness.md) remains required before
+formal publication. E completed the original A-E engineering sequence; F is now
+the selected documentation/site follow-up. Neither E delivery nor F selection
+is automatic approval for a beta, RC, formal release or public deployment.
+Removing M8 is not a release trigger. The
+[formal compatibility policy](../../spec/foundations/product-versioning-and-compatibility.md)
+owns same-Major guarantees, origin-independent final-baseline acceptance and
+the alpha-to-formal promotion boundary. This handoff is not independent
+verification; use the owning E evidence and the later release gates.
+
+## Evidence caveat
+
+Managed Input Migration requirements now link to their direct automated evidence.
+M6.5 ServiceStorage and transformation rules have their own real-resource,
+cross-process and format evidence. M7 lifecycle now has its own acceptance
+record; it is not inferred from Managed Input or M6.5 tests. The broader resource
+taxonomy remains outside the approved scope.

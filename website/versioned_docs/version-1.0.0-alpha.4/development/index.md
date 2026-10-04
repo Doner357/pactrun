@@ -1,0 +1,111 @@
+---
+title: Development
+slug: /development
+---
+
+# Developing Pactrun
+
+**Status: Informative development entry.** This section helps implementers work
+from the specification; it does not replace the product rules or an approved
+milestone scope.
+
+## Start a development task
+
+E local engineering and the same-version help/README correction are integrated
+into develop. The [E delivery ledger](./e-implementation-status.md) records actual
+verification and publication limits.
+
+**Completed delivery: F — Documentation and Documentation Site.** The operator
+selected complete documentation authoring and documentation website/page design.
+F implementation and review corrections are complete. On 2026-09-29 the operator
+approved local commit and merge into develop. See the [F delivery record](./f-documentation-status.md) for scope and verification.
+Use the [F direction record](./remaining-capability-milestones.md#f-documentation-and-documentation-site)
+and [current handoff](./next-milestone.md). Public publication remains separately
+authorized; the port-3000 preview remains available.
+
+The [E design decisions](./design-notes/e-versioning-redesign-decisions.md),
+[approved E S0 plan](./design-notes/e-versioning-s0-plan.md) and
+[pre-E review](./pre-e-readiness.md) remain historical rationale and evidence,
+not pending approval gates for the completed E work.
+
+1. Read the [developer product overview](./product-overview.md).
+2. Establish the [current baseline and authorized scope](./next-milestone.md).
+3. Choose a [task reading path](./reading-paths.md) and its owning rules rather than reading all files.
+4. Apply [implementation guidance](./implementation-guidance.md).
+5. Follow [development and verification policy](./development-and-verification.md),
+   then report changed behavior, evidence, results, and limits.
+
+The [roadmap](./implementation-roadmap.md) controls work order. The Spec controls
+product semantics. A design summary may help locate a rule but cannot override
+it. The [M4 closeout](./m4-implementation-status.md) records integrated work, not
+a release or a fresh claim that every test has just run.
+
+## Historical milestone chronology
+
+The following records describe their original source revisions. Use the current
+handoff above for availability and baseline decisions.
+
+The historical work-order entry is the [ServiceStorage staged alignment](./design-notes/service-storage-staged-design-alignment.md).
+The [M6 bounded baseline](./design-notes/m6-recovery-implementation-baseline.md)
+records the scope of the now-integrated recovery milestone.
+The approved work order places ServiceStorage in M6.5 between M6 recovery and
+M7 Cleanup/deletion. Bounded M6 S0-S4 is complete and integrated; its
+[implementation record](./m6-implementation-status.md) records evidence and integration.
+M6.5's separate approval and integration are recorded below; they do not approve M7.
+
+The [M6.5 baseline](./design-notes/m6-5-servicestorage-baseline.md) links the
+approved design direction. M6.5 S1-S7 is implemented and integrated into develop;
+the [implementation record](./m6-5-implementation-status.md) separates runtime
+support, final-source verification and Git integration. [M7](./m7-implementation-status.md)
+is implemented and integrated; [M8 is rejected and archived](./history/m8-recipes-rejected.md).
+The [product completion milestones](./product-completion-milestones.md) now
+start with managed-object lifecycle/GC and end with versioning/baseline
+consolidation; the intermediate scopes and rationale are recorded there.
+The [lifecycle implementation record](./managed-object-lifecycle-status.md) tracks
+the separately approved design and all lifecycle slices on V9, with final
+acceptance passed and local develop integration completed. Snapshot Capacity and
+Restore Workflow is now [implemented, verified and integrated into local develop](./snapshot-capacity-and-restore-status.md);
+Shell Adapter / Loader is [implemented, verified and integrated into local develop](./shell-adapter-loader-status.md).
+Its former Hook diagnostic presentation gap was closed by A in the
+[remaining capability plan approved on 2026-09-19](./remaining-capability-milestones.md).
+Execution diagnostics/Instance observability is integrated into local develop.
+[Object catalog/history/metadata](./object-catalog-history-metadata-status.md) is
+also implemented, verified and integrated. [Portable Pack transport](./pack-transport-status.md)
+is implemented, verified and integrated into local develop.
+Machine-readable output is implemented, verified and integrated into local develop under its [approved S0-S4 baseline](./design-notes/cli-presentation-baseline.md); see the [implementation record](./cli-presentation-status.md). E is locally delivered; F is the selected documentation/site follow-up. The
+former full-usage-guide exclusion belongs to A-E, not F. No retired milestone
+number is reused.
+The [2026-09-23 obligation audit](./obligation-audit-2026-09-23.md) classifies
+remaining traceability, acceptance, formal-baseline and conditional-scope work.
+It supplements the historical inventory without approving E design or runtime work.
+Its [verification follow-up](./verification-gap-closure.md) records actual added
+tests, clause-backed evidence repairs and the still-open acceptance work.
+The [format review](./design-notes/m6-5-format-activation-review.md)
+records the independent Core/Hook V2 Freeze gate.
+
+## Release readiness is a separate planning dimension
+
+The [release-readiness checklist](./release-readiness.md) records approved work
+that must be accepted before formal publication, with relative work order now
+recorded in the completion plan and calendar timing left unassigned.
+It does not start automatically after M7 or the retirement of M8.
+The [owning compatibility policy](../spec/foundations/product-versioning-and-compatibility.md)
+separates this future product commitment from today's implemented format checks.
+
+## Change discipline
+
+For behavior-preserving work, choose local implementation details without
+inventing new product concepts. For a real conflict, identify the owning rules,
+observable consequences, and proposed decision before changing semantics.
+A passing test is evidence of an exercised contract, not permission to weaken it.
+
+The [migration review](./spec-migration-review.md) records the earlier document move
+and its preservation checks. Current [user guides](../guides/index.md),
+[author guides](../package-authors/index.md), and agent task entries
+(`docs/agents/index.md` in the checkout, also available through the site's agent
+text entry) are available; that migration's original placeholder scope is historical.
+
+Repository instructions and the task determine execution permissions. Personal
+communication and machine preferences are not part of the Pactrun Spec.
+
+- [Native package engineering delivery](./native-package-delivery.md): local artifact and source tooling; publication remains excluded.

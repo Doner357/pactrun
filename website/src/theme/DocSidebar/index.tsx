@@ -1,11 +1,11 @@
 import React, {type ReactNode} from 'react';
 import OriginalSidebar from '@theme-original/DocSidebar';
 import type {Props} from '@theme/DocSidebar';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import {readerRole} from '../../lib/reader-role.mjs';
+import {useEdition} from '../../lib/edition';
 
 export default function DocSidebar(props: Props): ReactNode {
-  const base = useBaseUrl('/');
+  const {docBase: base} = useEdition();
   const role = readerRole(props.path, base);
   const labels = {Users: 'Users', Authors: 'Pack authors'};
   const sidebar = role ? props.sidebar

@@ -59,3 +59,14 @@
 .search-filter-panel[open] .search-filters { margin-top: 1rem; }
 .search-filter-panel .search-scope { margin-bottom: 0; }
 @media (max-width: 600px) { .filter-summary { display: block; margin-left: 1rem; } .search-page h1 { font-size: 2rem; } }
+:root .edition-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.5rem;
+  align-items: center;
+  padding: .5rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  font-size: .85rem;
+}
+.edition-bar span {font-weight: 600; margin-right: auto;}
+.edition-picker select {max-width: 15rem; font: inherit; color: var(--ifm-font-color-base); background: var(--ifm-background-color);}
