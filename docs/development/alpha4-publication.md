@@ -4,8 +4,8 @@ title: Alpha.4 Linux compatibility delivery
 
 # Alpha.4 Linux compatibility delivery
 
-**Status: Qualified alpha.4 assets published on 2026-10-04; Preview catalog
-activation and public acquisition/Pages verification in progress.**
+**Status: Published and verified on 2026-10-04; Preview catalog activated,
+public acquisition and Pages verified, release synchronized into develop.**
 
 On 2026-10-04 the owner requested the alpha.4 compatibility delivery after the
 [Debian 12 CI gate](./linux-compatibility-ci.md) passed. Public mutations remain
@@ -109,3 +109,42 @@ the deployed Pages digest are separate post-activation checks recorded at closeo
 The published alpha.3 remains unchanged and still requires glibc 2.39. Current
 user instructions state the alpha.4 qualification baseline and do not promise
 automatic per-glibc version selection or removal of Homebrew dependencies.
+
+### Activation receipts
+
+- Release `402847622` is a public prerelease, not the Stable/latest release.
+  All 11 assets were downloaded anonymously and matched qualified sizes and
+  SHA-256 values after publication; no binaries were rebuilt for catalog activation.
+- Catalog/installation commit `2ac8a688d8bdc1de1b24fb670e9f64a8b3d016a6`
+  passed both PR gates (`37179332049`, `37179334543`) without retries. PR #26
+  merged into main at `e24e5275d3dd4676319e09998cd1f48acb5aa8ea`; PR #27
+  synchronized develop at `c6e082fb8bd7d732a5dc0b3ad91b2a750f6da679`.
+  Both merge trees match the catalog candidate. Main CI/Pages `37180043435`
+  and develop CI `37180045800` passed without retries.
+- Actual public-source acquisition passed 20 Windows/Scoop and 19 native
+  Linux/Homebrew assertions: moving alpha.4 and exact alpha.3 selection,
+  ordinary main source, separate management roots, command-conflict refusal,
+  active Hook survival, reinstall and uninstall data retention. The temporary
+  Windows PATH fingerprint was restored exactly. An initial Windows harness
+  invocation failed before Scoop setup because its manager path was relative;
+  the recorded acceptance run used absolute paths and a fresh isolated directory.
+- The public Homebrew coexistence run used Debian 13/glibc 2.41, where alpha.3
+  can execute. It is not a Debian 12 host result. The independent Debian 12
+  qualification consumed the final alpha.4 candidate archives; anonymous public
+  byte checks and generated formula parity tie that evidence to the publication.
+- Public Pages browser checks passed all eight selected routes, the alpha.4
+  installation and glibc 2.36 text, mobile overflow and JavaScript-error checks.
+  Activation source digest:
+  `630253daf8eea7517dd98ae63d030e05637ed5e37d5fb2a3b94b9855e5612fd9`.
+  Subsequent receipt-only documentation has a new digest and must pass the same
+  publication checks; this activation digest is not its final digest.
+- Alpha.1/alpha.2/alpha.3 Release IDs and asset IDs, names, sizes and digests were
+  unchanged against the pre-delivery audit. Their exact package definitions and
+  release records remain byte-identical to pre-delivery main.
+
+Closeout documentation reuses the unchanged source/artifact qualification above;
+its own scope is documentation tests, links, typecheck/build and final Pages
+verification, not a claimed additional full runtime qualification. The original
+Windows CI observation remains retained, not silently classified as resolved.
+Real reported-host Debian 12 acceptance remains a useful follow-up, not a claimed
+part of these container/shared-kernel and native Debian 13 results.
