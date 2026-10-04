@@ -5,7 +5,7 @@ title: Debian 12 artifact qualification
 # Debian 12 artifact qualification
 
 **Status: Implemented, verified on GitHub and integrated into develop on
-2026-10-04; no new public release.**
+2026-10-04; the original CI milestone did not publish a product.**
 
 The owner requested a GitHub CI path on 2026-10-04 after the public alpha.3 Linux
 payload failed on Debian 12 with system glibc 2.36. Its weak GLIBC_2.39 symbol
@@ -13,6 +13,10 @@ requirements are still loader requirements: merely installing Homebrew glibc
 did not make the executable use it. Published alpha.3 remains immutable and
 still has its documented glibc 2.39 requirement. This work does not update public
 package definitions, product versions or installed user software.
+
+**Subsequent delivery:** The separately requested [alpha.4 release](./alpha4-publication.md)
+uses this qualified recipe. The no-publication boundary below describes the
+original CI task, not the current release availability.
 
 ## One build path, independent runtime environments
 
@@ -107,6 +111,6 @@ with Actions artifacts and locally under `target/debian12-ci-20261004/`.
 The documentation-only closeout reuses unchanged runtime/tooling validation and
 retained candidate evidence; only informative records differ. It runs its own
 documentation/CI checks, not another fresh full runtime gate.
-Main, published alpha.3 binaries, exact definitions, package catalogs and Pages
-remain unchanged. A real Debian 12 host confirmation and any new public version
-remain separate steps requiring their applicable authorization.
+At CI closeout, main, alpha.3 binaries, exact definitions, package catalogs and
+Pages remained unchanged. Real-host confirmation and public delivery are separate
+steps with their own evidence and authorization; see the subsequent alpha.4 record.
