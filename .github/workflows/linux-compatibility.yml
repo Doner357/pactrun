@@ -1,0 +1,156 @@
+name: Debian 12 artifact qualification
+
+on:
+  workflow_call:
+    inputs:
+      source_commit:
+        type: string
+        default: ''
+      candidate_version:
+        type: string
+        default: ''
+      artifact_name:
+        type: string
+        default: debian12-linux-candidate
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build Bookworm payload and audit ABI
+    runs-on: ubuntu-24.04
+    env:
+      # The repository's rolling rust-toolchain.toml must not override this image.
+      RUSTUP_TOOLCHAIN: 1.98.1
+    container:
+      # Official Rust 1.98.1 Bookworm image, pinned linux/amd64 manifest.
+      image: rust:1.98.1-slim-bookworm@sha256:dacc9e51f252243eb59d2fb4cb4ad8b0d3f607b6a82c398cf8a321e59ff778a7
+    steps:
+      - name: Prepare build-only dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git python3 binutils pkg-config build-essential ca-certificates
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test artifact qualification tooling
+        run: python3 -B -m unittest tools.test_release_artifacts tools.test_linux_compatibility
+      - name: Build source-qualified archives and reject excessive glibc requirements
+        env:
+          REQUESTED_SHA: ${{ inputs.source_commit || github.sha }}
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+          RUSTFLAGS: ''
+          CARGO_ENCODED_RUSTFLAGS: ''
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -B -m tools.linux_compatibility build \
+            --work "$GITHUB_WORKSPACE/target/debian12-candidate" --candidate-version "$CANDIDATE_VERSION"
+      - name: Retain the single build for both runtime gates
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/debian12-candidate/output/assets/*
+            target/debian12-candidate/output/release-part.json
+            target/debian12-candidate/output/artifact-checksums.json
+            target/debian12-candidate/output/binary-probe.json
+            target/debian12-candidate/snapshot/*
+            target/debian12-candidate/linux-abi.json
+      - name: Retain build failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian12-build-failure
+          path: |
+            target/debian12-candidate/*.log
+            target/debian12-candidate/output/cargo-build.log
+
+  direct:
+    name: Clean Debian 12 without Homebrew
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:12-slim@sha256:f3034a6ec3c1205360777c4aae76234998866ad18806ae62b63a3f84ccad782b
+    steps:
+      - name: Prepare a non-root runtime, not a compiler environment
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 ca-certificates git
+          useradd --uid 1001 --create-home --shell /bin/bash pactrun-ci
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: target/linux-candidate
+      - name: Exercise exact archives and reproduce the immutable alpha.3 failure
+        run: |
+          install -d -o 1001 -g 1001 "$GITHUB_WORKSPACE/target/direct-work"
+          runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility direct \
+            --artifacts "$GITHUB_WORKSPACE/target/linux-candidate" --work "$GITHUB_WORKSPACE/target/direct-work/validation"
+      - name: Retain direct-runtime receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian12-direct-evidence
+          path: target/direct-work/validation/result.json
+          if-no-files-found: warn
+
+  homebrew:
+    name: Normal Homebrew install on Debian 12
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:12-slim@sha256:f3034a6ec3c1205360777c4aae76234998866ad18806ae62b63a3f84ccad782b
+    steps:
+      - name: Prepare documented Homebrew prerequisites and an ordinary user
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential procps curl file git python3 ca-certificates
+          useradd --uid 1001 --create-home --shell /bin/bash pactrun-ci
+          install -d -o 1001 -g 1001 /home/linuxbrew/.linuxbrew
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_commit || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: target/linux-candidate
+      - name: Install a pinned Homebrew in its standard Linux prefix
+        run: |
+          runuser -u pactrun-ci -- git init /home/linuxbrew/.linuxbrew/Homebrew
+          runuser -u pactrun-ci -- git -C /home/linuxbrew/.linuxbrew/Homebrew remote add origin https://github.com/Homebrew/brew.git
+          runuser -u pactrun-ci -- git -C /home/linuxbrew/.linuxbrew/Homebrew fetch --depth=1 origin 570982948a8a194f0f42f43f4a5bce2d1c9f64cb
+          runuser -u pactrun-ci -- git -C /home/linuxbrew/.linuxbrew/Homebrew checkout --detach FETCH_HEAD
+          test "$(git -c safe.directory=/home/linuxbrew/.linuxbrew/Homebrew -C /home/linuxbrew/.linuxbrew/Homebrew rev-parse HEAD)" = 570982948a8a194f0f42f43f4a5bce2d1c9f64cb
+          runuser -u pactrun-ci -- mkdir /home/linuxbrew/.linuxbrew/bin
+          runuser -u pactrun-ci -- mkdir -p /home/linuxbrew/.linuxbrew/Cellar /home/linuxbrew/.linuxbrew/opt /home/linuxbrew/.linuxbrew/var
+          runuser -u pactrun-ci -- ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew
+      - name: Install staged formula normally, record dependencies, and test exact payload
+        run: |
+          install -d -o 1001 -g 1001 "$GITHUB_WORKSPACE/target/brew-work"
+          runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility brew \
+            --artifacts "$GITHUB_WORKSPACE/target/linux-candidate" --work "$GITHUB_WORKSPACE/target/brew-work/validation" \
+            --manager /home/linuxbrew/.linuxbrew/bin/brew
+      - name: Retain Homebrew receipt and actual dependency list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian12-homebrew-evidence
+          path: |
+            target/brew-work/validation/result.json
+            target/brew-work/validation/*.log
+            target/brew-work/validation/dependencies-*.txt
+          if-no-files-found: warn

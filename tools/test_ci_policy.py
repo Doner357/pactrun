@@ -95,12 +95,14 @@ class ScopeTests(unittest.TestCase):
             ("success", "false", "success", "failure", False),
         ]
         for scope, runtime, ubuntu, windows, expected in cases:
-            with self.subTest(scope=scope, runtime=runtime, ubuntu=ubuntu, windows=windows):
-                env = dict(os.environ, SCOPE_RESULT=scope, RUNTIME=runtime,
-                           UBUNTU_RESULT=ubuntu, WINDOWS_RESULT=windows)
-                result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], env=env,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                self.assertEqual(result.returncode == 0, expected, result.stderr.decode())
+            for debian in ['success', 'skipped', 'failure', 'cancelled', '']:
+                allowed = expected and debian == ('success' if runtime == 'true' else 'skipped')
+                with self.subTest(scope=scope, runtime=runtime, ubuntu=ubuntu, windows=windows, debian=debian):
+                    env = dict(os.environ, SCOPE_RESULT=scope, RUNTIME=runtime,
+                               UBUNTU_RESULT=ubuntu, WINDOWS_RESULT=windows, DEBIAN12_RESULT=debian)
+                    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], env=env,
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    self.assertEqual(result.returncode == 0, allowed, result.stderr.decode())
 
 
 if __name__ == "__main__":

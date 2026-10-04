@@ -44,7 +44,16 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
-## Current approved work: Alpha.3 Preview delivery
+## Current approved work: Debian 12 artifact CI
+
+**State: Implementation and GitHub verification in progress; not a public release.**
+
+The [Debian 12 CI record](./linux-compatibility-ci.md) adds a lower-glibc build and
+separate direct/Homebrew runtime gates for future Linux artifacts. The published
+alpha.3 executable, its glibc 2.39 requirement and immutable assets are unchanged.
+No product-version bump, main/Pages publication or new release is included.
+
+## Previous work: Alpha.3 Preview delivery
 
 **State: Published and verified; public acquisition and Pages verified on 2026-10-03.**
 
