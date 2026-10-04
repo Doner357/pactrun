@@ -46,7 +46,7 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current approved work: Debian 12 artifact CI
 
-**State: Implementation and GitHub verification in progress; not a public release.**
+**State: Implemented, GitHub-verified and integrated into develop; not a public release.**
 
 The [Debian 12 CI record](./linux-compatibility-ci.md) adds a lower-glibc build and
 separate direct/Homebrew runtime gates for future Linux artifacts. The published
