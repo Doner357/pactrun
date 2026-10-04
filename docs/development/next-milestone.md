@@ -46,7 +46,8 @@ milestone record authorizes restoring an obsolete reader or deleting real data.
 
 ## Current work: Alpha.4 Linux compatibility delivery
 
-**State: Qualified alpha.4 assets published; catalog activation and public verification in progress.**
+**State: Published and verified on 2026-10-04; Preview catalog, public acquisition
+and Pages verified, release synchronized into develop. No next milestone started.**
 
 The published product is `1.0.0-alpha.4`; all alpha.1 through alpha.3 exact
 releases remain immutable. The [alpha.4 record](./alpha4-publication.md)
