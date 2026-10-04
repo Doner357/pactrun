@@ -2,12 +2,27 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {exportCatalog} from '../plugins/document-catalog/index.mjs';
 import {exportText} from '../plugins/text-docs/index.mjs';
+import {editions} from '../plugins/editions.mjs';
+import {writeFile, rm, copyFile} from 'node:fs/promises';
 
 const siteDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const result = await exportText({
-  docsDir: path.resolve(siteDir, '../docs'),
-  outDir: path.join(siteDir, '.generated-text'),
-});
-console.log('Prepared text edition:', result.count, 'documents; source SHA-256', result.digest);
-
-await exportCatalog(siteDir);
+const all = await editions(siteDir);
+const baseUrl = process.env.DOCUSAURUS_BASE_URL ?? '/';
+const output = path.resolve(siteDir, '.generated-text');
+if (path.dirname(output) !== siteDir) throw new Error('Invalid generated output directory');
+await rm(output, {recursive: true, force: true});
+for (const edition of all) {
+  const result = await exportText({docsDir: edition.docsDir,
+    outDir: path.join(siteDir, '.generated-text', edition.path), version: edition.id, baseUrl});
+  await exportCatalog(siteDir, edition);
+  console.log('Prepared', edition.label, result.count, 'documents; SHA-256', result.digest);
+}
+// Unversioned text/API bookmarks resolve to the latest release, never development.
+await exportText({docsDir: all[0].docsDir, outDir: output, version: all[0].id, baseUrl});
+for (const name of ['document-catalog.json', 'command-help.json']) {
+  await copyFile(path.join(output, all[0].path, name), path.join(output, name));
+}
+// Preserve the public text entry, but explicitly direct readers to an edition.
+await writeFile(path.join(siteDir, '.generated-text', 'llms.txt'),
+  '# Pactrun documentation\n\n' + all.map(edition =>
+    `- [${edition.label}](./${edition.path}/llms.txt)`).join('\n') + '\n');

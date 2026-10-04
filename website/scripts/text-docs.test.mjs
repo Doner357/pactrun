@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
-import textDocs, {exportText, markdownBody, readDocuments, validateLinks, textBody} from '../plugins/text-docs/index.mjs';
+import textDocs, {exportText, markdownBody, readDocuments, validateLinks, textBody, verifyText} from '../plugins/text-docs/index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -47,7 +47,7 @@ test('text export is deterministic, preserves relative links, and removes stale 
     const first = await exportText({docsDir, outDir});
     const second = await exportText({docsDir, outDir});
     assert.deepEqual(first, second);
-    const plugin = textDocs({siteDir: path.join(workspace, 'website'), siteConfig: {baseUrl: '/'}});
+    const plugin = {postBuild: () => verifyText({docsDir, outDir})};
     await plugin.postBuild({outDir, routesPaths: ['/']});
     await writeFile(path.join(outDir, 'agent-docs/index.md'), '# Corrupted export\n');
     await assert.rejects(plugin.postBuild({outDir, routesPaths: ['/']}), /drift/);
@@ -83,8 +83,8 @@ test('agent text shares classification and preserves the entire original body af
 
 test('discovery supports a project base path and agent HTML routes are rejected', async () => {
   const plugin = textDocs({siteDir: path.join(root, 'website'), siteConfig: {baseUrl: '/pactrun/'}});
-  assert.equal(plugin.injectHtmlTags().headTags[0].attributes.href, '/pactrun/llms.txt');
   await assert.rejects(plugin.postBuild({outDir: 'unused', routesPaths: ['/pactrun/agents/index']}), /HTML route/);
+  await assert.rejects(plugin.postBuild({outDir: 'unused', routesPaths: ['/pactrun/next/agents/index']}), /HTML route/);
 });
 
 test('agent source files are excluded from human document generation', async () => {

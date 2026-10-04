@@ -1,5 +1,7 @@
 import type {Config} from '@docusaurus/types';
 import type {Options, ThemeConfig} from '@docusaurus/preset-classic';
+import versions from './versions.json';
+import {versionLinks} from './plugins/editions.mjs';
 
 const config: Config = {
   title: 'Pactrun',
@@ -20,6 +22,12 @@ const config: Config = {
           exclude: ['agents/**', 'archive/**', 'proposals/**'],
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
+          lastVersion: versions[0],
+          versions: {
+            current: {label: 'Development (unreleased)', path: 'next', banner: 'unreleased'},
+            ...Object.fromEntries(versions.map(version => [version, {label: version, path: version}])),
+          },
+          beforeDefaultRemarkPlugins: [versionLinks],
         },
         blog: false,
         theme: {
@@ -33,17 +41,14 @@ const config: Config = {
     navbar: {
       title: 'Pactrun',
       items: [
-        {to: '/guides/', label: 'Users', position: 'left'},
-        {to: '/package-authors/', label: 'Authors', position: 'left'},
-        {to: '/spec/', label: 'Spec', position: 'left'},
-        {to: '/commands', label: 'Commands', position: 'right'},
-        {to: '/search', label: 'Search', position: 'right'},
-        {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
-          position: 'left',
-          label: 'Browse',
-        },
+        {type: 'custom-editionLink', target: '/guides/', label: 'Users', position: 'left'},
+        {type: 'custom-editionLink', target: '/package-authors/', label: 'Authors', position: 'left'},
+        {type: 'custom-editionLink', target: '/spec/', label: 'Spec', position: 'left'},
+        {type: 'custom-editionLink', target: '/commands', label: 'Commands', position: 'right'},
+        {type: 'custom-editionLink', target: '/search', label: 'Search', position: 'right'},
+        {type: 'custom-editionPicker', position: 'right'},
+        {href: 'https://github.com/Doner357/pactrun', label: 'GitHub', position: 'right'},
+        {type: 'custom-editionLink', target: '/', position: 'left', label: 'Browse'},
       ],
     },
     footer: {
