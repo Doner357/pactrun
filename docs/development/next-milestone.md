@@ -44,7 +44,26 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
-## Current approved work: Alpha.3 Preview delivery
+## Current work: Alpha.4 Linux compatibility delivery
+
+**State: Candidate preparation and qualification in progress; not yet published.**
+
+The candidate product is `1.0.0-alpha.4`; the published Preview remains
+`1.0.0-alpha.3` until delivery completes. The [alpha.4 record](./alpha4-publication.md)
+owns the new Bookworm-built artifacts and delivery evidence. All earlier release
+bytes and exact definitions remain immutable. This is not Stable promotion,
+a format change, a documentation redesign or an automatic data/Pack repair.
+
+## Previous work: Debian 12 artifact CI
+
+**State: Implemented, GitHub-verified and integrated into develop; not a public release.**
+
+The [Debian 12 CI record](./linux-compatibility-ci.md) adds a lower-glibc build and
+separate direct/Homebrew runtime gates for future Linux artifacts. The published
+alpha.3 executable, its glibc 2.39 requirement and immutable assets are unchanged.
+No product-version bump, main/Pages publication or new release is included.
+
+## Previous work: Alpha.3 Preview delivery
 
 **State: Published and verified; public acquisition and Pages verified on 2026-10-03.**
 

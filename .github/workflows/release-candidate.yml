@@ -26,9 +26,6 @@ jobs:
           - runner: windows-2025
             platform: windows-x86_64
             target: x86_64-pc-windows-msvc
-          - runner: ubuntu-24.04
-            platform: linux-x86_64
-            target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.runner }}
     env:
       RUSTUP_TOOLCHAIN: 1.98.1
@@ -89,3 +86,11 @@ jobs:
             ${{ runner.temp }}/pactrun-candidate/output/artifact-checksums.json
             ${{ runner.temp }}/pactrun-candidate/output/binary-probe.json
             ${{ runner.temp }}/pactrun-candidate/snapshot/*
+
+  linux:
+    name: Qualified Debian 12 Linux candidate
+    uses: ./.github/workflows/linux-compatibility.yml
+    with:
+      source_commit: ${{ inputs.source_commit }}
+      candidate_version: ${{ inputs.version }}
+      artifact_name: candidate-linux-x86_64

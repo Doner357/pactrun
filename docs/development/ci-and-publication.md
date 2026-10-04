@@ -38,6 +38,11 @@ history and initial pushes use the full scope.
 - Pinned, checksum-verified actionlint checks workflow syntax and expressions;
   ShellCheck integration is not enabled. Scope policy, the actual aggregate gate
   and the inline Pages freshness guard have focused executable tests.
+- Runtime scope also requires the shared [Debian 12 artifact gate](./linux-compatibility-ci.md):
+  one Bookworm build with launcher/payload ABI checks, a clean non-root runtime
+  without Homebrew, and an independent ordinary-user Homebrew installation.
+  Documentation-only scope must explicitly skip this gate; runtime failure or
+  cancellation cannot satisfy the aggregate check.
 - The aggregate **CI gate** requires all applicable jobs to pass. A skipped
   Windows job is accepted only when documentation-only scope was proved. Failed,
   cancelled or missing verification does not authorize deployment.
@@ -149,10 +154,13 @@ Real releases require full candidate/artifact qualification, minimum-environment
 and trust/license review, and explicit publication authorization. Neither workflow
 automatically uploads executable releases or updates package sources. The manually
 dispatched **Release candidate** workflow builds source-qualified artifacts on
-Windows 2025 and Ubuntu 24.04 with Rust 1.98.1; its read-only token cannot publish
-them. Choose the binary source SHA from the delivery receipt, not a later metadata
+Windows 2025 and a pinned Debian 12 Bookworm container with Rust 1.98.1; the Linux
+leg uses the same build-and-runtime workflow as normal CI. Its read-only token
+cannot publish artifacts. Choose the binary source SHA from the delivery receipt, not a later metadata
 commit, when reproducing that source. Candidate artifacts are review inputs, not
 permission to overwrite an already published version with a different build.
+Archived alpha.3 used its original Ubuntu 24.04 build recipe; reproduce it with
+the historical workflow revision, not by relabeling a new Bookworm build.
 
 For pre-main qualification, manually dispatch the workflow from
 `release/<version>` and supply that exact dispatch-head SHA and Cargo version.
