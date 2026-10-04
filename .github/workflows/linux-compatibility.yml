@@ -49,8 +49,9 @@ jobs:
           RUSTFLAGS: ''
           CARGO_ENCODED_RUSTFLAGS: ''
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 -B -m tools.linux_compatibility build \
-            --work "$RUNNER_TEMP/pactrun-linux" --candidate-version "$CANDIDATE_VERSION"
+            --work "$GITHUB_WORKSPACE/target/debian12-candidate" --candidate-version "$CANDIDATE_VERSION"
       - name: Retain the single build for both runtime gates
         uses: actions/upload-artifact@v4
         with:
@@ -58,20 +59,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ runner.temp }}/pactrun-linux/output/assets/*
-            ${{ runner.temp }}/pactrun-linux/output/release-part.json
-            ${{ runner.temp }}/pactrun-linux/output/artifact-checksums.json
-            ${{ runner.temp }}/pactrun-linux/output/binary-probe.json
-            ${{ runner.temp }}/pactrun-linux/snapshot/*
-            ${{ runner.temp }}/pactrun-linux/linux-abi.json
+            target/debian12-candidate/output/assets/*
+            target/debian12-candidate/output/release-part.json
+            target/debian12-candidate/output/artifact-checksums.json
+            target/debian12-candidate/output/binary-probe.json
+            target/debian12-candidate/snapshot/*
+            target/debian12-candidate/linux-abi.json
       - name: Retain build failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: debian12-build-failure
           path: |
-            ${{ runner.temp }}/pactrun-linux/*.log
-            ${{ runner.temp }}/pactrun-linux/output/cargo-build.log
+            target/debian12-candidate/*.log
+            target/debian12-candidate/output/cargo-build.log
 
   direct:
     name: Clean Debian 12 without Homebrew
@@ -85,7 +86,6 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends python3 ca-certificates git
           useradd --uid 1001 --create-home --shell /bin/bash pactrun-ci
-          install -d -o 1001 -g 1001 "$RUNNER_TEMP/direct-work"
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.source_commit || github.sha }}
@@ -93,17 +93,18 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: ${{ runner.temp }}/linux-candidate
+          path: target/linux-candidate
       - name: Exercise exact archives and reproduce the immutable alpha.3 failure
         run: |
+          install -d -o 1001 -g 1001 "$GITHUB_WORKSPACE/target/direct-work"
           runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility direct \
-            --artifacts "$RUNNER_TEMP/linux-candidate" --work "$RUNNER_TEMP/direct-work/validation"
+            --artifacts "$GITHUB_WORKSPACE/target/linux-candidate" --work "$GITHUB_WORKSPACE/target/direct-work/validation"
       - name: Retain direct-runtime receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debian12-direct-evidence
-          path: ${{ runner.temp }}/direct-work/validation/result.json
+          path: target/direct-work/validation/result.json
           if-no-files-found: warn
 
   homebrew:
@@ -118,7 +119,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends build-essential procps curl file git python3 ca-certificates
           useradd --uid 1001 --create-home --shell /bin/bash pactrun-ci
-          install -d -o 1001 -g 1001 /home/linuxbrew/.linuxbrew "$RUNNER_TEMP/brew-work"
+          install -d -o 1001 -g 1001 /home/linuxbrew/.linuxbrew
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.source_commit || github.sha }}
@@ -126,7 +127,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: ${{ runner.temp }}/linux-candidate
+          path: target/linux-candidate
       - name: Install a pinned Homebrew in its standard Linux prefix
         run: |
           runuser -u pactrun-ci -- git init /home/linuxbrew/.linuxbrew/Homebrew
@@ -138,8 +139,9 @@ jobs:
           runuser -u pactrun-ci -- ln -s ../Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew
       - name: Install staged formula normally, record dependencies, and test exact payload
         run: |
+          install -d -o 1001 -g 1001 "$GITHUB_WORKSPACE/target/brew-work"
           runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility brew \
-            --artifacts "$RUNNER_TEMP/linux-candidate" --work "$RUNNER_TEMP/brew-work/validation" \
+            --artifacts "$GITHUB_WORKSPACE/target/linux-candidate" --work "$GITHUB_WORKSPACE/target/brew-work/validation" \
             --manager /home/linuxbrew/.linuxbrew/bin/brew
       - name: Retain Homebrew receipt and actual dependency list
         if: always()
@@ -147,7 +149,7 @@ jobs:
         with:
           name: debian12-homebrew-evidence
           path: |
-            ${{ runner.temp }}/brew-work/validation/result.json
-            ${{ runner.temp }}/brew-work/validation/*.log
-            ${{ runner.temp }}/brew-work/validation/dependencies-*.txt
+            target/brew-work/validation/result.json
+            target/brew-work/validation/*.log
+            target/brew-work/validation/dependencies-*.txt
           if-no-files-found: warn

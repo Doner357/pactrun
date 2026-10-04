@@ -71,6 +71,8 @@ class LinuxCompatibility(unittest.TestCase):
         self.assertNotIn('contents: write', shared)
         self.assertNotIn('--ignore-dependencies', shared)
         self.assertNotIn('LD_LIBRARY_PATH:', shared)
+        self.assertNotIn('${{ runner.temp }}', shared)
+        self.assertIn('git config --global --add safe.directory "$GITHUB_WORKSPACE"', shared)
 
 
 if __name__ == '__main__':

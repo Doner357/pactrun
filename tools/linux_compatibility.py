@@ -112,6 +112,7 @@ def build(work, candidate_version):
             raise ValueError('Cargo version differs from requested release candidate')
     work.mkdir(exist_ok=False)
     snapshot, source, output = [work / part for part in ['snapshot', 'source', 'output']]
+    run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT, log=work / 'source-status.log')
     release.source(ROOT, snapshot)
     unpack(snapshot / 'source.tar.gz', source)
     fetched = run(['cargo', 'fetch', '--locked', '--manifest-path', source / 'Cargo.toml', '--target', 'x86_64-unknown-linux-gnu'])
