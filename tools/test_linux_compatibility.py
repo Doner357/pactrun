@@ -64,6 +64,7 @@ class LinuxCompatibility(unittest.TestCase):
         self.assertEqual(shared.count('uses: actions/download-artifact@v4'), 2)
         self.assertEqual(shared.count('debian:12-slim@sha256:'), 2)
         self.assertIn('rust:1.98.1-slim-bookworm@sha256:', shared)
+        self.assertIn('RUSTUP_TOOLCHAIN: 1.98.1', shared)
         self.assertIn('runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility direct', shared)
         self.assertIn('runuser -u pactrun-ci -- python3 -B -m tools.linux_compatibility brew', shared)
         self.assertIn('contents: read', shared)

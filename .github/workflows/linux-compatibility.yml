@@ -24,6 +24,9 @@ jobs:
   build:
     name: Build Bookworm payload and audit ABI
     runs-on: ubuntu-24.04
+    env:
+      # The repository's rolling rust-toolchain.toml must not override this image.
+      RUSTUP_TOOLCHAIN: 1.98.1
     container:
       # Official Rust 1.98.1 Bookworm image, pinned linux/amd64 manifest.
       image: rust:1.98.1-slim-bookworm@sha256:dacc9e51f252243eb59d2fb4cb4ad8b0d3f607b6a82c398cf8a321e59ff778a7
