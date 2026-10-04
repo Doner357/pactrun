@@ -27,7 +27,7 @@ payload; this does not qualify all Authentik features or repair old data. See th
 [evaluated boundary and deferred documentation work](./public-preview-delivery.md#authentik-black-box-follow-up).
 
 The [E delivery ledger](./e-implementation-status.md) records local engineering
-qualification and integration. The current published product is `1.0.0-alpha.3`; the
+qualification and integration. The current published product is `1.0.0-alpha.4`; the
 eight current format domains use `1.0-alpha.1`. These selections do not couple
 the independent version domains or authorize formal promotion.
 
@@ -44,7 +44,17 @@ Development-era numeric formats and storage upgrade chains are retired. Updating
 the executable does not relabel, rehash, or rebind existing objects. No old
 milestone record authorizes restoring an obsolete reader or deleting real data.
 
-## Current approved work: Debian 12 artifact CI
+## Current work: Alpha.4 Linux compatibility delivery
+
+**State: Qualified alpha.4 assets published; catalog activation and public verification in progress.**
+
+The published product is `1.0.0-alpha.4`; all alpha.1 through alpha.3 exact
+releases remain immutable. The [alpha.4 record](./alpha4-publication.md)
+owns the new Bookworm-built artifacts and delivery evidence. All earlier release
+bytes and exact definitions remain immutable. This is not Stable promotion,
+a format change, a documentation redesign or an automatic data/Pack repair.
+
+## Previous work: Debian 12 artifact CI
 
 **State: Implemented, GitHub-verified and integrated into develop; not a public release.**
 

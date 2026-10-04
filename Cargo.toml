@@ -1,6 +1,6 @@
 [package]
 name = "pactrun"
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.4"
 edition = "2024"
 publish = false
 license = "MIT"
