@@ -24,7 +24,7 @@ test('reader navigation stays in role at root and project base paths; developer 
     assert.equal(allowReaderNavigation(url('package-authors/'), url('spec/'), base), false);
     assert.equal(allowReaderNavigation(url('pactrun-users/reference/snapshot-limits'), url('package-authors/'), base), false);
     assert.equal(allowReaderNavigation(url('guides/'), url('pactrun-users/reference/'), base), true);
-    assert.equal(allowReaderNavigation(url('spec/'), url('development/'), base), true);
+    assert.equal(allowReaderNavigation(url('spec/'), url('spec/storage/compatibility'), base), true);
     assert.equal(allowReaderNavigation(url('guides/'), base, base), true);
   }
 });
@@ -71,7 +71,7 @@ test('reader views preserve every real source code block independently of projec
 });
 
 test('both reader roles explain exact invocation text and user maintenance states its store-wide scope', () => {
-  const owner = bodies.get('spec/contracts/actions-inputs-and-parameters.md');
+  const owner = bodies.get('spec/operations/parameters.md');
   const patterns = [String.raw`-?(0|[1-9][0-9]*)`, String.raw`-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`];
   for (const pattern of patterns) {
     assert.ok(owner.includes(pattern));
@@ -92,8 +92,8 @@ test('author field guide exposes choices, omissions and meanings for common decl
   for (const value of ['none', 'output', 'interactive', 'integer', 'float', 'boolean', 'string', 'normal', 'secret', 'direct', 'interpreter', 'shell_loader', 'powershell_7', 'windows_powershell_5_1']) assert.ok(guide.includes('`' + value + '`'), value);
   for (const value of ['read_exposure', 'user_mutation', 'service_access', 'service_requires', 'source_revision_digest', 'storage_transitions', 'resource_transitions', 'reuse', 'reattach', 'transform', 'declassify']) assert.ok(service.includes(value), value);
   assert.match(guide, /String `"1\.0-alpha\.1"`/);
-  const sourceMarker = bodies.get('spec/contracts/pack-source.md').match(/source_format: "([^"]+)"/)[1];
-  const hookMarker = bodies.get('spec/contracts/hook-protocol.md').match(/the supported value is `([^`]+)`/)[1];
+  const sourceMarker = bodies.get('spec/packages/source-format.md').match(/source_format: "([^"]+)"/)[1];
+  const hookMarker = bodies.get('spec/interfaces/hook-protocol.md').match(/the supported value is `([^`]+)`/)[1];
   assert.ok(guide.split('| `source_format` |')[1].split('\n')[0].includes('"' + sourceMarker + '"'));
   assert.ok(guide.split('| `protocol_version` |')[1].split('\n')[0].includes('"' + hookMarker + '"'));
   assert.match(guide, /There is no default terminal mode/);
@@ -103,19 +103,20 @@ test('author field guide exposes choices, omissions and meanings for common decl
 test('task queries prefer reader guidance while exact requirement queries retain the Spec owner', () => {
   assert.equal(searchPages(catalog.pages, {q: 'terminal none', audience: 'Authors'})[0].source, 'package-authors/reference/pack-fields.md');
   assert.ok(searchPages(catalog.pages, {q: 'jsonl', audience: 'Users'})[0].source.startsWith('pactrun-users/'));
-  assert.equal(searchPages(catalog.pages, {q: 'PR-REQ-0258', audience: 'Authors'})[0].source, 'spec/contracts/pack-source.md');
-  assert.equal(searchPages(catalog.pages, {q: 'Product Versioning and Compatibility'})[0].source, 'spec/foundations/product-versioning-and-compatibility.md');
+  assert.equal(searchPages(catalog.pages, {q: 'PR-REQ-0258', audience: 'Authors'})[0].source, 'spec/packages/source-format.md');
+  assert.equal(searchPages(catalog.pages, {q: 'Product Versioning and Compatibility'})[0].source, 'spec/storage/compatibility.md');
   for (const [q, audience] of [['hook protocol', 'Authors'], ['snapshot integrity', 'Users']]) {
     const results = searchPages(catalog.pages, {q, audience});
-    const readerIndex = results.findIndex(page => ['Guide', 'Tutorial', 'Reference', 'Explanation'].includes(page.role));
+    const readerIndex = results.findIndex(page => page.source.startsWith(audience === 'Authors' ? 'package-authors/' : 'pactrun-users/'));
     const specIndex = results.findIndex(page => page.role === 'Specification');
     assert.ok(readerIndex >= 0 && specIndex >= 0, q + ': fixture must cover both audiences');
     assert.ok(readerIndex < specIndex, q + ': title-only scoring must not bypass reader guidance');
+    assert.ok(results[0].source.startsWith(audience === 'Authors' ? 'package-authors/' : 'pactrun-users/'), q + ': Spec indexes must not masquerade as reader guidance');
   }
 });
 
 test('reader enum choices follow the owning declaration vocabulary', () => {
-  const owner = bodies.get('spec/contracts/revision-canonical.md');
+  const owner = bodies.get('spec/packages/revision-format.md');
   for (const [name, keys] of [
     ['package-authors/reference/pack-fields.md', ['type', 'protection', 'access', 'terminal', 'shell']],
     ['package-authors/reference/service-fields.md', ['read_exposure', 'mode', 'view', 'role']],

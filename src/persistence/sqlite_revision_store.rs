@@ -1,7 +1,7 @@
 //! Crate-private SQLite persistence for exact Revision content.
 //!
 //! This module owns database reference publication only. Runtime blob bytes are
-//! published durably by M1-B before a new relational reference is committed.
+//! published durably before a new relational reference is committed.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -1205,9 +1205,10 @@ pub(crate) fn fault(point: FaultPoint) {
             thread::sleep(Duration::from_millis(10));
         }
     }
-    if std::env::var_os("PACTRUN_M4_SYNC").is_some_and(|value| value == point.name()) {
+    if std::env::var_os("PACTRUN_OPERATION_TEST_SYNC").is_some_and(|value| value == point.name()) {
         let root = PathBuf::from(
-            std::env::var_os("PACTRUN_M4_SYNC_DIR").expect("test synchronization directory"),
+            std::env::var_os("PACTRUN_OPERATION_TEST_SYNC_DIR")
+                .expect("test synchronization directory"),
         );
         std::fs::write(root.join("ready"), point.name()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(30);
@@ -1218,10 +1219,10 @@ pub(crate) fn fault(point: FaultPoint) {
     }
     if [
         "PACTRUN_LIFECYCLE_FAULT",
-        "PACTRUN_M1C_FAULT",
-        "PACTRUN_M1D_FAULT",
-        "PACTRUN_M3_FAULT",
-        "PACTRUN_M4_FAULT",
+        "PACTRUN_REVISION_TEST_FAULT",
+        "PACTRUN_METADATA_TEST_FAULT",
+        "PACTRUN_RUN_TEST_FAULT",
+        "PACTRUN_OPERATION_TEST_FAULT",
     ]
     .iter()
     .any(|variable| std::env::var_os(variable).is_some_and(|value| value == point.name()))
@@ -1251,7 +1252,7 @@ mod tests {
         project_runtime_content_closure_v1, validate_declaration_content,
     };
 
-    const WORKER_TEST: &str = "persistence::sqlite_revision_store::tests::m1c_subprocess_worker";
+    const WORKER_TEST: &str = "persistence::sqlite_revision_store::tests::revision_store_worker";
 
     // Test-ID: PR-TEST-0339
     // Verifies: PR-REQ-0018, PR-REQ-0318
@@ -1299,9 +1300,9 @@ mod tests {
     }
 
     fn test_root() -> (TempDir, PathBuf) {
-        let parent = std::env::var_os("PACTRUN_M1C_TEST_PARENT")
+        let parent = std::env::var_os("PACTRUN_REVISION_TEST_TEST_PARENT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m1c-tests"));
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/revision-tests"));
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("sqlite-persistence-")
@@ -1393,18 +1394,18 @@ mod tests {
             .arg("--exact")
             .arg(WORKER_TEST)
             .arg("--nocapture")
-            .env("PACTRUN_M1C_WORKER", operation)
-            .env("PACTRUN_M1C_ROOT", root)
-            .env("PACTRUN_M1C_SUCCESS_MARKER", marker)
+            .env("PACTRUN_REVISION_TEST_WORKER", operation)
+            .env("PACTRUN_REVISION_TEST_ROOT", root)
+            .env("PACTRUN_REVISION_TEST_SUCCESS_MARKER", marker)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         if let Some(fault) = fault {
-            command.env("PACTRUN_M1C_FAULT", fault.name());
+            command.env("PACTRUN_REVISION_TEST_FAULT", fault.name());
         }
         let output = command.output().unwrap();
         if !output.status.success() && fault.is_none() {
             eprintln!(
-                "M1-C worker failed with {}\nstdout:\n{}\nstderr:\n{}",
+                "Revision worker failed with {}\nstdout:\n{}\nstderr:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
@@ -1827,7 +1828,7 @@ mod tests {
             assert!(marker.exists());
         }
 
-        let expected_content = shared_content(&digest(b"m1c worker content"));
+        let expected_content = shared_content(&digest(b"revision worker content"));
         let expected_identity = RevisionIdentity::new(
             package(42),
             calculate_service_free_digest(&expected_content).unwrap(),
@@ -1849,7 +1850,7 @@ mod tests {
             assert!(!run_worker(&crash_root, "persist", Some(fault), &marker));
             assert!(!marker.exists());
             let reopened = PactrunPersistence::open(&crash_root).unwrap();
-            let content = shared_content(&digest(b"m1c worker content"));
+            let content = shared_content(&digest(b"revision worker content"));
             let identity = RevisionIdentity::new(
                 package(42),
                 calculate_service_free_digest(&content).unwrap(),
@@ -1857,7 +1858,9 @@ mod tests {
             match fault {
                 FaultPoint::BeforeRevisionCommit => {
                     assert!(reopened.load_revision(&identity).unwrap().is_none());
-                    assert!(final_blob_path(&crash_root, &digest(b"m1c worker content")).exists());
+                    assert!(
+                        final_blob_path(&crash_root, &digest(b"revision worker content")).exists()
+                    );
                 }
                 FaultPoint::AfterRevisionCommit => {
                     assert!(reopened.load_revision(&identity).unwrap().is_some());
@@ -1964,17 +1967,18 @@ mod tests {
     }
 
     #[test]
-    fn m1c_subprocess_worker() {
-        let Some(operation) = std::env::var_os("PACTRUN_M1C_WORKER") else {
+    fn revision_store_worker() {
+        let Some(operation) = std::env::var_os("PACTRUN_REVISION_TEST_WORKER") else {
             return;
         };
-        let root = PathBuf::from(std::env::var_os("PACTRUN_M1C_ROOT").unwrap());
-        let marker = PathBuf::from(std::env::var_os("PACTRUN_M1C_SUCCESS_MARKER").unwrap());
+        let root = PathBuf::from(std::env::var_os("PACTRUN_REVISION_TEST_ROOT").unwrap());
+        let marker =
+            PathBuf::from(std::env::var_os("PACTRUN_REVISION_TEST_SUCCESS_MARKER").unwrap());
         let persistence = PactrunPersistence::open(&root).unwrap();
         match operation.to_string_lossy().as_ref() {
             "open" => {}
             "persist" => {
-                let bytes = b"m1c worker content";
+                let bytes = b"revision worker content";
                 let blob_digest = digest(bytes);
                 let publication = persistence
                     .put_runtime_content(&blob_digest, &mut Cursor::new(bytes))
@@ -1984,8 +1988,8 @@ mod tests {
                     .persist_revision(package(42), &content, &[publication])
                     .unwrap();
             }
-            other => panic!("unknown M1-C worker operation {other}"),
+            other => panic!("unknown Revision worker operation {other}"),
         }
-        fs::write(marker, b"m1c-operation-returned-success").unwrap();
+        fs::write(marker, b"revision-operation-returned-success").unwrap();
     }
 }

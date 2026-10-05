@@ -7,7 +7,7 @@ use std::{
 use tempfile::TempDir;
 
 fn session() -> (TempDir, StagingSession) {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m4-s3-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/snapshot-bundle-tests");
     fs::create_dir_all(&parent).unwrap();
     let temp = tempfile::Builder::new()
         .prefix("bundle-")

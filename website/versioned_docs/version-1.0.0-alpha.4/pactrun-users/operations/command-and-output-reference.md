@@ -61,8 +61,8 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [commands](../../spec/behavior/command-and-output-reference.md),
-[machine output](../../spec/contracts/cli-machine-interface.md), and
-[selectors](../../spec/contracts/cli-id-selectors.md).
+Contracts: [commands](../../spec/interfaces/commands.md),
+[machine output](../../spec/interfaces/machine-output.md), and
+[selectors](../../spec/interfaces/id-selectors.md).
 
 </details>

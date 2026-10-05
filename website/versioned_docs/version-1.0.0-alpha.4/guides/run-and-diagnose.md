@@ -59,7 +59,7 @@ saved Hook text; it does not disable live output.
 `run reconcile` addresses retained execution bookkeeping; it does not repair
 an external service. `instance resolve-manual-recovery` is an operator assertion
 after repair, not a repair command. Do not use recovery override merely to silence
-a warning. See [recovery rules](recovery.md).
+a warning. See [recovery rules](./recovery.md).
 
 ## Automation
 

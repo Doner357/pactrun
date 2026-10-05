@@ -16,10 +16,10 @@ anchors only and adds no product rules.
 [PR-REQ-0269 - Exact PersistenceSchemaV3](../../spec/persistence/persistence-baseline.md#pr-req-0269---exact-persistenceschemav3)
 
 <a id="pr-req-0270---persistence-migration-to-v3" />
-[PR-REQ-0270 - Persistence migration to V3](../../spec/persistence/persistence-baseline.md#pr-req-0270---persistence-migration-to-v3)
+[PR-REQ-0270 - Persistence migration to V3](../../spec/persistence/persistence-baseline.md#pr-req-0299---durable-writable-admission-and-serialized-migration)
 
 <a id="candidate-crate-private-repository-contract" />
 [Instance repository contract](../../spec/persistence/persistence-baseline.md#candidate-crate-private-repository-contract)
 
 <a id="deferred-work" />
-[Historical Instance-slice exclusions](../../spec/persistence/persistence-baseline.md#deferred-work-1)
+[Historical Instance-slice exclusions](../../spec/persistence/persistence-baseline.md#pr-req-0269---exact-persistenceschemav3)

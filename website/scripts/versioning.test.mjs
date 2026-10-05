@@ -7,11 +7,20 @@ import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {editions, versionLinks} from '../plugins/editions.mjs';
 import {editionCatalog} from '../plugins/document-catalog/index.mjs';
-import {exportText, verifyText, readDocuments, documentDigest, textBody} from '../plugins/text-docs/index.mjs';
+import {exportText, verifyText, readDocuments, documentDigest, textBody, textAliases} from '../plugins/text-docs/index.mjs';
 import {searchPages} from '../src/lib/search.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const versions = await editions(site);
+
+test('every published text alias resolves against each edition source tree', async () => {
+  const aliases = JSON.parse(await readFile(path.join(site, 'spec-source-aliases.json'), 'utf8'));
+  for (const version of versions) {
+    const result = textAliases(await readDocuments(version.docsDir), aliases, version.id, '/');
+    assert.ok(result.length > 0);
+    assert.ok(result.some(([name, text]) => name.endsWith('identity-and-state.md') && text.includes('PR-REQ-0025')));
+  }
+});
 
 test('released and development documents have disjoint routes and scoped search', async () => {
   assert.notEqual(versions[0].id, 'current');

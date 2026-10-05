@@ -35,7 +35,7 @@ try {
   await page.goto(url('search?q=PR-REQ-0258&audience=Authors'), {waitUntil: 'networkidle'});
   await ready();
   const owner = page.locator('.search-results li h2 a').first();
-  assert.equal(await owner.innerText(), 'Pack Source Baseline');
+  assert.equal(await owner.innerText(), 'Pack Source Format');
   const href = await owner.getAttribute('href');
   assert.ok(href.includes('#pr-req-0258-'));
   await owner.click();
@@ -74,46 +74,31 @@ try {
   await openFilters();
   await page.getByRole('button', {name: 'Reset filters', exact: true}).click();
   assert.equal(await page.getByLabel('Search documentation', {exact: true}).inputValue(), 'restore');
-  await page.getByLabel('Document state').selectOption('historical');
-  await page.locator('.search-results li').first().waitFor();
-  assert.ok((await page.locator('.search-results').innerText()).toLowerCase().includes('historical'));
-  await page.locator('.search-results li h2 a').first().click();
-  await page.locator('.doc-context--history').waitFor();
-  checks.push('history remains discoverable with explicit page warning');
-
-  const historicalText = await (await page.request.get(url('agent-docs/development/m4-implementation-status.md'))).text();
-  assert.ok(historicalText.startsWith('> Document context (generated): historical'));
-  assert.ok(historicalText.includes('Historical record.'));
-  const loader = await (await page.request.get(url('agent-docs/spec/contracts/shell-loader.md'))).text();
+  const loader = await (await page.request.get(url('agent-docs/spec/interfaces/shell-loader.md'))).text();
   assert.ok(loader.includes('retained by default for Run inspection'));
   assert.ok(!loader.includes('Core discards its text'));
-  checks.push('agent text exposes shared history context and corrected diagnostic behavior');
+  checks.push('agent text preserves the diagnostic behavior contract');
 
-  await page.goto(url('search?q=persistence-schema-v11'), {waitUntil: 'networkidle'});
-  await ready();
-  assert.equal(await page.locator('.search-results li').count(), 0);
-  await page.getByRole('button', {name: 'Search all documents'}).click();
-  await page.locator('.search-results li').first().waitFor();
-  await page.locator('.search-results li h2 a').first().click();
-  assert.match(await page.locator('.doc-context').innerText(), /superseded/i);
-  assert.ok(!(await page.locator('.doc-context').innerText()).includes('Product contract'));
-  await page.screenshot({path: path.join(output, 'retired-schema.png'), fullPage: true});
-  const retiredText = await (await page.request.get(url('agent-docs/spec/persistence/persistence-schema-v11.md'))).text();
-  assert.match(retiredText, /^> Document context \(generated\): superseded \| Compatibility/);
-  checks.push('retired schemas require an explicit wider search and agree with agent context');
+  await page.goto(url('spec/persistence/persistence-schema-v11'), {waitUntil: 'networkidle'});
+  await page.getByRole('heading', {name: 'Persistence Schema', exact: true}).waitFor();
+  assert.ok(page.url().includes('/spec/storage/schema'));
+  assert.ok(!(await page.locator('.theme-doc-markdown').innerText()).includes('Historical metadata-slice'));
+  await page.screenshot({path: path.join(output, 'current-schema.png'), fullPage: false});
+  const aliasedText = await (await page.request.get(url('agent-docs/spec/persistence/persistence-schema-v11.md'))).text();
+  assert.ok(aliasedText.includes('Source: docs/spec/persistence/persistence-baseline.md'));
+  checks.push('retired schema bookmarks resolve to the current schema in HTML and text');
 
-  await page.goto(url('search?q=Shared+Vocabulary&role=Informative'), {waitUntil: 'networkidle'});
+  await page.goto(url('search?q=Vocabulary&role=Reference'), {waitUntil: 'networkidle'});
   await ready();
   await openFilters();
-  assert.equal(await page.getByLabel('Document role').inputValue(), 'Informative');
-  await page.getByRole('link', {name: 'Shared Vocabulary', exact: true}).click();
-  assert.match(await page.locator('.doc-context').innerText(), /Informative reading aid/);
-  assert.ok(!(await page.locator('.doc-context').innerText()).includes('Product contract'));
+  assert.equal(await page.getByLabel('Document role').inputValue(), 'Reference');
+  await page.getByRole('link', {name: 'Vocabulary', exact: true}).click();
+  assert.ok(!(await page.locator('.doc-context').innerText()).includes('Informative'));
   assert.ok(!(await page.locator('.theme-doc-markdown').innerText()).includes('runtime remains deferred'));
-  await page.screenshot({path: path.join(output, 'informative-glossary.png'), fullPage: true});
-  const glossaryText = await (await page.request.get(url('agent-docs/spec/glossary.md'))).text();
-  assert.match(glossaryText, /^> Document context \(generated\): current \| Informative/);
-  checks.push('informative role filter and HTML/text notices preserve authority distinctions');
+  await page.screenshot({path: path.join(output, 'vocabulary.png'), fullPage: false});
+  const glossaryText = await (await page.request.get(url('agent-docs/spec/core/vocabulary.md'))).text();
+  assert.match(glossaryText, /^> Document context \(generated\): current \| Reference/);
+  checks.push('vocabulary is a searchable reference without classification notices');
 
   for (const [version, role, anchor] of [[3, 'Instance', 'candidate-crate-private-repository-contract'], [4, 'Run', 'candidate-crate-private-repository-contract-1']]) {
     await page.goto(url(`pactrun-developers/architecture/persistence-schema-v${version}`), {waitUntil: 'networkidle'});
@@ -126,8 +111,8 @@ try {
   }
   checks.push('historical Instance and Run repository links land on distinct owning sections');
 
-  await page.goto(url('spec/contracts/'), {waitUntil: 'networkidle'});
-  assert.equal(await page.locator('.theme-doc-markdown').getByRole('link', {name: 'Snapshot Integrity Baseline', exact: true}).count(), 1);
+  await page.goto(url('spec/catalog'), {waitUntil: 'networkidle'});
+  assert.equal(await page.locator('.theme-doc-markdown').getByRole('link', {name: 'Snapshot Integrity Format', exact: true}).count(), 1);
   const formatMap = await page.locator('.theme-doc-markdown').innerText();
   assert.ok(!formatMap.includes('V1 and V2 remain distinct supported'));
   assert.ok(!formatMap.includes('unresolved diagnostic presentation follow-up'));

@@ -529,15 +529,19 @@ fn required_absence_is_format_representable_not_capture_admission_permission() {
 // Test-ID: PR-TEST-0193
 // Verifies: PR-REQ-0297
 #[test]
-fn v2_specification_and_corpus_lifecycle_markers_agree() {
-    let specification = include_str!("../docs/spec/contracts/snapshot-integrity.md");
-    let status = specification
-        .lines()
-        .find(|line| line.starts_with("**Status:"))
-        .unwrap();
-    let corpus: Corpus = serde_json::from_str(V2).unwrap();
-    assert!(status.starts_with("**Status: Approved E normative baseline, 1.0-alpha.1"));
-    assert_eq!(corpus.status, "baseline");
+fn specification_and_corpora_select_the_supported_integrity_format() {
+    let specification = include_str!("../docs/spec/snapshots/integrity.md");
+    let version = SnapshotIntegrityVersion::BASELINE.as_str();
+    let marker = format!("`format_version: \"{version}\"`");
+    assert!(specification.contains(&marker));
+    for source in [V1, V2] {
+        let corpus: Corpus = serde_json::from_str(source).unwrap();
+        assert_eq!(corpus.status, "baseline");
+        for fixture in corpus.valid {
+            let manifest: Value = serde_json::from_str(&fixture.raw_manifest).unwrap();
+            assert_eq!(manifest["format_version"].as_str(), Some(version));
+        }
+    }
 }
 
 // Test-ID: PR-TEST-0194

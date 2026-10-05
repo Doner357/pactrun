@@ -248,7 +248,7 @@ mod platform {
 mod tests {
     use super::*;
     fn fixture() -> (tempfile::TempDir, std::path::PathBuf, ServiceAllocationId) {
-        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m7-retirement-fs");
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/retirement-fs");
         std::fs::create_dir_all(&base).unwrap();
         let temp = tempfile::tempdir_in(base).unwrap();
         let id = ServiceAllocationId::generate().unwrap();
@@ -582,7 +582,7 @@ mod tests {
         };
         let root = std::fs::canonicalize(root).unwrap();
         let workspace = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
-        let base = std::fs::canonicalize(workspace.join("target/m7-retirement-fs")).unwrap();
+        let base = std::fs::canonicalize(workspace.join("target/retirement-fs")).unwrap();
         assert!(base.starts_with(&workspace) && root.starts_with(&base) && root != base);
         let allocation = std::env::var("PACTRUN_RETIREMENT_TEST_ID")
             .unwrap()

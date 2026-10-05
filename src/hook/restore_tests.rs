@@ -300,7 +300,7 @@ fn guarded_instance_options_preserve_state_until_explicit_resolution_restore_or_
         let initial_guard=guard(&f).unwrap();
         let before=count(&f,"runs");
         assert!(view(&f).required_inputs_satisfied);
-        let intent=f.application.resolve_action(&InstanceName::parse("slice4").unwrap(),
+        let intent=f.application.resolve_action(&InstanceName::parse("hook-fixture").unwrap(),
             &ActionIdentity::parse("direct").unwrap(),parameters("success",&f.marker("denied"))).unwrap();
         let plan=f.application.compile_action(&intent,&[]).unwrap();
         assert_eq!(count(&f,"runs"),before,"resolution/compilation is not acceptance");
@@ -328,7 +328,7 @@ fn guarded_instance_options_preserve_state_until_explicit_resolution_restore_or_
                 assert!(guard(&f).is_none());
             }
             _ => {
-                let intent=f.application.resolve_deletion(&InstanceName::parse("slice4").unwrap(),None,DeletionMode::AbandonManagement).unwrap();
+                let intent=f.application.resolve_deletion(&InstanceName::parse("hook-fixture").unwrap(),None,DeletionMode::AbandonManagement).unwrap();
                 let plan=f.application.compile_deletion(&intent,&[]).unwrap();
                 let run=f.application.accept_deletion_plan(plan,AdmissionOptions::default(),without_hook_text(),policy(None,None,None)).unwrap();
                 let until=Instant::now()+WAIT_LIMIT;
@@ -873,7 +873,7 @@ fn restore_process_owner() {
         .unwrap();
     let app = PactrunApplication::open(Path::new(&storage)).unwrap();
     let instance = app
-        .resolve_instance_name(&InstanceName::parse("slice4").unwrap())
+        .resolve_instance_name(&InstanceName::parse("hook-fixture").unwrap())
         .unwrap()
         .unwrap();
     let plan = crate::workflow::compile_snapshot(
@@ -933,7 +933,7 @@ fn actor(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::inherit());
     if let Some(fault) = fault {
-        cmd.env("PACTRUN_M4_FAULT", fault);
+        cmd.env("PACTRUN_OPERATION_TEST_FAULT", fault);
     }
     if pause {
         cmd.env("PACTRUN_S6_PAUSE", "1");

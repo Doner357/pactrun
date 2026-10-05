@@ -123,7 +123,7 @@ fn explicit_text_opt_out_leaves_no_durable_hook_explanations() {
     let store=PactrunPersistence::open_read_only(&fixture.storage).unwrap();
     let view=store.inspect_diagnostics(run).unwrap().unwrap();
     assert!(!view.retain_text && view.closed && view.events.is_empty());
-    for marker in ["hook_completion_marker","slice5_hook_completion_marker","slice5_hook_diagnostic_marker"] { assert!(!contains(&database_bytes(&fixture.storage),marker.as_bytes())); }
+    for marker in ["hook_completion_marker","private_hook_completion_marker","private_hook_diagnostic_marker"] { assert!(!contains(&database_bytes(&fixture.storage),marker.as_bytes())); }
 }
 
 #[test]

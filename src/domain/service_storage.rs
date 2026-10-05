@@ -450,7 +450,7 @@ pub(crate) fn project_service_revision(
             && !crate::domain::VersionDomain::Hook.supports(hook.protocol_version)
         {
             return Err(invalid(
-                "persistent authority/prerequisites require protocol 2",
+                "persistent authority/prerequisites require a supported Hook protocol",
             ));
         }
         if h.access.iter().any(|a| a.mode == ServiceAccessMode::Write)
@@ -704,7 +704,7 @@ fn normalize_mappings(
                 .and_then(|m| m.hook.as_ref())
                 .expect("validated Hook owner");
             if !crate::domain::VersionDomain::Hook.supports(declaration.protocol_version) {
-                return Err(mapping("transform requires protocol 2"));
+                return Err(mapping("transform requires a supported Hook protocol"));
             }
             for target in targets.iter() {
                 let reference = ServiceReferenceV2 {

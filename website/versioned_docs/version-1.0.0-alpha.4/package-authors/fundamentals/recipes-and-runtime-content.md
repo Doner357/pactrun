@@ -62,8 +62,8 @@ More detail: [Pack fields and values](../reference/pack-fields.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [source acquisition](../../spec/contracts/pack-source.md),
-[runtime content](../../spec/contracts/recipes-and-runtime-content.md), and
-[distribution](../../spec/contracts/pack-distribution.md).
+Contracts: [source acquisition](../../spec/packages/source-format.md),
+[runtime content](../../spec/packages/runtime-content.md), and
+[distribution](../../spec/packages/distribution.md).
 
 </details>

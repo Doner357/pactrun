@@ -22,12 +22,12 @@ test('tilde and long backtick fences retain nested-looking code', () => {
 });
 
 test('maintainer source links retain distinct referenced sections', () => {
-  const rendered = renderReference(entry, '# Owner\n\nSee [first](../foundations/identity-and-state.md#first) and [second](../foundations/identity-and-state.md#second).\n');
-  assert.ok(rendered.includes('[first](../../spec/foundations/identity-and-state.md#first)'));
-  assert.ok(rendered.includes('[second](../../spec/foundations/identity-and-state.md#second)'));
+  const rendered = renderReference(entry, '# Owner\n\nSee [first](../packages/identity.md#first) and [second](../packages/identity.md#second).\n');
+  assert.ok(rendered.includes('[first](../../spec/packages/identity.md#first)'));
+  assert.ok(rendered.includes('[second](../../spec/packages/identity.md#second)'));
 });
 
 test('ordinary bare relative document links also route to the same-role view', () => {
-  const rendered = renderReference(entry, '# Owner\n\nSee [source](pack-source.md#field).\n');
+  const rendered = renderReference(entry, '# Owner\n\nSee [source](../packages/source-format.md#field).\n');
   assert.ok(rendered.includes('[source](./source-format.md#field)'));
 });

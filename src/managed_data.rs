@@ -187,7 +187,7 @@ impl fmt::Display for StagingError {
             Self::Unsupported(message) => formatter.write_str(message),
             Self::ManagedInputTooLarge => write!(
                 formatter,
-                "Managed Input exceeds the {} byte M2 limit",
+                "Managed Input exceeds the {} byte limit",
                 MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1
             ),
             Self::LengthOverflow => formatter.write_str("staged byte length exceeds u64"),
@@ -747,7 +747,7 @@ mod tests {
     }
 
     fn root() -> (TempDir, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m2-staging-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/input-staging-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("staging-")

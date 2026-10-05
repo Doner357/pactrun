@@ -124,9 +124,9 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Owners: [command spelling](../../spec/behavior/command-and-output-reference.md#pr-req-0284---m3-human-action-plan-run-and-recovery-spelling),
-[parameter sources and deadlines](../../spec/behavior/actions-plans-and-runs.md#pr-req-0288---invocation-parameter-sources-and-policy-values),
-[typed text](../../spec/contracts/actions-inputs-and-parameters.md#pr-req-0273---primitive-invocation-text-lexical-profile),
-and [machine output](../../spec/contracts/cli-machine-interface.md).
+Owners: [command spelling](../../spec/interfaces/commands.md#pr-req-0284---m3-human-action-plan-run-and-recovery-spelling),
+[parameter sources and deadlines](../../spec/operations/actions-plans-runs.md#pr-req-0288---invocation-parameter-sources-and-policy-values),
+[typed text](../../spec/operations/parameters.md#pr-req-0273---primitive-invocation-text-lexical-profile),
+and [machine output](../../spec/interfaces/machine-output.md).
 
 </details>

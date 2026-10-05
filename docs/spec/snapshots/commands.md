@@ -1,0 +1,134 @@
+---
+title: Snapshot Commands
+---
+
+# Snapshot Commands
+
+Capture and Restore execute Pack capabilities. Listing, inspection, verification,
+and transport are management operations; they do not launch a Hook.
+
+### PR-REQ-0301 - Snapshot command syntax {#pr-req-0301---m4-human-command-spelling}
+
+The CLI MUST implement these Snapshot operations:
+
+```text
+pactrun snapshot capture <instance> [execution-options]
+pactrun snapshot restore <instance> <snapshot-id> [execution-options]
+pactrun snapshot list [--instance <instance>]
+pactrun snapshot show <snapshot-id>
+pactrun snapshot verify <snapshot-id>
+pactrun snapshot import <bundle-path>
+pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export
+```
+
+The [export naming rule](../interfaces/commands.md#pr-req-0357---specialized-envelope-export-filenames)
+requires export to append `.snapshot` unconditionally to the supplied base path.
+For example, `--output backup` writes `backup.snapshot`, while
+`--output backup.snapshot` writes `backup.snapshot.snapshot`. Import continues to
+use the exact supplied path. The success report includes the final output path.
+
+Capture and Restore accept these execution options. Create-and-restore uses
+the Restore options specified below:
+
+```text
+[--param <id>=<text>]...
+[--param-file <id>=<host-path>]...
+[--param-stdin <id>]
+[--plan]
+[--authorize-recovery-override]
+[--startup-timeout-ms <milliseconds>]
+[--execution-timeout-ms <milliseconds>]
+[--termination-grace-ms <milliseconds>]
+```
+
+Instance operands use exact InstanceName semantics. A complete SnapshotId has
+32 lowercase hexadecimal characters. CLI operands also accept unique lowercase
+hexadecimal prefixes of at least eight digits under the
+[ID selector contract](../interfaces/id-selectors.md); fuzzy lookup is not supported. Typed
+parameters, Protected file/stdin sources, redaction, deadline range checks,
+and interactive-Hook stdin exclusion follow the invocation contract. Bundle stdin/stdout
+is not enabled by parameter stdin. Omitted startup/execution timeouts are
+unlimited; omitted termination grace is 5000ms; zero means immediate expiry or
+no grace. Existing invoke --action-timeout-ms is unchanged.
+
+Capture access MUST come from the exact authored capability; no caller access
+option exists. Restore invocation expresses replacement intent, with warnings
+but no generic yes/force confirmation flow. A recovery override bypasses only
+the trust guard for that execution and cannot waive readiness, exact identity,
+capacity, transition legality, or conflicts. --plan remains side-effect-free:
+no Run, reservation, lease, pin, schema upgrade, or implicit reconciliation.
+
+Success is exit 0, syntax failure 2, operation failure/cancellation 1.
+Capture/Restore return 0 only after durable Succeeded publication. Import and
+export accept filesystem paths only; '-' and force/overwrite/resume are not
+supported. An unsupported persistence store is refused without conversion or
+data deletion. Snapshot deletion follows [object lifecycle](../lifecycle/objects-gc.md),
+and structured output follows the [CLI machine interface](../interfaces/machine-output.md).
+Raw manifest/payload previews and stable public Rust APIs are outside this command contract.
+
+**Verification: PR-TEST-0268, PR-TEST-0269, PR-TEST-0270, PR-TEST-0271, PR-TEST-0272, PR-TEST-0273, PR-TEST-0274.**
+
+### PR-REQ-0302 - Snapshot inspection, verification, and diagnostics
+
+list/show MUST be structural-only and read-only: no full implicit payload
+verification, lease, migration, repair, or reconciliation. list --instance MUST
+resolve a live Instance name to exact identity and filter Snapshot provenance;
+it does not imply ownership. Plans and diagnostics MUST use typed safe
+projections, not raw persisted text, ZIP errors, paths containing payload data,
+Secret bytes, Secret-derived digests or lengths, or revealing parameter values.
+
+Inspection MUST distinguish publication-time validation provenance, current
+verification actually performed, local Restore capability, and eligibility
+for a particular target. A stored Snapshot may be valid but not executable by
+this build. An unspecified target MUST NOT be reported as definitely eligible.
+
+verify MUST explicitly check the selected stored manifest and complete payload
+closure with the supported [integrity baseline](./integrity.md)
+verifier. Unsupported formats are refused without conversion. It creates
+no Run and does not repair
+or reconcile. If producer semantics are unavailable but intrinsic/content
+verification completes, return 0 and explicitly report relational validation
+not_evaluated. If capacity/resource limits prevent completion, return 1 and
+report incomplete verification; do not call the Snapshot corrupt or valid.
+
+Error ownership MUST remain layered: intrinsic format violations belong to
+their version-specific verifier; bundle profile violations belong to the
+bundle adapter; operation capability refusals are not integrity corruption;
+host I/O/resource errors are separate. Keep the error taxonomy's existing
+owners/codes/categories intact and use fixed safe operation diagnostics.
+
+**Verification: PR-TEST-0209, PR-TEST-0211, PR-TEST-0214, PR-TEST-0215, PR-TEST-0218, PR-TEST-0268, PR-TEST-0269, PR-TEST-0270, PR-TEST-0271, PR-TEST-0272, PR-TEST-0274.**
+
+Snapshot inspection distinguishes publication-time intrinsic/content validation
+from verification performed now. Producer-relative validation that was not
+recorded is reported as `not_recorded`, not inferred from current producer
+availability. Restore plan eligibility is advisory, not Admission or a writable
+reservation.
+
+### PR-REQ-0346 - Create an Instance and Restore its Snapshot
+
+The CLI MUST accept `instance create <name> --revision <reference>
+--restore-from <snapshot-id>` with the existing Restore execution options except
+`--plan`. Revision is required and MUST exactly match the Snapshot producer.
+Initial `--input-file` and `--input-stdin` options MUST NOT be combined with this
+form. Restore-only options without `--restore-from` MUST be rejected. Existing
+parameter typing, source protection, redaction, timeouts, cancellation and
+interactive-stdin restrictions apply without new defaults.
+
+Before Create, read-only preflight MUST check the Snapshot, exact installed
+Revision, Restore declaration and supplied parameters. It creates no Instance,
+Run, pin or reservation and cannot substitute for formal Restore Admission.
+Parameter sources are acquired once; stdin MUST NOT be reread after Create.
+Restore MUST target the exact InstanceId returned by Create, never a later
+name resolution. Snapshot staged bindings determine Restore readiness.
+
+Create failure MUST NOT start Restore. After Create succeeds, Restore refusal,
+failure or cancellation MUST preserve the created Instance and report partial
+completion, its identity, current state when available, and any accepted RunId.
+Only durable Restore success returns 0; syntax failure returns 2 and operation
+failure or partial completion returns 1. Diagnostic output MUST remain safe.
+The operations are not one transaction: process loss between them can leave an
+Instance without a Restore Run. There is no automatic deletion, resume,
+compensation, installation, import, Migration or compatibility relaxation.
+
+**Verification: PR-TEST-0476, PR-TEST-0477, PR-TEST-0478.**

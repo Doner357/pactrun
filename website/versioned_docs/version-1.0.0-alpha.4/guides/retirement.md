@@ -156,9 +156,7 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Evaluation: [Authentik black-box follow-up](../development/public-preview-delivery.md#authentik-black-box-follow-up).
-Correction evidence: [alpha.2 retirement qualification](../development/alpha2-retirement-fix.md).
-Contracts: [managed-object lifecycle](../spec/behavior/managed-object-lifecycle.md)
-and [Instance retirement](../spec/execution/m7-instance-retirement.md).
+Contracts: [managed-object lifecycle](../spec/lifecycle/objects-gc.md)
+and [Instance retirement](../spec/lifecycle/retirement.md).
 
 </details>

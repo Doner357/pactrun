@@ -1,4 +1,4 @@
-// M6 cross-operation recovery evidence using real process owners and the
+// Cross-operation recovery evidence using real process owners and the
 // production acceptance/admission/persistence/reconciliation paths. No Hook
 // is launched here; operation-specific Hook/commit tests remain complementary.
 
@@ -179,14 +179,14 @@ fn worker(path: &Path, case: &str, mode: &str, fault: Option<&str>) -> Command {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .args(["--exact", WORKER, "--nocapture"])
-        .env("PACTRUN_M6_ROOT", path)
-        .env("PACTRUN_M6_CASE", case)
-        .env("PACTRUN_M6_MODE", mode)
+        .env("PACTRUN_RECOVERY_TEST_ROOT", path)
+        .env("PACTRUN_RECOVERY_TEST_CASE", case)
+        .env("PACTRUN_RECOVERY_TEST_MODE", mode)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     if let Some(fault) = fault {
-        command.env("PACTRUN_M4_FAULT", fault);
+        command.env("PACTRUN_OPERATION_TEST_FAULT", fault);
     }
     command
 }
@@ -195,8 +195,8 @@ fn synchronized_reconciler(path: &Path, case: &str, label: &str) -> (ManagedWork
     let barrier = path.join(format!("{label}-sync"));
     fs::create_dir(&barrier).unwrap();
     let child = worker(path, case, label, None)
-        .env("PACTRUN_M4_SYNC", "after_recovery_owner_loss_probe")
-        .env("PACTRUN_M4_SYNC_DIR", &barrier)
+        .env("PACTRUN_OPERATION_TEST_SYNC", "after_recovery_owner_loss_probe")
+        .env("PACTRUN_OPERATION_TEST_SYNC_DIR", &barrier)
         .spawn()
         .unwrap();
     (ManagedWorker(child), barrier)
@@ -204,11 +204,11 @@ fn synchronized_reconciler(path: &Path, case: &str, label: &str) -> (ManagedWork
 
 #[test]
 fn recovery_worker() {
-    let Some(path) = std::env::var_os("PACTRUN_M6_ROOT") else {
+    let Some(path) = std::env::var_os("PACTRUN_RECOVERY_TEST_ROOT") else {
         return;
     };
     let path = PathBuf::from(path);
-    let mode = std::env::var("PACTRUN_M6_MODE").unwrap();
+    let mode = std::env::var("PACTRUN_RECOVERY_TEST_MODE").unwrap();
     if mode.starts_with("reconcile-") {
         let app = PactrunApplication::open(&path).unwrap();
         let reconciled = app.reconcile_lost_managed_owners().unwrap();
@@ -225,7 +225,7 @@ fn recovery_worker() {
             .unwrap();
         return;
     }
-    let case = std::env::var("PACTRUN_M6_CASE").unwrap();
+    let case = std::env::var("PACTRUN_RECOVERY_TEST_CASE").unwrap();
     let run = prepare(&p, &path, &case, mode != "accepted");
     if mode != "accepted" {
         p.open_recovery_risk(run).unwrap();

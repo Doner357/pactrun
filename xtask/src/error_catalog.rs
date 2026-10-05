@@ -37,8 +37,7 @@ const INITIAL_OWNERS: &[&str] = &[
     "snapshot_integrity",
 ];
 
-/// Initial owners that still have no appended code. `execution` left this set
-/// when M3 Slice 4 appended its runtime codes under PR-REQ-0222.
+/// Registered owners with no assigned error codes.
 const EMPTY_INITIAL_OWNERS: &[&str] = &[
     "compilation",
     "domain_validation",

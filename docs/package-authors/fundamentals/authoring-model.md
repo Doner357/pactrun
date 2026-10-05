@@ -130,8 +130,8 @@ More detail: [Pack fields and values](../reference/pack-fields.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Pack source](../../spec/contracts/pack-source.md),
-[Revision model](../../spec/contracts/revision-canonical.md),
-[Shell Loader](../../spec/contracts/shell-loader.md).
+Contracts: [Pack source](../../spec/packages/source-format.md),
+[Revision model](../../spec/packages/revision-format.md),
+[Shell Loader](../../spec/interfaces/shell-loader.md).
 
 </details>

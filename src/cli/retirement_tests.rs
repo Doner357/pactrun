@@ -8,7 +8,7 @@ fn fixture() -> (
     ServiceAllocationId,
     PathBuf,
 ) {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m7-cli-tests");
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/deletion-cli-tests");
     fs::create_dir_all(&base).unwrap();
     let temp = tempfile::tempdir_in(base).unwrap();
     let root = temp.path().join("storage");

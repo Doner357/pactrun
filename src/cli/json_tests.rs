@@ -141,7 +141,7 @@ fn json_real_execution_plan_and_run_inspection_are_structured_and_redacted() {
     let (code,executed,err)=json_invoke(&root,execution);
     assert_eq!(code,0,"{executed}; {err}"); assert!(marker.with_extension("session").exists());
     assert_eq!(executed["result"]["run"]["state"]["outcome"],"succeeded");
-    assert!(!executed.to_string().contains("slice4-secret-binding")); assert!(!executed.to_string().contains("slice4-sensitive-parameter"));
+    assert!(!executed.to_string().contains("hook-fixture-secret-binding")); assert!(!executed.to_string().contains("hook-fixture-sensitive-parameter"));
     let id=executed["result"]["run"]["run_id"].as_str().unwrap();
     let shown=json_ok(&root,&["run","show",id]); assert_eq!(shown["run"],executed["result"]["run"]);
     json_ok(&root,&["run","list"]); json_ok(&root,&["run","reconcile"]);

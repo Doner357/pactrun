@@ -6,7 +6,8 @@ export function searchPages(pages, {q = '', state = 'current', role = '', audien
     const taskRole = ['Guide', 'Tutorial', 'Reference', 'Explanation'].includes(page.role);
     const ownerMatch = words.some(word => page.requirements.some(id => id.toLowerCase() === word));
     const readerScope = audience === 'Users' || audience === 'Authors';
-    const readerPriority = ownerMatch ? 2 : words.length && readerScope && taskRole ? 1 : 0;
+    const readerGuidance = taskRole && !page.source.startsWith('spec/');
+    const readerPriority = ownerMatch ? 2 : words.length && readerScope && readerGuidance ? 1 : 0;
     const taskBoost = words.length && taskRole ? (page.readerView ? 2 : 12) : 0;
     const score = taskBoost + words.reduce((n, word) => n + (title.includes(word) ? 8 : 0) + (page.requirements.some(id => id.toLowerCase() === word) ? 40 : 0), 0);
     const at = words.length ? Math.max(0, text.indexOf(words[0]) - 70) : 0;

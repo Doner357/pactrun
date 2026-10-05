@@ -1,0 +1,217 @@
+{
+  "spec/foundations/system-model.md": [
+    "spec/core/system-model.md"
+  ],
+  "spec/behavior/packages-revisions-and-instances.md": [
+    "spec/core/objects.md"
+  ],
+  "spec/glossary.md": [
+    "spec/core/vocabulary.md"
+  ],
+  "spec/foundations/product-versioning-and-compatibility.md": [
+    "spec/storage/compatibility.md"
+  ],
+  "spec/contracts/authoring-model.md": [
+    "spec/packages/authoring.md"
+  ],
+  "spec/contracts/pack-source.md": [
+    "spec/packages/source-format.md"
+  ],
+  "spec/contracts/revision-canonical.md": [
+    "spec/packages/revision-format.md"
+  ],
+  "spec/contracts/recipes-and-runtime-content.md": [
+    "spec/packages/runtime-content.md"
+  ],
+  "spec/contracts/pack-distribution.md": [
+    "spec/packages/distribution.md"
+  ],
+  "spec/behavior/inputs-secrets-and-readiness.md": [
+    "spec/instances/inputs-secrets.md"
+  ],
+  "spec/execution/m6-5-service-storage-execution.md": [
+    "spec/instances/service-storage.md"
+  ],
+  "spec/behavior/m6-5-service-storage-command-reference.md": [
+    "spec/instances/resource-commands.md"
+  ],
+  "spec/behavior/actions-plans-and-runs.md": [
+    "spec/operations/actions-plans-runs.md"
+  ],
+  "spec/execution/execution-and-concurrency.md": [
+    "spec/operations/execution.md"
+  ],
+  "spec/behavior/execution-diagnostics.md": [
+    "spec/operations/diagnostics.md"
+  ],
+  "spec/contracts/snapshots-and-managed-data.md": [
+    "spec/snapshots/definition.md"
+  ],
+  "spec/contracts/snapshot-integrity.md": [
+    "spec/snapshots/integrity.md"
+  ],
+  "spec/contracts/snapshot-bundle.md": [
+    "spec/snapshots/bundles.md"
+  ],
+  "spec/execution/m4-snapshot-lifecycle-approval-baseline.md": [
+    "spec/snapshots/execution.md"
+  ],
+  "spec/behavior/m4-runtime-capabilities.md": [
+    "spec/snapshots/limits.md"
+  ],
+  "spec/behavior/m4-snapshot-command-reference.md": [
+    "spec/snapshots/commands.md"
+  ],
+  "spec/contracts/migrations.md": [
+    "spec/migrations/definition.md"
+  ],
+  "spec/execution/m5-migration-execution.md": [
+    "spec/migrations/execution.md"
+  ],
+  "spec/behavior/m5-migration-command-reference.md": [
+    "spec/migrations/commands.md"
+  ],
+  "spec/execution/recovery-and-reconciliation.md": [
+    "spec/lifecycle/recovery.md"
+  ],
+  "spec/execution/m7-instance-retirement.md": [
+    "spec/lifecycle/retirement.md"
+  ],
+  "spec/behavior/managed-object-lifecycle.md": [
+    "spec/lifecycle/objects-gc.md"
+  ],
+  "spec/contracts/hooks-recovery-and-cleanup.md": [
+    "spec/interfaces/hooks.md"
+  ],
+  "spec/contracts/hook-protocol.md": [
+    "spec/interfaces/hook-protocol.md"
+  ],
+  "spec/contracts/shell-loader.md": [
+    "spec/interfaces/shell-loader.md"
+  ],
+  "spec/contracts/cli-machine-interface.md": [
+    "spec/interfaces/machine-output.md"
+  ],
+  "spec/contracts/cli-id-selectors.md": [
+    "spec/interfaces/id-selectors.md"
+  ],
+  "spec/contracts/error-taxonomy-v1.md": [
+    "spec/interfaces/errors.md"
+  ],
+  "spec/behavior/command-and-output-reference.md": [
+    "spec/interfaces/commands.md"
+  ],
+  "spec/foundations/identity-and-state.md": [
+    "spec/packages/identity.md",
+    "spec/storage/runtime-content.md",
+    "spec/storage/revision-records.md",
+    "spec/packages/metadata.md",
+    "spec/instances/identity-state.md",
+    "spec/instances/bindings.md",
+    "spec/instances/service-resources.md"
+  ],
+  "spec/behavior/snapshots-migrations-and-recovery.md": [
+    "spec/snapshots/behavior.md",
+    "spec/migrations/behavior.md",
+    "spec/lifecycle/failure.md",
+    "spec/lifecycle/deletion.md"
+  ],
+  "spec/foundations/resources-and-versioning.md": [
+    "spec/lifecycle/resource-lifetimes.md",
+    "spec/storage/format-domains.md",
+    "spec/packages/import-identity.md",
+    "spec/snapshots/import-identity.md"
+  ],
+  "spec/contracts/actions-inputs-and-parameters.md": [
+    "spec/operations/action-definitions.md",
+    "spec/instances/input-declarations.md",
+    "spec/operations/parameters.md"
+  ],
+  "spec/foundations/index.md": [
+    "spec/core/index.md"
+  ],
+  "spec/behavior/index.md": [
+    "spec/operations/index.md"
+  ],
+  "spec/contracts/index.md": [
+    "spec/index.md"
+  ],
+  "spec/execution/index.md": [
+    "spec/operations/index.md"
+  ],
+  "spec/persistence/index.md": [
+    "spec/storage/index.md"
+  ],
+  "spec/contracts/cli-events.schema.json": [
+    "spec/interfaces/cli-events.schema.json"
+  ],
+  "spec/contracts/cli-machine.schema.json": [
+    "spec/interfaces/cli-machine.schema.json"
+  ],
+  "spec/contracts/hook-protocol-v1.md": [
+    "spec/interfaces/hook-protocol.md"
+  ],
+  "spec/contracts/hook-protocol-v2.md": [
+    "spec/interfaces/hook-protocol.md"
+  ],
+  "spec/contracts/pack-distribution-v1.md": [
+    "spec/packages/distribution.md"
+  ],
+  "spec/contracts/pack-source-yaml-v1.md": [
+    "spec/packages/source-format.md"
+  ],
+  "spec/contracts/pack-source-yaml-v2.md": [
+    "spec/packages/source-format.md"
+  ],
+  "spec/contracts/pack-source-yaml-v3.md": [
+    "spec/packages/source-format.md"
+  ],
+  "spec/contracts/revision-core-format-v1.md": [
+    "spec/packages/revision-format.md"
+  ],
+  "spec/contracts/revision-core-format-v2.md": [
+    "spec/packages/revision-format.md"
+  ],
+  "spec/contracts/revision-core-format-v3.md": [
+    "spec/packages/revision-format.md"
+  ],
+  "spec/contracts/snapshot-bundle-v1.md": [
+    "spec/snapshots/bundles.md"
+  ],
+  "spec/contracts/snapshot-integrity-format-v1.md": [
+    "spec/snapshots/integrity.md"
+  ],
+  "spec/contracts/snapshot-integrity-format-v2.md": [
+    "spec/snapshots/integrity.md"
+  ],
+  "spec/persistence/persistence-schema-v10.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v11.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v2.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v3.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v4.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v5.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v6.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v7.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v8.md": [
+    "spec/persistence/persistence-baseline.md"
+  ],
+  "spec/persistence/persistence-schema-v9.md": [
+    "spec/persistence/persistence-baseline.md"
+  ]
+}

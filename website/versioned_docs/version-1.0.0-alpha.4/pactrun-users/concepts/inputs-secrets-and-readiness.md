@@ -41,7 +41,7 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Input behavior](../../spec/behavior/inputs-secrets-and-readiness.md)
-and [resource ownership](../../spec/foundations/resources-and-versioning.md).
+Contracts: [Input behavior](../../spec/instances/inputs-secrets.md)
+and [resource ownership](../../spec/lifecycle/resource-lifetimes.md).
 
 </details>
