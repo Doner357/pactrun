@@ -1,8 +1,8 @@
-//! Slice 4 contract tests.
+//! Hook runtime contract tests.
 //!
 //! Real Hooks are this test binary launched as an Action Hook: the `direct`
 //! and `interpreted` Actions execute a materialized copy of `current_exe()`
-//! filtered to `m3_hook_worker`, which speaks Frozen HookProtocolV1 over the
+//! filtered to `hook_protocol_worker`, which speaks Frozen HookProtocolV1 over the
 //! discovered transport and acts according to the `mode` parameter.
 
 use std::{
@@ -42,12 +42,12 @@ use crate::{
     persistence::PactrunPersistence,
 };
 
-const WORKER_TEST: &str = "hook::tests::m3_hook_worker";
+const WORKER_TEST: &str = "hook::tests::hook_protocol_worker";
 const TRANSPORT_ENVIRONMENT: &str = "PACTRUN_HOOK_PROTOCOL_TRANSPORT";
 const ENDPOINT_ENVIRONMENT: &str = "PACTRUN_HOOK_PROTOCOL_ENDPOINT";
-const SECRET_BINDING: &[u8] = b"slice4-secret-binding";
-const SENSITIVE_PARAMETER: &str = "slice4-sensitive-parameter";
-const ARGUMENT_TAIL: &str = "slice4-argument-tail";
+const SECRET_BINDING: &[u8] = b"hook-fixture-secret-binding";
+const SENSITIVE_PARAMETER: &str = "hook-fixture-sensitive-parameter";
+const ARGUMENT_TAIL: &str = "hook-fixture-argument-tail";
 const MODE_PREFIX: &str = "pactrun-hook-mode:";
 const LINGER: Duration = Duration::from_millis(1500);
 const WAIT_LIMIT: Duration = Duration::from_secs(60);
@@ -182,7 +182,7 @@ impl RuntimeFixture {
     }
 
     fn with_source(configure: impl FnOnce(&Path, &Path, &mut String)) -> Self {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice4-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-hook-fixture-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("hook-")
@@ -218,7 +218,7 @@ impl RuntimeFixture {
             .revision;
         let instance = application
             .create_instance(
-                InstanceName::parse("slice4").unwrap(),
+                InstanceName::parse("hook-fixture").unwrap(),
                 revision,
                 vec![InputAcquisition {
                     input_id: InputIdentity::parse("secret_config").unwrap(),
@@ -243,7 +243,7 @@ impl RuntimeFixture {
         let intent = self
             .application
             .resolve_action(
-                &InstanceName::parse("slice4").unwrap(),
+                &InstanceName::parse("hook-fixture").unwrap(),
                 &ActionIdentity::parse(action).unwrap(),
                 parameters(mode, marker),
             )
@@ -716,7 +716,7 @@ fn frame_bytes(value: &Value) -> Vec<u8> {
 }
 
 #[test]
-fn m3_hook_worker() {
+fn hook_protocol_worker() {
     let arguments: Vec<String> = env::args().skip(1).collect();
     // The Unix interactive test adapter is itself a libtest process. It
     // inherits the owner's protocol environment while running the adapter
@@ -887,13 +887,13 @@ impl HookWorker {
                         "type": "diagnostic",
                         "severity": "warning",
                         "code": "hook_diagnostic_marker",
-                        "message": "slice5_hook_diagnostic_marker",
+                        "message": "private_hook_diagnostic_marker",
                     }),
                 );
                 self.complete(json!({
                     "status": "failure",
                     "code": "hook_completion_marker",
-                    "message": "slice5_hook_completion_marker",
+                    "message": "private_hook_completion_marker",
                     "produced_outputs": [],
                 }));
                 self.expect_accepted();
@@ -1234,7 +1234,7 @@ fn transport_fault_code(vector: &Value) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Slice 4 contract tests
+// Hook runtime contract tests
 // ---------------------------------------------------------------------------
 
 // Test-ID: PR-TEST-0093
@@ -1396,7 +1396,7 @@ fn production_action_protocol_matches_frozen_vectors_and_real_hooks() {
     assert_eq!(
         running_risk(&fixture.storage, run),
         RecoveryRiskState::Open,
-        "open risk stays durable for Slice 5"
+        "open risk stays durable for recovery"
     );
 
     let invalid = fixture.execute(
@@ -2164,8 +2164,8 @@ fn sensitive_values_endpoints_and_raw_frames_are_not_retained() {
 #[test]
 fn production_finalization_separates_hook_evidence_from_structural_outcome() {
     const CODE_MARKER: &str = "hook_completion_marker";
-    const COMPLETION_MESSAGE_MARKER: &str = "slice5_hook_completion_marker";
-    const DIAGNOSTIC_MARKER: &str = "slice5_hook_diagnostic_marker";
+    const COMPLETION_MESSAGE_MARKER: &str = "private_hook_completion_marker";
+    const DIAGNOSTIC_MARKER: &str = "private_hook_diagnostic_marker";
 
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("finalization-text-marker");
@@ -2309,7 +2309,7 @@ fn confirmed_owner_loss_cleanup_removes_execution_bytes_but_not_durable_run_stat
     );
 
     // Durable Run, ownership record, risk, and pins are untouched: only
-    // Slice 5 reconciliation may change them.
+    // Reconciliation may change them.
     match load_run(&storage, run).state {
         RunState::Running(execution) => {
             assert_eq!(execution.owner, owner);

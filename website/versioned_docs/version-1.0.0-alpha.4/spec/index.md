@@ -1,81 +1,50 @@
 ---
 title: Pactrun Specification
-slug: /spec
 ---
 
 # Pactrun Specification
 
-**Status: Informative specification map.**
+Pactrun installs immutable Pack Revisions and manages long-lived Instances.
+The specification describes their definitions, behavior, interfaces, and data
+boundaries for the selected documentation version.
 
-**Authority:** English normative text under this Spec tree defines Pactrun's
-product behavior and required architectural boundaries. Reading aids, examples,
-and this map explain the contracts; they do not add requirements.
+Start with [System and Core Concepts](./core/index.md), or choose the subject
+you need below. The [Vocabulary](./core/vocabulary.md) defines shared terms.
 
-## Read in layers
+## [System and Core Concepts](./core/index.md)
 
-1. [Foundations](./foundations/index.md): scope, ownership, identity, and lifetimes.
-2. [Observable behavior](./behavior/index.md): what operations expose and guarantee.
-3. [Authoring and format contracts](./contracts/index.md): Pack, Hook, wire, errors,
-   and exact immutable representations.
-4. [Execution and recovery](./execution/index.md): acceptance, concurrency, failure,
-   and durable recovery boundaries.
-5. [Internal persistence](./persistence/index.md): current schema and internal
-   storage guarantees, not a public database API.
+Understand the objects Pactrun manages and the boundaries between installation, execution, and service-owned data.
 
-Use the [shared vocabulary](./glossary.md) to locate a term's owner and the
-[contract catalog](./catalog.md) to find an exact page and its original status.
-For development work, use the [task reading paths](../development/reading-paths.md)
-instead of loading every specification at once.
-The layers organize references; they are not commands to execute or a mandatory
-cover-to-cover course. Start a development task with the current work scope, then
-read its owning rules and linked dependencies. Historical records preserve the
-evidence of their own stage and are not prerequisites for ordinary user tasks.
+## [Packages and Revisions](./packages/index.md)
 
-## One authority, different kinds of evidence
+Define, install, identify, and distribute immutable Pack Revisions. Descriptive metadata remains separate from operational identity.
 
-| Material | Role |
-| --- | --- |
-| Normative Spec text, including unnumbered architecture constraints | Defines product promises and prohibitions |
-| PR-REQ identifiers | Stable references to independently verifiable requirements |
-| PR-TEST and verification declarations | Evidence relationships, not replacement definitions |
-| Development guides and design syntheses | Explain implementation workflow and link to owning rules |
-| Roadmap and implementation records | Work order and reported implementation progress |
-| Compatibility pages at old paths | Forward old links; contain no independent rules |
-| Generated HTML and text copies | Publish the same source, never a second specification |
-| User and Pack author guides | Explain product use and authoring; link to owning contracts without adding rules |
+## [Instances and Data](./instances/index.md)
 
-Requirement-bearing documents live here, including new milestone contracts. Non-normative
-syntheses and planning baselines live under Development. A milestone-specific
-page that actually contains normative rules, such as the M4 execution boundary,
-remains in Spec rather than being archived because of its date.
+Manage Instance state, Input bindings, Secrets, and service-owned resources. Each kind of data has its own ownership and lifetime.
 
-## Status is not one switch
+## [Operations and Execution](./operations/index.md)
 
-Preserve three separate questions when reading a contract:
+Resolve and preview operations, admit an exact execution context, and follow a Run through completion or failure.
 
-- Does this text define a rule, or only explain one?
-- Is its format Frozen, Candidate, or internal/non-public?
-- Has the relevant runtime been implemented and verified?
+## [Snapshots and Restore](./snapshots/index.md)
 
-A Frozen protocol can describe a context whose runtime is not yet implemented.
-An internal schema does not become a public API by appearing on this website.
-Pending verification declarations are not removed by this document migration.
-See [implementation status and remaining decisions](../development/next-milestone.md).
+Capture a complete recovery representation, validate its integrity, transport it, and restore it to an exact-compatible Instance.
 
-The [M6.5 contracts](./catalog.md#proposed-m65-s0-designs-not-active-contracts)
-originated as conditional S0 designs. Their later approval, independent
-Core/Hook V2 Freeze and implementation evidence are recorded separately in the
-linked baseline and implementation record. A requirement ID alone never
-establishes approval or runtime completion.
+## [Migration](./migrations/index.md)
 
-## Changes and conflicts
+Move an Instance through declared Revision transitions. Each edge has its own requirements, service transformation, and durable commit.
 
-Moving or clarifying a rule does not authorize changing its meaning, reusing its
-ID, weakening its tests, or changing Frozen bytes. Exact rule headings and
-verification markers remain machine-readable. No unnamed normative constraint
-may be dropped merely because the ID scanner cannot see it.
+## [Lifecycle and Recovery](./lifecycle/index.md)
 
-Follow [development and verification policy](../development/development-and-verification.md)
-when a contract is unclear. Record affected rules and observable consequences;
-do not let a guide, a historical summary, or the current code silently decide a
-conflict. This migration does not establish new agent runtime or CLI promises.
+Understand resource retention, Cleanup, retirement, abandonment, and recovery after interrupted work.
+
+## [Hooks and Integration Interfaces](./interfaces/index.md)
+
+Use the Hook protocol, shell adapter, CLI, and structured outputs without conflating their distinct authority and version boundaries.
+
+## [Compatibility and Storage](./storage/index.md)
+
+Determine supported versions and the persistence rules for immutable content, Revision records, and the management database.
+
+For individual contracts, use the [reference index](./catalog.md).

@@ -1,84 +1,72 @@
 # Contributing to Pactrun
 
-Pactrun follows a modular-monolith architecture and a Git Flow branch model:
-`main` is releasable, `develop` is the integration branch, and work is prepared
-on focused topic branches. Choose the target version line before the prefix:
-`feature/*` for capabilities, `fix/*` for development-line fixes, and `docs/*`
-for documentation all start from and merge into `develop`. `release/*` is for
-release stabilization; `hotfix/*` is for an existing released production line,
-not every urgent or small change. See the
-[Git Flow rules](./docs/development/development-and-verification.md#git-flow-and-topic-naming).
+## Build and run
 
-## Change discipline
+CI uses Rust stable with rustfmt and Clippy; Cargo.toml declares Rust 2024.
+Build on Windows or Linux with a native C compiler and linker for bundled
+SQLite. Windows CI uses the MSVC toolchain. Release reproduction uses the pinned
+toolchain in the release workflow rather than whichever compiler is newest.
 
-- State assumptions and define verifiable completion criteria before changing
-  behavior.
-- Prefer the smallest sufficient, local change. Do not add speculative
-  abstractions.
-- Preserve module ownership: the domain must not depend on CLI, persistence, or
-  third-party adapter types.
-- Do not reinterpret normative semantics during ordinary implementation. Report
-  an invariant conflict and use a separate design-change workflow.
-- Add requirement, test, and vector identifiers only when they refer to real
-  contracts. Do not create placeholder traceability.
-- New functions and tests use product concepts, behavior and invariants, not
-  milestone/slice markers in names or executable content. Existing occurrences
-  are reviewed when working in the affected area; do not mass-rename unrelated code.
-  Real format/protocol versions and stable requirement/test IDs are not milestones.
-- Record design rationale with the owning rule or a stable decision reference:
-  problem, reason, material alternatives, assumptions/evidence and conditions for
-  reconsideration. Keep rationale informative and never invent an original reason
-  that was not recorded. See the
-  [detailed rules](./docs/development/development-and-verification.md#product-oriented-functions-and-tests).
+From the repository root:
 
-## Documentation
+```text
+cargo build --locked
+cargo run -- --help
+```
 
-For CI scope, required checks, Pages activation and the separate software-release
-boundary, see [CI and publication operations](./docs/development/ci-and-publication.md).
+Run exercises against an isolated, explicitly provisioned storage root;
+see [data locations](docs/guides/data-location.md).
 
-Canonical Markdown is maintained in `docs/`. The `website/` project is a
-presentation layer and must not rewrite those sources. Read the relevant
-[specification authority map](./docs/spec/index.md) and normative pages before changing behavior. English is the
-canonical documentation language; a future `zh-Hant` tree may provide
-translations but will not independently define semantics.
+## Make a change
 
-Keep documentation scoped to its audience. Only docs/spec defines product
-requirements; Development contains workflow, design syntheses, implementation
-records, and work-order guidance. Old paths are compatibility entries, not
-additional authority. Read the [Spec map](docs/spec/index.md) and the
-[development entry](docs/development/index.md).
+Read the relevant [Spec](docs/spec/index.md) and its tests. Define changed behavior
+before implementing it. Keep Domain policy independent of CLI, storage adapters
+and third-party mechanism types.
 
-Users, Pack authors, and operation-oriented agents have complete reading entries:
-[user onboarding](docs/guides/index.md), [authoring](docs/package-authors/index.md),
-and [agent task selection](docs/agents/index.md). Product implementers use
-[agent development navigation](docs/agents/develop-pactrun.md).
-Agent sources are excluded from human HTML pages and navigation. Generated text
-and HTML are publication copies, never additional authority. Personal developer
-preferences do not belong in the product specification.
+Tests declare actual coverage with Test-ID: PR-TEST-NNNN and Verifies: PR-REQ-NNNN
+comments. Owning requirements cite those tests in the other direction. Preserve
+IDs when moving code; retired IDs are not reused and numeric gaps are valid.
 
-Documentation must be valid UTF-8. English documents may use Unicode punctuation,
-symbols, diagrams, emoji, proper names, and encoding examples, but their natural
-language must remain English. Do not enforce this rule with a blanket non-ASCII
-ban.
+Use [Git Flow](https://nvie.com/posts/a-successful-git-branching-model/): development
+topics start from and return to `develop`; `main` contains release-ready history. Use `feature/*`, `fix/*` or `docs/*` for development topics,
+`release/*` for stabilization and `hotfix/*` for a released production line.
+Use Conventional Commits.
 
-Repository-owned source code, identifiers, comments, test names, and embedded
-fixtures must use ASCII by default, while Pactrun behavior must correctly support
-UTF-8 external text and opaque data. Prefer escapes, byte construction, or a
-dedicated fixture for Unicode test data. A literal non-ASCII source-code
-exception must be indispensable, narrowly scoped, and explained in ASCII.
+For CLI presentation, use [CLIG](https://clig.dev/#human-first-design) for human-first
+output and discoverable help, and [GOV.UK error-message guidance](https://design-system.service.gov.uk/components/error-message/)
+for explaining what went wrong and how to correct it. Keep those wording choices
+separate from the [machine interface](docs/spec/interfaces/machine-output.md).
 
-The complete contributor contract is the
-[Development and Verification Policy](./docs/development/development-and-verification.md).
+## Verify the change
 
-## Verification
+| Change | Checks |
+| --- | --- |
+| Documentation or navigation | Documentation tests, traceability and affected site typecheck/build |
+| Spec, embedded SQL/schema, codecs or fixtures | Consuming contract tests plus documentation checks |
+| Bounded Rust change | Formatting, Clippy and affected tests, including refusals |
+| High-risk or cross-cutting runtime change; formal release | Full `cargo xtask ci` and affected platform/artifact checks |
 
-Choose the minimum sufficient checks using the
-[risk-based validation policy](./docs/development/development-and-verification.md#risk-based-validation-scope).
-Documentation-only edits use document/link/traceability checks and affected site
-typecheck/build, not the complete Rust product suite. Full `cargo xtask ci`
-remains the high-risk runtime, milestone-integration and formal-release gate.
-Every change must report its verification scope, status and documentation impact;
-identify reused evidence separately from checks run now.
+Inspect consumers before narrowing scope: Markdown may be executable test input.
+Identity, persistence, concurrency, Hook authority and recovery changes need
+particular care. Use the full gate when impact cannot be bounded. A filter must
+execute the intended tests, not return success with zero matches.
 
-Commits, pushes, host-level toolchain installation, and machine configuration
-require separate explicit authorization.
+Report checks actually run and their tested source; distinguish reused evidence
+and unrun checks. A documentation-only commit does not by itself invalidate
+unchanged runtime evidence. Do not remove behavioral assertions to obtain a pass.
+See [test entry points](tests/README.md) for focused and opt-in checks.
+
+## Documentation and maintenance
+
+Canonical English Markdown lives in `docs/`. UTF-8 punctuation and examples are
+valid; external product data is not restricted to ASCII. Repository code,
+identifiers and comments use ASCII by default; Unicode fixtures use escapes or
+dedicated data files where practical.
+
+- [Website maintenance](website/README.md): generated references, versions and builds.
+- [Delivery tools](tools/README.md): candidate builds, package catalog and Pages.
+
+Use the [Google developer documentation style guide](https://developers.google.com/style)
+for prose and [Diátaxis](https://diataxis.fr/) to distinguish tasks, references and
+explanations. [Good Docs templates](https://www.thegooddocsproject.dev/templates)
+are optional starting points, not required page structures.

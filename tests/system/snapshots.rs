@@ -1,4 +1,4 @@
-//! M4 journeys use a fresh executable for every public product operation.
+//! Snapshot journeys use a fresh executable for every public product operation.
 use super::support::{
     Scenario, assert_empty_json_result, assert_exit, assert_success, first_line,
     instance_projection,
@@ -14,9 +14,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-const SECRET: &[u8] = b"m4-managed-secret-bytes";
-const SERVICE: &[u8] = b"m4-captured-service-bytes";
-const PRIVATE: &str = "m4-sensitive-parameter";
+const SECRET: &[u8] = b"snapshot-secret-bytes";
+const SERVICE: &[u8] = b"snapshot-service-bytes";
+const PRIVATE: &str = "snapshot-sensitive-parameter";
 const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
 
 fn source(access: &str) -> String {
@@ -32,7 +32,7 @@ fn source(access: &str) -> String {
             r#"      parameters:
         - { id: mode, type: string, sensitive: false, default: success }
         - { id: marker, type: string, sensitive: false, default: '{hook_marker}' }
-        - { id: secret_text, type: string, sensitive: true, default: m4-sensitive-parameter }
+        - { id: secret_text, type: string, sensitive: true, default: snapshot-sensitive-parameter }
         - { id: enabled, type: boolean, sensitive: false, default: true }
       hook:
         protocol_version: 1.0-alpha.1

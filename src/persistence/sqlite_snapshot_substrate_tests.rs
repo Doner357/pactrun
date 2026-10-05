@@ -834,7 +834,7 @@ fn spawn_restore(
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     if let Some(fault) = fault {
-        command.env("PACTRUN_M4_FAULT", fault);
+        command.env("PACTRUN_OPERATION_TEST_FAULT", fault);
     }
     ManagedWorker(command.spawn().unwrap())
 }

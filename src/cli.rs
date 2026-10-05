@@ -3481,7 +3481,7 @@ mod tests {
     }
 
     fn cli_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m2-cli-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/input-cli-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("cli-")
@@ -3518,7 +3518,7 @@ portable_metadata:
     }
 
     fn cli_action_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-cli-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/invoke-cli-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("cli-action-")
@@ -3567,7 +3567,7 @@ runtime_content:
     }
 
     fn cli_hook_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-cli-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/invoke-cli-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("cli-hook-")
@@ -3605,7 +3605,7 @@ revision:
       hook:
         protocol_version: 1.0-alpha.1
         launch: {{ kind: direct, executable: worker }}
-        args: ["--exact", "hook::tests::m3_hook_worker", "--nocapture", "--test-threads=1", "slice4-argument-tail"]
+        args: ["--exact", "hook::tests::hook_protocol_worker", "--nocapture", "--test-threads=1", "hook-fixture-argument-tail"]
         io: {{ terminal: none }}
       outputs: [{{ id: report }}]
   migrations: []
@@ -3650,8 +3650,8 @@ runtime_content:
         let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
         let expected_path = temporary.path().join("expected-binding.txt");
         let sensitive_path = temporary.path().join("sensitive-value.txt");
-        fs::write(&expected_path, b"slice4-secret-binding").unwrap();
-        fs::write(&sensitive_path, b"slice4-sensitive-parameter").unwrap();
+        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
+        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
         assert_eq!(
             run(
                 vec![
@@ -3775,7 +3775,7 @@ runtime_content:
     // Test-ID: PR-TEST-0114
     // Verifies: PR-REQ-0097, PR-REQ-0114, PR-REQ-0284, PR-REQ-0285
     #[test]
-    fn m3_commands_and_run_projection_are_structural_and_redacted() {
+    fn commands_and_run_projection_are_structural_and_redacted() {
         assert!(matches!(
             parse_command(vec!["action".into(), "list".into(), "node".into()]).unwrap(),
             Command::ListActions { .. }
@@ -3910,7 +3910,7 @@ runtime_content:
     // Test-ID: PR-TEST-0116
     // Verifies: PR-REQ-0135, PR-REQ-0288
     #[test]
-    fn m3_parameter_sources_preserve_exact_text_and_protected_channel() {
+    fn parameter_sources_preserve_exact_text_and_protected_channel() {
         let command = parse_command(vec![
             "invoke".into(),
             "node".into(),
@@ -4012,7 +4012,7 @@ runtime_content:
     // Test-ID: PR-TEST-0118
     // Verifies: PR-REQ-0284, PR-REQ-0287
     #[test]
-    fn m3_recovery_commands_have_explicit_operator_spellings() {
+    fn recovery_commands_have_explicit_operator_spellings() {
         let expected = InstanceStateVersion::from_bytes([9; 16]).to_string();
         assert!(matches!(
             parse_command(vec![
@@ -4034,7 +4034,7 @@ runtime_content:
     // Test-ID: PR-TEST-0120
     // Verifies: PR-REQ-0095, PR-REQ-0284
     #[test]
-    fn m3_human_action_and_plan_commands_use_the_read_only_path() {
+    fn human_action_and_plan_commands_use_the_read_only_path() {
         let (_temporary, storage, source) = cli_action_roots();
         let storage_env = Some(storage.as_os_str().to_owned());
         let mut stdout = Vec::new();
@@ -4135,7 +4135,7 @@ runtime_content:
     // Test-ID: PR-TEST-0119
     // Verifies: PR-REQ-0094, PR-REQ-0284
     #[test]
-    fn m3_human_invoke_creates_and_finishes_a_managed_run() {
+    fn human_invoke_creates_and_finishes_a_managed_run() {
         let (temporary, storage, source) = cli_hook_roots();
         let storage_env = Some(storage.as_os_str().to_owned());
         let mut stdout = Vec::new();
@@ -4156,7 +4156,7 @@ runtime_content:
         stdout.clear();
         stderr.clear();
         let expected_path = temporary.path().join("expected-binding.txt");
-        fs::write(&expected_path, b"slice4-secret-binding").unwrap();
+        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
         assert_eq!(
             run(
                 vec![
@@ -4180,7 +4180,7 @@ runtime_content:
 
         let marker = temporary.path().join("invoke-marker");
         let sensitive_path = temporary.path().join("sensitive-value.txt");
-        fs::write(&sensitive_path, b"slice4-sensitive-parameter").unwrap();
+        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
         stdout.clear();
         stderr.clear();
         assert_eq!(
@@ -4213,8 +4213,8 @@ runtime_content:
             .find_map(|line| line.strip_prefix("run: "))
             .expect("invoke prints the completed RunId")
             .to_owned();
-        assert!(!summary.contains("slice4-sensitive-parameter"));
-        assert!(!summary.contains("slice4-secret-binding"));
+        assert!(!summary.contains("hook-fixture-sensitive-parameter"));
+        assert!(!summary.contains("hook-fixture-secret-binding"));
         stdout.clear();
         stderr.clear();
         assert_eq!(
@@ -4270,8 +4270,8 @@ runtime_content:
         let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
         let expected_path = storage.parent().unwrap().join("expected-binding.txt");
         let sensitive_path = storage.parent().unwrap().join("sensitive-value.txt");
-        fs::write(&expected_path, b"slice4-secret-binding").unwrap();
-        fs::write(&sensitive_path, b"slice4-sensitive-parameter").unwrap();
+        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
+        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
         stdout.clear();
         stderr.clear();
         assert_eq!(

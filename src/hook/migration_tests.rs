@@ -364,17 +364,17 @@ fn multiple_hook_edges_get_independent_sessions_and_full_active_and_retained_sou
 
 #[test]
 fn migration_owner_worker() {
-    let Some(root) = env::var_os("PACTRUN_M5_HOOK_TEST_ROOT") else { return; };
+    let Some(root) = env::var_os("PACTRUN_MIGRATION_TEST_HOOK_TEST_ROOT") else { return; };
     let root = PathBuf::from(root);
     let app = PactrunApplication::open(&root).unwrap();
-    if env::var_os("PACTRUN_M5_RECONCILE").is_some() {
+    if env::var_os("PACTRUN_MIGRATION_TEST_RECONCILE").is_some() {
         app.reconcile_lost_action_owners().unwrap();
         return;
     }
-    let instance = app.resolve_instance_name(&InstanceName::parse("slice4").unwrap()).unwrap().unwrap();
+    let instance = app.resolve_instance_name(&InstanceName::parse("hook-fixture").unwrap()).unwrap().unwrap();
     let observation = app.observe_migration_compilation(instance).unwrap();
-    let target = RevisionIdentity::new(observation.active_revision.package_id, env::var("PACTRUN_M5_TARGET").unwrap().parse().unwrap());
-    let key = MigrationTargetInput {revision: env::var("PACTRUN_M5_INPUT_TARGET").unwrap().parse().unwrap(), input:InputIdentity::parse("request").unwrap()};
+    let target = RevisionIdentity::new(observation.active_revision.package_id, env::var("PACTRUN_MIGRATION_TEST_TARGET").unwrap().parse().unwrap());
+    let key = MigrationTargetInput {revision: env::var("PACTRUN_MIGRATION_TEST_INPUT_TARGET").unwrap().parse().unwrap(), input:InputIdentity::parse("request").unwrap()};
     let plan = crate::workflow::compile_migration(&app, &crate::workflow::PlatformHostLauncherLookup,
         &TransitionRevision {instance, expected_state_version:observation.state_version,
             source:observation.active_revision, target, path:MigrationPathSelection::Automatic,
@@ -404,15 +404,15 @@ fn mixed_chain_crashes_reconcile_in_a_new_process_without_files_or_hook_replay()
         let request = f.marker("request.json");
         fs::write(&request, serde_json::to_vec(&json!({"mode":"success","marker":f.marker("invoked")})).unwrap()).unwrap();
         let status = Command::new(env::current_exe().unwrap()).args(["--exact",OWNER_WORKER,"--nocapture"])
-            .env("PACTRUN_M5_HOOK_TEST_ROOT",&f.storage).env("PACTRUN_M5_TARGET",path[3].content_digest.to_string())
-            .env("PACTRUN_M5_INPUT_TARGET",path[2].content_digest.to_string())
-            .env("PACTRUN_M4_FAULT",fault).env("PACTRUN_MIGRATION_FAULT_EDGE",edge.to_string())
+            .env("PACTRUN_MIGRATION_TEST_HOOK_TEST_ROOT",&f.storage).env("PACTRUN_MIGRATION_TEST_TARGET",path[3].content_digest.to_string())
+            .env("PACTRUN_MIGRATION_TEST_INPUT_TARGET",path[2].content_digest.to_string())
+            .env("PACTRUN_OPERATION_TEST_FAULT",fault).env("PACTRUN_MIGRATION_FAULT_EDGE",edge.to_string())
             .stdout(std::process::Stdio::null()).status().unwrap();
         assert_eq!(status.code(),Some(87),"{fault}");
         let run:RunId = fs::read_to_string(f.marker("accepted-run")).unwrap().parse().unwrap();
         fs::remove_file(request).unwrap();
         assert!(Command::new(env::current_exe().unwrap()).args(["--exact",OWNER_WORKER,"--nocapture"])
-            .env("PACTRUN_M5_HOOK_TEST_ROOT",&f.storage).env("PACTRUN_M5_RECONCILE","1")
+            .env("PACTRUN_MIGRATION_TEST_HOOK_TEST_ROOT",&f.storage).env("PACTRUN_MIGRATION_TEST_RECONCILE","1")
             .stdout(std::process::Stdio::null()).status().unwrap().success());
         let p = persistence(&f.storage);
         let inspection = p.managed_run_inspection(run).unwrap().unwrap();

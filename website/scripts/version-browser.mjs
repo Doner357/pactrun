@@ -23,14 +23,14 @@ try {
   checks.push('default entry selects the published release');
 
   await page.goto(url('spec/contracts/pack-source#pr-req-0258---packsourceyamlv1-schema-numbers-and-package-lineage'), {waitUntil: 'networkidle'});
-  assert.ok(page.url().includes('/' + release + '/spec/contracts/pack-source#pr-req-0258'));
+  assert.ok(page.url().includes('/' + release + '/spec/packages/source-format#pr-req-0258'));
   await picker().selectOption('current');
-  await page.waitForURL('**/next/spec/contracts/pack-source#pr-req-0258*');
+  await page.waitForURL('**/next/spec/packages/source-format#pr-req-0258*');
   await page.locator('#pr-req-0258---packsourceyamlv1-schema-numbers-and-package-lineage').waitFor();
   await page.locator('.edition-bar').filter({hasText: 'Development (unreleased)'}).waitFor();
   const report = new URL(await page.getByRole('link', {name: 'Report a documentation issue'}).getAttribute('href'));
   assert.ok(report.searchParams.get('body').includes('Development (unreleased)'));
-  assert.ok(report.searchParams.get('body').includes('/next/spec/contracts/pack-source'));
+  assert.ok(report.searchParams.get('body').includes('/next/spec/packages/source-format'));
   checks.push('legacy anchors, same-topic version switching and issue context');
 
   await page.locator('a.navbar__brand').click();

@@ -1,7 +1,5 @@
 //! Persistence boundary and storage-adapter ownership.
 
-// M1-B establishes the production storage contract before M1-C adds its first
-// application caller.
 #![allow(dead_code)]
 
 #[cfg(test)]

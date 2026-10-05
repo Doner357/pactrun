@@ -90,8 +90,9 @@ More detail: [Pack fields and values](../reference/pack-fields.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Actions and parameters](../../spec/contracts/actions-inputs-and-parameters.md),
-[Pack source](../../spec/contracts/pack-source.md), and
-[Hook protocol](../../spec/contracts/hook-protocol.md).
+Contracts: [Action definitions](../../spec/operations/action-definitions.md),
+[invocation parameters](../../spec/operations/parameters.md),
+[Pack source](../../spec/packages/source-format.md), and
+[Hook protocol](../../spec/interfaces/hook-protocol.md).
 
 </details>

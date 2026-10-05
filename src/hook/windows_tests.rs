@@ -40,7 +40,7 @@ fn arguments(mode: &str, directory: &Path) -> Vec<String> {
 fn temporary() -> tempfile::TempDir {
     let parent = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("target")
-        .join("m3-windows-launch-tests");
+        .join("windows-launch-tests");
     fs::create_dir_all(&parent).unwrap();
     tempfile::Builder::new()
         .prefix("launch-")

@@ -4,9 +4,28 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
-import textDocs, {exportText, markdownBody, readDocuments, validateLinks, textBody, verifyText} from '../plugins/text-docs/index.mjs';
+import textDocs, {exportText, markdownBody, readDocuments, validateLinks, textBody, verifyText, textAliases} from '../plugins/text-docs/index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+test('legacy text aliases combine split owners without breaking links or altering code and JSON', () => {
+  const code = '```md\n[example](./literal.md)\n```\n';
+  const sources = [['spec/packages/identity.md', '# Identity\n[State](../instances/state.md)\n' + code],
+    ['spec/instances/state.md', '# State\n[Identity](../packages/identity.md)\n'],
+    ['spec/interfaces/example.schema.json', '{"description":"[literal](./literal.md)"}\n']];
+  const aliases = {'spec/foundations/identity-and-state.md': ['spec/packages/identity.md', 'spec/instances/state.md'],
+    'spec/contracts/example.schema.json': ['spec/interfaces/example.schema.json']};
+  const result = new Map(textAliases(sources, aliases, '1.0.0-alpha.4', '/pactrun/'));
+  const body = result.get('spec/foundations/identity-and-state.md');
+  assert.ok(body.includes('Source: docs/spec/packages/identity.md'));
+  assert.ok(body.includes('Source: docs/spec/instances/state.md'));
+  assert.ok(body.includes('[State](../instances/state.md)'));
+  assert.ok(body.includes('[Identity](../packages/identity.md)'));
+  assert.ok(body.includes(code));
+  assert.equal(result.get('spec/contracts/example.schema.json'), sources[2][1]);
+  assert.throws(() => textAliases(sources, {'spec/../../outside.md': [sources[0][0]]}, 'current', '/'), /Invalid text alias/);
+  assert.throws(() => textAliases(sources, {'spec/old.md': ['spec/missing.md']}, 'current', '/'), /Missing text alias target/);
+});
 
 test('all current document links resolve in the text edition', async () => {
   validateLinks(await readDocuments(path.join(root, 'docs')));
@@ -71,7 +90,7 @@ test('text export is deterministic, preserves relative links, and removes stale 
 
 test('agent text shares classification and preserves the entire original body after context', () => {
   const source = '---\ntitle: Old\n---\n\n# Contract\nMUST preserve this exact sentence.\n';
-  for (const [name, state] of [['development/m4-implementation-status.md', 'historical'], ['spec/contracts/pack-source.md', 'current'], ['pactrun-developers/old.md', 'superseded']]) {
+  for (const [name, state] of [['spec/packages/source-format.md', 'current'], ['pactrun-developers/old.md', 'superseded']]) {
     const text = textBody(name, source);
     assert.ok(text.startsWith('> Document context (generated): ' + state));
     assert.equal(text.slice(text.indexOf('\n\n') + 2), markdownBody(source));
@@ -98,14 +117,16 @@ test('repository README links and machine-format descriptions follow current con
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
   const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8');
   const documents = await readDocuments(path.join(root, 'docs'));
+  const maintenance = await Promise.all(['website/README.md', 'tests/README.md', 'tools/README.md'].map(async name => [name, await readFile(path.join(root, name), 'utf8')]));
   validateLinks([
     ['README.md', readme],
     ['CONTRIBUTING.md', contributing],
+    ...maintenance,
     ['LICENSE', await readFile(path.join(root, 'LICENSE'), 'utf8')],
     ...documents.map(([name]) => ['docs/' + name, '']),
   ]);
   for (const file of ['cli-machine.schema.json', 'cli-events.schema.json']) {
-    const schema = JSON.parse(await readFile(path.join(root, 'docs/spec/contracts', file), 'utf8'));
+    const schema = JSON.parse(await readFile(path.join(root, 'docs/spec/interfaces', file), 'utf8'));
     for (const field of ['format', 'format_version']) {
       const declaration = field + ': ' + JSON.stringify(schema.properties[field].const);
       assert.ok(readme.includes('`' + declaration + '`'), file + ': README must describe ' + declaration);

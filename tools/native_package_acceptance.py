@@ -1,4 +1,4 @@
-"""Source-qualified, isolated E native-manager rehearsal; not an installer.
+"""Source-qualified, isolated native-manager rehearsal; not an installer.
 Inputs are real release-part.json files and their sibling assets directories.
 Requires an explicitly authorized transient Scoop shim PATH change on Windows.
 """
@@ -6,7 +6,7 @@ import argparse, datetime, functools, hashlib, http.server, json, os
 from pathlib import Path
 import shutil, signal, sqlite3, subprocess, tempfile, threading, time
 
-parser = argparse.ArgumentParser(__doc__)
+parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--root', type=Path, required=True)
 parser.add_argument('--manager', type=Path, required=True)
 parser.add_argument('--xtask', type=Path, required=True)

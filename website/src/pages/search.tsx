@@ -53,7 +53,7 @@ export default function Search(): React.JSX.Element {
 
   if (!location.pathname.startsWith(docBase)) return <Redirect to={docBase + 'search' + location.search + location.hash} />;
 
-  return <Layout title="Search documentation" description="Search current documentation and historical records.">
+  return <Layout title="Search documentation" description="Search versioned product documentation.">
     <main className="container search-page">
       <h1>Search documentation</h1>
       <p>Search {edition.label} for commands, concepts, and requirement IDs. Search runs in your browser.</p>
@@ -66,17 +66,17 @@ export default function Search(): React.JSX.Element {
         <div className="search-filters">
           <label>Document state<select aria-label="Document state" value={state} onChange={e => update('state', e.target.value)}>
             <option value="current">Current documents</option><option value="">All states</option>
-            <option value="historical">Historical records</option><option value="superseded">Superseded pages</option>
+            <option value="superseded">Superseded pages</option>
           </select></label>
           <label>Audience<select aria-label="Audience" value={audience} onChange={e => update('audience', e.target.value)}>
             <option value="">All audiences</option>{['Users', 'Authors', 'Developers'].map(x => <option key={x}>{x}</option>)}
           </select></label>
           <label>Document role<select aria-label="Document role" value={role} onChange={e => update('role', e.target.value)}>
-            <option value="">All roles</option>{['Tutorial', 'Guide', 'Explanation', 'Reference', 'Informative', 'Specification', 'Development', 'Record', 'Compatibility'].map(x => <option key={x}>{x}</option>)}
+            <option value="">All roles</option>{['Tutorial', 'Guide', 'Explanation', 'Reference', 'Specification', 'Compatibility'].map(x => <option key={x}>{x}</option>)}
           </select></label>
           <button className="button button--secondary" onClick={() => resetFilters()}>Reset filters</button>
         </div>
-        <p className="search-scope">Current documents exclude historical and superseded pages. References can serve more than one audience.</p>
+        <p className="search-scope">Current documents exclude superseded pages. References can serve more than one audience.</p>
       </details>
       <div role="status" aria-live="polite">{status === 'loading' ? 'Loading document index…' : status === 'error' ? 'Search could not load. Use the documentation navigation or retry.' : results.length + ' matching documents'}</div>
       {status === 'error' && <button className="button button--primary" onClick={() => setAttempt(n => n + 1)}>Retry search</button>}

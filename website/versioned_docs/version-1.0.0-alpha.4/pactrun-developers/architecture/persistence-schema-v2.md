@@ -22,10 +22,10 @@ anchors only and adds no product rules.
 [Required repository ordering](../../spec/persistence/persistence-baseline.md#required-repository-ordering)
 
 <a id="pr-req-0257---v1-to-v2-migration-and-validation" />
-[PR-REQ-0257 - V1-to-V2 migration and validation](../../spec/persistence/persistence-baseline.md#pr-req-0257---v1-to-v2-migration-and-validation)
+[PR-REQ-0257 - V1-to-V2 migration and validation](../../spec/persistence/persistence-baseline.md#pr-req-0299---durable-writable-admission-and-serialized-migration)
 
 <a id="planned-crate-private-typed-interface" />
 [Planned crate-private typed interface](../../spec/persistence/persistence-baseline.md#planned-crate-private-typed-interface)
 
 <a id="deferred-work" />
-[Deferred work](../../spec/persistence/persistence-baseline.md#deferred-work)
+[Deferred work](../../spec/persistence/persistence-baseline.md#pr-req-0256---exact-persistenceschemav2)

@@ -1,4 +1,4 @@
-//! V5 managed Run, execution pin, recovery, and historical Action Artifact repository.
+//! Managed Run, execution pin, recovery, and retained Action Artifact repository.
 //!
 //! Every mutation is one `BEGIN IMMEDIATE` transaction. Run creation, pin
 //! establishment, risk transitions, and a terminal publication without an
@@ -3182,14 +3182,14 @@ mod tests {
 
     const TOOL_BYTES: &[u8] = b"deploy tool";
 
-    const WORKER_TEST: &str = "persistence::sqlite_runs::tests::m3_subprocess_worker";
+    const WORKER_TEST: &str = "persistence::sqlite_runs::tests::run_store_worker";
 
     mod managed_access {
         include!("sqlite_managed_access_tests.rs");
     }
 
     fn root() -> (TempDir, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice2-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/run-store-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("runs-")
@@ -3632,7 +3632,7 @@ mod tests {
         }
     }
 
-    // Supporting coverage for the Slice 5 inspection substrate. This is not
+    // Supporting coverage for the Run inspection substrate. This is not
     // verification of the user-visible Run-detail requirement.
     #[test]
     fn run_inspection_uses_one_read_snapshot_for_run_and_current_guard() {
@@ -3868,19 +3868,19 @@ mod tests {
             .arg("--exact")
             .arg(WORKER_TEST)
             .arg("--nocapture")
-            .env("PACTRUN_M3_WORKER", operation)
-            .env("PACTRUN_M3_ROOT", root)
-            .env("PACTRUN_M3_RUN", run.to_string())
-            .env("PACTRUN_M3_SUCCESS_MARKER", marker)
+            .env("PACTRUN_RUN_TEST_WORKER", operation)
+            .env("PACTRUN_RUN_TEST_ROOT", root)
+            .env("PACTRUN_RUN_TEST_RUN", run.to_string())
+            .env("PACTRUN_RUN_TEST_SUCCESS_MARKER", marker)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         if let Some(fault) = fault {
-            command.env("PACTRUN_M3_FAULT", fault.name());
+            command.env("PACTRUN_RUN_TEST_FAULT", fault.name());
         }
         let output = command.output().unwrap();
         if !output.status.success() && fault.is_none() {
             eprintln!(
-                "M3 worker failed with {}\nstdout:\n{}\nstderr:\n{}",
+                "Run worker failed with {}\nstdout:\n{}\nstderr:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
@@ -3890,13 +3890,13 @@ mod tests {
     }
 
     #[test]
-    fn m3_subprocess_worker() {
-        let Some(operation) = std::env::var_os("PACTRUN_M3_WORKER") else {
+    fn run_store_worker() {
+        let Some(operation) = std::env::var_os("PACTRUN_RUN_TEST_WORKER") else {
             return;
         };
-        let root = PathBuf::from(std::env::var_os("PACTRUN_M3_ROOT").unwrap());
-        let marker = PathBuf::from(std::env::var_os("PACTRUN_M3_SUCCESS_MARKER").unwrap());
-        let run = std::env::var("PACTRUN_M3_RUN")
+        let root = PathBuf::from(std::env::var_os("PACTRUN_RUN_TEST_ROOT").unwrap());
+        let marker = PathBuf::from(std::env::var_os("PACTRUN_RUN_TEST_SUCCESS_MARKER").unwrap());
+        let run = std::env::var("PACTRUN_RUN_TEST_RUN")
             .unwrap()
             .parse::<RunId>()
             .unwrap();
@@ -3921,9 +3921,9 @@ mod tests {
                     .finish_run(run, &plain_finish(RunOutcome::Failed), &mut [])
                     .unwrap();
             }
-            other => panic!("unknown M3 worker operation {other}"),
+            other => panic!("unknown Run worker operation {other}"),
         }
-        fs::write(marker, b"m3-operation-returned-success").unwrap();
+        fs::write(marker, b"run-operation-returned-success").unwrap();
     }
 
     // Test-ID: PR-TEST-0083

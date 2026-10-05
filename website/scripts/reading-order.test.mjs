@@ -10,6 +10,17 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const documents = await readDocuments(path.join(root, 'docs'));
 const docs = new Map(documents);
 
+test('Spec references return to their product topic rather than development history', () => {
+  for (const [name] of documents.filter(([name]) => name.startsWith('spec/') && name.endsWith('.md'))) {
+    const route = readingNavigation(name);
+    assert.equal(route.kind, 'lookup');
+    assert.ok(route.back.startsWith('spec/'));
+    assert.ok(docs.has(route.back));
+    if (name === 'spec/persistence/persistence-baseline.md') assert.equal(route.back, 'spec/storage/index.md');
+    else if (name.split('/').length === 3 && !name.endsWith('/index.md')) assert.equal(route.back, name.slice(0, name.lastIndexOf('/') + 1) + 'index.md');
+  }
+});
+
 test('guided routes have existing prerequisites, consistent sidebar order and explicit next destinations', async () => {
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
   for (const sequence of Object.values(readingSequences)) {
@@ -41,7 +52,7 @@ test('independent tasks, references and records do not become an automatic execu
   }
   for (const name of ['guides/recovery.md', 'guides/retirement.md', 'guides/configure-inputs.md',
     'package-authors/managed-capabilities/migrations.md', 'package-authors/managed-capabilities/snapshots-and-managed-data.md',
-    'spec/contracts/pack-source.md', 'pactrun-users/reference/machine-output.md']) {
+    'spec/packages/source-format.md', 'pactrun-users/reference/machine-output.md']) {
     assert.equal(readingNavigation(name).kind, 'lookup', name);
     assert.equal(readingNavigation(name).next, undefined, name);
   }
@@ -63,13 +74,4 @@ test('the empty tutorial and later task prerequisites cannot be confused with a 
   for (const name of ['guides/configure-inputs.md', 'guides/run-and-diagnose.md', 'guides/service-resources.md']) assert.ok(docs.get(name).includes('use-pack.md'), name);
   assert.match(docs.get('guides/index.md'), /not a sequence of commands/);
   assert.match(docs.get('package-authors/index.md').replace(/\s+/g, ' '), /Neither assumes that you have completed the other/);
-});
-
-test('repository and developer entry points describe delivered guides, not obsolete placeholders', async () => {
-  for (const name of ['CONTRIBUTING.md', 'docs/development/index.md']) {
-    const body = (await readFile(path.join(root, name), 'utf8')).replace(/\s+/g, ' ');
-    assert.doesNotMatch(body, /guides remain (?:placeholders|reserved)|guides for users.*remain placeholders|wait for baseline consolidation/i, name);
-  }
-  const entry = docs.get('agents/index.md');
-  assert.ok(entry.indexOf('Choose a task') < entry.indexOf('For product implementation'));
 });

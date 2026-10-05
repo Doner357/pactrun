@@ -1414,7 +1414,7 @@ mod tests {
     };
     use crate::persistence::sqlite_revision_store::SCHEMA_VERSION;
 
-    const WORKER_TEST: &str = "persistence::sqlite_revision_metadata::tests::m1d_subprocess_worker";
+    const WORKER_TEST: &str = "persistence::sqlite_revision_metadata::tests::metadata_store_worker";
 
     fn package(tag: u8) -> crate::domain::PackageId {
         crate::domain::PackageId::from_bytes([tag; 16])
@@ -1425,9 +1425,9 @@ mod tests {
     }
 
     fn test_root() -> (TempDir, PathBuf) {
-        let parent = std::env::var_os("PACTRUN_M1D_TEST_PARENT")
+        let parent = std::env::var_os("PACTRUN_METADATA_TEST_TEST_PARENT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m1d-tests"));
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/metadata-tests"));
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("metadata-persistence-")
@@ -1530,7 +1530,7 @@ mod tests {
         persistence: &PactrunPersistence,
         package_tag: u8,
     ) -> (RevisionIdentity, DeclarationContent) {
-        let bytes = b"m1-d metadata fixture";
+        let bytes = b"revision metadata fixture";
         let digest = blob_digest(bytes);
         let publication = persistence
             .put_runtime_content(&digest, &mut Cursor::new(bytes))
@@ -1553,28 +1553,28 @@ mod tests {
             .arg("--exact")
             .arg(WORKER_TEST)
             .arg("--nocapture")
-            .env("PACTRUN_M1D_WORKER", operation)
-            .env("PACTRUN_M1D_ROOT", root)
+            .env("PACTRUN_METADATA_TEST_WORKER", operation)
+            .env("PACTRUN_METADATA_TEST_ROOT", root)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         if let Some(fault) = fault {
-            command.env("PACTRUN_M1D_FAULT", fault);
+            command.env("PACTRUN_METADATA_TEST_FAULT", fault);
         }
         if let Some(revision) = revision {
             command
                 .env(
-                    "PACTRUN_M1D_PACKAGE",
+                    "PACTRUN_METADATA_TEST_PACKAGE",
                     hex::encode(revision.package_id.as_bytes()),
                 )
                 .env(
-                    "PACTRUN_M1D_REVISION",
+                    "PACTRUN_METADATA_TEST_REVISION",
                     hex::encode(revision.content_digest.as_bytes()),
                 );
         }
         let output = command.output().unwrap();
         if !output.status.success() && fault.is_none() {
             eprintln!(
-                "M1-D worker failed with {}\nstdout:\n{}\nstderr:\n{}",
+                "Metadata worker failed with {}\nstdout:\n{}\nstderr:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
@@ -1584,21 +1584,23 @@ mod tests {
     }
 
     #[test]
-    fn m1d_subprocess_worker() {
-        let Some(operation) = std::env::var_os("PACTRUN_M1D_WORKER") else {
+    fn metadata_store_worker() {
+        let Some(operation) = std::env::var_os("PACTRUN_METADATA_TEST_WORKER") else {
             return;
         };
-        let root = PathBuf::from(std::env::var_os("PACTRUN_M1D_ROOT").unwrap());
+        let root = PathBuf::from(std::env::var_os("PACTRUN_METADATA_TEST_ROOT").unwrap());
         let persistence = PactrunPersistence::open(&root).unwrap();
         if operation == "metadata" {
-            let package: [u8; 16] = hex::decode(std::env::var("PACTRUN_M1D_PACKAGE").unwrap())
-                .unwrap()
-                .try_into()
-                .unwrap();
-            let digest: [u8; 32] = hex::decode(std::env::var("PACTRUN_M1D_REVISION").unwrap())
-                .unwrap()
-                .try_into()
-                .unwrap();
+            let package: [u8; 16] =
+                hex::decode(std::env::var("PACTRUN_METADATA_TEST_PACKAGE").unwrap())
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+            let digest: [u8; 32] =
+                hex::decode(std::env::var("PACTRUN_METADATA_TEST_REVISION").unwrap())
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
             let revision = RevisionIdentity::new(
                 crate::domain::PackageId::from_bytes(package),
                 RevisionContentDigest::from_bytes(digest),
@@ -2152,7 +2154,7 @@ mod tests {
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        // V7 service custody is a separate contract, not an M1-D metadata
+        // Service custody is a separate contract, not a descriptive metadata
         // payload. Exempt only its exact approved relations from the historical
         // no-surrogate-schema check; arbitrary resource/JSON/orphan tables are
         // still forbidden here.

@@ -127,9 +127,7 @@ unsupported stores are refused rather than upgraded or deleted automatically.
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-[Delivery evidence](../development/e-implementation-status.md),
-[release gates](../development/release-readiness.md),
-[versioning](../spec/foundations/product-versioning-and-compatibility.md), and
+[Versioning](../spec/storage/compatibility.md) and
 [persistence](../spec/persistence/persistence-baseline.md).
 
 </details>

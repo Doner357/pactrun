@@ -58,6 +58,6 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contract: [ServiceStorage commands](../spec/behavior/m6-5-service-storage-command-reference.md).
+Contract: [ServiceStorage commands](../spec/instances/resource-commands.md).
 
 </details>

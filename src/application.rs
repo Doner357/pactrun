@@ -1136,7 +1136,7 @@ mod action_tests {
     use tempfile::TempDir;
 
     fn roots() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice1-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/action-plan-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("action-")
@@ -1518,7 +1518,7 @@ mod admission_tests {
         persistence::FaultPoint,
     };
 
-    const WORKER_TEST: &str = "application::admission_tests::m3_admission_worker";
+    const WORKER_TEST: &str = "application::admission_tests::admission_worker";
 
     struct Fixture {
         _temporary: TempDir,
@@ -1550,7 +1550,7 @@ mod admission_tests {
     }
 
     fn fixture() -> Fixture {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-slice3-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/admission-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("admission-")
@@ -1784,17 +1784,17 @@ runtime_content:
             .arg("--exact")
             .arg(WORKER_TEST)
             .arg("--nocapture")
-            .env("PACTRUN_M3_ADMIT_WORKER", operation)
-            .env("PACTRUN_M3_ADMIT_STORAGE", &fixture.storage)
-            .env("PACTRUN_M3_ADMIT_INSTANCE", instance)
-            .env("PACTRUN_M3_ADMIT_ACTION", action)
-            .env("PACTRUN_M3_ADMIT_FIRST", &fixture.first)
-            .env("PACTRUN_M3_ADMIT_SECOND", &fixture.second)
-            .env("PACTRUN_M3_ADMIT_RESULT", result)
+            .env("PACTRUN_ADMISSION_TEST_WORKER", operation)
+            .env("PACTRUN_ADMISSION_TEST_STORAGE", &fixture.storage)
+            .env("PACTRUN_ADMISSION_TEST_INSTANCE", instance)
+            .env("PACTRUN_ADMISSION_TEST_ACTION", action)
+            .env("PACTRUN_ADMISSION_TEST_FIRST", &fixture.first)
+            .env("PACTRUN_ADMISSION_TEST_SECOND", &fixture.second)
+            .env("PACTRUN_ADMISSION_TEST_RESULT", result)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         if let Some(fault) = fault {
-            command.env("PACTRUN_M3_FAULT", fault.name());
+            command.env("PACTRUN_RUN_TEST_FAULT", fault.name());
         }
         command.spawn().unwrap()
     }
@@ -1812,16 +1812,16 @@ runtime_content:
     }
 
     #[test]
-    fn m3_admission_worker() {
-        let Some(operation) = std::env::var_os("PACTRUN_M3_ADMIT_WORKER") else {
+    fn admission_worker() {
+        let Some(operation) = std::env::var_os("PACTRUN_ADMISSION_TEST_WORKER") else {
             return;
         };
-        let storage = PathBuf::from(std::env::var_os("PACTRUN_M3_ADMIT_STORAGE").unwrap());
-        let instance = std::env::var("PACTRUN_M3_ADMIT_INSTANCE").unwrap();
-        let action = std::env::var("PACTRUN_M3_ADMIT_ACTION").unwrap();
-        let first = PathBuf::from(std::env::var_os("PACTRUN_M3_ADMIT_FIRST").unwrap());
-        let second = PathBuf::from(std::env::var_os("PACTRUN_M3_ADMIT_SECOND").unwrap());
-        let result = PathBuf::from(std::env::var_os("PACTRUN_M3_ADMIT_RESULT").unwrap());
+        let storage = PathBuf::from(std::env::var_os("PACTRUN_ADMISSION_TEST_STORAGE").unwrap());
+        let instance = std::env::var("PACTRUN_ADMISSION_TEST_INSTANCE").unwrap();
+        let action = std::env::var("PACTRUN_ADMISSION_TEST_ACTION").unwrap();
+        let first = PathBuf::from(std::env::var_os("PACTRUN_ADMISSION_TEST_FIRST").unwrap());
+        let second = PathBuf::from(std::env::var_os("PACTRUN_ADMISSION_TEST_SECOND").unwrap());
+        let result = PathBuf::from(std::env::var_os("PACTRUN_ADMISSION_TEST_RESULT").unwrap());
         let application = PactrunApplication::open(&storage).unwrap();
         let owner = application.execution_owner();
         let instance_name = InstanceName::parse(instance).unwrap();

@@ -106,10 +106,10 @@ try {
   }
   checks.push('role sidebars and end-of-section pagination do not divert readers into other roles');
 
-  await open('search?q=Product+Versioning+and+Compatibility');
+  await open('search?q=Product+and+Format+Compatibility');
   await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent.includes('matching documents'));
   assert.equal(await page.getByLabel('Audience', {exact: true}).inputValue(), '');
-  assert.ok((await page.locator('.search-results li h2 a').first().getAttribute('href')).includes('/spec/foundations/product-versioning-and-compatibility'));
+  assert.ok((await page.locator('.search-results li h2 a').first().getAttribute('href')).includes('/spec/storage/compatibility'));
   checks.push('unscoped exact-title lookup retains global relevance');
 
   await page.setViewportSize({width: 390, height: 844});

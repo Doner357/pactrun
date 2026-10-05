@@ -168,7 +168,7 @@ pub(super) fn assert_response(value: &Value) {
     static VALIDATOR: std::sync::OnceLock<jsonschema::Validator> = std::sync::OnceLock::new();
     let validator = VALIDATOR.get_or_init(|| {
         let schema: Value = serde_json::from_str(include_str!(
-            "../../docs/spec/contracts/cli-machine.schema.json"
+            "../../docs/spec/interfaces/cli-machine.schema.json"
         ))
         .unwrap();
         jsonschema::validator_for(&schema).unwrap()
@@ -187,7 +187,7 @@ pub(super) fn assert_event(value: &Value) {
         ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
             if uri.as_str() == "https://pactrun.test/cli-machine.schema.json" {
                 Ok(serde_json::from_str(include_str!(
-                    "../../docs/spec/contracts/cli-machine.schema.json"
+                    "../../docs/spec/interfaces/cli-machine.schema.json"
                 ))?)
             } else {
                 Err(format!("unexpected schema reference: {uri}").into())
@@ -197,7 +197,7 @@ pub(super) fn assert_event(value: &Value) {
     static VALIDATOR: std::sync::OnceLock<jsonschema::Validator> = std::sync::OnceLock::new();
     let validator = VALIDATOR.get_or_init(|| {
         let schema: Value = serde_json::from_str(include_str!(
-            "../../docs/spec/contracts/cli-events.schema.json"
+            "../../docs/spec/interfaces/cli-events.schema.json"
         ))
         .unwrap();
         jsonschema::options()
@@ -224,7 +224,7 @@ fn cli_json_schema_contract_matches_explicit_projections() {
     )
     .unwrap();
     let checked: Value = serde_json::from_str(include_str!(
-        "../../docs/spec/contracts/cli-machine.schema.json"
+        "../../docs/spec/interfaces/cli-machine.schema.json"
     ))
     .unwrap();
     assert!(

@@ -304,7 +304,7 @@ impl PactrunPersistence {
         let core = load_revision_core(&transaction, &revision)?;
         let declaration = input_declaration(&core, &input.input_id).ok_or_else(|| {
             PersistenceError::InvalidManagedInput(
-                "retained or unknown Input cannot be set in M2".to_owned(),
+                "retained or unknown Input cannot be set".to_owned(),
             )
         })?;
         let previous = binding_payload(&transaction, instance, &input.input_id)?;
@@ -479,7 +479,7 @@ pub(super) fn insert_payload(
 ) -> Result<ManagedInputPayloadId, PersistenceError> {
     if input.byte_len > MANAGED_INPUT_PAYLOAD_MAX_BYTES_V1 {
         return Err(PersistenceError::InvalidManagedInput(
-            "Managed Input exceeds the M2 size limit".to_owned(),
+            "Managed Input exceeds the size limit".to_owned(),
         ));
     }
     let payload = ManagedInputPayloadId::generate().map_err(|error| {
@@ -489,7 +489,7 @@ pub(super) fn insert_payload(
         .execute(
             "INSERT INTO managed_input_payloads(instance_id, payload_id, protection_rank, byte_length) \
              VALUES (?1, ?2, ?3, ?4)",
-            params![instance.as_bytes().as_slice(), payload.as_bytes().as_slice(), i64::from(protection.rank()), i64::try_from(input.byte_len).expect("M2 payload length fits i64")],
+            params![instance.as_bytes().as_slice(), payload.as_bytes().as_slice(), i64::from(protection.rank()), i64::try_from(input.byte_len).expect("Input payload length fits i64")],
         )
         .map_err(|error| PersistenceError::sqlite("insert Managed Input payload", error))?;
     insert_chunks(
@@ -904,7 +904,7 @@ mod tests {
     };
 
     fn root() -> (TempDir, std::path::PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m2-instance-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/instance-store-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("instance-")

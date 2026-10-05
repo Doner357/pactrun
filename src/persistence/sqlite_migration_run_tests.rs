@@ -20,7 +20,7 @@ fn input(name: &str, required: bool, secret: bool) -> InputDeclarationV1 {
     }
 }
 fn root() -> (tempfile::TempDir, PathBuf) {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m5-run-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/migration-run-tests");
     fs::create_dir_all(&parent).unwrap();
     let tmp = tempfile::tempdir_in(parent).unwrap();
     let root = tmp.path().join("store");
@@ -683,7 +683,7 @@ fn edge_crashes_reconcile_without_plan_or_replay_and_final_edge_has_no_running_w
         let status = Command::new(std::env::current_exe().unwrap())
             .args(["--exact", WORKER, "--nocapture"])
             .env("PACTRUN_MIGRATION_TEST_ROOT", &root)
-            .env("PACTRUN_M4_FAULT", point)
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .env("PACTRUN_MIGRATION_FAULT_EDGE", edge.to_string())
             .stdout(Stdio::null())
             .status()
@@ -765,8 +765,8 @@ fn cross_process_management_cannot_bypass_an_admitted_migration() {
         Command::new(std::env::current_exe().unwrap())
             .args(["--exact", WORKER, "--nocapture"])
             .env("PACTRUN_MIGRATION_TEST_ROOT", &root)
-            .env("PACTRUN_M4_SYNC", "after_run_admit_commit")
-            .env("PACTRUN_M4_SYNC_DIR", &sync)
+            .env("PACTRUN_OPERATION_TEST_SYNC", "after_run_admit_commit")
+            .env("PACTRUN_OPERATION_TEST_SYNC_DIR", &sync)
             .stdout(Stdio::null())
             .spawn()
             .unwrap(),

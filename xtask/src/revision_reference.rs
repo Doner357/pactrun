@@ -2002,9 +2002,9 @@ mod tests {
     fn normative_document_scope_excludes_non_authoritative_copies() {
         for included in [
             "spec/behavior/resources.md",
-            "spec/foundations/system-model.md",
-            "spec/execution/recovery-and-reconciliation.md",
-            "spec/contracts/hook-protocol-v1.md",
+            "spec/core/system-model.md",
+            "spec/lifecycle/recovery.md",
+            "spec/interfaces/hook-protocol.md",
         ] {
             assert!(is_normative_markdown(Path::new(included)), "{included}");
         }

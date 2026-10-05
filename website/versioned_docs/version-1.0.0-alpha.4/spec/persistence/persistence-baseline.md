@@ -1,16 +1,9 @@
 ---
-title: Persistence Baseline 1.0-alpha.1
+title: Persistence Schema
+slug: /spec/storage/schema
 ---
 
-# Persistence baseline 1.0-alpha.1
-
-**Status: Approved E normative baseline, 1.0-alpha.1; implementation verified for local E delivery.**
-
-<!-- spec-navigation:start -->
-This page owns the complete fresh schema and the surviving persistence obligations
-under [PR-REQ-0078](../foundations/resources-and-versioning.md#pr-req-0078---persistence-migrations).
-Development-era schemas are not supported or upgraded, and real data is not deleted.
-<!-- spec-navigation:end -->
+# Persistence Schema
 
 The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
@@ -1010,9 +1003,8 @@ INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.1'
 
 ## Functional persistence obligations
 
-Stable requirement IDs and historical heading anchors are retained below. Their
-headings do not advertise numeric-schema support. Only the complete current DDL
-above defines layout; functional transaction, ordering and ownership rules remain.
+The SQL above defines the complete table layout. The following rules define
+validation, transaction boundaries, ordering, and ownership for those tables.
 
 ### PR-REQ-0255 - Typed metadata mutation and repository contract
 
@@ -1039,11 +1031,10 @@ transaction, Pactrun MUST compare the current typed semantic state as follows:
 2. otherwise, if current equals expected, Pactrun applies desired;
 3. otherwise, the complete batch conflicts and MUST roll back.
 
-This comparison intentionally has no history-sensitive or ABA guarantee. M1-D
-has no metadata generation, version token, event history, or audit order. If a
+This comparison has no history-sensitive or ABA guarantee. Metadata has no
+generation token, event history, or audit order. If a
 value changes from A to B and back to A, a later operation expecting A cannot
-distinguish that history from no intervening mutation. Stronger concurrency is
-a future design gate.
+distinguish that history from no intervening mutation. It does not provide stronger concurrency than this comparison.
 
 The repository MUST use `BEGIN IMMEDIATE`. Validation failure, a missing target
 Revision, a malformed or absent presentation target, alias conflict, CAS
@@ -1051,9 +1042,9 @@ conflict, constraint failure, or process loss before commit MUST publish no
 part of the batch. A successful commit is the durable metadata boundary. Loss
 after commit but before the response MAY be retried: set-like operations and
 current-equals-desired handling MUST converge on the committed semantic state.
-The batch is not required to share a transaction with initial Revision
-publication; future installation or import orchestration may coordinate those
-boundaries without changing this contract.
+A standalone metadata batch does not require a new Revision publication.
+Installation and import include metadata in their own atomic publication
+boundaries without changing the batch's conflict semantics.
 
 Logical load MUST validate every stored value against its typed Domain syntax,
 validate every presentation target against the strict-decoded canonical
@@ -1091,22 +1082,21 @@ source rows by Revision identity, and orders only the resulting distinct
 Revision identities. These ranks and components are semantic constants rather
 than implementation enumeration layouts.
 
-An authorized exact Revision deletion MUST remove all of that Revision's M1-D
-subordinate rows in the same database transaction. Metadata MUST NOT pin a
+An authorized exact Revision deletion MUST remove all of that Revision's metadata
+rows in the same database transaction. Metadata MUST NOT pin a
 Revision or require a separate purge. Cascading one target's label bindings
 MUST NOT remove bindings that target another Revision.
 
 **Verification: PR-TEST-0062, PR-TEST-0063, PR-TEST-0064, PR-TEST-0065,
 PR-TEST-0066, PR-TEST-0067, PR-TEST-0530, PR-TEST-0536.**
 
-### PR-REQ-0256 - Exact PersistenceSchemaV2
+### PR-REQ-0256 - Metadata table representation {#pr-req-0256---exact-persistenceschemav2}
 
 The complete baseline contains immutable Package/Revision/reference tables and
 typed metadata relations. Metadata MUST NOT mutate canonical components or derived
 runtime references. The complete DDL above is authoritative; it is not a delta
 or a reader for the original development schema.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 For a pristine database, the complete block above is the exact implemented
 schema. Existing development-era databases are refused without applying an
@@ -1178,20 +1168,9 @@ primary-key iteration is not a substitute for these clauses.
 
 **Verification: PR-TEST-0059, PR-TEST-0063, PR-TEST-0067.**
 
-### PR-REQ-0257 - V1-to-V2 migration and validation
+## Metadata repository interface {#planned-crate-private-typed-interface}
 
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era persistence upgrades are unsupported. Shared exact-schema,
-serialized admission, bootstrap crash safety and preservation obligations now
-belong to PR-REQ-0078 and PR-REQ-0299; this historical upgrade is not a
-compatibility promise for the new baseline.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
-## Planned crate-private typed interface
-
-The implementation slice must derive, rather than redefine, an interface
-equivalent to:
+The crate-private metadata interface has these semantics:
 
 ```text
 CurrentState<T> = Absent | Present(T)
@@ -1220,30 +1199,13 @@ accepted replacement MUST already exist, and the batch's target Revision is the
 desired target for a present binding or the current target for a clear. No
 stable public Rust API, CLI spelling, or wire contract is created here.
 
-## Historical metadata-slice exclusions {#deferred-work}
-
-The M1-D metadata slice did not define Export Bundle serialization or merge,
-Package or Instance metadata, `LocalInstall`, generic timestamps, localization,
-fuzzy lookup, additional provenance claims, trust policy or history, note history,
-history-sensitive CAS or ABA detection, stable new error codes, cross-domain
-Revision-plus-metadata publication, CLI, or ServiceStorage persistence.
-
-This is historical scope, not a list of missing current capabilities. The
-complete DDL above and the functional contracts below own current persistence.
-Use [Pack distribution](../contracts/pack-distribution.md),
-[ServiceStorage execution](../execution/m6-5-service-storage-execution.md), and
-[managed-object lifecycle](../behavior/managed-object-lifecycle.md) for those
-capabilities. This baseline does not add `LocalInstall`, history-sensitive CAS,
-or a stable public repository API.
-
-### PR-REQ-0269 - Exact PersistenceSchemaV3
+### PR-REQ-0269 - Managed Input table representation {#pr-req-0269---exact-persistenceschemav3}
 
 The complete baseline contains live Instance identities, bindings, payload
 headers and active chunk storage. application_id is 0x50414354 and user_version
 is private marker 0. All tables are STRICT and WITHOUT ROWID; correctness does
 not depend on rowid, insertion order, timestamps or query-plan iteration.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 `instance_name` and `input_identity` store exact UTF-8 bytes as BLOBs. The
 repository MUST validate their Domain syntax when writing and loading.
@@ -1272,7 +1234,7 @@ payload is corruption because the required promotion was not durably
 published. Active Normal with a Secret payload is valid sticky state, not a
 mismatch. An Input identity absent from the active Revision is retained; its
 payload rank alone defines effective protection and MUST NOT be compared with a
-nonexistent declaration. This is the complete V3 binding/payload protection
+nonexistent declaration. This is the binding/payload protection
 validation rule.
 
 Payload headers and chunks are immutable after publication. Replacement MUST
@@ -1287,7 +1249,7 @@ stores the stronger of the previous payload protection and the active
 declaration. Any operation that promotes an existing binding MUST publish a
 fresh Secret payload because it cannot mutate an existing payload header.
 Migration coordination must establish the same committed invariant before target
-publication under the [Migration execution contract](../execution/m5-migration-execution.md).
+publication under the [Migration execution contract](../migrations/execution.md).
 
 Every deterministic Instance enumeration MUST order by exact
 `instance_name`, then `instance_id`, using BLOB byte order. Binding enumeration
@@ -1297,28 +1259,18 @@ is by the complete `(instance_id, payload_id)` key and never by physical row
 order.
 
 The active Revision foreign key prevents deletion while a live Instance refers
-to it. Instance deletion remains M7 behavior; the cascades define relational
+to it. Instance retirement is a separate operation; cascades define relational
 cleanup only after a separately authorized Instance deletion transaction.
 Current bindings, in-progress ExportInput observations, durable pins, and recovery
 references govern payload reachability under the
-[managed-object lifecycle contract](../behavior/managed-object-lifecycle.md).
+[managed-object lifecycle contract](../lifecycle/objects-gc.md).
 The complete DDL above owns the persisted reference kinds.
 
 **Verification: PR-TEST-0075.**
 
-### PR-REQ-0270 - Persistence migration to V3
-
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era persistence upgrades are unsupported. Shared exact-schema,
-serialized admission, bootstrap crash safety and preservation obligations now
-belong to PR-REQ-0078 and PR-REQ-0299; this historical upgrade is not a
-compatibility promise for the new baseline.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
 ## Instance repository contract (crate-private) {#candidate-crate-private-repository-contract}
 
-The M2 implementation derives typed operations equivalent to:
+The crate-private Instance interface has these semantics:
 
 ```text
 create_instance(name, revision, initial_payloads)
@@ -1338,19 +1290,7 @@ bind buffer. A transaction failure publishes no header, chunk, binding,
 Instance, or new state version. The concrete Rust names remain crate-private
 and are not a stable API.
 
-## Historical Instance-slice exclusions {#deferred-work-1}
-
-The V3 Instance slice did not define Action execution, durable pins, Snapshot persistence,
-Migration execution, recovery state, Instance deletion UX, ServiceStorage,
-stable public APIs, payload encryption, secure erasure, generic garbage
-collection, or a backup format.
-
-These were exclusions of that historical slice. The current baseline includes
-the later Run, Snapshot, Migration, retirement, and ServiceStorage relations
-shown above. Public APIs, payload encryption, and secure erasure remain outside
-this persistence contract.
-
-### PR-REQ-0275 - Exact PersistenceSchemaV4
+### PR-REQ-0275 - Run ownership, pins, and recovery records {#pr-req-0275---exact-persistenceschemav4}
 
 The complete baseline includes managed Run identities, invocations, execution
 owners, pins, outcomes, failures, completion, artifacts and recovery guards.
@@ -1358,7 +1298,6 @@ It retains application_id 0x50414354 and private user_version marker 0. All
 relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
 extension performed while opening an older development store.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 `run_id` is an independently generated opaque 128-bit value. It MUST NOT be
 derived from the Plan, the Instance, the Action, or a timestamp, and MUST NOT
@@ -1398,7 +1337,7 @@ payload cannot be reclaimed. Payload reachability is a current binding row or
 an execution pin row; the repository MUST reclaim a payload only when neither
 exists and MUST decide that by explicit lookup rather than by relying on a
 foreign-key failure. `runs` references `instances` with `ON DELETE RESTRICT`;
-Instance deletion remains M7 behavior and MUST address Run history explicitly.
+Instance retirement MUST address Run history explicitly.
 
 Execution pins are established only for an accepted Run, atomically with the
 token-first comparison of the current `InstanceStateVersion` against the
@@ -1492,19 +1431,9 @@ produce Run text.
 
 **Verification: PR-TEST-0084, PR-TEST-0087, PR-TEST-0104, PR-TEST-0105, PR-TEST-0112, PR-TEST-0452.**
 
-### PR-REQ-0276 - Persistence migration to V4
-
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era persistence upgrades are unsupported. Shared exact-schema,
-serialized admission, bootstrap crash safety and preservation obligations now
-belong to PR-REQ-0078 and PR-REQ-0299; this historical upgrade is not a
-compatibility promise for the new baseline.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
 ## Run repository contract (crate-private) {#candidate-crate-private-repository-contract-1}
 
-The M3 Slice 2 implementation derives typed operations equivalent to:
+The crate-private Run interface has these semantics:
 
 ```text
 create_accepted_run(instance, accepted_state_version, action_identity, owner_session) -> RunId
@@ -1543,51 +1472,34 @@ consequence before writing, deletes the execution row, writes the outcome and
 its records, releases pins, reclaims unreferenced payloads, and publishes the
 guard and state version only when a consequence exists. Artifact bytes stream
 from transient staging in one-megabyte chunks. The two pinned-view readers
-added by M3 Slice 4 resolve an admitted Run's payload and runtime-content pins
+resolve an admitted Run's payload and runtime-content pins
 from the existing `run_payload_pins`, `run_revision_pins`, and
 `revision_runtime_content_refs` rows and refuse a Run that is not Running and
 Admitted; they add no schema. A transaction failure publishes no Run, pin,
 risk transition, outcome, Artifact, guard, or state version. The concrete Rust
 names remain crate-private and are not a stable API.
 
-M3 Slice 5 composes the crate-private owner continuation and finalization
-substrate over V4: eligible Action output bytes are independently staged,
+Owner continuation and finalization coordinate publication: eligible Action output bytes are independently staged,
 execution cleanup is attempted before the terminal transaction, and the
 Run outcome, failures, Hook structural result, and Artifacts are published
 atomically. The production finalizer retains Hook completion status while
-omitting Hook-authored code and message text; generic historical V4 reads keep
-their exact optional-value semantics. The explicit owner-loss reconciler reads
+not copying Hook-authored code or message text into optional completion
+fields. The bounded diagnostic collection in PR-REQ-0352 retains accepted
+explanations separately. Stored optional values preserve absence and
+present-empty semantics. The explicit owner-loss reconciler reads
 the durable owner and risk state, confirms the staging lease, and finishes only
 confirmed-lost valid Running Action records. `load_run_inspection` reads a Run
-and its Instance's current recovery guard from one SQLite read snapshot. These
-additions do not alter the V4 table manifest or expose a public inspection or
-CLI surface.
+and its Instance's current recovery guard from one SQLite read snapshot. This repository interface is crate-private, not a public API.
 
-## Historical Run-slice exclusions {#deferred-work-2}
-
-The V4 Run slice did not define non-sensitive parameter recording, Run retention policy,
-Snapshot, Migration, Restore, or Cleanup execution records, Instance deletion,
-generic garbage collection, Artifact export, ServiceStorage, a stable public
-API, or human spelling.
-
-These were exclusions of that historical slice. Current execution/lifecycle
-records are defined below, including diagnostic retention. The
-[command reference](../behavior/command-and-output-reference.md) and
-[managed-object lifecycle contract](../behavior/managed-object-lifecycle.md)
-own human spelling and retained-object operations; this is not a stable public
-repository API.
-
-### PR-REQ-0298 - Exact PersistenceSchemaV5
+### PR-REQ-0298 - Snapshot records and Restore admission {#pr-req-0298---exact-persistenceschemav5}
 
 The baseline contains durable writable admission, exact operation kinds,
 Capture/Restore invocations, recovery-consequence versions, Snapshot manifests
-and immutable blob references, Restore admissions and Capture results. The old
-inline Snapshot chunk relation is retired. The public format is the metadata
+and immutable blob references, Restore admissions, and Capture results. The public format is the metadata
 string; user_version and admitted_schema_version remain private marker 0.
 All tables are STRICT and WITHOUT ROWID. Rowid, clocks and query plans do not
 establish correctness.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 ### Logical loading and mutation invariants
 
@@ -1638,7 +1550,7 @@ The complete baseline DDL above owns this representation; there is no historical
   SnapshotId BLOB bytes. Cross-Snapshot/Instance/Artifact CAS is not introduced.
 - Capability limits are checked independently of these storage invariants.
   Do not add the former 8 GiB product ceiling to the schema or call an otherwise-valid
-  over-capability object corrupt. Managed Input and Artifact V4 limits remain.
+  over-capability object corrupt. Managed Input and Artifact limits remain applicable.
 - Canonical manifests and digests may contain sensitive authoritative material.
   Run records MUST NOT copy this content. Inspection projects safe structural
   fields rather than dumping rows or library errors.
@@ -1649,22 +1561,8 @@ The complete baseline DDL above owns this representation; there is no historical
 
 **Verification: PR-TEST-0182, PR-TEST-0183, PR-TEST-0195, PR-TEST-0202, PR-TEST-0203, PR-TEST-0204, PR-TEST-0208, PR-TEST-0209, PR-TEST-0210, PR-TEST-0212, PR-TEST-0213, PR-TEST-0215, PR-TEST-0222, PR-TEST-0223, PR-TEST-0224, PR-TEST-0226, PR-TEST-0228, PR-TEST-0229, PR-TEST-0230, PR-TEST-0232, PR-TEST-0233, PR-TEST-0234, PR-TEST-0236, PR-TEST-0239, PR-TEST-0240, PR-TEST-0246, PR-TEST-0247, PR-TEST-0252, PR-TEST-0255, PR-TEST-0258, PR-TEST-0259, PR-TEST-0260, PR-TEST-0263, PR-TEST-0264, PR-TEST-0267, PR-TEST-0275, PR-TEST-0480.**
 
-Coverage includes exact DDL, initialization, operation discriminators,
-consequence counters, legacy preservation, and Snapshot-owned byte loading,
-verification, atomic import, and export. Partial S4 coverage additionally
-checks competing operation/invocation consistency, exact Revision pins, and
-owner-checked Snapshot interruption with atomic consequence advancement and
-pin release. Further S4 tests exercise typed Snapshot acceptance, operation-aware
-failed-step ranks, complete Capture registry pins, Restore admission-link
-corruption, unknown/live/lost owners, and real-process Capture/Action admission
-arbitration. Capture/Restore successful result publication and Hook execution
-remain later-slice work. S4 additionally proves real Restore admission
-qualification, before/after-commit crash boundaries, one selected immutable
-Snapshot strong pin, exact state/consequence tokens (including nonzero counters),
-and owner-held retry/cancellation without creating another Run. No DDL or rank
-mapping changed to implement those paths.
 
-### PR-REQ-0299 - Durable writable admission and serialized migration
+### PR-REQ-0299 - Durable writer admission and bootstrap {#pr-req-0299---durable-writable-admission-and-serialized-migration}
 
 An operation-scoped session directory and its lease are durable pre-admission
 ownership evidence, not permission to write any schema version. Only a
@@ -1700,17 +1598,7 @@ from development-era schemas.
 **Verification: PR-TEST-0195, PR-TEST-0196, PR-TEST-0197, PR-TEST-0198,
 PR-TEST-0201, PR-TEST-0622, PR-TEST-0623, PR-TEST-0639.**
 
-### PR-REQ-0300 - Exact V4 to V5 legacy bootstrap
-
-Retired by the approved E one-time baseline reset on 2026-09-26. Development
-schema upgrades are no longer supported. Stable IDs PR-TEST-0199 and PR-TEST-0200
-are retired, not reused. Shared writer admission, crash-boundary and recovery
-invariants remain covered under PR-REQ-0299 and the new baseline.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
-
-### PR-REQ-0308 - V6 Migration persistence and upgrade boundary
+### PR-REQ-0308 - Migration record ownership and admission {#pr-req-0308---v6-migration-persistence-and-upgrade-boundary}
 
 The baseline preserves operation ranks and stored meaning, including the
 distinct Migration discriminator. Durable Migration state MUST identify the
@@ -1731,12 +1619,7 @@ replay, invent an operation kind or infer terminal disposition.
 
 **Verification: PR-TEST-0304, PR-TEST-0327.**
 
-Development upgrade-only tests are retired with their readers. The retained
-Migration commit/recovery, pin-lifetime and discriminator tests are rebased onto
-the current baseline; their earlier historical pass results are not reused as
-proof of the new implementation.
-
-### PR-REQ-0311 - Exact PersistenceSchemaV6 representation
+### PR-REQ-0311 - Migration paths and committed boundaries {#pr-req-0311---exact-persistenceschemav6-representation}
 
 The baseline preserves the closed operation ranks: 0 Action, 1 Capture,
 2 Restore, 3 Migration, and the separately specified Deletion rank. Its seven
@@ -1745,7 +1628,6 @@ revision/payload pins and checkpoint bindings. Foreign keys remain enabled.
 There are no temporary rebuild tables, table-copy steps or development upgrade
 gates. First publication atomically creates the complete baseline DDL.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 Migration invocation stores an exact same-lineage source/target and the
 declassification authorization, never a CLI path ID or host acquisition path.
@@ -1778,21 +1660,11 @@ as Action. Mixed invocation kinds and inconsistent path/boundary/reference data
 MUST be rejected. Structural inspection does not establish execution support.
 The tests listed here cover this persistence representation; Hook-backed
 execution and its evidence are owned by the
-[Migration execution contract](../execution/m5-migration-execution.md).
+[Migration execution contract](../migrations/execution.md).
 
 **Verification: PR-TEST-0293, PR-TEST-0299.**
 
-### PR-REQ-0312 - Exact V5-to-V6 admission-aware upgrade
-
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era schema upgrades are unsupported. Shared writer admission,
-owner-loss, transactional bootstrap and identity/recovery preservation remain
-requirements of the new Persistence baseline; no historical upgrade is promised.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
-
-### PR-REQ-0323 - Exact V7 additions
+### PR-REQ-0323 - Service allocation and association records {#pr-req-0323---exact-v7-additions}
 
 The baseline contains the typed service allocation, preparation, protection,
 origin, association, pin, target and committed-edge relations below. The public
@@ -1800,7 +1672,6 @@ contract is the exact Persistence string and complete DDL; no upgrade wrapper
 publishes another integer schema version. Allocation and association publication
 remain owned by their existing transactional and filesystem boundaries.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 All identifiers stored as BLOB are strict-decoded Domain IDs, not arbitrary
 bytes that merely pass SQL lengths. Associations do not duplicate locator,
@@ -1858,8 +1729,8 @@ a dedicated typed service-resource relation, not ManagedInputBindings or EAV.
   completion or clear risk when loaded by a new owner. Non-transform edges have
   no row. While Running, exact pinned Core validates this relationship; historical
   validation after Revision removal is structural unless that Core is available.
-- No synthetic V1 successful Hook completion is stored for a target proposal.
-  V7's transform evidence plus the committed boundary explains it. Ordinary
+- No synthetic successful Hook completion is stored for a target proposal.
+  The transform receipt and committed edge boundary provide its evidence. Ordinary
   completion records retain their historical meaning; terminal risk remains
   Clear after committed successful transformation. Any pre-existing guard remains.
 - origin_run_id is audit identity only and intentionally has no Run FK; allocation
@@ -1901,7 +1772,7 @@ without a separately designed operation.
    and protection rows atomically, removing their preparation rows. The physical
    roots must already exist. For a Migration, protect newly exposed targets before
    Session disclosure; published source/retained allocations are already protected.
-4. Any protection promotion is monotonic in M6.5. Deleting an execution, stage
+4. Allocation protection promotion is monotonic. Deleting an execution, stage
    row, association or stale writer cannot remove the protection row or allocation.
    No service contents are moved into or mirrored by managed_input_payloads.
 
@@ -1914,7 +1785,7 @@ authorize contents, not renaming/deleting the allocation root itself.
 Directory creation success alone is not the durability barrier. If the supported
 Windows fixed-NTFS or existing POSIX storage backend cannot complete its required
 namespace persistence primitives, allocation must fail before publication/path
-exposure; no weaker filesystem fallback is allowed. S2 must demonstrate the
+exposure; no weaker filesystem fallback is allowed. The implementation must meet the
 actual adapter barriers with filesystem crash tests rather than infer them from
 the in-memory DDL check or a successful mkdir call.
 
@@ -1927,7 +1798,7 @@ Unexpected contents, linked/unsafe paths or inconclusive ownership preserve the
 records. Unknown/unrecorded directories are not automatically adopted or deleted.
 No startup cleanup traverses protected storage. Destructive finalization follows
 the explicit authorization and receipt protocol in the
-[retirement contract](../execution/m7-instance-retirement.md).
+[retirement contract](../lifecycle/retirement.md).
 
 ### Crash matrix
 
@@ -1954,17 +1825,7 @@ a created root from a failed no-replace collision, so these tests do not claim
 post-crash ownership proof or automatic removal of existing empty directories.
 They do not establish Hook access, Migration publication or power-loss safety.
 
-### PR-REQ-0325 - Explicit V6-to-V7 upgrade
-
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era schema upgrades are unsupported. Shared writer admission,
-owner-loss, transactional bootstrap and identity/recovery preservation remain
-requirements of the new Persistence baseline; no historical upgrade is promised.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
-
-### PR-REQ-0338 - Exact V8 lifecycle records
+### PR-REQ-0338 - Retirement and detached custody records {#pr-req-0338---exact-v8-lifecycle-records}
 
 The baseline owns the complete lifecycle relations above. Run
 identity, outcome, child records and Artifacts MUST survive Instance removal.
@@ -2019,7 +1880,7 @@ Abandon and cannot be replaced by a later discard's newly observed identity.
 
 The Linux `retirement-v1` area is durable physical progress for the same
 AllocationId, not Workspace, a Snapshot, or a new source of deletion authority.
-Every journal is bound to the V8-qualified root incarnation. Its versioned,
+Every journal is bound to the allocation's qualified root incarnation. Its versioned,
 closed records retain native component names, parent provenance, qualified
 object identity, original/claimed position and completion/move receipts.
 Publish complete initial records atomically; publish claim intent before rename,
@@ -2050,30 +1911,10 @@ These tests prove exact DDL, referential preservation and rejection of corrupt
 legacy references. Logical lifecycle writers/readers and finalization runtime
 require their own coverage; schema tests do not certify their implementation.
 
-## Exact changes
-
-Data-bearing table replacement uses a dedicated maintenance connection with
-foreign-key enforcement disabled before BEGIN; never disable it on an admitted
-runtime connection. Validate the full graph before committing and restore
-foreign-key enforcement before further connection use. The table replacements
-must not cascade through existing Run children.
-
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
-
-### PR-REQ-0339 - Explicit exact-V7 upgrade
-
-Retired by the approved E one-time baseline reset on 2026-09-26.
-Development-era schema upgrades are unsupported. Shared writer admission,
-owner-loss, transactional bootstrap and identity/recovery preservation remain
-requirements of the new Persistence baseline; no historical upgrade is promised.
-
-**Verification: Not applicable — retired requirement, not pending runtime coverage.**
-
-
-### PR-REQ-0345 - Lifecycle coordination activation
+### PR-REQ-0345 - Lifecycle content coordination {#pr-req-0345---lifecycle-coordination-activation}
 
 The supported [Persistence baseline](./persistence-baseline.md) incorporates the
-[lifecycle coordination contract](../behavior/managed-object-lifecycle.md).
+[lifecycle coordination contract](../lifecycle/objects-gc.md).
 It adds no tombstone, GC queue or compact historical-evidence format. The public
 version is the metadata string; the private admission marker is 0. Development
 schemas are unsupported and no storage upgrade command remains.
@@ -2102,7 +1943,7 @@ resources; it does not fabricate missing evidence or reconcile Runs.
 
 New Snapshot payload bytes MUST be durably verified in the existing private
 opaque blob store before the single Snapshot metadata transaction commits.
-The historical `runtime-content` physical namespace MAY hold these immutable
+The `runtime-content` physical namespace MAY hold these immutable
 values; this does not grant runtime membership, service authority, or a Revision
 ownership relation. Physical addressing remains SHA-256; Frozen Snapshot,
 Revision, Hook and error wire formats remain unchanged.
@@ -2139,7 +1980,7 @@ this adds neither encryption, secure erasure nor a secret vault.
 A SQLite-only copy does not include referenced physical content. Snapshot export
 still includes its exact payload closure; no whole-store backup facility is added.
 
-Development-era stores are unsupported and are not upgraded. Supported baseline
+Unsupported stores are not upgraded. Supported baseline
 reopening MUST preserve exact Snapshot identities, canonical bytes, payload
 representations and service resources without a bulk rewrite. Read-only opening
 MUST NOT publish new immutable files or infer missing evidence. Product updates
@@ -2151,8 +1992,8 @@ alone do not authorize rewriting retained data or bindings.
 ### PR-REQ-0352 - Run evidence persistence and compatibility
 
 New stores MUST use the supported [Persistence baseline](./persistence-baseline.md).
-Development-era stores are refused without upgrade or inferred diagnostic
-collections. Unsupported, foreign and drifted stores are not repaired. Reopening
+Unsupported stores are refused without upgrade or inferred diagnostic
+collections. Foreign or drifted stores are not repaired. Reopening
 supported storage preserves Run data and existing evidence exactly; absence of a
 collection row means not-collected evidence, never permission to invent it.
 
@@ -2186,6 +2027,5 @@ Missing events are not evidence that nothing was emitted. Disabled text retentio
 MUST NOT persist Hook code/message bytes, including through debug/error paths.
 This is not an encrypted vault, backup facility or secure-erasure promise.
 
-The complete baseline DDL above owns this representation; there is no historical SQL upgrade step.
 
 **Verification: PR-TEST-0521, PR-TEST-0522, PR-TEST-0523, PR-TEST-0524, PR-TEST-0526, PR-TEST-0527.**

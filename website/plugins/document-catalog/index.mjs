@@ -113,6 +113,23 @@ export default function documentCatalog(context) {
         actions.addRoute({path: base + oldPath.slice(1), exact: true,
           component: '@site/src/components/LegacyRedirect.tsx', modules: {target: data}});
       }
+      const aliases = JSON.parse(await readFile(path.join(context.siteDir, 'spec-redirects.json'), 'utf8'));
+      const sections = JSON.parse(await readFile(path.join(context.siteDir, 'spec-section-redirects.json'), 'utf8'));
+      for (const edition of content) {
+        const canonical = new Set(edition.pages.map(page => page.url));
+        for (const [previous, destination] of Object.entries(aliases)) {
+          const to = '/' + edition.path + destination;
+          if (!canonical.has(to)) throw new Error('Missing Spec redirect target: ' + to);
+          const source = '/' + edition.path + previous;
+          if (canonical.has(source)) continue;
+          const sectionTargets = Object.fromEntries(Object.entries(sections[previous] ?? {}).map(([anchor, route]) => [anchor, '/' + edition.path + route]));
+          const data = await actions.createData('spec-alias-' + edition.id + '-' + previous.replaceAll('/', '_') + '.json', JSON.stringify({to, sections: sectionTargets}));
+          actions.addRoute({path: base + source.slice(1), exact: true,
+            component: '@site/src/components/LegacyRedirect.tsx', modules: {target: data}});
+          if (edition.id === content[0].id) actions.addRoute({path: base + previous.slice(1), exact: true,
+            component: '@site/src/components/LegacyRedirect.tsx', modules: {target: data}});
+        }
+      }
     },
     async postBuild({outDir, routesPaths}) {
       const normalize = route => route.replace(/\/$/, '') || '/';

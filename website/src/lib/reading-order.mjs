@@ -6,24 +6,34 @@ export const readingSequences = {
     'package-authors/fundamentals/actions-inputs-and-parameters.md',
     'package-authors/fundamentals/recipes-and-runtime-content.md',
     'package-authors/managed-capabilities/hooks-recovery-and-cleanup.md'],
-  Developers: ['development/index.md', 'development/product-overview.md',
-    'development/next-milestone.md', 'development/reading-paths.md',
-    'development/implementation-guidance.md', 'development/development-and-verification.md'],
 };
 
 export function readingNavigation(source, state = 'current') {
-  if (state !== 'current') return {kind: 'record', back: 'development/next-milestone.md', label: 'Read the current baseline'};
+  if (state !== 'current') return {kind: 'record', back: 'spec/index.md', label: 'Read the specification'};
   for (const [audience, sequence] of Object.entries(readingSequences)) {
     const index = sequence.indexOf(source);
     if (index !== -1) return {kind: 'sequence', audience, previous: sequence[index - 1], next: sequence[index + 1],
-      back: sequence[0], label: audience === 'Users' ? 'Choose an operating task' : audience === 'Authors' ? 'Choose an authoring task' : 'Choose development work'};
+      back: sequence[0], label: audience === 'Users' ? 'Choose an operating task' : 'Choose an authoring task'};
   }
   if (source.startsWith('package-authors/')) return {kind: 'lookup', back: 'package-authors/index.md', label: 'Back to the author guide'};
   if (source.startsWith('guides/') || source.startsWith('pactrun-users/')) return {
     kind: 'lookup', back: source.includes('/reference/') || source.includes('-reference.md') ? 'pactrun-users/reference/index.md' : 'guides/index.md',
     label: source.includes('/reference/') || source.includes('-reference.md') ? 'Back to the user reference' : 'Choose an operating task',
   };
-  if (source.startsWith('spec/')) return {kind: 'lookup', back: 'spec/index.md', label: 'Back to the specification map'};
-  if (source.startsWith('development/')) return {kind: 'lookup', back: 'development/index.md', label: 'Back to the development guide'};
+  if (source.startsWith('spec/')) {
+    const topics = {
+      core: 'System and Core Concepts', packages: 'Packages and Revisions',
+      instances: 'Instances and Data', operations: 'Operations and Execution',
+      snapshots: 'Snapshots and Restore', migrations: 'Migration',
+      lifecycle: 'Lifecycle and Recovery', interfaces: 'Hooks and Integration Interfaces',
+      storage: 'Compatibility and Storage',
+    };
+    const directory = source.split('/')[1];
+    const topic = directory === 'persistence' ? 'storage' : directory;
+    if (topics[topic] && !source.endsWith('/index.md')) return {
+      kind: 'lookup', back: `spec/${topic}/index.md`, label: 'Back to ' + topics[topic],
+    };
+    return {kind: 'lookup', back: 'spec/index.md', label: 'Back to the specification'};
+  }
   return {kind: 'hub'};
 }

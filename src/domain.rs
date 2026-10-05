@@ -2,9 +2,6 @@
 //!
 //! This module must not depend on CLI, persistence, or third-party adapter types.
 
-// M1-A establishes production domain contracts before the application layer
-// consumes them. Later milestones remove this transitional allowance as each
-// contract gains a production caller.
 #![allow(dead_code)]
 
 mod catalog;

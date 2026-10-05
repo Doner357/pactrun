@@ -76,7 +76,7 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Pack distribution](../spec/contracts/pack-distribution.md) and
-[metadata commands](../spec/behavior/command-and-output-reference.md).
+Contracts: [Pack distribution](../spec/packages/distribution.md) and
+[metadata commands](../spec/interfaces/commands.md).
 
 </details>

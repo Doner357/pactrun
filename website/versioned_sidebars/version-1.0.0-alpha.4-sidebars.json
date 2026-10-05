@@ -95,159 +95,121 @@
       "collapsed": true,
       "items": [
         "spec/index",
-        "spec/glossary",
         "spec/catalog",
         {
           "type": "category",
-          "label": "Foundations",
+          "label": "System and Core Concepts",
           "items": [
-            "spec/foundations/index",
-            "spec/foundations/system-model",
-            "spec/foundations/identity-and-state",
-            "spec/foundations/resources-and-versioning",
-            "spec/foundations/product-versioning-and-compatibility"
+            "spec/core/index",
+            "spec/core/system-model",
+            "spec/core/objects",
+            "spec/core/vocabulary"
           ]
         },
         {
           "type": "category",
-          "label": "Observable behavior",
+          "label": "Packages and Revisions",
           "items": [
-            "spec/behavior/index",
-            "spec/behavior/actions-plans-and-runs",
-            "spec/behavior/execution-diagnostics",
-            "spec/behavior/command-and-output-reference",
-            "spec/behavior/managed-object-lifecycle",
-            "spec/behavior/inputs-secrets-and-readiness",
-            "spec/behavior/m4-runtime-capabilities",
-            "spec/behavior/m4-snapshot-command-reference",
-            "spec/behavior/m5-migration-command-reference",
-            "spec/behavior/packages-revisions-and-instances",
-            "spec/behavior/snapshots-migrations-and-recovery"
+            "spec/packages/index",
+            "spec/packages/authoring",
+            "spec/packages/source-format",
+            "spec/packages/identity",
+            "spec/packages/revision-format",
+            "spec/packages/runtime-content",
+            "spec/packages/metadata",
+            "spec/packages/distribution",
+            "spec/packages/import-identity"
           ]
         },
         {
           "type": "category",
-          "label": "Authoring and format contracts",
+          "label": "Instances and Data",
           "items": [
-            "spec/contracts/index",
-            "spec/contracts/actions-inputs-and-parameters",
-            "spec/contracts/authoring-model",
-            "spec/contracts/error-taxonomy-v1",
-            "spec/contracts/cli-machine-interface",
-            "spec/contracts/cli-id-selectors",
-            "spec/contracts/hook-protocol",
-            "spec/contracts/hooks-recovery-and-cleanup",
-            "spec/contracts/migrations",
-            "spec/contracts/pack-source",
-            "spec/contracts/pack-distribution",
-            "spec/contracts/recipes-and-runtime-content",
-            "spec/contracts/revision-canonical",
-            "spec/contracts/snapshot-bundle",
-            "spec/contracts/snapshot-integrity",
-            "spec/contracts/snapshots-and-managed-data"
+            "spec/instances/index",
+            "spec/instances/identity-state",
+            "spec/instances/input-declarations",
+            "spec/instances/bindings",
+            "spec/instances/inputs-secrets",
+            "spec/instances/service-resources",
+            "spec/instances/service-storage",
+            "spec/instances/resource-commands"
           ]
         },
         {
           "type": "category",
-          "label": "Execution and recovery",
+          "label": "Operations and Execution",
           "items": [
-            "spec/execution/index",
-            "spec/execution/execution-and-concurrency",
-            "spec/execution/m4-snapshot-lifecycle-approval-baseline",
-            "spec/execution/m5-migration-execution",
-            "spec/execution/m5-migration-execution",
-            "spec/execution/m7-instance-retirement",
-            "spec/execution/recovery-and-reconciliation"
+            "spec/operations/index",
+            "spec/operations/action-definitions",
+            "spec/operations/parameters",
+            "spec/operations/actions-plans-runs",
+            "spec/operations/execution",
+            "spec/operations/diagnostics"
           ]
         },
         {
           "type": "category",
-          "label": "Internal persistence",
+          "label": "Snapshots and Restore",
           "items": [
-            "spec/persistence/index",
+            "spec/snapshots/index",
+            "spec/snapshots/behavior",
+            "spec/snapshots/definition",
+            "spec/snapshots/limits",
+            "spec/snapshots/execution",
+            "spec/snapshots/commands",
+            "spec/snapshots/integrity",
+            "spec/snapshots/bundles",
+            "spec/snapshots/import-identity"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Migration",
+          "items": [
+            "spec/migrations/index",
+            "spec/migrations/behavior",
+            "spec/migrations/definition",
+            "spec/migrations/execution",
+            "spec/migrations/commands"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Lifecycle and Recovery",
+          "items": [
+            "spec/lifecycle/index",
+            "spec/lifecycle/resource-lifetimes",
+            "spec/lifecycle/objects-gc",
+            "spec/lifecycle/failure",
+            "spec/lifecycle/recovery",
+            "spec/lifecycle/deletion",
+            "spec/lifecycle/retirement"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Hooks and Integration Interfaces",
+          "items": [
+            "spec/interfaces/index",
+            "spec/interfaces/hooks",
+            "spec/interfaces/hook-protocol",
+            "spec/interfaces/shell-loader",
+            "spec/interfaces/commands",
+            "spec/interfaces/id-selectors",
+            "spec/interfaces/machine-output",
+            "spec/interfaces/errors"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Compatibility and Storage",
+          "items": [
+            "spec/storage/index",
+            "spec/storage/compatibility",
+            "spec/storage/format-domains",
+            "spec/storage/runtime-content",
+            "spec/storage/revision-records",
             "spec/persistence/persistence-baseline"
-          ]
-        },
-        {
-          "type": "category",
-          "label": "Shell Adapter / Loader",
-          "items": [
-            "spec/contracts/shell-loader"
-          ]
-        },
-        {
-          "type": "category",
-          "label": "ServiceStorage",
-          "items": [
-            "spec/execution/m6-5-service-storage-execution",
-            "spec/behavior/m6-5-service-storage-command-reference"
-          ]
-        }
-      ]
-    },
-    {
-      "type": "category",
-      "label": "Development",
-      "items": [
-        "development/index",
-        "development/product-overview",
-        "development/next-milestone",
-        "development/reading-paths",
-        "development/implementation-guidance",
-        "development/development-and-verification",
-        "development/documentation-style",
-        "development/f-documentation-status",
-        "development/release-readiness",
-        "development/design-references",
-        {
-          "type": "category",
-          "label": "Delivery records and historical scope",
-          "items": [
-            "development/implementation-roadmap",
-            "development/product-completion-milestones",
-            "development/remaining-capability-milestones",
-            "development/execution-diagnostics-observability-status",
-            "development/object-catalog-history-metadata-status",
-            "development/pack-transport-status",
-            "development/cli-presentation-status",
-            "development/shared-obligation-inventory",
-            "development/obligation-audit-2026-09-23",
-            "development/verification-gap-closure",
-            "development/pre-e-readiness",
-            "development/managed-object-lifecycle-status",
-            "development/snapshot-capacity-and-restore-status",
-            "development/shell-adapter-loader-status",
-            "development/m4-implementation-status",
-            "development/m6-implementation-status",
-            "development/m6-5-implementation-status",
-            "development/m7-implementation-status",
-            "development/design-notes/m7-cleanup-deletion-implementation-baseline",
-            "development/spec-migration-review"
-          ]
-        },
-        {
-          "type": "category",
-          "label": "Design syntheses and history",
-          "items": [
-            "development/design-notes/snapshot-capacity-and-restore-baseline",
-            "development/design-notes/shell-adapter-loader-baseline",
-            "development/design-notes/object-catalog-history-metadata-baseline",
-            "development/design-notes/pack-transport-baseline",
-            "development/design-notes/cli-presentation-baseline",
-            "development/design-notes/e-versioning-redesign-decisions",
-            "development/design-notes/e-versioning-s0-plan",
-            "development/design-notes/shell-loader-format-activation-review",
-            "development/design-notes/non-identity-metadata-semantic-baseline",
-            "development/design-notes/pre-m2-installation-instance-binding-baseline",
-            "development/design-notes/service-storage-semantic-baseline",
-            "development/design-notes/service-storage-staged-design-alignment",
-            "development/design-notes/m6-recovery-implementation-baseline",
-            "development/design-notes/m6-5-servicestorage-baseline",
-            "development/design-notes/m3-action-execution-approval-baseline",
-            "development/history/documentation-edition-1",
-            "development/history/handoff-before-consistency-review-2026-09-28",
-            "development/history/guidance-before-consistency-review-2026-09-28",
-            "development/history/m8-recipes-rejected"
           ]
         }
       ]

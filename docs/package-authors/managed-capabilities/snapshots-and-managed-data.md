@@ -59,10 +59,10 @@ More detail: [Pack fields and values](../reference/pack-fields.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Snapshot capabilities](../../spec/contracts/snapshots-and-managed-data.md),
-[integrity](../../spec/contracts/snapshot-integrity.md),
-[bundle](../../spec/contracts/snapshot-bundle.md), and
-[execution](../../spec/execution/m4-snapshot-lifecycle-approval-baseline.md).
+Contracts: [Snapshot capabilities](../../spec/snapshots/definition.md),
+[integrity](../../spec/snapshots/integrity.md),
+[bundle](../../spec/snapshots/bundles.md), and
+[execution](../../spec/snapshots/execution.md).
 
 </details>
 

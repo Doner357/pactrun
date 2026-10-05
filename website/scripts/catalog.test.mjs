@@ -20,7 +20,7 @@ test('optional maintainer citations do not outrank task content through hidden s
 test('bootstrap prose agrees with the current private SQLite marker and rejects development upgrades', async () => {
   const implementation = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   const marker = implementation.match(/const SCHEMA_VERSION: i64 = (\d+);/)[1];
-  const identity = docs.find(([name]) => name === 'spec/foundations/identity-and-state.md')[1].replace(/\s+/g, ' ');
+  const identity = docs.find(([name]) => name === 'spec/storage/revision-records.md')[1].replace(/\s+/g, ' ');
   const bootstrap = identity.split('### PR-REQ-0231')[1].split('### PR-REQ-0232')[0];
   assert.ok(bootstrap.includes('private user version `' + marker + '`'));
   assert.ok(bootstrap.includes('pactrun_metadata.format_version'));
@@ -30,27 +30,22 @@ test('bootstrap prose agrees with the current private SQLite marker and rejects 
   assert.doesNotMatch(persistence, /migration executes only the additions|only future\s+destructive lifecycle|later M7 schema must add/);
 });
 
-test('historical persistence exclusions keep distinct anchors and compatibility redirects', () => {
+test('persistence reference exposes current records, not retired implementation-slice exclusions', () => {
   const persistence = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
-  for (const [version, title, anchor] of [
-    [2, 'metadata', 'deferred-work'], [3, 'Instance', 'deferred-work-1'], [4, 'Run', 'deferred-work-2'],
-  ]) {
-    assert.ok(persistence.includes(`## Historical ${title}-slice exclusions {#${anchor}}`));
-    const entry = docs.find(([name]) => name === `pactrun-developers/architecture/persistence-schema-v${version}.md`)[1];
-    assert.ok(entry.includes(`persistence-baseline.md#${anchor})`));
-  }
-  assert.doesNotMatch(persistence, /^## Deferred work$/m);
+  assert.doesNotMatch(persistence, /^## (?:Historical|Deferred)/m);
   assert.ok(persistence.includes('pr-req-0338---exact-v8-lifecycle-records'));
-  for (const [version, role, anchor] of [[3, 'Instance', 'candidate-crate-private-repository-contract'], [4, 'Run', 'candidate-crate-private-repository-contract-1']]) {
+  for (const [role, anchor] of [['Instance', 'candidate-crate-private-repository-contract'], ['Run', 'candidate-crate-private-repository-contract-1']]) {
     assert.ok(persistence.includes(`## ${role} repository contract (crate-private) {#${anchor}}`));
-    const entry = docs.find(([name]) => name === `pactrun-developers/architecture/persistence-schema-v${version}.md`)[1];
-    assert.ok(entry.includes(`persistence-baseline.md#${anchor})`));
   }
+  for (const id of ['0257', '0270', '0276', '0300', '0312', '0325', '0339']) {
+    assert.doesNotMatch(persistence, new RegExp('^### PR-REQ-' + id, 'm'));
+  }
+  assert.match(persistence, /^### PR-REQ-0299 /m);
 });
 
 test('service diagnostic identities match the registered catalog rather than development owners', async () => {
   const registry = JSON.parse(await readFile(path.join(root, 'tests/vectors/error_taxonomy_v1/catalog.json'), 'utf8'));
-  const source = docs.find(([name]) => name === 'spec/behavior/m6-5-service-storage-command-reference.md')[1];
+  const source = docs.find(([name]) => name === 'spec/instances/resource-commands.md')[1];
   const rows = [...source.matchAll(/^\| ([a-z_]+) \| ([a-z_]+) \|/gm)];
   const entries = registry.codes.filter(entry => entry.owner === 'service_storage');
   assert.equal(rows.length, entries.length);
@@ -63,11 +58,11 @@ test('service diagnostic identities match the registered catalog rather than dev
 });
 
 test('main command reference composes with selectors, machine output and retired upgrade policy', () => {
-  const source = docs.find(([name]) => name === 'spec/behavior/command-and-output-reference.md')[1].replace(/\s+/g, ' ');
-  assert.ok(source.includes('cli-id-selectors.md'));
+  const source = docs.find(([name]) => name === 'spec/interfaces/commands.md')[1].replace(/\s+/g, ' ');
+  assert.ok(source.includes('id-selectors.md'));
   assert.match(source, /prefixes of at least eight digits in either exact-reference component/);
-  assert.ok(source.includes('cli-machine-interface.md'));
-  assert.match(source, /`storage upgrade` command is retired/);
+  assert.ok(source.includes('machine-output.md'));
+  assert.match(source.replace(/\s+/g, ' '), /Unsupported stores are refused without conversion or data deletion/);
   assert.doesNotMatch(source, /Bare tokens, digest prefixes|explicit storage-upgrade spelling/);
 });
 
@@ -77,57 +72,50 @@ test('current runtime owners do not restate superseded milestone availability', 
     if (classify(name, body).state !== 'current' || !name.endsWith('.md')) continue;
     assert.doesNotMatch(body.replace(/\s+/g, ' '), obsolete, name);
   }
-  const snapshots = docs.find(([name]) => name === 'spec/execution/m4-snapshot-lifecycle-approval-baseline.md')[1];
-  assert.match(snapshots, /Historical M4 scope \(informative\)/);
-  assert.ok(snapshots.includes('current handoff'));
+  const snapshots = docs.find(([name]) => name === 'spec/snapshots/execution.md')[1];
+  assert.doesNotMatch(snapshots, /Historical M4|development\//);
+  assert.match(snapshots, /Confirmed|confirmed/);
 });
 
-test('format navigation names the current owners once and Snapshot commands reject retired readers', () => {
-  const index = docs.find(([name]) => name === 'spec/contracts/index.md')[1];
+test('reference index names each current format owner once and Snapshot verification refuses unsupported formats', () => {
+  const index = docs.find(([name]) => name === 'spec/catalog.md')[1];
   const targets = [...index.matchAll(/^- \[[^\]]+\]\(([^)]+)\)/gm)].map(match => match[1]);
-  assert.equal(new Set(targets).size, targets.length, 'Duplicate main contract entries');
-  for (const name of ['pack-source', 'revision-canonical', 'hook-protocol', 'snapshot-integrity', 'snapshot-bundle', 'pack-distribution']) {
-    const owner = docs.find(([file]) => file === `spec/contracts/${name}.md`)[1];
+  assert.equal(new Set(targets).size, targets.length);
+  for (const name of ['packages/source-format', 'packages/revision-format', 'interfaces/hook-protocol', 'snapshots/integrity', 'snapshots/bundles', 'packages/distribution']) {
+    const owner = docs.find(([file]) => file === `spec/${name}.md`)[1];
     const title = owner.match(/^title: (.+)$/m)[1];
     assert.ok(index.includes(`[${title}](./${name}.md)`), name);
   }
-  assert.doesNotMatch(index, /V1 and V2 remain distinct supported|unresolved diagnostic presentation follow-up/);
-  assert.ok(index.includes('execution-diagnostics.md'));
-  const commands = docs.find(([name]) => name === 'spec/behavior/m4-snapshot-command-reference.md')[1];
-  assert.doesNotMatch(commands, /original V1\/V2 verifier/);
-  assert.match(commands, /Numeric development formats are refused without conversion/);
+  assert.ok(index.includes('operations/diagnostics.md'));
+  const commands = docs.find(([name]) => name === 'spec/snapshots/commands.md')[1];
+  assert.match(commands, /Unsupported formats are refused without conversion/);
+  assert.match(commands, /complete payload/);
 });
 
-test('every retired schema is superseded in catalog, default search and agent text', () => {
+test('retired schema pages are replaced by version-scoped redirects to the current schema', async () => {
+  const aliases = JSON.parse(await readFile(path.join(root, 'website/spec-redirects.json'), 'utf8'));
   for (let version = 2; version <= 11; version++) {
     const name = `spec/persistence/persistence-schema-v${version}.md`;
-    const source = docs.find(([file]) => file === name)[1];
-    const entry = catalog.pages.find(page => page.source === name);
-    assert.equal(entry.state, 'superseded', name);
-    assert.equal(entry.role, 'Compatibility', name);
-    assert.ok(!searchPages(catalog.pages).some(page => page.source === name), name);
-    assert.ok(searchPages(catalog.pages, {q: `persistence-schema-v${version}`, state: 'superseded'}).some(page => page.source === name), name);
-    assert.match(textBody(name, source), /^> Document context \(generated\): superseded \| Compatibility/);
+    assert.ok(!docs.some(([file]) => file === name));
+    assert.ok(!catalog.pages.some(page => page.source === name));
+    assert.equal(aliases['/' + name.replace(/\.md$/, '')], '/spec/storage/schema');
   }
-  for (const heading of ['title: Retired development schema', '# Retired development persistence schema'])
-    assert.equal(classify('spec/persistence/example.md', heading).state, 'superseded');
-  assert.equal(classify('spec/persistence/persistence-baseline.md', '').state, 'current');
+  assert.ok(catalog.pages.some(page => page.source === 'spec/persistence/persistence-baseline.md' && page.url === '/spec/storage/schema'));
 });
 
-test('informative Spec pages remain discoverable without claiming contract authority', () => {
-  const names = ['spec/index.md', 'spec/catalog.md', 'spec/glossary.md',
-    ...['behavior', 'contracts', 'execution', 'foundations', 'persistence'].map(section => `spec/${section}/index.md`)];
+test('topic indexes and vocabulary are searchable references without reader-facing classification notices', () => {
+  const names = ['spec/index.md', 'spec/catalog.md', 'spec/core/vocabulary.md',
+    ...['core', 'packages', 'instances', 'operations', 'snapshots', 'migrations', 'lifecycle', 'interfaces', 'storage'].map(section => `spec/${section}/index.md`)];
   for (const name of names) {
     const source = docs.find(([file]) => file === name)[1];
     const entry = catalog.pages.find(page => page.source === name);
     assert.equal(entry.state, 'current', name);
-    assert.equal(entry.role, 'Informative', name);
-    assert.ok(searchPages(catalog.pages, {role: 'Informative'}).some(page => page.source === name), name);
-    assert.ok(!searchPages(catalog.pages, {role: 'Specification'}).some(page => page.source === name), name);
-    assert.match(textBody(name, source), /Informative reading aid\. Follow the linked owning contracts/);
+    assert.equal(entry.role, 'Reference', name);
+    assert.ok(searchPages(catalog.pages, {role: 'Reference'}).some(page => page.source === name));
+    assert.ok(!searchPages(catalog.pages, {role: 'Specification'}).some(page => page.source === name));
+    assert.doesNotMatch(textBody(name, source), /^> .*Informative/m);
   }
-  // An informative reading-map subsection does not demote its normative owner.
-  assert.equal(catalog.pages.find(page => page.source === 'spec/behavior/packages-revisions-and-instances.md').role, 'Specification');
+  assert.equal(catalog.pages.find(page => page.source === 'spec/core/objects.md').role, 'Specification');
 });
 
 test('Input deletion guide distinguishes active required, optional and retained bindings', () => {
@@ -139,17 +127,17 @@ test('Input deletion guide distinguishes active required, optional and retained 
 });
 
 test('current ServiceStorage summaries and evidence boundaries do not defer available contracts', () => {
-  for (const name of ['spec/glossary.md', 'spec/behavior/packages-revisions-and-instances.md',
-    'spec/behavior/actions-plans-and-runs.md', 'spec/contracts/actions-inputs-and-parameters.md',
-    'spec/contracts/index.md', 'development/reading-paths.md', 'spec/execution/recovery-and-reconciliation.md']) {
+  for (const name of ['spec/core/vocabulary.md', 'spec/core/objects.md',
+    'spec/operations/actions-plans-runs.md', 'spec/operations/action-definitions.md',
+    'spec/index.md', 'spec/lifecycle/recovery.md']) {
     const text = docs.find(([file]) => file === name)[1].replace(/\s+/g, ' ');
     assert.doesNotMatch(text, /runtime remains deferred|future versioned contract|future service-resource exposure|future authority and operation-prerequisite|their deferred representation|remains pending under M7/, name);
   }
-  const recovery = docs.find(([name]) => name === 'spec/execution/recovery-and-reconciliation.md')[1];
-  assert.ok(recovery.includes('m7-instance-retirement.md'));
-  assert.match(recovery.replace(/\s+/g, ' '), /This list does not claim deletion coverage/);
-  const storage = docs.find(([name]) => name === 'spec/execution/m6-5-service-storage-execution.md')[1];
-  assert.match(storage.replace(/\s+/g, ' '), /Development-era numeric schemas and their upgrade chains are retired/);
+  const recovery = docs.find(([name]) => name === 'spec/lifecycle/recovery.md')[1];
+  assert.ok(recovery.includes('retirement.md'));
+  assert.match(recovery.replace(/\s+/g, ' '), /Successful Instance deletion removes the object/);
+  const storage = docs.find(([name]) => name === 'spec/instances/service-storage.md')[1];
+  assert.match(storage.replace(/\s+/g, ' '), /Abandonment cannot be represented by deleting allocation rows/);
 });
 
 test('catalog retains source identity, excludes agent routes, and covers reader guides', () => {
@@ -159,21 +147,19 @@ test('catalog retains source identity, excludes agent routes, and covers reader 
   for (const name of ['introduction.md', 'guides/retirement.md', 'package-authors/fundamentals/authoring-model.md'])
     assert.equal(catalog.pages.find(p => p.source === name).state, 'current');
 });
-test('retired contracts and historical records cannot masquerade as current search results', () => {
-  assert.equal(classify('spec/contracts/pack-source-yaml-v1.md', 'title: Retired development contract').state, 'superseded');
-  assert.equal(classify('development/m4-implementation-status.md', '').state, 'historical');
-  assert.equal(classify('development/next-milestone.md', '').state, 'current');
-  assert.equal(classify('spec/behavior/m4-runtime-capabilities.md', '').state, 'current');
+test('superseded contracts cannot masquerade as current search results', () => {
+  assert.equal(classify('spec/packages/source-format.md', 'title: Retired development contract').state, 'superseded');
+  assert.equal(classify('spec/snapshots/limits.md', '').state, 'current');
   assert.equal(classify('pactrun-developers/architecture/system-model.md', '').state, 'superseded');
   assert.equal(classify('engineering/documentation-edition-1.md', '**Status: Informative compatibility entry; no independent specification.**').state, 'superseded');
 });
-test('search supports IDs, multiword queries, combined filters, history and no results', () => {
-  assert.equal(searchPages(catalog.pages, {q: 'PR-REQ-0258'})[0].source, 'spec/contracts/pack-source.md');
+test('search supports IDs, multiword queries, combined filters, superseded pages and no results', () => {
+  assert.equal(searchPages(catalog.pages, {q: 'PR-REQ-0258'})[0].source, 'spec/packages/source-format.md');
   const restore = searchPages(catalog.pages, {q: 'restore', audience: 'Users'});
   assert.ok(restore.some(p => p.source.endsWith('snapshots-migrations-and-recovery.md')));
   assert.ok(restore.every(p => p.state === 'current' && p.audiences.includes('Users')));
   assert.ok(searchPages(catalog.pages, {q: 'shell loader', audience: 'Authors'}).length > 0);
-  assert.ok(searchPages(catalog.pages, {state: 'historical'}).length > 0);
+  assert.ok(searchPages(catalog.pages, {state: 'superseded'}).length > 0);
   assert.ok(searchPages(catalog.pages, {state: ''}).length > searchPages(catalog.pages).length);
   assert.equal(searchPages(catalog.pages, {q: 'nonexistent-zzyy-887766'}).length, 0);
   assert.equal(searchPages(catalog.pages, {state: 'invalid'}).length, 0);
@@ -282,12 +268,12 @@ test('search and text discovery are integrated without authorizing Pages', async
 
 test('reader filters retain shared references and exact requirement links', () => {
   const author = searchPages(catalog.pages, {q: 'PR-REQ-0258', audience: 'Authors'})[0];
-  assert.equal(author.source, 'spec/contracts/pack-source.md');
+  assert.equal(author.source, 'spec/packages/source-format.md');
   assert.ok(author.url.endsWith('#pr-req-0258---packsourceyamlv1-schema-numbers-and-package-lineage'));
   for (const q of ['--param-file', '--action-timeout-ms']) {
     assert.ok(searchPages(catalog.pages, {q, audience: 'Users'}).some(p => p.source.endsWith('/invoke-reference.md')));
   }
-  assert.ok(classify('spec/contracts/pack-source.md', '').audiences.includes('Authors'));
+  assert.ok(classify('spec/packages/source-format.md', '').audiences.includes('Authors'));
   assert.deepEqual(classify('spec/persistence/persistence-baseline.md', '').audiences, ['Developers']);
   assert.deepEqual(searchPages(catalog.pages, {q: 'PR-REQ-0258', role: 'Tutorial'}), []);
   assert.ok(searchPages(catalog.pages, {q: 'PR-REQ-0258', state: ''}).length > 0);
@@ -309,18 +295,18 @@ test('requirement anchors must exist in rendered HTML, not merely resemble slugs
 
 test('effective baseline statements do not contradict canonical versions or diagnostics', () => {
   const doc = name => docs.find(([file]) => file === name)[1].replace(/\s+/g, ' ');
-  const source = doc('spec/contracts/pack-source.md');
-  const canonical = doc('spec/contracts/revision-canonical.md');
+  const source = doc('spec/packages/source-format.md');
+  const canonical = doc('spec/packages/revision-format.md');
   const marker = canonical.match(/format_version: "([^"]+)"/)[1];
   assert.ok(source.includes('Revision Core format version ' + String.fromCharCode(96) + '"' + marker + '"'));
   assert.doesNotMatch(source, /including Hook protocol versions/);
   assert.match(source, /numeric markers are rejected/);
-  const loader = doc('spec/contracts/shell-loader.md');
+  const loader = doc('spec/interfaces/shell-loader.md');
   assert.match(loader, /retained by default for Run inspection/);
   assert.doesNotMatch(loader, /Core discards its text|not displayed live or retained/);
   assert.match(loader, /execution diagnostics policy/);
-  assert.match(doc('spec/behavior/m4-snapshot-command-reference.md'), /prefixes of at least eight digits/);
-  assert.doesNotMatch(doc('spec/behavior/m6-5-service-storage-command-reference.md'), /storage upgrade.*retains its existing/);
+  assert.match(doc('spec/snapshots/commands.md'), /prefixes of at least eight digits/);
+  assert.doesNotMatch(doc('spec/instances/resource-commands.md'), /storage upgrade.*retains its existing/);
   assert.doesNotMatch(doc('spec/index.md'), /Reserved for later usage documentation/);
 });
 
@@ -364,78 +350,48 @@ test('current document prose rejects the obsolete availability claims found by f
   }
 });
 
-test('current handoff uses the product version and effective owners rather than a development support matrix', async () => {
-  const handoff = docs.find(([name]) => name === 'development/next-milestone.md')[1];
-  const {version} = await commandHelp(root);
-  assert.ok(handoff.includes(version));
-  for (const owner of ['revision-canonical.md', 'pack-source.md', 'hook-protocol.md', 'snapshot-integrity.md', 'snapshot-bundle.md', 'persistence-baseline.md', 'cli-machine-interface.md', 'pack-distribution.md']) {
-    assert.ok(handoff.includes(owner), owner);
-  }
-  assert.match(handoff.replace(/\s+/g, ' '), /Development-era numeric formats and storage upgrade chains are retired/);
-  const prose = handoff.replace(/\s+/g, ' ');
-  assert.match(prose, /published on GitHub Pages through verified CI artifacts/);
-  assert.match(prose, /alpha\.1 Authentik evaluation was partially verified; ordinary-user retirement failed in that evaluation/);
-  assert.match(prose, /corrected alpha\.2 evaluation Pack passed ordinary-user retirement with the released Linux payload/);
-  assert.match(prose, /Visual redesign and versioned documentation snapshots remain deferred/);
-  assert.doesNotMatch(prose, /Push, public deployment and package-source publication remain unauthorized/);
-  assert.doesNotMatch(handoff, /Uncommitted review candidate|No commit, merge, push/);
-  assert.ok(handoff.includes('handoff-before-consistency-review-2026-09-28.md'));
-});
 
 test('ServiceStorage overview and authoring reference the effective declarations without erasing deferred taxonomy', () => {
   const get = name => docs.find(([file]) => file === name)[1];
-  const author = get('spec/contracts/authoring-model.md');
+  const author = get('spec/packages/authoring.md');
   assert.match(author, /ServiceStorageDeclarations/);
   assert.match(author, /ServiceResourceDeclarations/);
-  for (const name of ['spec/contracts/authoring-model.md', 'spec/contracts/hooks-recovery-and-cleanup.md', 'spec/behavior/inputs-secrets-and-readiness.md']) {
+  for (const name of ['spec/packages/authoring.md', 'spec/interfaces/hooks.md', 'spec/instances/inputs-secrets.md']) {
     const text = get(name);
-    assert.ok(text.includes('m6-5-service-storage-execution.md'), name);
-    assert.ok(text.includes('m7-instance-retirement.md'), name);
+    assert.ok(text.includes('service-storage.md'), name);
+    assert.ok(text.includes('retirement.md'), name);
   }
-  const scope = get('spec/foundations/resources-and-versioning.md').replace(/\s+/g, ' ');
+  const scope = get('spec/storage/format-domains.md').replace(/\s+/g, ' ');
   assert.match(scope, /MUST NOT add them retroactively to an older closed schema/);
   assert.match(scope, /Revision Core and Hook Protocol remain independent version domains/);
-  assert.match(scope, /resources outside ServiceStorage.*separate taxonomy gate/);
+  assert.match(scope, /cover ServiceStorage-backed resources only/);
 });
 
 test('lifecycle clarification retains non-replay and non-destruction obligations with concrete owners', () => {
-  const text = docs.find(([name]) => name === 'spec/behavior/snapshots-migrations-and-recovery.md')[1].replace(/\s+/g, ' ');
+  const text = docs.find(([name]) => name === 'spec/lifecycle/deletion.md')[1].replace(/\s+/g, ' ');
   assert.match(text, /MUST NOT be treated as proof that replay is safe/);
   assert.match(text, /MUST NOT replay Cleanup/);
   assert.match(text, /MUST NOT require a public persistent/);
   assert.match(text, /MUST NOT destructively remove the abandoned service-owned state/);
-  assert.ok(text.includes('m7-instance-retirement.md'));
+  assert.ok(text.includes('retirement.md'));
   assert.ok(text.includes('persistence-baseline.md'));
 });
 
 test('Migration and retirement spellings compose with current selectors and machine presentation', () => {
-  const migration = docs.find(([name]) => name === 'spec/behavior/m5-migration-command-reference.md')[1];
-  const retirement = docs.find(([name]) => name === 'spec/execution/m7-instance-retirement.md')[1];
+  const migration = docs.find(([name]) => name === 'spec/migrations/commands.md')[1];
+  const retirement = docs.find(([name]) => name === 'spec/lifecycle/retirement.md')[1];
   assert.ok(migration.includes('mp1-<8..63 hex digits>'));
-  assert.ok(migration.includes('cli-id-selectors.md#pr-req-0369'));
-  for (const text of [migration, retirement]) assert.ok(text.includes('cli-machine-interface.md'));
+  assert.ok(migration.includes('id-selectors.md#pr-req-0369'));
+  for (const text of [migration, retirement]) assert.ok(text.includes('machine-output.md'));
   assert.match(retirement.replace(/\s+/g, ' '), /No generic force flag, replayable Plan or path-based discard exists/);
 });
 
-test('Snapshot stage evidence remains historical and does not overwrite current closure', () => {
-  const text = docs.find(([name]) => name === 'spec/execution/m4-snapshot-lifecycle-approval-baseline.md')[1].replace(/\s+/g, ' ');
-  assert.match(text, /Historical S4–S6 coverage/);
-  assert.match(text, /At the S6 stage.*was not yet/);
-  assert.ok(text.includes('m4-implementation-status.md'));
-  assert.ok(text.includes('e-implementation-status.md'));
-  assert.match(text, /earlier stage evidence is not relabeled as a fresh pass/);
-});
-
-test('historical source snapshots remain excluded from current search and task rows avoid duplicate targets', () => {
-  for (const name of ['development/history/handoff-before-consistency-review-2026-09-28.md', 'development/history/guidance-before-consistency-review-2026-09-28.md']) {
-    const body = docs.find(([file]) => file === name)[1];
-    assert.equal(classify(name, body).state, 'historical');
-    assert.match(body, /including claims that were already obsolete/);
-    assert.match(body, /[a-f0-9]{64}/);
-  }
-  const map = docs.find(([file]) => file === 'development/reading-paths.md')[1];
-  for (const row of map.split('\n').filter(line => line.startsWith('|'))) {
-    const links = [...row.matchAll(/\]\(([^)]+)\)/g)].map(m => m[1]);
-    assert.equal(new Set(links).size, links.length, row);
-  }
+test('Snapshot contracts describe complete current execution without staged-delivery claims', () => {
+  const execution = docs.find(([name]) => name === 'spec/snapshots/execution.md')[1];
+  const commands = docs.find(([name]) => name === 'spec/snapshots/commands.md')[1];
+  for (const text of [execution, commands]) assert.doesNotMatch(text, /Historical M4|S[3-7] coverage|later-slice|development\//);
+  assert.match(execution, /RecoveryConsequenceVersion/);
+  assert.match(execution, /MUST NOT.*clear|clear no guard/);
+  assert.match(commands, /incomplete verification/);
+  assert.match(commands, /not_recorded/);
 });

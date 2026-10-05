@@ -364,7 +364,7 @@ mod tests {
     };
 
     fn roots() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m2-install-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/installation-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("install-")
