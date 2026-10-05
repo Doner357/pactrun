@@ -27,7 +27,7 @@ mod platform;
 mod platform;
 
 #[cfg(not(any(target_os = "linux", windows)))]
-compile_error!("M1-B runtime-content storage currently supports Windows and Linux only");
+compile_error!("Runtime-content storage supports Windows and Linux only");
 
 const LOCK_NAME: &str = ".publish.lock";
 const STREAM_BUFFER_BYTES: usize = 64 * 1024;
@@ -735,7 +735,7 @@ struct TestObserver {
 #[cfg(test)]
 impl TestObserver {
     fn fault(&self, point: FaultPoint) -> Result<(), RuntimeContentStoreError> {
-        if std::env::var_os("PACTRUN_M1B_FAULT")
+        if std::env::var_os("PACTRUN_CONTENT_TEST_FAULT")
             .is_some_and(|configured| configured == point.name())
         {
             std::process::exit(86);
@@ -791,16 +791,16 @@ mod tests {
         },
     };
 
-    const WORKER_TEST: &str = "persistence::runtime_content_store::tests::m1b_subprocess_worker";
+    const WORKER_TEST: &str = "persistence::runtime_content_store::tests::content_store_worker";
 
     fn digest(bytes: &[u8]) -> Sha256Digest {
         Sha256Digest::parse(format!("sha256:{}", hex::encode(Sha256::digest(bytes)))).unwrap()
     }
 
     fn test_root() -> (TempDir, PathBuf) {
-        let parent = std::env::var_os("PACTRUN_M1B_TEST_PARENT")
+        let parent = std::env::var_os("PACTRUN_CONTENT_TEST_TEST_PARENT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m1b-tests"));
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target/content-tests"));
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("runtime-content-")
@@ -859,15 +859,15 @@ mod tests {
             .arg("--exact")
             .arg(WORKER_TEST)
             .arg("--nocapture")
-            .env("PACTRUN_M1B_WORKER", "put")
-            .env("PACTRUN_M1B_ROOT", root)
-            .env("PACTRUN_M1B_CONTENT_HEX", hex::encode(bytes))
-            .env("PACTRUN_M1B_DIGEST", expected.as_str())
-            .env("PACTRUN_M1B_SUCCESS_MARKER", marker)
+            .env("PACTRUN_CONTENT_TEST_WORKER", "put")
+            .env("PACTRUN_CONTENT_TEST_ROOT", root)
+            .env("PACTRUN_CONTENT_TEST_CONTENT_HEX", hex::encode(bytes))
+            .env("PACTRUN_CONTENT_TEST_DIGEST", expected.as_str())
+            .env("PACTRUN_CONTENT_TEST_SUCCESS_MARKER", marker)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         if let Some(fault) = fault {
-            command.env("PACTRUN_M1B_FAULT", fault.name());
+            command.env("PACTRUN_CONTENT_TEST_FAULT", fault.name());
         }
         command.status().unwrap().success()
     }
@@ -1222,14 +1222,17 @@ mod tests {
     }
 
     #[test]
-    fn m1b_subprocess_worker() {
-        if std::env::var_os("PACTRUN_M1B_WORKER").is_none() {
+    fn content_store_worker() {
+        if std::env::var_os("PACTRUN_CONTENT_TEST_WORKER").is_none() {
             return;
         }
-        let root = PathBuf::from(std::env::var_os("PACTRUN_M1B_ROOT").unwrap());
-        let bytes = hex::decode(std::env::var("PACTRUN_M1B_CONTENT_HEX").unwrap()).unwrap();
-        let expected = Sha256Digest::parse(std::env::var("PACTRUN_M1B_DIGEST").unwrap()).unwrap();
-        let marker = PathBuf::from(std::env::var_os("PACTRUN_M1B_SUCCESS_MARKER").unwrap());
+        let root = PathBuf::from(std::env::var_os("PACTRUN_CONTENT_TEST_ROOT").unwrap());
+        let bytes =
+            hex::decode(std::env::var("PACTRUN_CONTENT_TEST_CONTENT_HEX").unwrap()).unwrap();
+        let expected =
+            Sha256Digest::parse(std::env::var("PACTRUN_CONTENT_TEST_DIGEST").unwrap()).unwrap();
+        let marker =
+            PathBuf::from(std::env::var_os("PACTRUN_CONTENT_TEST_SUCCESS_MARKER").unwrap());
         let store = RuntimeContentStore::open(root).unwrap();
         store
             .put_verified(&expected, &mut Cursor::new(bytes))

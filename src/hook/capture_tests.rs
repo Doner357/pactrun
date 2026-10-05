@@ -61,7 +61,7 @@ fn successful_action_and_capture_overrides_preserve_the_existing_trust_guard() {
     let intent = f
         .application
         .resolve_action(
-            &InstanceName::parse("slice4").unwrap(),
+            &InstanceName::parse("hook-fixture").unwrap(),
             &ActionIdentity::parse("direct").unwrap(),
             parameters("success", &f.marker("action-override")),
         )
@@ -256,7 +256,7 @@ fn snapshot_cli_keeps_its_owner_when_admission_retries_and_diagnostic_output_bre
     let args = vec![
         "snapshot".into(),
         "capture".into(),
-        "slice4".into(),
+        "hook-fixture".into(),
         "--param".into(),
         "mode=success".into(),
         "--param".into(),
@@ -919,7 +919,7 @@ fn capture_process_owner() {
     let mode = env::var("PACTRUN_S5_OWNER_MODE").unwrap();
     let app = PactrunApplication::open(&storage).unwrap();
     let instance = app
-        .resolve_instance_name(&InstanceName::parse("slice4").unwrap())
+        .resolve_instance_name(&InstanceName::parse("hook-fixture").unwrap())
         .unwrap()
         .unwrap();
     let plan = crate::workflow::compile_snapshot(
@@ -970,7 +970,7 @@ fn actor(f: &RuntimeFixture, marker: &Path, mode: &str, fault: Option<&str>, pau
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::inherit());
     if let Some(fault) = fault {
-        command.env("PACTRUN_M4_FAULT", fault);
+        command.env("PACTRUN_OPERATION_TEST_FAULT", fault);
     }
     if pause {
         command.env("PACTRUN_S5_PAUSE", "1");

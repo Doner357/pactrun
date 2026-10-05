@@ -22,4 +22,4 @@ anchors only and adds no product rules.
 [PR-REQ-0299 - Durable writable admission and serialized migration](../../spec/persistence/persistence-baseline.md#pr-req-0299---durable-writable-admission-and-serialized-migration)
 
 <a id="pr-req-0300---exact-v4-to-v5-legacy-bootstrap" />
-[PR-REQ-0300 - Exact V4 to V5 legacy bootstrap](../../spec/persistence/persistence-baseline.md#pr-req-0300---exact-v4-to-v5-legacy-bootstrap)
+[PR-REQ-0300 - Exact V4 to V5 legacy bootstrap](../../spec/persistence/persistence-baseline.md#pr-req-0299---durable-writable-admission-and-serialized-migration)

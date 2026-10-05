@@ -233,4 +233,4 @@ mod platform {
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
-compile_error!("M2 Pack source acquisition supports Windows and Linux only");
+compile_error!("Pack source acquisition supports Windows and Linux only");

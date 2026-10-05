@@ -1,6 +1,6 @@
 //! Run records, managed execution ownership, and recovery state.
 //!
-//! These types preserve historical Action meanings and extend them for V5.
+//! Durable identities, state and outcomes shared by managed operations.
 //! They carry no Execution Plan and are never a replay contract.
 
 use std::fmt;
@@ -331,8 +331,7 @@ pub(crate) struct RunExecutionView {
     pub(crate) risk_state: RecoveryRiskState,
 }
 
-/// Shared Running-state matrix; the historical function name is retained for
-/// Action callers. Risk is not legal before the Admission boundary exists.
+/// Shared Running-state matrix. Risk is not legal before Admission.
 pub(crate) fn validate_running_action_state(
     boundary: ActionRunBoundary,
     risk_state: RecoveryRiskState,
@@ -394,7 +393,7 @@ pub(crate) struct RunView {
 }
 
 /// Operation-neutral durable view. The Action view remains a compatibility
-/// projection for the existing M3 callers, never a Snapshot replay contract.
+/// projection for Action callers, never a Snapshot replay contract.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ManagedRunView {
     pub(crate) id: RunId,

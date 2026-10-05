@@ -342,7 +342,7 @@ fn capture_session() -> Value {
 // Verifies: PR-REQ-0213, PR-REQ-0216
 #[test]
 fn capture_completion_crosses_the_real_private_transport_without_becoming_an_action() {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m4-s5-protocol-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/capture-wire-tests");
     fs::create_dir_all(&parent).unwrap();
     let root = tempfile::Builder::new()
         .prefix("capture-")

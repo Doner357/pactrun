@@ -175,7 +175,7 @@ fn run_system_tests(workspace_root: &Path) -> Result<(), String> {
             "-p",
             "pactrun",
             "--test",
-            "m3_slice6_real_cli_e2e",
+            "invoke_cli",
             "--all-features",
         ],
     )

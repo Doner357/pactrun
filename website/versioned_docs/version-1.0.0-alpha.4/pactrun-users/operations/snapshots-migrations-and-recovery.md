@@ -104,8 +104,8 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Snapshot operations](../../spec/behavior/m4-snapshot-command-reference.md),
-[Migration commands](../../spec/behavior/m5-migration-command-reference.md), and
-[recovery](../../spec/execution/recovery-and-reconciliation.md).
+Contracts: [Snapshot operations](../../spec/snapshots/commands.md),
+[Migration commands](../../spec/migrations/commands.md), and
+[recovery](../../spec/lifecycle/recovery.md).
 
 </details>

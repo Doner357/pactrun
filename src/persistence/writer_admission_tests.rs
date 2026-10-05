@@ -14,7 +14,7 @@ use tempfile::TempDir;
 const WORKER: &str = "persistence::writer_admission::tests::admission_worker";
 
 fn root() -> (TempDir, PathBuf) {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m4-s2-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/writer-admission-tests");
     fs::create_dir_all(&parent).unwrap();
     let tmp = tempfile::Builder::new()
         .prefix("v5-")
@@ -64,14 +64,14 @@ fn worker(root: &Path, mode: &str, extra: &[(&str, &str)]) -> Worker {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .args(["--exact", WORKER, "--nocapture"])
-        .env("PACTRUN_M4_MODE", mode)
-        .env("PACTRUN_M4_ROOT", root)
-        .env_remove("PACTRUN_M4_FAULT")
-        .env_remove("PACTRUN_M4_SYNC")
-        .env_remove("PACTRUN_M4_SYNC_DIR")
-        .env_remove("PACTRUN_M1C_FAULT")
-        .env_remove("PACTRUN_M1D_FAULT")
-        .env_remove("PACTRUN_M3_FAULT")
+        .env("PACTRUN_OPERATION_TEST_MODE", mode)
+        .env("PACTRUN_OPERATION_TEST_ROOT", root)
+        .env_remove("PACTRUN_OPERATION_TEST_FAULT")
+        .env_remove("PACTRUN_OPERATION_TEST_SYNC")
+        .env_remove("PACTRUN_OPERATION_TEST_SYNC_DIR")
+        .env_remove("PACTRUN_REVISION_TEST_FAULT")
+        .env_remove("PACTRUN_METADATA_TEST_FAULT")
+        .env_remove("PACTRUN_RUN_TEST_FAULT")
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     for (key, value) in extra {
@@ -82,10 +82,10 @@ fn worker(root: &Path, mode: &str, extra: &[(&str, &str)]) -> Worker {
 
 #[test]
 fn admission_worker() {
-    let Some(mode) = std::env::var_os("PACTRUN_M4_MODE") else {
+    let Some(mode) = std::env::var_os("PACTRUN_OPERATION_TEST_MODE") else {
         return;
     };
-    let root = PathBuf::from(std::env::var_os("PACTRUN_M4_ROOT").unwrap());
+    let root = PathBuf::from(std::env::var_os("PACTRUN_OPERATION_TEST_ROOT").unwrap());
     match mode.to_str().unwrap() {
         "open" => {
             let _p = PactrunPersistence::open(&root).unwrap();
@@ -272,8 +272,8 @@ fn prepared_writer_revalidates_after_the_serialized_boundary_in_another_process(
         &root,
         "prepared-late",
         &[
-            ("PACTRUN_M4_SYNC", "before_writable_admission"),
-            ("PACTRUN_M4_SYNC_DIR", sync.to_str().unwrap()),
+            ("PACTRUN_OPERATION_TEST_SYNC", "before_writable_admission"),
+            ("PACTRUN_OPERATION_TEST_SYNC_DIR", sync.to_str().unwrap()),
         ],
     );
     wait_file(&sync.join("ready"));
@@ -299,7 +299,7 @@ fn prepared_writer_revalidates_after_the_serialized_boundary_in_another_process(
 fn bootstrap_and_admission_crashes_leave_only_committed_boundaries() {
     for point in ["after_wal_before_bootstrap", "before_bootstrap_commit"] {
         let (_tmp, root) = root();
-        worker(&root, "open", &[("PACTRUN_M4_FAULT", point)]).wait(87);
+        worker(&root, "open", &[("PACTRUN_OPERATION_TEST_FAULT", point)]).wait(87);
         let db = Connection::open(db_path(&root)).unwrap();
         let objects: i64 = db
             .query_row(
@@ -317,7 +317,7 @@ fn bootstrap_and_admission_crashes_leave_only_committed_boundaries() {
     worker(
         &root,
         "open",
-        &[("PACTRUN_M4_FAULT", "after_writable_admission")],
+        &[("PACTRUN_OPERATION_TEST_FAULT", "after_writable_admission")],
     )
     .wait(87);
     assert_eq!(version(&root), SCHEMA_VERSION);

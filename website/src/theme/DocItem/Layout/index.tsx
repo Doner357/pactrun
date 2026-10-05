@@ -13,9 +13,8 @@ export default function DocLayout(props: Props): React.JSX.Element {
   return <>
     {entry && entry.source !== 'index.md' && <aside className={'doc-context ' + (entry.state !== 'current' ? 'doc-context--history' : '')} aria-label="Document context">
       <div className="doc-labels"><span>{entry.role}</span>{entry.audiences.map(audience => <span key={audience}>{audience}</span>)}<span>{entry.state}</span></div>
-      {entry.state !== 'current' && <p>This {entry.state === 'superseded' ? 'superseded page preserves an old link' : 'record describes its own historical scope'}. Check <Link to={prefix + '/development/next-milestone'}>current status</Link> and <Link to={prefix + '/spec/'}>owning contracts</Link> before acting.</p>}
-      {entry.role === 'Specification' && <p>Product contract. Historical milestone wording is read with the current baseline and any explicitly superseding requirements.</p>}
-      {entry.role === 'Informative' && <p>Informative reading aid. Follow the linked owning contracts for product requirements.</p>}
+      {entry.state !== 'current' && <p>This page preserves an old link. Follow its current-owner links or the <Link to={prefix + '/spec/'}>specification</Link>.</p>}
+      {entry.role === 'Specification' && <p>Product contract.</p>}
       <a href={docBase + 'agent-docs/' + entry.source}>Read Markdown text</a>
       {audience && <> · <Link to={prefix + '/search?audience=' + audience}>Search {audience === 'Authors' ? 'author' : 'user'} docs</Link></>}
     </aside>}

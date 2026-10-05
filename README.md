@@ -60,10 +60,6 @@ and [machine-output reference](./docs/pactrun-users/reference/machine-output.md)
 - [User guides](./docs/guides/index.md) - onboarding and independent operating tasks.
 - [Pack author guide](./docs/package-authors/index.md) - authoring route, optional capabilities, and field references.
 - [Specification](./docs/spec/index.md) - formats, lifecycle, and exact behavior.
-- [Development](./docs/development/index.md) - implementation history, current
-  baseline, and verification policy.
-- [Design references](./docs/development/design-references.md) - sources and adopted
-  design principles.
 
 English Markdown in `docs/` is canonical. `website/` renders it with Docusaurus.
 
@@ -75,7 +71,7 @@ before changing the implementation. Source lives in `src/`; repository checks
 live in `xtask/`.
 
 Choose checks using the
-[verification policy](./docs/development/development-and-verification.md#risk-based-validation-scope).
+[verification guidance](./CONTRIBUTING.md#verify-the-change).
 The full verification gate is:
 
 ```text

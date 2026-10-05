@@ -73,6 +73,6 @@ More detail: [User reference](../pactrun-users/reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contract: [Inputs, Secrets, and readiness](../spec/behavior/inputs-secrets-and-readiness.md).
+Contract: [Inputs, Secrets, and readiness](../spec/instances/inputs-secrets.md).
 
 </details>

@@ -1,7 +1,5 @@
 //! Workflow compilation and execution-plan ownership.
 
-// Slice 1 establishes crate-private compilation contracts before the human CLI
-// and Executor become production callers in later M3 slices.
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -796,7 +794,7 @@ mod tests {
     }
 
     fn assert_platform_launcher_lookup_semantics() {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m3-launcher-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/action-launch-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("launcher-")

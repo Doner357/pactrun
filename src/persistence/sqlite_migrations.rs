@@ -119,7 +119,7 @@ mod tests {
     // Verifies: PR-REQ-0029, PR-REQ-0305
     #[test]
     fn migration_observation_is_read_only_and_includes_retained_bindings() {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m5-observation-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/migration-read-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::tempdir_in(parent).unwrap();
         for directory in ["database", "runtime-content", "staging"] {

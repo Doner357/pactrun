@@ -275,7 +275,7 @@ for instance in ('demo', 'diagnostic-demo'):
     run('instance', 'delete', instance, '--plan')
     run('instance', 'delete', instance)
 machine = json.loads(run('--format', 'json', 'instance', 'deletion', 'list').stdout)
-schema = json.loads((root / 'docs/spec/contracts/cli-machine.schema.json').read_text(encoding='utf-8'))
+schema = json.loads((root / 'docs/spec/interfaces/cli-machine.schema.json').read_text(encoding='utf-8'))
 assert machine['format'] == schema['properties']['format']['const']
 assert machine['format_version'] == schema['properties']['format_version']['const']
 assert machine['status'] == 'success'

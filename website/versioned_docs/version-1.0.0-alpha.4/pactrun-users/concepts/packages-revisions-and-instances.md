@@ -41,8 +41,8 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [identity](../../spec/foundations/identity-and-state.md),
-[Instances](../../spec/behavior/packages-revisions-and-instances.md), and
-[ID selectors](../../spec/contracts/cli-id-selectors.md).
+Contracts: [identity](../../spec/packages/identity.md),
+[Instances](../../spec/core/objects.md), and
+[ID selectors](../../spec/interfaces/id-selectors.md).
 
 </details>

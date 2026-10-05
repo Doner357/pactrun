@@ -87,7 +87,7 @@ mod tests {
     use super::*;
 
     fn source_root() -> (TempDir, std::path::PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m2-source-tests");
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/source-tests");
         fs::create_dir_all(&parent).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("source-")

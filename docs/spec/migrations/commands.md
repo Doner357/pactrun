@@ -1,0 +1,212 @@
+---
+title: Migration Commands
+---
+
+# Migration Commands
+
+### PR-REQ-0307 - Migration command syntax {#pr-req-0307---m5-human-command-spelling}
+
+```text
+pactrun instance migrate <instance> --to <revision-reference>
+    [--path <path-id>]
+    [--input-file <target-digest>/<input-id>=<host-path>]...
+    [--authorize-declassification]
+    [--authorize-recovery-override]
+    [--plan]
+    [--startup-timeout-ms <milliseconds>]
+    [--execution-timeout-ms <milliseconds>]
+    [--termination-grace-ms <milliseconds>]
+```
+
+Instance names remain exact. Revision references, path fingerprints and
+Migration Input target digests accept the forms in the
+[ID selector contract](../interfaces/id-selectors.md). Resolution fixes complete
+identities before acquisition or execution. A complete target-digest uses
+`sha256:<digest>` for a target on the selected same-Package path; permitted unique
+prefixes resolve within that lineage. Split the first equals sign, preserving
+the remaining native path.
+Duplicate operator writers MUST fail. Inputs are files only: no stdin, inline
+values, parameters, request file, or resume. The [Snapshot execution options](../snapshots/commands.md)
+define the timeout ranges and defaults, applied to each Hook invocation.
+Declarative edges launch no process.
+
+Declassification authorization covers only declared Declassify transitions of
+this exact path. Recovery override bypasses only the trust guard. Neither
+waives writer, presence, or protection rules. Operator files require bounded
+acquisition, existing capacity/protection rules, and detached staged values;
+later edges MUST NOT reread host paths as authoritative binding sources.
+
+--plan is read-only: no Run, persistent staging, lease, pin, upgrade, or
+reconciliation. Safe typed output shows exact path, requirements, writers,
+retained dependencies, declassification, and predicted readiness. Inspection
+and Run records MUST NOT disclose Secret values or value-derived digests.
+run show exposes Migration progress and the last committed Revision without
+claiming service coherence. Versioned JSON/JSONL presentation follows the
+[CLI machine contract](../interfaces/machine-output.md). No public Rust
+API is introduced by this command spelling.
+
+Executing Migration returns 0 only for durable Succeeded, 2 for syntax errors,
+and 1 for failure/cancellation. Successful read-only queries and compile-only
+plans return 0 without a Run. Incomplete execution success remains success and
+separately reports configuration readiness.
+
+**Verification: PR-TEST-0318, PR-TEST-0319, PR-TEST-0320, PR-TEST-0324.**
+
+PR-REQ-0310 defines discovery/planning; PR-REQ-0314 defines retained command
+ownership, PR-REQ-0315 operator acquisition, and PR-REQ-0316 Hook invocation.
+
+### PR-REQ-0309 - Stateless exact path IDs and bounded candidate listing
+
+A path ID MUST bind one Package and one ordered exact Revision sequence,
+including both endpoints. It MUST NOT be a display ordinal, persisted object,
+authorization capability, Plan, pin, or reservation. The same sequence MUST keep
+the same ID despite changes to graph order, installed unrelated Revisions,
+labels, Instance binding state, or storage location. It is deliberately not
+bound to an Instance or InstanceStateVersion; compilation and Admission still
+check their own current state. No ID lookup may silently choose another path.
+
+The path-selector encoding is `mp1-<fingerprint>[-<intermediate-digest>]...`. Every digest
+is exactly 64 lowercase hexadecimal characters, without the sha256 prefix.
+The fingerprint is SHA-256 over this exact byte sequence:
+
+1. ASCII `pactrun.migration-path.v1` followed by one NUL byte;
+2. the 16 PackageId bytes;
+3. the number of Revision nodes, including both endpoints, as unsigned 64-bit
+   big-endian;
+4. each node's 32 RevisionContentDigest bytes in path order.
+
+The suffix carries intermediate digests in that same order. Endpoints come from
+the resolved request and current source Revision; the fingerprint MUST match
+the reconstructed sequence and every edge MUST still be valid before use. A
+direct path has no suffix. Unknown encoding prefixes, noncanonical spelling,
+changed context, missing edges, or repeated nodes MUST fail, never fall back to
+another route. Full selectors retain this self-contained encoding. The CLI also
+accepts unique `mp1-<8..63 hex digits>` fingerprint prefixes under
+[PR-REQ-0369](../interfaces/id-selectors.md#pr-req-0369---unique-object-prefixes).
+That selector layer resolves one complete path before use; it does not change
+the fingerprint bytes, choose an ambiguous path, or introduce a mutable registry.
+IDs are longer for chains so selection needs neither a mutable registry nor an
+exhaustive search of all possible paths. This versioned CLI encoding changes no
+Frozen Revision identity or Hook wire format.
+
+Candidate discovery MUST use only relationally Valid declared simple paths and
+MUST NOT filter or automatically select by current Input readiness. Listing
+MUST distinguish structural candidates from assessed execution eligibility;
+requirements, runtime, and authorization are not evaluated by listing.
+Rows sort lexicographically by their exact Revision digest sequence. Pages
+default to 20 rows and accept limits from 1 through 100. A page MUST explicitly
+report whether more paths exist; a truncated or final page with one row is not
+proof of a unique route. --after uses the last displayed path ID as an exclusive
+cursor, revalidates it, and does not restart silently on an invalid cursor.
+Pagination observes the current graph, not a reserved snapshot; graph changes
+can require restarting discovery to see newly inserted earlier routes. The
+resolver's independent uniqueness check MUST NOT depend on a page limit.
+
+**Verification: PR-TEST-0286, PR-TEST-0287, PR-TEST-0288, PR-TEST-0289,
+PR-TEST-0290, PR-TEST-0291, PR-TEST-0300.**
+
+### PR-REQ-0310 - Read-only Migration discovery and plan CLI
+
+The read-only foundation implements:
+
+```text
+pactrun instance migration-paths <instance> --to <revision-reference>
+    [--limit <1..100>] [--after <path-id>]
+pactrun instance migrate <instance> --to <revision-reference> --plan
+    [--path <path-id>] [--authorize-declassification]
+```
+
+Discovery returns 0 for a valid query, including an empty candidate list. Plan
+compilation without a selected ID auto-selects only a unique path; ambiguity
+prints the first candidate page and fails with exit 1, creating no Plan or Run.
+A supplied ID resolves exactly even when other routes exist. Selection never
+waives requirements, declassification authorization, or compiler qualification.
+Successful plans show the exact route, expected state version, per-edge
+requirements, transitions, outputs, Hook presence, and predicted readiness.
+Output MUST NOT reveal binding bytes, payload IDs, or value-derived digests.
+
+Both forms MUST open storage read-only and create no staging, writer admission,
+Run, pin, path registry, schema upgrade, or reconciliation. Syntax/duplicate
+options fail with exit 2; resolution/compilation failures return 1. --direct and
+--via are rejected. Execution support is separately gated by PR-REQ-0314;
+read-only success MUST NOT be presented as successful Migration execution.
+Operator file inputs and invocation limits follow PR-REQ-0315 and PR-REQ-0316;
+plan output is symbolic and MUST NOT acquire those files.
+
+Human previews MUST use task-facing view/role/resource/presence terms rather than
+implementation Debug wrappers. Where applicable they MUST explicitly state that
+operator files are unacquired and live service requirements unobserved. Consuming a binding
+MUST NOT be presented as deleting service bytes. Machine plans retain per-service
+`live_observation: not_performed` and additionally emit the additive
+`operator_input_acquisition: not_performed` field. Older plans may omit that field;
+absence does not mean acquisition succeeded. No file stat/read or service probe
+is authorized to enrich a symbolic plan.
+
+**Verification: PR-TEST-0290, PR-TEST-0291, PR-TEST-0292, PR-TEST-0318, PR-TEST-0646, PR-TEST-0651.**
+
+### PR-REQ-0314 - Declarative execution CLI and retained ownership
+
+Omitting --plan from instance migrate executes the selected path. Declarative
+edges need no Hook; PR-REQ-0315 and PR-REQ-0316 extend the same owner to operator
+inputs and Hook-backed edges. --path and automatic
+unique-path selection keep PR-REQ-0309 semantics. The CLI MUST compile and reject
+unsupported capabilities before writable opening/Run acceptance; it MUST NOT
+execute a declarative prefix of an unsupported chain. --authorize-declassification
+applies only to declared transitions; --authorize-recovery-override bypasses only
+the initial trust guard, not token/ref validation or mutation conflicts.
+
+The shared owner-continuation registry MUST retain the exact Run/plan/lease
+through uncertain acceptance and persistence failure. The CLI MUST resolve
+uncertain acceptance by durable lookup, never create a replacement Run, and
+advance from committed progress after a lost acknowledgment, not repeat an edge.
+Cancellation and each declarative publication are serialized at the owner gate;
+committed edges are not undone. Confirmation of owner loss is required before
+explicit reconciliation terminalizes an orphan as Interrupted without replay.
+
+The CLI returns 0 only after reading durable Succeeded, prints the Migration Run
+and committed progress, and reports current required-input readiness separately.
+An incomplete result is not failure or manual recovery. Terminal non-success
+returns 1 with the last committed boundary retained. Broken diagnostic output
+or transient persistence errors must not discard an uncertain owned continuation.
+run list/show recognizes Migration and safely projects its historical progress.
+Machine presentation uses the [CLI machine contract](../interfaces/machine-output.md).
+No daemon, generic DAG executor or public Rust API is added.
+
+**Verification: PR-TEST-0305, PR-TEST-0307, PR-TEST-0308, PR-TEST-0310,
+PR-TEST-0311, PR-TEST-0316, PR-TEST-0648.**
+
+### PR-REQ-0315 - Target-qualified detached operator file acquisition
+
+Each repeated input-file option MUST resolve to a complete target Revision
+digest and declared Input on the exact selected path. Accepted target-digest
+prefixes follow the ID selector contract and resolve before source acquisition.
+Parsing MUST split only the first
+equals sign and preserve the remaining host-native path, including additional
+equals signs and non-Unicode native path units. Duplicate target/Input pairs
+are syntax errors. Whole-chain symbolic preflight MUST reserve declared writers
+and reject conflicts before opening operator files, including continuation or
+reactivation conflicting with a later operator writer.
+
+Read-only planning MUST validate the target/Input selectors and predict presence
+without opening, statting or staging their paths. It MUST identify supplied
+writers as unacquired, not claim that acquisition or Admission has succeeded.
+Execution MUST acquire all supplied files through the existing bounded Managed
+Input staging policy before accepting a Run. Missing/unreadable files or capacity
+failure MUST create no Run. Empty files are present bindings, not absence.
+
+The owner continuation MUST keep the detached acquisitions through uncertain
+acceptance and publication retries. Each edge uses only its own qualified
+acquisitions; later edges use the committed registry, never reread an original
+host path. New bindings use target-declared protection. Target requirements,
+single writers, declassification and sticky continuity retain their independent
+rules. File paths, payload bytes and value-derived digests MUST NOT appear in
+plans or structural Run inspection. Operator acquisition creates no separate
+retained store and grants no Hook output authority.
+
+Acquisition failures with known compiled context MUST preserve safe target/Input
+and phase/reason facts for the CLI diagnostic projection in PR-REQ-0359. This
+does not change preflight ordering, the bounded acquisition policy or the
+requirement to fail before Run acceptance. Never infer an unavailable reason by
+parsing arbitrary OS messages or payload data.
+
+**Verification: PR-TEST-0312, PR-TEST-0318, PR-TEST-0319, PR-TEST-0320, PR-TEST-0324, PR-TEST-0646, PR-TEST-0647, PR-TEST-0650.**

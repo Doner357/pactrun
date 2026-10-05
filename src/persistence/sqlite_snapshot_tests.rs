@@ -13,7 +13,7 @@ mod file_backed {
 }
 
 fn root() -> (TempDir, PathBuf) {
-    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m4-s3-store-tests");
+    let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/snapshot-store-tests");
     fs::create_dir_all(&parent).unwrap();
     let tmp = tempfile::Builder::new()
         .prefix("snapshots-")
@@ -469,7 +469,7 @@ fn process_loss_before_and_after_import_commit_has_one_authoritative_boundary() 
                 "--nocapture",
             ])
             .env("PACTRUN_S3_ROOT", &path)
-            .env("PACTRUN_M4_FAULT", fault)
+            .env("PACTRUN_OPERATION_TEST_FAULT", fault)
             .stdout(Stdio::null())
             .status()
             .unwrap();

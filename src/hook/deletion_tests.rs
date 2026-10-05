@@ -224,9 +224,9 @@ fn retirement_waits_for_admitted_observers_without_losing_owner_or_pins() {
 
 #[test]
 fn deletion_owner_worker() {
-    let Some(root) = env::var_os("PACTRUN_M7_OWNER_ROOT") else { return; };
+    let Some(root) = env::var_os("PACTRUN_RETIREMENT_TEST_OWNER_ROOT") else { return; };
     let app = PactrunApplication::open(PathBuf::from(root)).unwrap();
-    let intent = app.resolve_deletion(&InstanceName::parse("slice4").unwrap(), None, DeletionMode::ManagedCleanup).unwrap();
+    let intent = app.resolve_deletion(&InstanceName::parse("hook-fixture").unwrap(), None, DeletionMode::ManagedCleanup).unwrap();
     let plan = app.compile_deletion(&intent, &[]).unwrap();
     let run = app.accept_deletion_plan(plan, AdmissionOptions::default(), ActionCancellation::default(), policy(Some(5000),Some(5000),Some(20))).unwrap();
     let deadline = Instant::now() + WAIT_LIMIT;
@@ -291,8 +291,8 @@ fn cleanup_boundary_crashes_require_confirmation_or_finalization_only_never_hook
         let f = fixture("success");
         let status = Command::new(env::current_exe().unwrap())
             .args(["--exact", OWNER_WORKER, "--nocapture"])
-            .env("PACTRUN_M7_OWNER_ROOT", &f.storage)
-            .env("PACTRUN_M4_FAULT", point)
+            .env("PACTRUN_RETIREMENT_TEST_OWNER_ROOT", &f.storage)
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
             .status().unwrap();
         assert_eq!(status.code(), Some(87), "{point}");

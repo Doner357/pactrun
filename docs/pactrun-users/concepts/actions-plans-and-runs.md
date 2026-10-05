@@ -36,7 +36,7 @@ More detail: [User reference](../reference/index.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [execution](../../spec/behavior/actions-plans-and-runs.md) and
-[diagnostics](../../spec/behavior/execution-diagnostics.md).
+Contracts: [execution](../../spec/operations/actions-plans-runs.md) and
+[diagnostics](../../spec/operations/diagnostics.md).
 
 </details>

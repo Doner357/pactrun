@@ -106,8 +106,8 @@ More detail: [Pack fields and values](../reference/pack-fields.md).
 <details>
 <summary>Maintainer sources (optional)</summary>
 
-Contracts: [Shell Loader](../../spec/contracts/shell-loader.md),
-[Hook lifecycle](../../spec/contracts/hooks-recovery-and-cleanup.md), and
-[recovery](../../spec/execution/recovery-and-reconciliation.md).
+Contracts: [Shell Loader](../../spec/interfaces/shell-loader.md),
+[Hook lifecycle](../../spec/interfaces/hooks.md), and
+[recovery](../../spec/lifecycle/recovery.md).
 
 </details>

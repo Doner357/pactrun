@@ -5,7 +5,6 @@
 //! that same Run. An admitted value is a one-shot capability consumed by the
 //! Hook runtime.
 
-// Later M3 slices add the production callers.
 #![allow(dead_code)]
 
 use std::fmt;

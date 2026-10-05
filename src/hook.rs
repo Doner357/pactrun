@@ -943,7 +943,7 @@ fn structural_hook_completion(completion: &HookCompletionRecord) -> HookCompleti
 fn safe_execution_failure(code: &'static str, message: &'static str) -> RunFailureRecord {
     RunFailureRecord {
         error: PactrunErrorRef::new("execution", code)
-            .expect("Slice 5 execution error identities are valid"),
+            .expect("Execution error identities are valid"),
         message: message.to_owned(),
     }
 }

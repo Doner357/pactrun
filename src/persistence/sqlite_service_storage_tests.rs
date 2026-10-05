@@ -249,7 +249,7 @@ fn allocation_crashes_leave_intent_or_complete_protected_instance_not_partial_as
                 "--nocapture",
             ])
             .env("PACTRUN_ALLOCATION_ROOT", &root)
-            .env("PACTRUN_M4_FAULT", point)
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .status()
@@ -1545,7 +1545,7 @@ fn service_association_commit_crashes_leave_only_complete_old_or_new_boundaries(
                 "PACTRUN_SERVICE_MIGRATION_TARGET",
                 format!("exact:{}/{}", path[1].package_id, path[1].content_digest),
             )
-            .env("PACTRUN_M4_FAULT", point)
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .env("PACTRUN_MIGRATION_FAULT_EDGE", "0")
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
@@ -1958,7 +1958,7 @@ fn transformation_owner_crashes_never_promote_a_proposal_or_rollback_service_byt
                 "PACTRUN_SERVICE_MIGRATION_TARGET",
                 format!("exact:{}/{}", target.package_id, target.content_digest),
             )
-            .env("PACTRUN_M4_FAULT", point)
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .env("PACTRUN_MIGRATION_FAULT_EDGE", "0")
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
@@ -2049,7 +2049,10 @@ fn committed_transform_output_and_service_boundary_survive_a_later_edge_crash() 
             "PACTRUN_SERVICE_MIGRATION_TARGET",
             format!("exact:{}/{}", target.package_id, target.content_digest),
         )
-        .env("PACTRUN_M4_FAULT", "before_migration_edge_commit")
+        .env(
+            "PACTRUN_OPERATION_TEST_FAULT",
+            "before_migration_edge_commit",
+        )
         .env("PACTRUN_MIGRATION_FAULT_EDGE", "1")
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())

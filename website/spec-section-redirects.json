@@ -1,0 +1,166 @@
+{
+  "/spec/foundations/identity-and-state": {
+    "revision-identity": "/spec/packages/identity",
+    "production-identity-and-revision-core-foundation": "/spec/packages/identity",
+    "references-and-non-identity-metadata": "/spec/packages/metadata",
+    "instance-identity-and-state-publication": "/spec/instances/identity-state",
+    "managed-input-state": "/spec/instances/bindings",
+    "servicestorage-backed-semantic-closure": "/spec/instances/service-resources",
+    "pre-m1-d-non-identity-metadata-closure": "/spec/packages/metadata"
+  },
+  "/spec/foundations/resources-and-versioning": {
+    "resource-lifecycle": "/spec/lifecycle/resource-lifetimes",
+    "independent-version-domains": "/spec/storage/format-domains",
+    "import-identity": "/spec/packages/import-identity"
+  },
+  "/spec/behavior/snapshots-migrations-and-recovery": {
+    "snapshots": "/spec/snapshots/behavior",
+    "revision-migration": "/spec/migrations/behavior",
+    "servicestorage-backed-resource-continuity": "/spec/migrations/behavior",
+    "failure-and-recovery": "/spec/lifecycle/failure",
+    "instance-deletion": "/spec/lifecycle/deletion"
+  },
+  "/spec/contracts/actions-inputs-and-parameters": {
+    "actions": "/spec/operations/action-definitions",
+    "input-declarations": "/spec/instances/input-declarations",
+    "secrets": "/spec/instances/input-declarations",
+    "invocation-parameters": "/spec/operations/parameters",
+    "servicestorage-backed-service-state-is-not-an-input": "/spec/instances/input-declarations#servicestorage-backed-service-state-is-not-an-input"
+  },
+  "/spec/persistence/persistence-baseline": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v2": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v3": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v4": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v5": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v6": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v7": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v8": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v9": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v10": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/persistence/persistence-schema-v11": {
+    "pr-req-0257---v1-to-v2-migration-and-validation": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0270---persistence-migration-to-v3": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0276---persistence-migration-to-v4": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0300---exact-v4-to-v5-legacy-bootstrap": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0312---exact-v5-to-v6-admission-aware-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0325---explicit-v6-to-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "pr-req-0339---explicit-exact-v7-upgrade": "/spec/storage/schema#pr-req-0299---durable-writable-admission-and-serialized-migration",
+    "deferred-work": "/spec/storage/schema#pr-req-0256---exact-persistenceschemav2",
+    "deferred-work-1": "/spec/storage/schema#pr-req-0269---exact-persistenceschemav3",
+    "deferred-work-2": "/spec/storage/schema#pr-req-0275---exact-persistenceschemav4"
+  },
+  "/spec/contracts/recipes-and-runtime-content": {
+    "retired-recipe-proposal-and-retained-identity-rule": "/spec/packages/runtime-content#reproducibility",
+    "runtime-content": "/spec/packages/runtime-content#runtime-content"
+  }
+}

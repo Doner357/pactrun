@@ -29,7 +29,8 @@ fn fixture() -> (tempfile::TempDir, PactrunPersistence, InstanceView) {
     fixture_with_cleanup(false)
 }
 fn fixture_with_cleanup(cleanup: bool) -> (tempfile::TempDir, PactrunPersistence, InstanceView) {
-    let parent = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/m7-deletion-tests");
+    let parent =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/deletion-store-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let temp = tempfile::tempdir_in(parent).unwrap();
     for path in ["store/database", "store/runtime-content", "store/staging"] {
@@ -846,7 +847,7 @@ fn corrupt_finalization_work_set_cannot_adopt_another_instances_allocation() {
 
 #[test]
 fn discard_crash_worker() {
-    let Some(root) = std::env::var_os("PACTRUN_M7_DISCARD_ROOT") else {
+    let Some(root) = std::env::var_os("PACTRUN_RETIREMENT_TEST_DISCARD_ROOT") else {
         return;
     };
     let p = PactrunPersistence::open(std::path::PathBuf::from(root)).unwrap();
@@ -861,8 +862,8 @@ fn crash_discard(root: &std::path::Path, point: &str) {
             "persistence::sqlite_deletions::tests::discard_crash_worker",
             "--nocapture",
         ])
-        .env("PACTRUN_M7_DISCARD_ROOT", root)
-        .env("PACTRUN_M4_FAULT", point)
+        .env("PACTRUN_RETIREMENT_TEST_DISCARD_ROOT", root)
+        .env("PACTRUN_OPERATION_TEST_FAULT", point)
         .output()
         .unwrap();
     assert_eq!(
@@ -875,7 +876,7 @@ fn crash_discard(root: &std::path::Path, point: &str) {
 
 #[test]
 fn finalization_crash_worker() {
-    let Some(root) = std::env::var_os("PACTRUN_M7_FINALIZE_ROOT") else {
+    let Some(root) = std::env::var_os("PACTRUN_RETIREMENT_TEST_FINALIZE_ROOT") else {
         return;
     };
     let p = PactrunPersistence::open(std::path::PathBuf::from(root)).unwrap();
@@ -917,8 +918,11 @@ fn finalization_crashes_preserve_incarnation_and_absence_evidence() {
                 "persistence::sqlite_deletions::tests::finalization_crash_worker",
                 "--nocapture",
             ])
-            .env("PACTRUN_M7_FINALIZE_ROOT", temp.path().join("store"))
-            .env("PACTRUN_M4_FAULT", point)
+            .env(
+                "PACTRUN_RETIREMENT_TEST_FINALIZE_ROOT",
+                temp.path().join("store"),
+            )
+            .env("PACTRUN_OPERATION_TEST_FAULT", point)
             .output()
             .unwrap();
         assert_eq!(

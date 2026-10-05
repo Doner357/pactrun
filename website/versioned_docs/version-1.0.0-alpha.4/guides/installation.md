@@ -86,10 +86,3 @@ create an Instance, choose a service data location, or migrate existing data.
   [install a supplied Pack](./use-pack.md).
 - **Updates and channel changes:** [Manage versions](./version-management.md).
 - **Offline/engineering fallback:** [Install a supplied standalone archive](./standalone-installation.md).
-
-<details>
-<summary>Maintainer sources (optional)</summary>
-
-[Public delivery evidence and platform limits](../development/public-preview-delivery.md).
-
-</details>

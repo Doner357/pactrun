@@ -44,11 +44,12 @@ export function scopeTextLinks(body, prefix) {
 export function textBody(name, source, version = 'current', baseUrl = '/') {
   if (!name.endsWith('.md')) return source;
   const {state, role, audiences} = classify(name, source);
+  const notice = contextNotice(state, role);
   return [
     '> Document context (generated): ' + state + ' | ' + role + ' | ' + audiences.join(', '),
     '> Documentation version: ' + (version === 'current' ? 'Development (unreleased)' : version),
     '> Source: docs/' + name,
-    '> ' + contextNotice(state, role),
+    ...(notice ? ['> ' + notice] : []),
     '> Markdown follows with front matter removed and root-relative website links scoped to this edition; contract text and code remain unchanged.',
     '', scopeTextLinks(markdownBody(source), baseUrl + (version === 'current' ? 'next' : version)),
   ].join('\n');
@@ -86,7 +87,41 @@ export function documentDigest(documents) {
   return createHash('sha256').update(JSON.stringify(documents)).digest('hex');
 }
 
-export async function exportText({docsDir, outDir, version = 'current', baseUrl = '/'}) {
+export function relocateTextLinks(source, from, to) {
+  let fence = null;
+  return source.split('\n').map(line => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (marker) {
+      if (!fence) fence = marker[1];
+      else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) fence = null;
+      return line;
+    }
+    if (fence) return line;
+    return line.replace(/(`+).*?\1|\[[^\]\n]*\]\(([^)\s]+)\)/g, (match, code, href) => {
+      if (code || /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(href)) return match;
+      const [file, fragment] = href.split('#');
+      const target = file ? path.posix.normalize(path.posix.join(path.posix.dirname(from), file)) : from;
+      let relative = path.posix.relative(path.posix.dirname(to), target);
+      if (!relative.startsWith('.')) relative = './' + relative;
+      return match.replace('](' + href + ')', '](' + relative + (fragment ? '#' + fragment : '') + ')');
+    });
+  }).join('\n');
+}
+
+export function textAliases(documents, aliases, version, baseUrl) {
+  const sources = new Map(documents);
+  return Object.entries(aliases).filter(([name]) => !sources.has(name)).map(([name, targets]) => {
+    if (!name.startsWith('spec/') || name.includes('\\') || path.posix.normalize(name) !== name) throw new Error('Invalid text alias');
+    const body = targets.map(target => {
+      const source = sources.get(target);
+      if (source === undefined) throw new Error('Missing text alias target: ' + target);
+      return target.endsWith('.md') ? relocateTextLinks(textBody(target, source, version, baseUrl), target, name) : source;
+    }).join('\n\n');
+    return [name, body];
+  });
+}
+
+export async function exportText({docsDir, outDir, version = 'current', baseUrl = '/', aliases = {}}) {
   const documents = await readDocuments(docsDir);
   validateLinks(documents);
   const digest = documentDigest(documents);
@@ -99,6 +134,11 @@ export async function exportText({docsDir, outDir, version = 'current', baseUrl 
     await mkdir(path.dirname(destination), {recursive: true});
     await writeFile(destination, textBody(name, source, version, baseUrl));
   }
+  for (const [name, body] of textAliases(documents, aliases, version, baseUrl)) {
+    const destination = path.join(target, name);
+    await mkdir(path.dirname(destination), {recursive: true});
+    await writeFile(destination, body);
+  }
   await mkdir(target, {recursive: true});
   await writeFile(path.join(target, 'publication.json'), JSON.stringify({
     edition: 3,
@@ -109,21 +149,18 @@ export async function exportText({docsDir, outDir, version = 'current', baseUrl 
     status: version === 'current' ? 'Development documentation (unreleased)' : 'Documentation for Pactrun ' + version,
     context_policy: 'Generated context precedes Markdown with edition-scoped root-relative website links. Contract text, code and JSON schemas are preserved.',
     authority_map: 'spec/index.md',
-    implementation_status: 'development/next-milestone.md',
     documents: documents.map(([name]) => name),
   }, null, 2) + '\n');
   await writeFile(path.join(outDir, 'llms.txt'), [
     '# Pactrun — ' + (version === 'current' ? 'Development (unreleased)' : version), '',
     '> Local-first Pack installation, managed Instances, and Pack-defined operations.', '',
-    'Product guides, specification, and development records from one English source.',
+    'Product guides and specification from one English source.',
     'Task guides are informative; the linked specification defines behavior.', '',
     '## Start here', '',
     '- [User guides](./agent-docs/guides/index.md): operating procedures and tutorials.',
       '- [Pack author guide](./agent-docs/package-authors/index.md): prepare a workspace, then build and validate a Pack.',
     '- [Document catalog](./document-catalog.json): generated source paths, roles, states, and source digest.',
       '- [Agent task entry](./agent-docs/agents/index.md): choose operating, authoring, Hook integration, or development work.',
-    '- [Development paths](./agent-docs/development/reading-paths.md): read the owning contracts by task.',
-    '- [Next milestone](./agent-docs/development/next-milestone.md): current baseline, implementation availability, and work status.',
     '- [Contract catalog](./agent-docs/spec/catalog.md): exact specification status.',
     '- [Develop Pactrun](./agent-docs/agents/develop-pactrun.md): project rules and verification.',
     '- [Specification](./agent-docs/spec/index.md): the sole normative product-rule tree.',
@@ -143,13 +180,14 @@ export default function textDocs(context) {
         }
       }
       for (const edition of await editions(context.siteDir)) {
-        await verifyText({docsDir: edition.docsDir, outDir: path.join(outDir, edition.path), version: edition.id, baseUrl: base});
+        const aliases = JSON.parse(await readFile(path.join(context.siteDir, 'spec-source-aliases.json'), 'utf8'));
+        await verifyText({docsDir: edition.docsDir, outDir: path.join(outDir, edition.path), version: edition.id, baseUrl: base, aliases});
       }
     },
   };
 }
 
-export async function verifyText({docsDir, outDir, version = 'current', baseUrl = '/'}) {
+export async function verifyText({docsDir, outDir, version = 'current', baseUrl = '/', aliases = {}}) {
   const documents = await readDocuments(docsDir);
   const metadata = JSON.parse(await readFile(path.join(outDir, 'agent-docs/publication.json'), 'utf8'));
   if (metadata.documentation_version !== version) throw new Error('Text edition mismatch');
@@ -163,5 +201,8 @@ export async function verifyText({docsDir, outDir, version = 'current', baseUrl 
   for (const [name, source] of documents) {
     const published = await readFile(path.join(outDir, 'agent-docs', name), 'utf8');
     if (published !== textBody(name, source, version, baseUrl)) throw new Error('Text publication drift: ' + name);
+  }
+  for (const [name, body] of textAliases(documents, aliases, version, baseUrl)) {
+    if (await readFile(path.join(outDir, 'agent-docs', name), 'utf8') !== body) throw new Error('Text alias drift: ' + name);
   }
 }
