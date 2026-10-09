@@ -205,7 +205,11 @@ pub(super) fn execute_materialized(
             );
         }
     };
-    let delivery = cancellation.delivery.scope(run, materialized.session());
+    let delivery = cancellation.delivery.scope(
+        run,
+        materialized.session(),
+        materialized.terminal() == crate::domain::TerminalContractV1::Interactive,
+    );
     let mut diagnostics = diagnostic_scope(risk_persistence, run, &materialized, &cancellation);
     if let Some(diagnostics) = &mut diagnostics {
         diagnostics.delivery = delivery.clone();
@@ -368,7 +372,11 @@ pub(super) fn execute_snapshot_with_risk(
             return run;
         }
     };
-    let delivery = cancellation.delivery.scope(run, materialized.session());
+    let delivery = cancellation.delivery.scope(
+        run,
+        materialized.session(),
+        materialized.terminal() == crate::domain::TerminalContractV1::Interactive,
+    );
     let mut diagnostics = diagnostic_scope(risk, run, &materialized, &cancellation);
     if let Some(diagnostics) = &mut diagnostics {
         diagnostics.delivery = delivery.clone();
@@ -476,6 +484,9 @@ fn drive_execution(
             match handle_wire_event(risk_persistence, &mut live, event) {
                 Flow::Continue => {}
                 Flow::RetryDurable(operation) => {
+                    live.cancellation
+                        .delivery
+                        .progress(live.run, super::delivery::CorePhase::RetryingStorage);
                     return OwnerContinuation::RetryDurableOperation(DurableOperationRetry {
                         live,
                         operation,
@@ -716,6 +727,9 @@ fn apply_step(
                 return Flow::Fail(FailureKind::ProtocolTransport);
             }
             live.completion_accepted = true;
+            live.cancellation
+                .delivery
+                .progress(live.run, super::delivery::CorePhase::WaitingForProcessTree);
             live.submitted_handles = completion.produced_outputs.clone();
             live.hook_completion = Some(HookCompletionRecord {
                 status: completion.status,
@@ -876,6 +890,11 @@ fn resume_durable_operation(
                 .set_recovery_risk(retry.live.run, requested)
                 .is_err()
             {
+                retry
+                    .live
+                    .cancellation
+                    .delivery
+                    .progress(retry.live.run, super::delivery::CorePhase::RetryingStorage);
                 return OwnerContinuation::RetryDurableOperation(retry);
             }
             match acknowledge_risk(&mut retry.live, request_id, requested) {
@@ -916,9 +935,6 @@ fn force_termination(
     risk_persistence: &dyn RecoveryRiskPersistence,
     mut live: LiveExecution,
 ) -> OwnerContinuation {
-    if live.exit_status.is_some() {
-        return finish_after_exit(risk_persistence, live);
-    }
     if live.supervisor.terminate_tree().is_err() {
         // Termination can only be refused for a tree that no longer exists;
         // anything else stays a retained process-control retry.
@@ -969,6 +985,9 @@ fn finish_after_exit(
         match handle_wire_event(risk_persistence, &mut live, event) {
             Flow::Continue => {}
             Flow::RetryDurable(operation) => {
+                live.cancellation
+                    .delivery
+                    .progress(live.run, super::delivery::CorePhase::RetryingStorage);
                 return OwnerContinuation::RetryDurableOperation(DurableOperationRetry {
                     live,
                     operation,
@@ -981,14 +1000,17 @@ fn finish_after_exit(
         }
     }
     live.protocol = LiveProtocol::Closed;
+    observe_control(&mut live);
     if live.target_proposal.is_some() {
-        observe_control(&mut live);
         if !live.exit_status.as_ref().is_some_and(ExitStatus::success) || !live.protocol_eof {
             live.winner
                 .claim(OutcomeWinner::Failed(FailureKind::ProtocolTransport));
         }
         if !live.supervisor.tree_terminated().unwrap_or(false) {
-            if live.winner.winner.is_some() {
+            live.cancellation
+                .delivery
+                .progress(live.run, super::delivery::CorePhase::WaitingForProcessTree);
+            if live.winner.winner.is_some() || forced_termination_due(&live) {
                 let _ = live.supervisor.terminate_tree();
             }
             return OwnerContinuation::RetryProcessControl(ProcessControlRetry {
@@ -997,6 +1019,7 @@ fn finish_after_exit(
             });
         }
         if live.winner.winner.is_none() {
+            live.supervisor.finish_output_relay();
             let proposal = live.target_proposal.take().expect("validated proposal");
             let outputs = live.materialized.take_migration_outputs();
             let (execution, _) = live.materialized.into_execution();
@@ -1012,6 +1035,28 @@ fn finish_after_exit(
         live.winner
             .claim(OutcomeWinner::Failed(FailureKind::ProtocolTransport));
     }
+    // Root exit and protocol acceptance are not tree termination. Retain the
+    // owner and all execution resources, regardless of who owns the pipes.
+    // A late cancellation still enforces its grace without rewriting the winner.
+    if !live.supervisor.tree_terminated().unwrap_or(false) {
+        live.cancellation
+            .delivery
+            .progress(live.run, super::delivery::CorePhase::WaitingForProcessTree);
+        if forced_termination_due(&live)
+            || (!live.completion_accepted
+                && matches!(live.winner.winner, Some(OutcomeWinner::Failed(_))))
+        {
+            let _ = live.supervisor.terminate_tree();
+        }
+        return OwnerContinuation::RetryProcessControl(ProcessControlRetry {
+            live,
+            operation: ProcessControlOperation::AwaitTree,
+        });
+    }
+    live.supervisor.finish_output_relay();
+    live.cancellation
+        .delivery
+        .progress(live.run, super::delivery::CorePhase::FinalizingExecution);
     let winner = live
         .winner
         .winner

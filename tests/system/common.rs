@@ -27,7 +27,11 @@ fn cli_startup_commands_do_not_require_or_create_storage() {
         temporary.path(),
         ["instance", "list"],
     ));
-    assert_exit(&output, 1);
+    assert_success(&output);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "No instances yet.\n"
+    );
     assert!(!absent_storage.exists());
     let output = run_command(command(&absent_storage, temporary.path(), ["--unknown"]));
     assert_exit(&output, 2);
@@ -315,6 +319,6 @@ fn declared_hook_failure_is_durable_and_its_explanation_is_attributed() {
     assert_eq!(run.outcome, "failed");
     let view = String::from_utf8_lossy(&shown.stdout);
     assert!(view.contains("fixture failure"));
-    assert!(view.contains("kind=completion"));
-    assert!(view.contains("hook completion: failure"));
+    assert!(view.contains("Kind: completion"));
+    assert!(view.contains("Hook completion: failure"));
 }

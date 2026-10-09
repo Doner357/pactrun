@@ -46,7 +46,7 @@ for Revision and Migration forms.
 
 - `--format json` returns one complete response.
 - `--format jsonl` streams events and ends with a result.
-- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.1"`.
+- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.2"`.
 - Noninteractive Hook output is delivered as Base64 byte chunks in machine modes.
   Human mode keeps the Hook's stdout and stderr streams.
 - `--cancel-on-output-close` requests cancellation when a JSONL execution's

@@ -1,7 +1,7 @@
-//! One-shot and incremental machine delivery share the same final V1 response.
+//! One execution event stream and typed final result, with format-specific views.
 use super::*;
 use crate::hook::delivery::{self, Delivery};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 
 pub(super) fn execution_options(command: &Command) -> (bool, bool) {
@@ -86,42 +86,16 @@ impl Write for ResultWriter<'_> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct WireResponse {
-    format: String,
-    format_version: String,
-    command: Option<String>,
-    status: String,
-    result: Option<Box<serde_json::value::RawValue>>,
-    error: Option<Box<serde_json::value::RawValue>>,
-}
-#[derive(Serialize)]
-struct DeliveredResponse {
-    #[serde(flatten)]
-    response: WireResponse,
-    delivery: DeliveryResult,
-}
 #[derive(Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct DeliveryResult {
-    complete: bool,
+    pub(super) complete: bool,
     error: Option<String>,
     event_count: String,
     streams: Vec<delivery::StreamSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, schemars(with = "Option<Vec<delivery::Record>>"))]
     events: Option<delivery::Events>,
-}
-#[derive(Serialize)]
-struct ResultEvent<'a> {
-    format: &'static str,
-    format_version: &'static str,
-    sequence: String,
-    received_at_unix_ms: Option<String>,
-    command: &'a str,
-    #[serde(rename = "type")]
-    kind: &'static str,
-    response: &'a DeliveredResponse,
 }
 
 fn write_json<T: Serialize>(out: &mut dyn Write, value: &T) -> io::Result<()> {
@@ -132,7 +106,7 @@ fn write_json<T: Serialize>(out: &mut dyn Write, value: &T) -> io::Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn execute_machine(
+pub(super) fn execute_stream(
     command: Command,
     storage_root: Option<OsString>,
     stdin: &mut (dyn Read + Send),
@@ -165,7 +139,7 @@ pub(super) fn execute_machine(
             stdout,
             stderr,
             cancellation,
-            presentation::Format::Json,
+            format,
         );
     };
     let prepared = (|| {
@@ -181,6 +155,7 @@ pub(super) fn execute_machine(
         Err(error) => return report_cli_failure(format, Some(name), false, error, stdout, stderr),
     };
     cancellation.delivery.set(delivery.clone());
+    cancellation.diagnostics.disable_live();
     struct ResetDelivery<'a>(&'a ActionCancellation);
     impl Drop for ResetDelivery<'_> {
         fn drop(&mut self) {
@@ -188,32 +163,53 @@ pub(super) fn execute_machine(
         }
     }
     let _reset = ResetDelivery(cancellation);
-    let mut cursor = delivery.cursor(true);
+    let human = format == presentation::Format::Human;
+    // Interactive diagnostics are displayed after the terminal is released.
+    // Keep their disk-backed records until then, never an unbounded RAM queue.
+    let mut cursor = delivery.cursor(!human);
     let mut output_failed = false;
     let mut read_failed = false;
-    let (code, bytes) = std::thread::scope(|scope| {
+    #[cfg(test)]
+    let faults = crate::application::finalization_faults_for_test();
+    #[cfg(test)]
+    let admission_fault = crate::executor::take_admission_fault_for_test();
+    #[cfg(test)]
+    let capture_clock = crate::hook::capture_clock_for_test();
+    let response = std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
-            let mut bytes = Vec::new();
+            #[cfg(test)]
+            crate::application::install_finalization_faults_for_test(faults);
+            #[cfg(test)]
+            crate::hook::install_capture_clock_for_test(capture_clock);
+            #[cfg(test)]
+            if admission_fault {
+                crate::executor::fail_next_admission_for_test();
+            }
             // Machine diagnostics travel in typed records and the final response.
             // Backend human progress messages must not leak into this interface.
-            let code = run_selected(
+            let response = collect_reply(
                 command,
                 storage_root,
                 stdin,
-                &mut bytes,
+                &mut io::sink(),
                 &mut io::sink(),
                 cancellation,
-                presentation::Format::Json,
+                human,
             );
             delivery.finish();
-            (code, bytes)
+            response
         });
         loop {
-            if format == presentation::Format::Jsonl && !output_failed && !read_failed {
+            if (human || format == presentation::Format::Jsonl) && !output_failed && !read_failed {
                 loop {
                     match cursor.next() {
                         Ok(Some(record)) => {
-                            if let Err(error) = write_json(stdout, &record) {
+                            let written = if human {
+                                write_human_event(&record, stdout, stderr, false)
+                            } else {
+                                write_json(stdout, &record)
+                            };
+                            if let Err(error) = written {
                                 output_failed = true;
                                 delivery.output_closed();
                                 if cancel_on_close && error.kind() == io::ErrorKind::BrokenPipe {
@@ -239,17 +235,28 @@ pub(super) fn execute_machine(
         worker.join().unwrap_or_else(|_| {
             delivery.fail("execution_response_unavailable");
             delivery.finish();
-            (1, Vec::new())
+            reply::Reply::unavailable(name, delivery.known_run())
         })
     });
     if output_failed {
+        if human {
+            let _ = writeln!(stderr, "Output delivery incomplete; inspect retained Runs.");
+            if let Some(run) = delivery.known_run() {
+                let _ = writeln!(stderr, "pactrun run show {run}");
+            }
+        }
         return 1;
     }
-    if format == presentation::Format::Jsonl && !read_failed {
+    if (human || format == presentation::Format::Jsonl) && !read_failed {
         loop {
             match cursor.next() {
                 Ok(Some(record)) => {
-                    if write_json(stdout, &record).is_err() {
+                    let written = if human {
+                        write_human_event(&record, stdout, stderr, false)
+                    } else {
+                        write_json(stdout, &record)
+                    };
+                    if written.is_err() {
                         return 1;
                     }
                 }
@@ -261,21 +268,34 @@ pub(super) fn execute_machine(
             }
         }
     }
-    let mut response: WireResponse = match serde_json::from_slice(&bytes) {
-        Ok(response) => response,
-        Err(_) => WireResponse {
-            format: presentation::FORMAT_KIND.into(), format_version: presentation::FORMAT_VERSION.into(), command: Some(name.into()), status: "failure".into(),
-            result: delivery.known_run().map(|run| serde_json::value::to_raw_value(&serde_json::json!({"run_id":run})).expect("known Run projection")),
-            error: Some(serde_json::value::to_raw_value(&serde_json::json!({"kind":"operation","message":"Execution response unavailable; inspect retained Runs","reference":null})).expect("fixed error")),
-        },
-    };
+    let code = response.exit_code();
     let summary = delivery.summary();
     let failed = !summary.complete;
-    if failed {
-        response.status = "failure".into();
-        if response.error.is_none() {
-            response.error=Some(serde_json::value::to_raw_value(&serde_json::json!({"kind":"output","message":"Output delivery incomplete","reference":null})).expect("fixed error"));
+    if human {
+        let mut deferred = delivery.cursor(false);
+        loop {
+            match deferred.next() {
+                Ok(Some(record)) => {
+                    if write_human_event(&record, stdout, stderr, true).is_err() {
+                        return 1;
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    let _ = writeln!(stderr, "Deferred diagnostics could not be fully delivered.");
+                    return 1;
+                }
+            }
         }
+        let rendered = response.render(format, stdout, stderr);
+        if failed {
+            let _ = writeln!(
+                stderr,
+                "Output delivery incomplete; retained operation outcomes are unchanged."
+            );
+            return 1;
+        }
+        return rendered;
     }
     let sequence = summary
         .events
@@ -283,32 +303,87 @@ pub(super) fn execute_machine(
         .unwrap_or(0)
         .saturating_add(1)
         .to_string();
-    let result = DeliveredResponse {
-        response,
-        delivery: DeliveryResult {
-            complete: summary.complete,
-            error: summary.error,
-            event_count: summary.events,
-            streams: summary.streams,
-            events: (format == presentation::Format::Json)
-                .then(|| delivery::Events(Arc::clone(&delivery))),
-        },
+    let result = DeliveryResult {
+        complete: summary.complete,
+        error: summary.error,
+        event_count: summary.events,
+        streams: summary.streams,
+        events: (format == presentation::Format::Json)
+            .then(|| delivery::Events(Arc::clone(&delivery))),
     };
-    let written = if format == presentation::Format::Jsonl {
-        write_json(
-            stdout,
-            &ResultEvent {
-                format: presentation::FORMAT_KIND,
-                format_version: presentation::FORMAT_VERSION,
-                sequence,
-                received_at_unix_ms: delivery::now(),
-                command: name,
-                kind: "result",
-                response: &result,
-            },
-        )
-    } else {
-        write_json(stdout, &result)
-    };
+    let written = response.json(
+        stdout,
+        Some(&result),
+        (format == presentation::Format::Jsonl).then_some(sequence.as_str()),
+    );
     if written.is_err() || failed { 1 } else { code }
+}
+
+fn write_human_event(
+    record: &delivery::Record,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    deferred: bool,
+) -> io::Result<()> {
+    use base64::Engine as _;
+    match &record.event {
+        delivery::Event::AcceptancePending { candidate_run_id } if !deferred => {
+            writeln!(
+                stderr,
+                "Run candidate {candidate_run_id}: confirming acceptance; owner retained, no replacement Run"
+            )?;
+            stderr.flush()
+        }
+        delivery::Event::CoreProgress {
+            run_id,
+            phase,
+            interactive,
+        } if *interactive == deferred => {
+            let text = match phase {
+                delivery::CorePhase::WaitingForProcessTree => "waiting for Hook processes to exit",
+                delivery::CorePhase::RetryingStorage => {
+                    "retrying storage access; execution ownership retained"
+                }
+                delivery::CorePhase::FinalizingExecution => {
+                    "finalizing execution; durable result not yet published"
+                }
+            };
+            writeln!(stderr, "Run {run_id}: {text}")?;
+            stderr.flush()
+        }
+        delivery::Event::Output { channel, data, .. } if !deferred => {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let out: &mut dyn Write = if *channel == delivery::Channel::Stdout {
+                stdout
+            } else {
+                stderr
+            };
+            out.write_all(&bytes)?;
+            out.flush()
+        }
+        delivery::Event::Diagnostic {
+            context,
+            kind,
+            severity,
+            code,
+            message,
+        } if context.interactive == deferred => {
+            writeln!(
+                stderr,
+                "Hook {}{}{}",
+                catalog::safe(severity.as_deref().unwrap_or(kind)),
+                code.as_ref()
+                    .map(|s| format!(" [{}]", catalog::safe(s)))
+                    .unwrap_or_default(),
+                message
+                    .as_ref()
+                    .map(|s| format!(": {}", catalog::safe(s)))
+                    .unwrap_or_default()
+            )?;
+            stderr.flush()
+        }
+        _ => Ok(()),
+    }
 }

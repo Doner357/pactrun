@@ -7,7 +7,7 @@ slug: /spec/storage/schema
 
 The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
-integer are private bootstrap marker 0, not a second public format version.
+integer are private bootstrap marker 2, not a second public format version.
 Only pristine storage or the exact supported metadata and schema may be admitted.
 Existing populated files without supported metadata are refused before Pactrun
 staging, admission/content-coordination creation, conversion or cleanup. Ordinary
@@ -19,14 +19,16 @@ Admission repeats the checks
 under its serialized write transaction. No product update relabels data or
 rewrites identities, bindings, non-terminal Runs or recovery obligations.
 
-The 72-table baseline preserves functional constraints and contains no ALTER
-ladder. Snapshot payloads are immutable files; the obsolete inline Snapshot
+The fresh schema preserves functional constraints and contains no ALTER
+ladder. Supported Store upgrades are defined by
+[local catalog upgrades](../storage/store-opening.md#pr-req-0373---store-opening-and-supported-catalog-upgrades).
+Snapshot payloads are immutable files; the obsolete inline Snapshot
 representation is absent. Managed Input chunks remain an active representation.
 
 ## Complete fresh schema
 
 ```sql
--- Fresh Persistence 1.0-alpha.1. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.3. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -989,7 +991,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 0),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 2),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -998,7 +1000,43 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.1');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.3');
+
+CREATE TABLE package_local_names (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 31 AND length(CAST(name AS BLOB)) = length(name) AND name GLOB '[A-Za-z0-9]*' AND name NOT GLOB '*[^A-Za-z0-9_.-]*'),
+    PRIMARY KEY (package_id),
+    UNIQUE (name),
+    FOREIGN KEY (package_id) REFERENCES packages(package_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE revision_local_names (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    revision_content_digest BLOB NOT NULL CHECK(length(revision_content_digest) = 32),
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 31 AND length(CAST(name AS BLOB)) = length(name) AND name GLOB '[A-Za-z0-9]*' AND name NOT GLOB '*[^A-Za-z0-9_.-]*'),
+    PRIMARY KEY (package_id, revision_content_digest),
+    UNIQUE (package_id, name),
+    FOREIGN KEY (package_id, revision_content_digest)
+        REFERENCES revisions(package_id, revision_content_digest) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE revision_installations (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    revision_content_digest BLOB NOT NULL CHECK(length(revision_content_digest) = 32),
+    installed_at_unix_ms INTEGER CHECK(installed_at_unix_ms IS NULL OR installed_at_unix_ms >= 0),
+    PRIMARY KEY (package_id, revision_content_digest),
+    FOREIGN KEY (package_id, revision_content_digest)
+        REFERENCES revisions(package_id, revision_content_digest) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE run_missing_input_causes (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+    input_id BLOB NOT NULL CHECK(length(input_id) > 0),
+    PRIMARY KEY (run_id, ordinal),
+    UNIQUE (run_id, input_id),
+    FOREIGN KEY (run_id) REFERENCES run_primary_failures(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
 ```
 
 ## Functional persistence obligations
@@ -1203,7 +1241,7 @@ stable public Rust API, CLI spelling, or wire contract is created here.
 
 The complete baseline contains live Instance identities, bindings, payload
 headers and active chunk storage. application_id is 0x50414354 and user_version
-is private marker 0. All tables are STRICT and WITHOUT ROWID; correctness does
+is private marker 2. All tables are STRICT and WITHOUT ROWID; correctness does
 not depend on rowid, insertion order, timestamps or query-plan iteration.
 
 
@@ -1294,7 +1332,7 @@ and are not a stable API.
 
 The complete baseline includes managed Run identities, invocations, execution
 owners, pins, outcomes, failures, completion, artifacts and recovery guards.
-It retains application_id 0x50414354 and private user_version marker 0. All
+It retains application_id 0x50414354 and private user_version marker 2. All
 relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
 extension performed while opening an older development store.
 
@@ -1496,7 +1534,7 @@ and its Instance's current recovery guard from one SQLite read snapshot. This re
 The baseline contains durable writable admission, exact operation kinds,
 Capture/Restore invocations, recovery-consequence versions, Snapshot manifests
 and immutable blob references, Restore admissions, and Capture results. The public format is the metadata
-string; user_version and admitted_schema_version remain private marker 0.
+string; user_version and admitted_schema_version remain private marker 2.
 All tables are STRICT and WITHOUT ROWID. Rowid, clocks and query plans do not
 establish correctness.
 

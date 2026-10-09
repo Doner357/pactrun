@@ -27,7 +27,7 @@ Generate a Package ID with `pactrun pack generate-id`. Create `pack/pactrun.yaml
 and replace the example ID with that complete value:
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000066"
 revision:
   actions:
@@ -63,7 +63,7 @@ The host must have PowerShell 7 available. On Windows, use this complete
 ID with your generated value; do not append a second YAML document.
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000066"
 revision:
   actions:
@@ -96,9 +96,9 @@ Revision content; they do not automatically fall back to each other.
 ## Install, inspect, and run
 
 ```text
-pactrun pack install ./pack
+pactrun pack install ./pack --package-name hook-example --revision-name initial
 pactrun revision list --no-trunc
-pactrun instance create hook-demo --revision <reference>
+pactrun instance create hook-demo --revision hook-example:initial
 pactrun action show hook-demo inspect
 pactrun invoke hook-demo inspect --plan
 pactrun invoke hook-demo inspect
@@ -106,9 +106,8 @@ pactrun run list hook-demo
 pactrun run show <run-id>
 ```
 
-Copy the full line beginning with `exact:` from `pack install` as `<reference>`;
-the list separates its components into columns. Use the actual source directory.
-Copy the value after `run:` from the invocation output as `<run-id>`. Expect the greeting,
+`hook-example:initial` is the local name you assigned, not part of the Pack.
+Use the Run ID shown by invocation or `run list` as `<run-id>`. Expect the greeting,
 a Workspace path, and a successful Run. The Workspace is scratch; do not keep its
 path as durable service state. If admission fails, check host interpreter availability,
 source paths, and declared shell kind before retrying.
@@ -122,7 +121,8 @@ source paths, and declared shell kind before retrying.
 - [Migrations](../managed-capabilities/migrations.md)
 
 Keep the Package ID stable for revisions of one lineage. Install a changed Pack
-to obtain a new Revision; an existing Instance stays bound until an allowed transition.
+to obtain a new Revision; omit `--revision-name` or choose a new unused name on
+later installations. An existing Instance stays bound until an allowed transition.
 Retire the disposable Instance with `instance delete` after reviewing its plan.
 
 More detail: [Pack fields and values](../reference/pack-fields.md).

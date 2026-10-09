@@ -336,18 +336,36 @@ impl CapturePreparation {
 }
 
 #[cfg(test)]
-thread_local! {static CLOCK:std::cell::Cell<Option<SystemTime>>=const {std::cell::Cell::new(None)};static CLOCK_READS:std::cell::Cell<usize>=const {std::cell::Cell::new(0)};}
+#[derive(Default)]
+pub(crate) struct TestCaptureClock {
+    time: std::sync::Mutex<Option<SystemTime>>,
+    reads: std::sync::atomic::AtomicUsize,
+}
+#[cfg(test)]
+thread_local! {static CLOCK:std::cell::RefCell<std::sync::Arc<TestCaptureClock>>=std::cell::RefCell::new(std::sync::Arc::new(TestCaptureClock::default()));}
+#[cfg(test)]
+pub(crate) fn capture_clock_for_test() -> std::sync::Arc<TestCaptureClock> {
+    CLOCK.with(|c| c.borrow().clone())
+}
+#[cfg(test)]
+pub(crate) fn install_capture_clock_for_test(clock: std::sync::Arc<TestCaptureClock>) {
+    CLOCK.with(|c| *c.borrow_mut() = clock);
+}
 #[cfg(test)]
 pub(super) fn test_clock(time: Option<SystemTime>) -> usize {
-    CLOCK.with(|c| c.set(time));
-    CLOCK_READS.with(|c| c.get())
+    let clock = capture_clock_for_test();
+    *clock.time.lock().unwrap() = time;
+    clock.reads.load(std::sync::atomic::Ordering::SeqCst)
 }
 pub(super) fn completion_time() -> Result<SnapshotTimestamp, CaptureError> {
     let now = SystemTime::now();
     #[cfg(test)]
     let now = {
-        CLOCK_READS.with(|c| c.set(c.get() + 1));
-        CLOCK.with(|c| c.get()).unwrap_or(now)
+        let clock = capture_clock_for_test();
+        clock
+            .reads
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        clock.time.lock().unwrap().unwrap_or(now)
     };
     timestamp(now)
 }
@@ -519,6 +537,7 @@ pub(super) fn advance(
     {
         finish.outcome = RunOutcome::Failed;
         finish.primary_failure = Some(RunPrimaryFailure {
+            cause: None,
             failure: safe_execution_failure("managed_output_publication_failed", message),
             step: RunFailedStep::SnapshotPlan(SnapshotPlanStep::PublishManagedResult),
         });

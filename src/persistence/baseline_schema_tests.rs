@@ -46,8 +46,11 @@ fn fresh_baseline_ddl_is_complete_and_matches_owning_specification() {
         .is_err()
     );
     tx.execute(
-        "INSERT INTO writable_admissions VALUES (?1,0)",
-        params![owner.as_slice()],
+        "INSERT INTO writable_admissions VALUES (?1,?2)",
+        params![
+            owner.as_slice(),
+            super::sqlite_revision_store::SCHEMA_VERSION
+        ],
     )
     .unwrap();
     for table in [
@@ -58,6 +61,7 @@ fn fresh_baseline_ddl_is_complete_and_matches_owning_specification() {
         "writable_admissions",
         "run_diagnostic_collections",
         "run_diagnostic_events",
+        "run_missing_input_causes",
     ] {
         let present: i64 = tx
             .query_row(
@@ -113,11 +117,11 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
     assert_eq!(application, APPLICATION_ID);
-    assert_eq!(marker, 0);
+    assert_eq!(marker, super::sqlite_revision_store::SCHEMA_VERSION);
     let admissions: i64 = db
         .query_row(
-            "SELECT count(*) FROM writable_admissions WHERE admitted_schema_version=0",
-            [],
+            "SELECT count(*) FROM writable_admissions WHERE admitted_schema_version=?1",
+            [super::sqlite_revision_store::SCHEMA_VERSION],
             |r| r.get(0),
         )
         .unwrap();
@@ -126,7 +130,7 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
     assert!(reader.staging_session().is_none());
     drop(reader);
     db.execute(
-        "UPDATE pactrun_metadata SET format_version='1.0-alpha.2'",
+        "UPDATE pactrun_metadata SET format_version='1.0-alpha.99'",
         [],
     )
     .unwrap();
@@ -138,7 +142,7 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
     assert!(PactrunPersistence::open_read_only(temp.path()).is_err());
     assert!(PactrunPersistence::open(temp.path()).is_err());
     db.execute(
-        "UPDATE pactrun_metadata SET format_version='1.0-alpha.1'",
+        "UPDATE pactrun_metadata SET format_version='1.0-alpha.3'",
         [],
     )
     .unwrap();
@@ -160,7 +164,7 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
 fn unsupported_storage_is_untouched_before_staging_or_coordination() {
     use super::{
         PactrunPersistence,
-        sqlite_revision_store::{APPLICATION_ID, BASELINE_SQL},
+        sqlite_revision_store::{APPLICATION_ID, BASELINE_SQL, SCHEMA_VERSION},
     };
     use crate::managed_data::StagingSession;
     for case in 0..21 {
@@ -177,6 +181,8 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
             db.execute_batch(BASELINE_SQL).unwrap();
             db.pragma_update(None, "application_id", APPLICATION_ID)
                 .unwrap();
+            db.pragma_update(None, "user_version", SCHEMA_VERSION)
+                .unwrap();
             match case {
                 11 => {
                     db.execute("UPDATE pactrun_metadata SET format_version='1.0'", [])
@@ -184,7 +190,7 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
                 }
                 12 => {
                     db.execute(
-                        "UPDATE pactrun_metadata SET format_version='1.0-alpha.2'",
+                        "UPDATE pactrun_metadata SET format_version='1.0-alpha.99'",
                         [],
                     )
                     .unwrap();
@@ -219,7 +225,7 @@ fn unsupported_storage_is_untouched_before_staging_or_coordination() {
                 }
                 19 => {
                     db.execute(
-                        "UPDATE pactrun_metadata SET format_version='1.0-alpha.2'",
+                        "UPDATE pactrun_metadata SET format_version='1.0-alpha.99'",
                         [],
                     )
                     .unwrap();
@@ -295,7 +301,7 @@ fn unsupported_wal_inspection_preserves_committed_frames_and_the_live_writer() {
         .unwrap();
     writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let main_before = std::fs::read(&database_path).unwrap();
-    writer.execute_batch("BEGIN IMMEDIATE; UPDATE pactrun_metadata SET format_version='1.0-alpha.2'; INSERT INTO packages VALUES(zeroblob(16)); COMMIT;").unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE; UPDATE pactrun_metadata SET format_version='1.0-alpha.3'; INSERT INTO packages VALUES(zeroblob(16)); COMMIT;").unwrap();
     let committed_wal = std::fs::read(&wal_path).unwrap();
     assert!(!committed_wal.is_empty());
     assert_eq!(std::fs::read(&database_path).unwrap(), main_before);

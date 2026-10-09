@@ -193,7 +193,7 @@ exit "$code"
 """
     (source/'script.txt').write_text(script,encoding='utf-8')
     shell,command,suffix=('powershell_7','pwsh.exe','ps1') if WIN else ('sh','sh','sh')
-    yaml=f"""source_format: '1.0-alpha.1'
+    yaml=f"""source_format: '1.0-alpha.2'
 package_id: '00000000000000000000000000000777'
 revision:
   actions:

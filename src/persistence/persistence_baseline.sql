@@ -1,4 +1,4 @@
--- Fresh Persistence 1.0-alpha.1. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.3. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -961,7 +961,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 0),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 2),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -970,4 +970,40 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.1');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.3');
+
+CREATE TABLE package_local_names (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 31 AND length(CAST(name AS BLOB)) = length(name) AND name GLOB '[A-Za-z0-9]*' AND name NOT GLOB '*[^A-Za-z0-9_.-]*'),
+    PRIMARY KEY (package_id),
+    UNIQUE (name),
+    FOREIGN KEY (package_id) REFERENCES packages(package_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE revision_local_names (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    revision_content_digest BLOB NOT NULL CHECK(length(revision_content_digest) = 32),
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 31 AND length(CAST(name AS BLOB)) = length(name) AND name GLOB '[A-Za-z0-9]*' AND name NOT GLOB '*[^A-Za-z0-9_.-]*'),
+    PRIMARY KEY (package_id, revision_content_digest),
+    UNIQUE (package_id, name),
+    FOREIGN KEY (package_id, revision_content_digest)
+        REFERENCES revisions(package_id, revision_content_digest) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE revision_installations (
+    package_id BLOB NOT NULL CHECK(length(package_id) = 16),
+    revision_content_digest BLOB NOT NULL CHECK(length(revision_content_digest) = 32),
+    installed_at_unix_ms INTEGER CHECK(installed_at_unix_ms IS NULL OR installed_at_unix_ms >= 0),
+    PRIMARY KEY (package_id, revision_content_digest),
+    FOREIGN KEY (package_id, revision_content_digest)
+        REFERENCES revisions(package_id, revision_content_digest) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE run_missing_input_causes (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+    input_id BLOB NOT NULL CHECK(length(input_id) > 0),
+    PRIMARY KEY (run_id, ordinal),
+    UNIQUE (run_id, input_id),
+    FOREIGN KEY (run_id) REFERENCES run_primary_failures(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;

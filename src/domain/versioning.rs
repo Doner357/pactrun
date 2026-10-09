@@ -242,18 +242,31 @@ impl VersionDomain {
     pub(crate) const fn current(self) -> FormatVersion {
         // Each domain owns its entry; shared initial values do not couple evolution.
         match self {
-            Self::PackSource
-            | Self::Revision
-            | Self::Hook
-            | Self::Snapshot
-            | Self::SnapshotBundle
-            | Self::PackDistribution
-            | Self::Machine
-            | Self::Persistence => FormatVersion::BASELINE,
+            Self::Revision | Self::Hook | Self::Snapshot | Self::SnapshotBundle => {
+                FormatVersion::BASELINE
+            }
+            Self::PackSource | Self::PackDistribution | Self::Machine | Self::Persistence => {
+                FormatVersion {
+                    major: 1,
+                    minor: 0,
+                    prerelease: Some(Prerelease {
+                        stage: Stage::Alpha,
+                        number: if matches!(self, Self::Persistence) {
+                            3
+                        } else {
+                            2
+                        },
+                    }),
+                }
+            }
         }
     }
     pub(crate) const fn current_text(self) -> &'static str {
-        "1.0-alpha.1"
+        match self {
+            Self::Persistence => "1.0-alpha.3",
+            Self::PackSource | Self::PackDistribution | Self::Machine => "1.0-alpha.2",
+            _ => "1.0-alpha.1",
+        }
     }
     pub(crate) fn supports(self, version: FormatVersion) -> bool {
         version == self.current()
@@ -369,11 +382,17 @@ mod tests {
         assert_eq!(names.len(), 8);
         for domain in VersionDomain::ALL {
             assert_eq!(
-                domain.require("1.0-alpha.1").unwrap(),
-                FormatVersion::BASELINE
+                domain.require(domain.current_text()).unwrap(),
+                domain.current()
             );
             for text in ["1.0-alpha.2", "1.0", "1.1", "2.0", "0.1"] {
+                if text == domain.current_text() {
+                    continue;
+                }
                 assert!(domain.require(text).unwrap_err().contains(domain.name()));
+            }
+            if domain.current_text() == "1.0-alpha.2" {
+                assert!(domain.require("1.0-alpha.1").is_err());
             }
             assert!(domain.require("1").is_err());
         }

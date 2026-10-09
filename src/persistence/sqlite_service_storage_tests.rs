@@ -382,10 +382,14 @@ fn retained_contracts_remain_validated_with_a_v1_current_revision() {
         &["resource", "show", "first", "config", "--retained"],
     );
     assert_eq!(show.0, 0);
-    assert!(show.1.contains("stored_mutation: direct"));
-    assert!(
-        show.1
-            .contains("effective_mutation: unavailable_until_reattachment")
+    let show = service_json(
+        &root,
+        &["resource", "show", "first", "config", "--retained"],
+    );
+    assert_eq!(show["details"]["stored_mutation"]["kind"], "direct");
+    assert_eq!(
+        show["effective_mutation"]["kind"],
+        "unavailable_until_reattachment"
     );
     assert_eq!(
         service_cli(
@@ -656,6 +660,16 @@ fn service_cli(root: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+fn service_json(root: &Path, args: &[&str]) -> serde_json::Value {
+    let mut command = vec!["--format", "json"];
+    command.extend_from_slice(args);
+    let (code, output, error) = service_cli(root, &command);
+    assert_eq!(code, 0, "{error}: {output}");
+    let response: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(response["status"], "success");
+    response["result"].clone()
+}
+
 // Test-ID: PR-TEST-0357
 // Verifies: PR-REQ-0328, PR-REQ-0242, PR-REQ-0243
 #[test]
@@ -681,12 +695,12 @@ fn service_cli_observes_real_resources_and_only_locate_discloses_native_paths() 
         assert!(err.is_empty());
     }
     assert_eq!(
-        service_cli(&root, &["resource", "list", "first", "--retained"]),
-        (0, String::new(), String::new())
+        service_json(&root, &["resource", "list", "first", "--retained"])["items"],
+        serde_json::json!([])
     );
     assert_eq!(
-        service_cli(&root, &["resource", "observe", "first", "config"]),
-        (0, "Absent\n".into(), String::new())
+        service_json(&root, &["resource", "observe", "first", "config"]),
+        serde_json::json!({"state":"absent"})
     );
     assert_eq!(
         service_cli(&root, &["resource", "observe", "first", "database"]).0,
@@ -706,14 +720,10 @@ fn service_cli_observes_real_resources_and_only_locate_discloses_native_paths() 
     assert!(write.1.contains(&format!("alloc-{allocation}")));
     assert!(!live.join("config.json").exists());
     fs::write(live.join("config.json"), b"service owns these bytes").unwrap();
-    let observed = service_cli(&root, &["resource", "observe", "first", "config"]);
+    let observed = service_json(&root, &["resource", "observe", "first", "config"]);
     assert_eq!(
         observed,
-        (
-            0,
-            "Present kind=file kind_matches=true\n".into(),
-            String::new()
-        )
+        serde_json::json!({"state":"present", "kind":"file", "kind_matches":true})
     );
     assert_eq!(
         service_cli(
@@ -741,9 +751,17 @@ fn service_cli_observes_real_resources_and_only_locate_discloses_native_paths() 
     assert_eq!(hidden.0, 1);
     assert!(hidden.2.contains("exposure_denied"));
     fs::rename(&live, root.join("missing-protected-root")).unwrap();
-    let unknown = service_cli(&root, &["resource", "observe", "first", "config"]);
+    let unknown = service_cli(
+        &root,
+        &["--format", "json", "resource", "observe", "first", "config"],
+    );
     assert_eq!(unknown.0, 1);
-    assert_eq!(unknown.1, "Unknown cause=allocation_unavailable\n");
+    let response: serde_json::Value = serde_json::from_str(&unknown.1).unwrap();
+    assert_eq!(response["status"], "failure");
+    assert_eq!(
+        response["result"],
+        serde_json::json!({"state":"unknown","cause":"allocation_unavailable"})
+    );
     assert!(!live.exists());
     assert_eq!(
         fs::read(root.join("missing-protected-root/config.json")).unwrap(),
@@ -864,8 +882,8 @@ fn service_cli_preserves_operation_routes_missing_parents_and_broken_output_boun
     assert!(!live.join("parent/file").exists());
     fs::create_dir(live.join("parent/file")).unwrap();
     assert_eq!(
-        service_cli(&root, &["resource", "observe", "first", "nested"]).1,
-        "Present kind=directory kind_matches=false\n"
+        service_json(&root, &["resource", "observe", "first", "nested"]),
+        serde_json::json!({"state":"present", "kind":"directory", "kind_matches":false})
     );
     let mismatch = service_cli(
         &root,
@@ -1179,7 +1197,7 @@ fn real_v2_service_operations_use_isolated_live_storage_and_preserve_recovery_bo
     fs::create_dir(&source).unwrap();
     fs::write(source.join("tool"), executable).unwrap();
     fs::write(source.join("pactrun.yaml"), format!(
-        "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n"
+        "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n"
     )).unwrap();
     let app = PactrunApplication::open(&root).unwrap();
     let revision = app
@@ -1755,7 +1773,7 @@ fn transform_target(
     let source_directory = tempfile::tempdir_in(root.parent().unwrap()).unwrap();
     fs::write(source_directory.path().join("tool"), bytes).unwrap();
     fs::write(source_directory.path().join("pactrun.yaml"), format!(
-        "source_format: 1.0-alpha.1\npackage_id: {}\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n", source.package_id
+        "source_format: 1.0-alpha.2\npackage_id: {}\nrevision: {definition}\nruntime_content:\n  files: [{{id: tool, source: tool, path: bin/tool, executable: true}}]\n", source.package_id
     )).unwrap();
     crate::application::PactrunApplication::open(root)
         .unwrap()
@@ -2543,8 +2561,8 @@ fn real_file_to_directory_transform_uses_explicit_nested_grants_without_implicit
             .is_none()
     );
     assert_eq!(
-        service_cli(&root, &["resource", "observe", "first", "bundle"]).1,
-        "Present kind=directory kind_matches=true\n"
+        service_json(&root, &["resource", "observe", "first", "bundle"]),
+        serde_json::json!({"state":"present", "kind":"directory", "kind_matches":true})
     );
 }
 
@@ -2566,16 +2584,16 @@ fn public_source_version_dispatch_rejects_invalid_v2_before_durable_blob_or_revi
         names
     };
     let before = blob_entries();
-    let valid = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\nruntime_content:\n  files: [{id: payload, source: payload.bin, path: payload.bin}]\n";
+    let valid = "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\nruntime_content:\n  files: [{id: payload, source: payload.bin, path: payload.bin}]\n";
     for invalid in [
-        valid.replace("source_format: 1.0-alpha.1", "source_format: 1"),
-        valid.replace("source_format: 1.0-alpha.1", "source_format: 2.0"),
-        valid.replace("source_format: 1.0-alpha.1", "source_format: '2'"),
+        valid.replace("source_format: 1.0-alpha.2", "source_format: 1"),
+        valid.replace("source_format: 1.0-alpha.2", "source_format: 2.0"),
+        valid.replace("source_format: 1.0-alpha.2", "source_format: '2'"),
         // V3 is explicitly supported; V4 must still fail before publication.
-        valid.replace("source_format: 1.0-alpha.1", "source_format: 4"),
+        valid.replace("source_format: 1.0-alpha.2", "source_format: 4"),
         valid.replace(
-            "source_format: 1.0-alpha.1",
-            "source_format: 1.0-alpha.1\nsource_format: 1.0-alpha.1",
+            "source_format: 1.0-alpha.2",
+            "source_format: 1.0-alpha.2\nsource_format: 1.0-alpha.2",
         ),
         valid.replace(
             "  service_storages:",
@@ -2584,9 +2602,21 @@ fn public_source_version_dispatch_rejects_invalid_v2_before_durable_blob_or_revi
         valid.replace("[{id: state}]", "[{id: state}, {id: state}]"),
     ] {
         fs::write(source.join("pactrun.yaml"), invalid).unwrap();
-        let result = service_cli(&root, &["pack", "install", source.to_str().unwrap()]);
+        let result = service_cli(
+            &root,
+            &[
+                "--format",
+                "json",
+                "pack",
+                "install",
+                source.to_str().unwrap(),
+            ],
+        );
         assert_eq!(result.0, 1, "{}", result.2);
-        assert!(result.1.is_empty());
+        let response: serde_json::Value = serde_json::from_str(&result.1).unwrap();
+        assert_eq!(response["status"], "failure");
+        assert!(response["result"].is_null());
+        assert!(result.2.is_empty());
         assert_eq!(count(&p, "revisions"), 0);
         assert_eq!(count(&p, "service_storage_allocations"), 0);
         assert_eq!(count(&p, "runs"), 0);
@@ -2604,12 +2634,27 @@ fn public_baseline_service_roundtrip_preserves_identity_live_storage_and_explici
     fs::create_dir(&source).unwrap();
     let install = |revision: &str| {
         let yaml = format!(
-            "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n{revision}\nruntime_content: {{}}\n"
+            "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision:\n{revision}\nruntime_content: {{}}\n"
         );
         fs::write(source.join("pactrun.yaml"), yaml).unwrap();
-        let result = service_cli(&root, &["pack", "install", source.to_str().unwrap()]);
+        let result = service_cli(
+            &root,
+            &[
+                "--format",
+                "json",
+                "pack",
+                "install",
+                source.to_str().unwrap(),
+            ],
+        );
         assert_eq!(result.0, 0, "{}", result.2);
-        result.1.lines().next().unwrap().to_owned()
+        let value: serde_json::Value = serde_json::from_str(&result.1).unwrap();
+        let revision = &value["result"]["revision"];
+        format!(
+            "exact:{}/{}",
+            revision["package_id"].as_str().unwrap(),
+            revision["content_digest"].as_str().unwrap()
+        )
     };
     let without_service = install("  inputs: []");
     let result = service_cli(
@@ -2649,8 +2694,8 @@ fn public_baseline_service_roundtrip_preserves_identity_live_storage_and_explici
         service_cli(&root, &args)
     };
     assert_eq!(
-        service_cli(&root, &["resource", "observe", "first", "config"]).1,
-        "Absent\n"
+        service_json(&root, &["resource", "observe", "first", "config"]),
+        serde_json::json!({"state":"absent"})
     );
     let path_result = locate(false, "write");
     assert_eq!(path_result.0, 0, "{}", path_result.2);
@@ -2676,7 +2721,10 @@ fn public_baseline_service_roundtrip_preserves_identity_live_storage_and_explici
         with_service.split_once('/').unwrap().1
     ));
     migrate(&service_free_target);
-    assert_eq!(service_cli(&root, &["resource", "list", "first"]).1, "");
+    assert_eq!(
+        service_json(&root, &["resource", "list", "first"])["items"],
+        serde_json::json!([])
+    );
     assert_eq!(
         locate(true, "read"),
         (0, path_result.1.clone(), String::new())

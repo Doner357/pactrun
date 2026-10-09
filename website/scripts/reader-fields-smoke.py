@@ -53,7 +53,7 @@ def content(block):
 def manifest(revision='{}', metadata=''):
     package = run('pack', 'generate-id').strip()
     value = '{}\n' if revision == '{}' else '\n' + ''.join('  ' + line + '\n' for line in content(revision).splitlines())
-    return 'source_format: "1.0-alpha.1"\npackage_id: "' + package + '"\nrevision: ' + value + 'runtime_content: {}\n' + metadata
+    return 'source_format: "1.0-alpha.2"\npackage_id: "' + package + '"\nrevision: ' + value + 'runtime_content: {}\n' + metadata
 
 def install(name, source, success=True, hook=False):
     directory = work / name

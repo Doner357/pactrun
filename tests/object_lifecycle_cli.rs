@@ -26,7 +26,7 @@ fn success(root: &Path, args: &[&str]) -> String {
 fn hook_exit_without_protocol() {}
 
 // Test-ID: PR-TEST-0469
-// Verifies: PR-REQ-0035, PR-REQ-0076, PR-REQ-0341, PR-REQ-0343, PR-REQ-0344
+// Verifies: PR-REQ-0035, PR-REQ-0076, PR-REQ-0341, PR-REQ-0343, PR-REQ-0344, PR-REQ-0371
 #[test]
 fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/lifecycle-process-tests");
@@ -40,12 +40,28 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     fs::create_dir(&source).unwrap();
     let tool = if cfg!(windows) { "tool.exe" } else { "tool" };
     fs::copy(std::env::current_exe().unwrap(), source.join(tool)).unwrap();
-    fs::write(source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000088\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'hook_exit_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
-    let reference = success(&root, &["pack", "install", source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    fs::write(source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000088\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'hook_exit_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
+    let installed: serde_json::Value = serde_json::from_str(&success(
+        &root,
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
+    ))
+    .unwrap();
+    let identity = &installed["result"]["revision"];
+    let reference = format!(
+        "{}:{}",
+        identity["package_id"].as_str().unwrap(),
+        identity["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     success(
         &root,
         &["instance", "create", "sample", "--revision", &reference],
@@ -106,10 +122,10 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     success(&root, &["revision", "delete", &reference]);
     success(&root, &["revision", "delete", &reference]);
     let preview = success(&root, &["storage", "gc", "--plan"]);
-    assert!(preview.contains("candidates=1"));
+    assert!(preview.contains("Candidates: 1"));
     let collected = success(&root, &["storage", "gc"]);
-    assert!(collected.contains("removed=1"));
-    assert!(success(&root, &["storage", "gc"]).contains("removed=0"));
+    assert!(collected.contains("Removed: 1"));
+    assert!(success(&root, &["storage", "gc"]).contains("Removed: 0"));
     assert_eq!(
         db.query_row("SELECT count(*) FROM packages", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -118,7 +134,7 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     assert_eq!(
         db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        0
+        2
     );
     assert_eq!(
         db.query_row(
@@ -127,6 +143,6 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
             |r| r.get::<_, String>(0)
         )
         .unwrap(),
-        "1.0-alpha.1"
+        "1.0-alpha.3"
     );
 }

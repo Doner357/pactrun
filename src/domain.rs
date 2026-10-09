@@ -12,6 +12,9 @@ pub(crate) use diagnostics::*;
 mod error;
 mod execution;
 mod identity;
+mod local_names;
+#[allow(unused_imports)]
+pub(crate) use local_names::*;
 mod managed_input;
 mod migration;
 mod migration_paths;

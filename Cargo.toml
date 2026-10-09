@@ -1,6 +1,6 @@
 [package]
 name = "pactrun"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 edition = "2024"
 publish = false
 license = "MIT"
@@ -33,6 +33,7 @@ yaml-rust2 = { version = "=0.11.0", default-features = false }
 zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 crc32fast = "1"
+time = { version = "=0.3.55", features = ["formatting"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1.4", features = ["fs", "process", "termios", "pipe"] }

@@ -40,7 +40,7 @@ no valid presentation was selected. Existing exit codes retain their meanings.
 
 An ordinary JSON response MUST be a single UTF-8 JSON object followed by a newline
 on stdout, with `format` equal to `pactrun.cli`, `format_version` equal to the string
-`1.0-alpha.1`, `command` (canonical command
+`1.0-alpha.2`, `command` (canonical command
 name, or null before dispatch including parsing/startup failures), `status`
 (`success` or `failure`), `result` (a
 command-specific typed object or null) and `error` (a typed error or null).
@@ -158,6 +158,15 @@ execution results. Machine queries may include separately grouped current
 installed definitions under PR-REQ-0365. Revision metadata show retains its
 existing raw inspection interface.
 
+Human list summaries use a `SUMMARY` column and only the target's `summary` field;
+missing summaries remain blank, without substituting display names or descriptions.
+Lists fold summary line breaks into spaces without changing stored or machine values.
+Details and previews use a `Summary` block with the full text, omitted when absent.
+Input summaries use the active defining Revision; retained bindings do not borrow
+another declaration's text. Migration-path summaries identify individual edges by
+their exact target Revision and source digest, not the path as a whole. Instance,
+Run and Snapshot objects do not acquire summaries from related definitions.
+
 ### Payload and terminal preservation {#pr-req-0360---payload-and-terminal-preservation}
 
 Presentation MUST NOT transform raw Input/Artifact bytes, transport archives or
@@ -203,6 +212,20 @@ defaults expose presence/redaction only. Large integer values use decimal string
 Raw payloads, secrets, Hook argument text and protected native paths retain their
 existing authorization/disclosure boundaries. Missing facts are not invented.
 
+Input set/delete results include `instance_id`, `input_id`, and `state_version`.
+Action previews include `missing_input_ids` from their compilation observation.
+These IDs describe required declarations without exposing bound values. Older
+responses may omit the added fields; omission is not proof of readiness.
+
+Run primary failures may contain `cause: {kind: "missing_required_inputs",
+input_ids: [...]}`. It is Core-owned evidence saved when Admission refused the
+Run, not a reconstruction from current Input bindings or raw messages. Immediate
+failure and later Run inspection use the same cause. Historical absence remains
+absence after Store upgrade. Causes contain no Input values, Secrets, or raw
+storage diagnostic text.
+An enriched admission-refusal result retains its established top-level `run_id`
+and adds the ordinary nested Run inspection rather than replacing that identity.
+
 ### Noninteractive machine delivery {#pr-req-0366---noninteractive-machine-delivery}
 
 For actual noninteractive execution, JSON MUST deliver a final response plus
@@ -235,11 +258,12 @@ replay or compensation. Interactive execution is outside this contract.
 ### CLI event stream {#pr-req-0367---cli-event-stream}
 
 `--format jsonl` selects the same `pactrun.cli` interface and string
-`format_version: "1.0-alpha.1"` as ordinary results, not another version domain. Each physical LF-terminated
+`format_version: "1.0-alpha.2"` as ordinary results, not another version domain. Each physical LF-terminated
 line follows the [event schema](./cli-events.schema.json). Each
 UTF-8 line contains one compact JSON object with format, format_version, sequence, receipt time,
 command and a typed event. Sequence is a decimal string and orders observation
-within this invocation. Events are run_accepted, output, diagnostic and result.
+within this invocation. Events are acceptance_pending, run_accepted, core_progress,
+output, diagnostic and result.
 Only a confirmed durable acceptance may produce run_accepted. Output preserves
 each stream's byte order; stderr bytes do not imply failure. Result carries the
 current response and delivery summary without duplicating previously delivered bytes.
@@ -247,6 +271,16 @@ Queries and previews emit one result. Absence of a complete final result indicat
 incomplete delivery, not a Run outcome. No reconnect/replay service is introduced.
 Raw stdout export is refused in JSONL before acquisition/publication; a file
 destination remains supported. Existing human/JSON raw export behavior is retained.
+
+Core progress contains the exact accepted `run_id`, `interactive`, and a closed
+`phase`: `waiting_for_process_tree`, `retrying_storage`, or `finalizing_execution`.
+It contains no raw storage error or Hook text. It reports an observation, not a
+terminal outcome, permission to replay, or proof of commit. Consecutive identical
+phases may be coalesced. Interactive Human presentation defers these messages
+until the terminal session ends. Delivery remains independent of durable history.
+`acceptance_pending` instead identifies `candidate_run_id` while a storage result
+is uncertain. It is not proof of acceptance or a terminal result and never
+authorizes a replacement Run. Repeated pending observations may be coalesced.
 
 ### Explicit output-close cancellation {#pr-req-0368---explicit-output-close-cancellation}
 
@@ -257,16 +291,52 @@ cancellation only for a confirmed closed output channel; slow consumers alone
 do not request cancellation. A terminal Run is never rewritten. Existing deadline,
 risk, owner-loss and cancellation precedence remain authoritative.
 
+### Output failure and operation continuation {#pr-req-0375---output-failure-and-operation-continuation}
+
+Failure of a CLI presentation channel MUST NOT implicitly cancel an executing
+command or prevent its remaining operation steps. Human and machine presentation
+MUST preserve the same default continuation policy. Explicit cancellation and
+the supported output-close cancellation option remain independent controls.
+This does not make an unavailable interactive terminal usable or allow a killed
+process to continue.
+
+Once a presentation channel fails, delivery MUST be reported as incomplete when
+possible and the CLI MUST return a nonzero status. A successful operation remains
+successful in retained state. Delivery failure MUST NOT trigger replay, rollback,
+or an assertion that the operation did not happen. Original operation failures
+and usage statuses MUST NOT be overwritten by an invented operation success.
+
+If an ordinary command completes but a diagnostic channel fails, its output-error
+response MAY carry that command's complete result to preserve committed facts.
+Warnings are presented after the operation; failure to display one is not a
+second authorization gate and MUST NOT cancel publication.
+
+### Shared command results and event delivery {#pr-req-0377---shared-command-results-and-event-delivery}
+
+Command execution MUST produce an owned typed result independently of the user's
+selected output format. Renderers consume that result and MUST NOT run commands,
+query storage, re-evaluate authorization, or derive operation outcomes from prose.
+An ordinary command produces one final result; managed execution additionally
+delivers the common typed event stream. JSON encoding occurs at the delivery
+boundary, not as an intermediate command result that is parsed again.
+
+Format-specific layout, buffering and terminal capabilities do not select a
+different business query or write path. Raw exports and interactive terminals
+retain their dedicated I/O contracts. The human view may omit machine-only
+detail but MUST apply the same disclosure rules and observe the same command facts.
+
 ## Existing representation conventions
 
 The checked-in [JSON Schema](./cli-machine.schema.json) defines the shape
-inventory for 62 canonical command names. Its generation test compares explicit
+inventory for the canonical commands. Its generation test compares explicit
 CLI projections to the checked-in contract; tests write a candidate only under
 target/, never silently update this specification. The following meanings apply:
 
 - Identity/digest strings and state tokens retain their owning canonical spellings.
   Revision objects contain `package_id` and `content_digest`; text reference
-  arguments and Revision pagination cursors retain the `exact:` reference prefix.
+  arguments use `<package>:<revision>` as defined by
+  local references. Revision pagination cursors are
+  opaque continuation tokens, not resource references.
 - State versions, potentially large counters, byte lengths, epoch seconds and
   milliseconds use decimal strings, avoiding loss in consumers with binary64
   numbers. Bounded counts, format versions and nanoseconds use JSON integers.
@@ -317,11 +387,11 @@ interface or an event stream. A completed JSON document never contains that text
 ## Examples {#examples-informative}
 
 ```json
-{"format":"pactrun.cli","format_version":"1.0-alpha.1","command":"version","status":"success","result":{"product_version":"0.1.0"},"error":null}
+{"format":"pactrun.cli","format_version":"1.0-alpha.2","command":"version","status":"success","result":{"product_version":"0.1.0"},"error":null}
 ```
 
 ```json
-{"format":"pactrun.cli","format_version":"1.0-alpha.1","command":null,"status":"failure","result":null,"error":{"kind":"usage","message":"unknown command","reference":null}}
+{"format":"pactrun.cli","format_version":"1.0-alpha.2","command":null,"status":"failure","result":null,"error":{"kind":"usage","message":"unknown command","reference":null}}
 ```
 
 A missing `format`, an unknown interface version, a numeric `product_version`,
@@ -343,5 +413,6 @@ not a fabricated clean Git identity. This command does not open management data.
 - [JSON and JSONL reference](../../spec/interfaces/machine-output.md)
 - [CLI selector contract](../../spec/interfaces/id-selectors.md)
 - [PR-REQ-0083](../../spec/storage/format-domains.md#pr-req-0083---structured-cli-version)
+- [local references](../../spec/packages/local-names.md)
 
 </details>

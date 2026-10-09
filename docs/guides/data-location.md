@@ -30,48 +30,38 @@ invalid selection, not a request to fall back to the default. Normal and test
 launchers can be pointed at the same store by an explicit override; their names
 alone do not protect valuable data after you override the location.
 
-Package installation and launcher selection do not provision the store's required
-directory tree in this candidate. Use an already prepared compatible store, or
-prepare a new one once. Never add or delete internal files to repair an existing
-store that Pactrun refuses.
+Pactrun prepares a missing Store automatically when an operation needs to write
+to it. You do not need to create internal directories or run an initialization
+command. Global collection queries return empty results before a Store exists.
+An existing but incomplete or unsupported Store is not treated as a new one.
 
-## Prepare a new store
+## Choose a different data location
 
-Choose an empty parent directory under your control. The examples create a new
-`pactrun-data` child, then select it in this terminal. For real use, choose a
+The package launcher's default is sufficient for ordinary use. To select another
+Store, choose a new `pactrun-data` path in the current directory. For real use, choose a
 persistent location covered by your backup policy; do not put service data in a
 disposable tutorial directory.
 
 PowerShell:
 
 ```powershell
-& {
-    $ErrorActionPreference = 'Stop'
-    $newStore = Join-Path (Get-Location) 'pactrun-data'
-    if (Test-Path -LiteralPath $newStore) { throw 'pactrun-data already exists; do not repair or overwrite it with this setup.' }
-    New-Item -ItemType Directory -Path $newStore | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $newStore 'database'), (Join-Path $newStore 'runtime-content'), (Join-Path $newStore 'staging') | Out-Null
-    $env:PACTRUN_STORAGE_ROOT = $newStore
-    Write-Output "Selected new store: $env:PACTRUN_STORAGE_ROOT"
-}
+$env:PACTRUN_STORAGE_ROOT = Join-Path (Get-Location) 'pactrun-data'
 ```
 
 POSIX shell:
 
 ```sh
-mkdir pactrun-data &&
-mkdir pactrun-data/database pactrun-data/runtime-content pactrun-data/staging &&
 export PACTRUN_STORAGE_ROOT="$PWD/pactrun-data"
 ```
 
-Stop if a step fails. This does not create an Instance or service files. The
-database is created during the first successful write operation. Continue with
+Selecting a location does not create an Instance or service files. A missing
+Store is prepared when first needed for writing. Continue with
 [installing a supplied Pack](./use-pack.md).
 
 ## Select an existing compatible store
 
 Set `PACTRUN_STORAGE_ROOT` to its known absolute path in the terminal where you
-will run Pactrun. Do not rerun the new-store block there. For example, set
+will run Pactrun. For example, set
 `$env:PACTRUN_STORAGE_ROOT` on PowerShell, or `export PACTRUN_STORAGE_ROOT=...` on
 a POSIX shell, using your actual path. Inspect `pactrun instance list` before
 performing a write and confirm that the objects are the ones you expect.
@@ -83,6 +73,12 @@ launcher supplies its default to the child process. Use the table above and the
 launcher delivered with your package to identify that location.
 
 ## If a store is refused
+
+After a program update, opening a supported older Store upgrades its management
+schema automatically. You do not need a separate upgrade command. An upgrade
+that requires a user choice, encounters an active incompatible writer, or cannot
+validate the source Store stops with an explanation and preserves the old data.
+Reinstalling an older executable does not reverse a Store upgrade.
 
 Preserve the data and inspect the binary, selected root, permissions, and
 compatibility. Do not delete directories, rewrite version markers, or use a

@@ -1,82 +1,89 @@
 ---
-title: Export Packs and manage metadata
+title: Manage installed Packs
 ---
 
-# Export Packs and manage metadata
+# Manage installed Packs
 
-Use this task for an already installed Revision. For first installation and
-Instance creation, follow [install a supplied Pack](./use-pack.md). Export and
-metadata management do not require a live Instance.
+Use this after [installing a Pack](./use-pack.md). Packages and Revisions have
+stable IDs; local names are optional conveniences you control in the selected
+Store. Authors supply descriptions, not your local names.
 
-## Identify the installed Revision
-
-```text
-pactrun revision list --no-trunc
-pactrun revision show <reference>
-```
-
-Use the complete `exact:` reference recorded at installation. A list row displays
-identity components separately; do not copy the entire row as an operand.
-
-## Export an installed Revision
+## Find an installed Revision
 
 ```text
-pactrun revision export <reference> --output ./release
+pactrun revision list
+pactrun revision show app:initial
 ```
 
-The destination is `release.pack`. Pactrun always appends the suffix, so passing
-`release.pack` produces `release.pack.pack`. Choose a new destination; do not
-assume force-overwrite support. Use `--include-portable-metadata` when you want
-the export to carry eligible portable metadata.
+The list is ordered newest-installed first. Unknown installation times appear
+last. Names are shown when they form an unambiguous reference; otherwise Pactrun
+uses IDs. `--no-trunc` shows complete identity references. Copy the continuation
+command when another page is available; its cursor remains usable if the last
+row on the previous page has since been deleted.
 
-## Use local aliases, notes, and trust labels
+## Set, change, or remove names
+
+Choose a Package ID and Revision ID from the list, replacing the placeholders:
 
 ```text
-pactrun revision metadata show <reference>
-pactrun revision alias set demo-current <exact-reference> --expect-absent
-pactrun revision alias show demo-current
+pactrun package rename <package-id> app
+pactrun revision rename app:<revision-id> initial
 ```
 
-Metadata writes require explicit expected state. For updates, inspect the value
-and pass its exact expectation; conflicts must be resolved by reinspection.
-Local trust labels describe your assessment. They do not authenticate downloaded
-code or sandbox a Hook.
-
-Notes and trust assessments have separate inspection and conditional writes:
+Each Package and Revision has at most one local name. Names contain 1 to 31
+ASCII letters, digits, hyphens, underscores or periods, starting with a letter
+or digit. They are case-sensitive. Package names are unique in the Store;
+Revision names are unique within their Package. A conflict is refused, not
+replaced automatically.
 
 ```text
-pactrun revision note show <reference>
-pactrun revision trust show <reference>
-pactrun revision note set <exact-reference> --value "reviewed locally" --expect-absent
-pactrun revision trust set <exact-reference> <trusted-or-distrusted> --expect-absent
+pactrun package rename app web
+pactrun revision rename web:initial stable
+pactrun revision show web:stable
 ```
 
-Replace `<trusted-or-distrusted>` with your actual choice, `trusted` or
-`distrusted`; do not copy an assessment you have not made. These creation examples
-expect no previous value. If one exists, use its inspected value with `--expect`
-instead. The [command overview](/commands) lists the corresponding clear forms.
-Do not store secrets in aliases or notes.
+Names do not change identity or update existing Instances. `stable` and `latest`
+are ordinary names, not automatic update channels. To remove a name without
+removing data:
 
-Portable metadata is distinct from local metadata. During installation, select
-`--metadata-conflict keep` or `overwrite` deliberately if metadata conflicts.
-Neither policy changes immutable Revision identity.
+```text
+pactrun revision unname web:stable
+pactrun package unname web
+```
 
-## Move an Instance to another Revision
+Use IDs again after removing names. Installation may set names with
+`--package-name` and `--revision-name`, but does not silently rename an already
+named object. Repeated installation preserves the recorded installation time;
+deleting and later reinstalling a Revision records a new time.
 
-Install the target Revision, then inspect `instance migration-paths` and use a
-declared Migration. Changing an alias does not rebind an existing Instance.
-See [Migration operations](../pactrun-users/operations/snapshots-migrations-and-recovery.md).
+## Record a local note or assessment
 
-**Done:** verify the reported export destination or inspect the changed metadata.
-Neither result implies that an Instance changed Revision. Return to the
-[user task index](./index.md) to choose an unrelated operation.
+Notes and trust assessments do not travel with an exported Pack. Choose a current
+reference from `revision list` for `<revision>`:
 
-More detail: [User reference](../pactrun-users/reference/index.md).
+```text
+pactrun revision note set <revision> --value "Local evaluation" --expect-absent
+pactrun revision trust set <revision> trusted --expect-absent
+pactrun revision metadata show <revision>
+```
 
-<details>
-<summary>Maintainer sources (optional)</summary>
+Use `--expect` with the exact previous value when replacing an existing note or
+assessment. A conflict requires reinspection, not a forced overwrite. Trust is
+a local annotation: `trusted` is not publisher authentication, and `distrusted`
+does not independently prevent execution.
 
-Contracts: [Pack distribution](../spec/packages/distribution.md) and
-[metadata commands](../spec/interfaces/commands.md).
+## Export or remove a Revision
 
-</details>
+```text
+pactrun revision export <revision> --output ./saved-pack --include-portable-metadata
+pactrun revision delete <revision>
+```
+
+Export creates `saved-pack.pack`; `.pack` is always appended to the output base
+path. The archive is unencrypted and can contain sensitive authored content.
+Portable metadata contains descriptions and provenance, not local names, notes,
+trust assessments or installation times. Existing destinations are not replaced.
+
+Deletion is subject to references and lifecycle constraints; it does not delete
+Instances or run service Cleanup. See [retirement](./retirement.md) for those
+operations and [data locations](./data-location.md) for Store selection.

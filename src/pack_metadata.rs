@@ -12,36 +12,9 @@ fn parsed<T, E: std::fmt::Display>(v: std::result::Result<T, E>) -> Result<T> {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Metadata {
     #[serde(default)]
-    reference_labels: Vec<Label>,
-    #[serde(default)]
     presentation: Vec<Presentation>,
     #[serde(default)]
     provenance: Vec<Claim>,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Label {
-    label: String,
-    source: LabelSource,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-enum LabelSource {
-    Unattributed,
-    SourceUri {
-        source_uri: String,
-    },
-    Publisher {
-        publisher_name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        publisher_namespace: Option<String>,
-    },
-    PublisherSourceUri {
-        publisher_name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        publisher_namespace: Option<String>,
-        source_uri: String,
-    },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -112,43 +85,6 @@ enum Claim {
 impl Metadata {
     pub(crate) fn decode(self) -> Result<PortableMetadataTemplate> {
         let mut result = PortableMetadataTemplate::default();
-        let mut labels = BTreeSet::new();
-        for l in self.reference_labels {
-            let source = match l.source {
-                LabelSource::Unattributed => ReferenceLabelSource::Unattributed,
-                LabelSource::SourceUri { source_uri } => {
-                    ReferenceLabelSource::SourceUri(parsed(SourceUri::parse(source_uri))?)
-                }
-                LabelSource::Publisher {
-                    publisher_name,
-                    publisher_namespace,
-                } => ReferenceLabelSource::Publisher {
-                    name: parsed(PublisherName::parse(publisher_name))?,
-                    namespace: parsed(
-                        publisher_namespace
-                            .map(PublisherNamespace::parse)
-                            .transpose(),
-                    )?,
-                },
-                LabelSource::PublisherSourceUri {
-                    publisher_name,
-                    publisher_namespace,
-                    source_uri,
-                } => ReferenceLabelSource::PublisherSourceUri {
-                    name: parsed(PublisherName::parse(publisher_name))?,
-                    namespace: parsed(
-                        publisher_namespace
-                            .map(PublisherNamespace::parse)
-                            .transpose(),
-                    )?,
-                    source_uri: parsed(SourceUri::parse(source_uri))?,
-                },
-            };
-            if !labels.insert((parsed(ReferenceLabel::parse(l.label))?, source)) {
-                return Err("duplicate reference-label tuple".into());
-            }
-        }
-        result.reference_labels = labels.into_iter().collect();
         let mut keys = BTreeSet::new();
         for p in self.presentation {
             let target = match p.target {
@@ -196,6 +132,11 @@ impl Metadata {
                 Field::Description => PresentationField::Description,
                 Field::Help => PresentationField::Help,
             };
+            if target == PresentationTargetV1::Revision && field == PresentationField::DisplayName {
+                return Err(
+                    "Revision display names are local user data; use descriptive metadata".into(),
+                );
+            }
             if !keys.insert((target.clone(), field)) {
                 return Err("duplicate presentation key".into());
             }
@@ -244,37 +185,13 @@ impl Metadata {
     }
     pub(crate) fn encode(value: &PortableMetadataTemplate) -> Self {
         Self {
-            reference_labels: value
-                .reference_labels
-                .iter()
-                .map(|(l, s)| Label {
-                    label: l.as_str().into(),
-                    source: match s {
-                        ReferenceLabelSource::Unattributed => LabelSource::Unattributed,
-                        ReferenceLabelSource::SourceUri(uri) => LabelSource::SourceUri {
-                            source_uri: uri.as_str().into(),
-                        },
-                        ReferenceLabelSource::Publisher { name, namespace } => {
-                            LabelSource::Publisher {
-                                publisher_name: name.as_str().into(),
-                                publisher_namespace: namespace.as_ref().map(|x| x.as_str().into()),
-                            }
-                        }
-                        ReferenceLabelSource::PublisherSourceUri {
-                            name,
-                            namespace,
-                            source_uri,
-                        } => LabelSource::PublisherSourceUri {
-                            publisher_name: name.as_str().into(),
-                            publisher_namespace: namespace.as_ref().map(|x| x.as_str().into()),
-                            source_uri: source_uri.as_str().into(),
-                        },
-                    },
-                })
-                .collect(),
             presentation: value
                 .presentation
                 .iter()
+                .filter(|p| {
+                    !(p.target == PresentationTargetV1::Revision
+                        && p.field == PresentationField::DisplayName)
+                })
                 .map(|p| Presentation {
                     target: match &p.target {
                         PresentationTargetV1::Revision => Target::Revision,

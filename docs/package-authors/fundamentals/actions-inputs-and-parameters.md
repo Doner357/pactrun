@@ -63,7 +63,7 @@ that sensitive content does not appear in output or diagnostics. Use declared
 output slots for retained artifacts and register them explicitly.
 
 Editing the source does not update a live Instance. Reinstall the changed Pack,
-copy its new `exact:` reference, and create a fresh test Instance or use a declared
+copy its new reference from `revision list`, and create a fresh test Instance or use a declared
 Migration. Do not expect the earlier parameter-free `hook-demo` to gain fields.
 
 If you applied both examples above to the starter Pack, create `config.txt` with

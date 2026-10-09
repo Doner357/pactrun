@@ -7,7 +7,7 @@ title: Pack Distribution Format
 ## Supported baseline
 
 The closed distribution descriptor has kind pactrun_distribution, string
-format_version `1.0-alpha.1`, required string revision_format `1.0-alpha.1`,
+format_version `1.0-alpha.2`, required string revision_format `1.0-alpha.1`,
 package_id, revision_digest and optional portable_metadata. The declared
 Revision format and inner canonical component are independently checked before
 publication. Source/distribution selection is exact, without parse-error fallback.
@@ -27,7 +27,7 @@ versions and projection. Distribution never reruns authoring or executes Hooks.
 Distribution regular members are exactly `pactrun-distribution.json`,
 `revision-core.json`, `runtime-content.json`, and `blobs/sha256/<64 lowercase hex>`.
 Safe directory entries are permitted. The descriptor is strict JSON with exactly
-`kind: "pactrun_distribution"`, string `format_version: "1.0-alpha.1"`, required string
+`kind: "pactrun_distribution"`, string `format_version: "1.0-alpha.2"`, required string
 `revision_format: "1.0-alpha.1"`, canonical `package_id`,
 `revision_digest` (`sha256:` plus 64 lowercase hex), and optional
 `portable_metadata`. Components MUST be exact canonical bytes under their own

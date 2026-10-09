@@ -40,14 +40,41 @@ impl DeliverySlot {
             d.accepted(run);
         }
     }
-    pub(super) fn scope(&self, run: RunId, session: &serde_json::Value) -> Option<Scope> {
-        self.get().map(|d| d.scope(run, session))
+    pub(crate) fn progress(&self, run: RunId, phase: CorePhase) {
+        if let Some(d) = self.get() {
+            d.progress(run, phase);
+        }
+    }
+    pub(crate) fn acceptance_pending(&self, candidate: RunId) {
+        if let Some(d) = self.get()
+            && d.pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(candidate)
+        {
+            d.emit(
+                Event::AcceptancePending {
+                    candidate_run_id: candidate.to_string(),
+                },
+                false,
+            );
+        }
+    }
+    pub(super) fn scope(
+        &self,
+        run: RunId,
+        session: &serde_json::Value,
+        interactive: bool,
+    ) -> Option<Scope> {
+        self.get().map(|d| d.scope(run, session, interactive))
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(crate) struct Context {
+    #[serde(default)]
+    pub(crate) interactive: bool,
     pub(crate) run_id: String,
     pub(crate) hook_ordinal: String,
     pub(crate) operation: String,
@@ -77,12 +104,29 @@ pub(crate) enum Channel {
     Stderr,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CorePhase {
+    WaitingForProcessTree,
+    RetryingStorage,
+    FinalizingExecution,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum Event {
+    AcceptancePending {
+        candidate_run_id: String,
+    },
     RunAccepted {
         run_id: String,
+    },
+    CoreProgress {
+        run_id: String,
+        phase: CorePhase,
+        interactive: bool,
     },
     Output {
         context: Context,
@@ -174,6 +218,9 @@ pub(crate) struct Delivery {
     sender: Mutex<Option<SyncSender<Event>>>,
     ordinal: AtomicU64,
     accepted: Mutex<BTreeSet<RunId>>,
+    pending: Mutex<BTreeSet<RunId>>,
+    progress: Mutex<BTreeMap<RunId, CorePhase>>,
+    interactive: Mutex<BTreeSet<RunId>>,
 }
 impl Delivery {
     pub(crate) fn start(root: &Path, command: &str) -> io::Result<Arc<Self>> {
@@ -272,6 +319,9 @@ impl Delivery {
             sender: Mutex::new(Some(sender)),
             ordinal: AtomicU64::new(0),
             accepted: Mutex::new(BTreeSet::new()),
+            pending: Mutex::new(BTreeSet::new()),
+            progress: Mutex::new(BTreeMap::new()),
+            interactive: Mutex::new(BTreeSet::new()),
         }))
     }
     fn emit(&self, event: Event, blocking: bool) {
@@ -313,10 +363,44 @@ impl Delivery {
             );
         }
     }
-    fn scope(self: Arc<Self>, run: RunId, session: &serde_json::Value) -> Scope {
+    fn progress(&self, run: RunId, phase: CorePhase) {
+        // An uncertain candidate is not proof of durable acceptance.
+        if !self
+            .accepted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&run)
+        {
+            return;
+        }
+        let interactive = self
+            .interactive
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&run);
+        let mut progress = self.progress.lock().unwrap_or_else(|e| e.into_inner());
+        if progress.insert(run, phase) != Some(phase) {
+            self.emit(
+                Event::CoreProgress {
+                    run_id: run.to_string(),
+                    phase,
+                    interactive,
+                },
+                false,
+            );
+        }
+    }
+    fn scope(self: Arc<Self>, run: RunId, session: &serde_json::Value, interactive: bool) -> Scope {
         self.accepted(run);
+        if interactive {
+            self.interactive
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(run);
+        }
         let operation = &session["operation"];
         let context = Context {
+            interactive,
             run_id: run.to_string(),
             hook_ordinal: (self.ordinal.fetch_add(1, Ordering::Relaxed) + 1).to_string(),
             operation: operation["kind"].as_str().unwrap_or("unknown").into(),
@@ -584,6 +668,41 @@ fn read_pipe(file: &mut File, bytes: &mut [u8]) -> io::Result<usize> {
 mod tests {
     use super::*;
 
+    // Supporting coverage for PR-TEST-0685: uncertain acceptance is not acceptance.
+    #[test]
+    fn core_progress_never_invents_acceptance_and_coalesces_repeated_phases() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/delivery-tests");
+        fs::create_dir_all(&parent).unwrap();
+        let root = tempfile::tempdir_in(parent).unwrap();
+        let delivery = Delivery::start(root.path(), "invoke").unwrap();
+        let slot = DeliverySlot::default();
+        slot.set(delivery.clone());
+        let run = RunId::generate().unwrap();
+        slot.acceptance_pending(run);
+        slot.acceptance_pending(run);
+        slot.progress(run, CorePhase::RetryingStorage);
+        assert!(delivery.known_run().is_none());
+        slot.accepted(run);
+        slot.progress(run, CorePhase::RetryingStorage);
+        slot.progress(run, CorePhase::RetryingStorage);
+        delivery.finish();
+        assert!(delivery.summary().complete);
+        let mut cursor = delivery.cursor(false);
+        assert!(matches!(
+            cursor.next().unwrap().unwrap().event,
+            Event::AcceptancePending { .. }
+        ));
+        assert!(matches!(
+            cursor.next().unwrap().unwrap().event,
+            Event::RunAccepted { .. }
+        ));
+        assert!(matches!(
+            cursor.next().unwrap().unwrap().event,
+            Event::CoreProgress { .. }
+        ));
+        assert!(cursor.next().unwrap().is_none());
+    }
+
     // Test-ID: PR-TEST-0583
     // Verifies: PR-REQ-0366
     #[test]
@@ -592,6 +711,7 @@ mod tests {
         fs::create_dir_all(&parent).unwrap();
         let root = tempfile::tempdir_in(parent).unwrap();
         let context = Context {
+            interactive: false,
             run_id: RunId::generate().unwrap().to_string(),
             hook_ordinal: "1".into(),
             operation: "action".into(),

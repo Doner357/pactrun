@@ -57,6 +57,9 @@ pub(super) fn open_writer_database(
             fault(FaultPoint::BeforeBootstrapCommit);
         }
         DatabaseState::Baseline => {}
+        state @ (DatabaseState::Alpha1 | DatabaseState::Alpha2) => {
+            return Err(unsupported_source(state));
+        }
     }
     transaction.execute(
         "INSERT INTO writable_admissions(owner_session, admitted_schema_version) VALUES (?1, ?2)",

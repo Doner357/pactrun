@@ -82,6 +82,10 @@ mod deletion_runtime {
     include!("deletion_tests.rs");
 }
 
+mod supervision_runtime {
+    include!("supervision_tests.rs");
+}
+
 // Test-ID: PR-TEST-0122
 // Verifies: PR-REQ-0286
 #[test]
@@ -406,7 +410,7 @@ fn manifest() -> String {
         launcher = launcher_command(),
     ));
     format!(
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000034
 revision:
   inputs:
@@ -833,6 +837,35 @@ impl HookWorker {
         let sensitive = parameters["sensitive_value"].as_str().unwrap().to_owned();
 
         match mode.as_str() {
+            "descendant_pipes" | "descendant_closed" | "descendant_cancel"
+            | "descendant_timeout" => {
+                let mut command = Command::new(env::current_exe().unwrap());
+                command
+                    .args([
+                        "--exact",
+                        "hook::tests::supervision_runtime::bounded_descendant",
+                        "--nocapture",
+                    ])
+                    .env("PACTRUN_TEST_DESCENDANT_MARKER", &marker);
+                if mode != "descendant_pipes" {
+                    command
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null());
+                }
+                let child = command.spawn().unwrap();
+                wait_for(&marker_variant(&marker, "child-ready"));
+                if mode == "descendant_timeout" {
+                    let cancel = self.expect_cancel();
+                    self.cancel_ack(&cancel);
+                    drop(child);
+                    return;
+                }
+                self.complete(json!({"status":"success","produced_outputs":[]}));
+                self.expect_accepted();
+                fs::write(marker_variant(&marker, "accepted"), b"accepted").unwrap();
+                // The owner, not the Hook parent, must observe the entire tree.
+                drop(child);
+            }
             "machine_stream" => {
                 let bytes: Vec<u8> = (0..512 * 1024).map(|n| (n % 256) as u8).collect();
                 io::stdout().write_all(&bytes).unwrap();

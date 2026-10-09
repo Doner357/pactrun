@@ -33,6 +33,8 @@ Producing a plan MUST NOT create a Run, reservation, lock, pin, or GC root.
 **Verification: PR-TEST-0120, PR-TEST-0140, PR-TEST-0141, PR-TEST-0144,
 PR-TEST-0148, PR-TEST-0165.**
 
+**Verification: PR-TEST-0688.**
+
 ### PR-REQ-0096 - Plan staleness
 
 A displayed plan MUST be treated as a preview rather than a guarantee. Actual

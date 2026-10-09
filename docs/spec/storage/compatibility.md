@@ -8,7 +8,7 @@ Product versions identify the executable. Format versions identify the contracts
 used to read and write data or exchange messages. Updating one does not
 automatically change the others.
 
-The current eight format/protocol domains each support `1.0-alpha.1`. Formal
+Current readers and writers are listed in [format domains](./format-domains.md). Formal
 same-Major compatibility applies after formal release; prereleases do not
 acquire that guarantee merely by sharing a Major number.
 
@@ -29,6 +29,9 @@ format Minors evolve independently. Ordering and shared Major do not prove suppo
 
 Pactrun product versions MUST follow Semantic Versioning and use the product
 Major as the formal external-compatibility boundary.
+Alpha products MAY replace prerelease interfaces rather than retain every earlier
+alpha contract. Affected format versions and supported readers MUST be explicit;
+this does not authorize silent data deletion, identity changes or service actions.
 Within one formal Major, newer software MUST continue to install and use Packs valid
 under earlier published external contracts of that Major, with their existing
 meaning and applicable platform/execution prerequisites preserved. Minor and

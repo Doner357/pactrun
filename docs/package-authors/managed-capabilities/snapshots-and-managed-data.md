@@ -86,7 +86,7 @@ snapshot-demo/
 Generate a Package ID and replace the example ID in `snapshot-demo/pactrun.yaml`:
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000067"
 revision:
   snapshot:
@@ -140,7 +140,7 @@ PowerShell 7 is a host prerequisite. Use this complete
 Package ID. Both launch declarations and the runtime file are already adjusted.
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000067"
 revision:
   snapshot:
@@ -191,13 +191,12 @@ Write-Output 'Verified snapshot bytes'
 Install the example Pack:
 
 ```text
-pactrun pack install ./snapshot-demo
+pactrun pack install ./snapshot-demo --package-name snapshot-example --revision-name initial
 ```
 
-Save the full output line beginning with `exact:` as `<snapshot-reference>`.
-Replace every angle-bracket placeholder below with the corresponding value,
-including removing the brackets. Do not substitute the separate table columns
-from `revision list` for that complete reference.
+Use `snapshot-example:initial` as `<snapshot-reference>`. Replace the other
+angle-bracket placeholders with the corresponding IDs shown by Capture, Restore,
+or the inspection commands.
 
 ```text
 pactrun instance create snapshot-demo --revision <snapshot-reference>
@@ -240,7 +239,6 @@ PowerShell:
 
 ```powershell
 if (Test-Path -LiteralPath './recovery-store') { throw 'Use a fresh working directory; recovery-store already exists.' }
-New-Item -ItemType Directory recovery-store/database, recovery-store/runtime-content, recovery-store/staging -ErrorAction Stop | Out-Null
 $env:PACTRUN_STORAGE_ROOT = Join-Path (Get-Location) 'recovery-store'
 $env:PACTRUN_STORAGE_ROOT
 ```
@@ -252,7 +250,6 @@ if [ -e ./recovery-store ] || [ -L ./recovery-store ]; then
   printf '%s\n' 'Use a fresh working directory; recovery-store already exists.' >&2
   exit 1
 fi
-mkdir -p recovery-store/database recovery-store/runtime-content recovery-store/staging || exit 1
 export PACTRUN_STORAGE_ROOT="$PWD/recovery-store"
 printf '%s\n' "$PACTRUN_STORAGE_ROOT"
 ```
@@ -261,12 +258,14 @@ The printed root must end in `recovery-store`. Keep the source store intact.
 Install the exported Pack into the new store, then inspect its empty Snapshot list:
 
 ```text
-pactrun pack install ./snapshot-pack.pack
+pactrun pack install ./snapshot-pack.pack --package-name snapshot-example --revision-name initial
 pactrun snapshot list --no-trunc
 ```
 
-The install output must equal the original `<snapshot-reference>`, and no
-Snapshots should be listed. If either check fails, stop before importing.
+Pactrun creates the Store on installation. Use `snapshot-example:initial` for the
+imported Revision, and compare its full identity (`revision show`) with the source
+Revision. Local names and installation times are not transported. No Snapshots
+should be listed. If either check fails, stop before importing.
 
 ### Import and restore in the destination
 
@@ -318,11 +317,11 @@ PY
 Install the second source:
 
 ```text
-pactrun pack install ./snapshot-other
+pactrun pack install ./snapshot-other --revision-name other
 ```
 
-Save the new `exact:` line as `<other-reference>` and confirm it differs from
-`<snapshot-reference>`. Do not overwrite the saved original reference.
+Use `snapshot-example:other` as `<other-reference>` and confirm its full identity
+differs from `<snapshot-reference>`. Keep the original Revision installed.
 
 ### Check the incompatible Restore refusal
 

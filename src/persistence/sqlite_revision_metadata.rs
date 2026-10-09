@@ -1641,7 +1641,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            72 // Baseline metadata; obsolete inline Snapshot storage is absent.
+            76 // Includes local names, installation facts and safe Run causes.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),

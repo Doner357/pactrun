@@ -6,7 +6,7 @@ title: Pack Source Format
 
 ## Supported baseline
 
-The only supported source marker is the string `source_format: "1.0-alpha.1"`.
+The only supported source marker is the string `source_format: "1.0-alpha.2"`.
 Quoted and plain spellings of this string are accepted. Numeric markers are
 rejected without fallback. The author supplies no Core format field;
 the projector inserts the supported canonical string and normalizes the complete
@@ -25,7 +25,7 @@ and syntactic subset; it does not enable the YAML or JSON implicit scalar
 resolver. The schema-directed decoding rules below are authoritative.
 
 ```text
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: <32 lowercase hexadecimal characters>
 revision:
   service_storages?
@@ -42,7 +42,6 @@ runtime_content:
       path
       executable
 portable_metadata?:
-  reference_labels
   presentation
   provenance
 ```
@@ -121,37 +120,22 @@ finite IEEE-754 binary64 using round-to-nearest, ties-to-even; overflow is
 invalid, underflow to zero is allowed, and negative zero normalizes to positive
 zero. Fixed integral fields use exact mathematical-integral validation without a
 binary64 intermediate. Hook `protocol_version` is a FormatVersion string; the
-current supported value is `"1.0-alpha.1"`, and numeric markers are rejected.
-`source_format` is a FormatVersion string. Only `1.0-alpha.1` is supported;
+current supported value is `"1.0-alpha.2"`, and numeric markers are rejected.
+`source_format` is a FormatVersion string. Only `1.0-alpha.2` is supported;
 quoted and unquoted string spellings normalize identically. Numeric, malformed
 and unsupported markers are rejected without trying another schema.
 
 Portable metadata MUST use only the source-facing closed shapes below. The
-`portable_metadata` map and each of its three sequence properties are optional;
+`portable_metadata` map and each of its two sequence properties are optional;
 omission means an empty collection. A present property MUST contain a sequence.
 Every map is closed, every unmarked property is required, and `?` marks the only
 optional properties.
 
-```text
-reference_labels:
-  - label: ReferenceLabel
-    source: ReferenceLabelSourceYamlV1
-
-ReferenceLabelSourceYamlV1 =
-  | { kind: unattributed }
-  | { kind: source_uri,
-      source_uri: SourceUri }
-  | { kind: publisher,
-      publisher_name: NonEmptyExactString,
-      publisher_namespace?: NonEmptyExactString }
-  | { kind: publisher_source_uri,
-      publisher_name: NonEmptyExactString,
-      publisher_namespace?: NonEmptyExactString,
-      source_uri: SourceUri }
-```
-
-`source` MUST be present. In particular, `{ kind: unattributed }` is the only
-unattributed spelling; omission MUST NOT synthesize attribution semantics.
+Pack metadata contains explanations and provenance, not Package or Revision names.
+Names are managed locally by the user. The `reference_labels` field and
+`display_name` for the Revision target are not accepted. Revision explanations
+use `summary`, `description`, or `help`; other declared targets may use all four
+presentation fields.
 
 ```text
 presentation:
@@ -180,8 +164,9 @@ PresentationTargetYamlV1 =
   | { kind: cleanup }
 ```
 
-All four presentation fields are valid for every target variant, as required
-by PR-REQ-0251. A target MUST name a typed member that exists in the normalized
+All target variants support `summary`, `description`, and `help`; only non-Revision
+targets also support `display_name`, as defined by PR-REQ-0251.
+A target MUST name a typed member that exists in the normalized
 Revision. For a Migration target, `source_revision_digest` is the Frozen source
 selector in the Package lineage being installed; the Package component is
 implicit from the installation context.
@@ -359,7 +344,7 @@ part of this source contract.
 ### PR-REQ-0320 - Service declarations and defaults {#pr-req-0320---yaml-v2-projection-and-examples}
 
 `pactrun.yaml` uses the closed top-level schema above with
-`source_format: "1.0-alpha.1"`. `package_id`, runtime source acquisition and portable
+`source_format: "1.0-alpha.2"`. `package_id`, runtime source acquisition and portable
 metadata retain their declared semantics. `revision` is Core baseline without format_version;
 the projector inserts the exact baseline string. Every scalar-style, raw numeric-token, duplicate-key,
 tag/alias/anchor/merge-key, null, unknown-field and source-root rule remains.
@@ -387,7 +372,7 @@ resources use their semantic IDs for display without defining additional present
 ### Example: service storage and resource declarations
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: 00000000000000000000000000000065
 revision:
   service_storages:
@@ -480,7 +465,7 @@ installation must pass canonical identity and content publication checks.
 
 The top-level closed schema, acquisition rules and defaults are unchanged from
 the complete baseline; the source MUST explicitly use the string
-`source_format: "1.0-alpha.1"`. The revision projector inserts `format_version: "1.0-alpha.1"` and uses
+`source_format: "1.0-alpha.2"`. The revision projector inserts `format_version: "1.0-alpha.1"` and uses
 baseline validation. Numeric version tokens, duplicate keys, aliases, unknown
 fields and null remain invalid. Existing installed content is not rewritten.
 

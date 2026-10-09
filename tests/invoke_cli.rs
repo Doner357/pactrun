@@ -216,7 +216,7 @@ fn setup_source(root: &std::path::Path) {
     fs::write(
         source.join("pactrun.yaml"),
         format!(
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000038
 revision:
   inputs: []
@@ -234,10 +234,6 @@ revision:
 runtime_content:
   files:
     - {{ id: worker, source: {worker_name}, path: bin/{worker_name}, executable: true }}
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: {{ kind: unattributed }}
 "#
         ),
     )
@@ -250,7 +246,7 @@ fn setup_interpreter_source(root: &std::path::Path) {
     fs::write(source.join("hook-script.txt"), b"interpreter hook script").unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000039
 revision:
   inputs: []
@@ -272,10 +268,6 @@ revision:
 runtime_content:
   files:
     - { id: hook_script, source: hook-script.txt, path: bin/hook-script.txt }
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#,
     )
     .unwrap();
@@ -287,7 +279,7 @@ fn setup_interpreter_source(root: &std::path::Path) {
     fs::write(source.join("hook-script.txt"), b"interpreter hook script").unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000040
 revision:
   inputs: []
@@ -309,10 +301,6 @@ revision:
 runtime_content:
   files:
     - { id: hook_script, source: hook-script.txt, path: bin/hook-script.txt }
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#,
     )
     .unwrap();
@@ -337,18 +325,31 @@ fn real_cli_interpreter_launch_preserves_non_utf8_launcher_directory() {
     let installed = run_cli(
         &std::path::PathBuf::from(env!("CARGO_BIN_EXE_pactrun")),
         &storage,
-        &["pack", "install", source.to_str().unwrap()],
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
     );
     assert!(
         installed.status.success(),
         "{}",
         String::from_utf8_lossy(&installed.stderr)
     );
-    let revision = String::from_utf8_lossy(&installed.stdout)
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let installed: serde_json::Value = serde_json::from_slice(&installed.stdout).unwrap();
+    let revision = format!(
+        "{}:{}",
+        installed["result"]["revision"]["package_id"]
+            .as_str()
+            .unwrap(),
+        installed["result"]["revision"]["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     let created = run_cli(
         &std::path::PathBuf::from(env!("CARGO_BIN_EXE_pactrun")),
         &storage,
@@ -437,19 +438,19 @@ fn real_cli_interpreter_plan_renders_non_utf8_launcher_directory_losslessly() {
     );
     let output = String::from_utf8_lossy(&planned.stdout);
     let expected = format!(
-        "windows-utf16[{}]",
+        "UTF-16 units [{}]",
         launcher
             .as_os_str()
             .encode_wide()
             .map(|unit| format!("{unit:04x}"))
             .collect::<Vec<_>>()
-            .join(",")
+            .join(" ")
     );
     assert!(
-        output.contains(&format!("resolved_path: {expected}")),
+        output.contains("Resolved Path") && output.contains(&expected),
         "{output}"
     );
-    assert!(output.contains("windows-utf16["), "{output}");
+    assert!(output.contains("UTF-16 units ["), "{output}");
     assert!(!output.contains('\u{fffd}'), "{output}");
     assert!(!temporary.path().join("launcher-report.json").exists());
     assert_eq!(
@@ -464,7 +465,7 @@ fn real_cli_interpreter_plan_renders_non_utf8_launcher_directory_losslessly() {
         "{}",
         String::from_utf8_lossy(&listed.stderr)
     );
-    assert!(String::from_utf8_lossy(&listed.stdout).contains("0 records shown."));
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("No Runs."));
 }
 
 #[cfg(target_os = "linux")]
@@ -503,20 +504,20 @@ fn real_cli_interpreter_plan_renders_invalid_utf8_launcher_directory_losslessly(
     );
     let output = String::from_utf8_lossy(&planned.stdout);
     let expected = format!(
-        "unix-bytes[{}]",
+        "Unix bytes [{}]",
         launcher
             .as_os_str()
             .as_bytes()
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<Vec<_>>()
-            .join(",")
+            .join(" ")
     );
     assert!(
-        output.contains(&format!("resolved_path: {expected}")),
+        output.contains("Resolved Path") && output.contains(&expected),
         "{output}"
     );
-    assert!(output.contains("unix-bytes["), "{output}");
+    assert!(output.contains("Unix bytes ["), "{output}");
     assert!(!output.contains('\u{fffd}'), "{output}");
     assert_eq!(
         fs::read(storage.join("database/pactrun.sqlite3")).unwrap(),
@@ -530,21 +531,38 @@ fn real_cli_interpreter_plan_renders_invalid_utf8_launcher_directory_losslessly(
         "{}",
         String::from_utf8_lossy(&listed.stderr)
     );
-    assert!(String::from_utf8_lossy(&listed.stdout).contains("0 records shown."));
+    assert!(String::from_utf8_lossy(&listed.stdout).contains("No Runs."));
 }
 
 fn install_instance(cli: &std::path::Path, storage: &std::path::Path, source: &std::path::Path) {
-    let installed = run_cli(cli, storage, &["pack", "install", source.to_str().unwrap()]);
+    let installed = run_cli(
+        cli,
+        storage,
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
+    );
     assert!(
         installed.status.success(),
         "{}",
         String::from_utf8_lossy(&installed.stderr)
     );
-    let revision = String::from_utf8_lossy(&installed.stdout)
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let installed: serde_json::Value = serde_json::from_slice(&installed.stdout).unwrap();
+    let revision = format!(
+        "{}:{}",
+        installed["result"]["revision"]["package_id"]
+            .as_str()
+            .unwrap(),
+        installed["result"]["revision"]["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     let created = run_cli(
         cli,
         storage,
@@ -626,18 +644,31 @@ fn real_cli_interactive_invoke_reopens_a_durable_run() {
     let installed = run_cli(
         &cli,
         &storage,
-        &["pack", "install", source.to_str().unwrap()],
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
     );
     assert!(
         installed.status.success(),
         "{}",
         String::from_utf8_lossy(&installed.stderr)
     );
-    let revision = String::from_utf8_lossy(&installed.stdout)
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let installed: serde_json::Value = serde_json::from_slice(&installed.stdout).unwrap();
+    let revision = format!(
+        "{}:{}",
+        installed["result"]["revision"]["package_id"]
+            .as_str()
+            .unwrap(),
+        installed["result"]["revision"]["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     let created = run_cli(
         &cli,
         &storage,
@@ -752,18 +783,31 @@ fn real_cli_invoke_reopens_a_durable_run() {
     let installed = run_cli(
         &cli,
         &storage,
-        &["pack", "install", source.to_str().unwrap()],
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
     );
     assert!(
         installed.status.success(),
         "{}",
         String::from_utf8_lossy(&installed.stderr)
     );
-    let revision = String::from_utf8_lossy(&installed.stdout)
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let installed: serde_json::Value = serde_json::from_slice(&installed.stdout).unwrap();
+    let revision = format!(
+        "{}:{}",
+        installed["result"]["revision"]["package_id"]
+            .as_str()
+            .unwrap(),
+        installed["result"]["revision"]["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     let created = run_cli(
         &cli,
         &storage,

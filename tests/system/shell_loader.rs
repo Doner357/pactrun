@@ -74,7 +74,7 @@ fn shells() -> Vec<(&'static str, &'static str)> {
 
 fn source(shell: &str, executable: &str, args: &[String]) -> String {
     format!(
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: '{{package_id}}'
 revision:
   actions:
@@ -163,7 +163,7 @@ fn shell_loader_risk_acknowledgments_and_nonzero_exit_preserve_recovery() {
                 String::from_utf8_lossy(&result.stderr)
             );
             let text = String::from_utf8_lossy(&result.stderr);
-            assert_eq!(text.contains("terminal_risk: open"), open, "{text}");
+            assert_eq!(text.contains("Recovery risk: open"), open, "{text}");
         }
     }
 }
@@ -189,7 +189,7 @@ fn assert_retained_explanation(scenario: &Scenario, output: &std::process::Outpu
     );
     let run = both
         .lines()
-        .find_map(|line| line.strip_prefix("run: "))
+        .find_map(|line| line.strip_prefix("Run: "))
         .expect(&both)
         .split_whitespace()
         .next()
@@ -198,7 +198,7 @@ fn assert_retained_explanation(scenario: &Scenario, output: &std::process::Outpu
     assert_success(&shown);
     let history = String::from_utf8_lossy(&shown.stdout);
     assert!(history.contains(marker), "{history}");
-    assert!(history.contains("collection_closed=true"), "{history}");
+    assert!(history.contains("Collection Closed: Yes"), "{history}");
 }
 // Test-ID: PR-TEST-0527
 // Verifies: PR-REQ-0351, PR-REQ-0352
@@ -269,9 +269,9 @@ fn blocked_diagnostic_stderr_does_not_hold_timeout_or_execution_ownership() {
     let shown = scenario.run(["run", "show", run]);
     assert_success(&shown);
     let history = String::from_utf8_lossy(&shown.stdout);
-    assert!(history.contains("outcome: timed_out"), "{history}");
+    assert!(history.contains("Outcome: timed_out"), "{history}");
     assert!(history.contains("evidence-before-timeout") && history.contains("tail-marker"));
-    assert!(history.contains("middle truncated") && history.contains("collection_closed=true"));
+    assert!(history.contains("Truncated: Yes") && history.contains("Collection Closed: Yes"));
 }
 
 // Test-ID: PR-TEST-0489
@@ -311,7 +311,7 @@ fn shell_loader_plain_capture_restore_and_cleanup_use_operation_completion() {
         let text = String::from_utf8(capture.stdout).unwrap();
         let snapshot = text
             .lines()
-            .find_map(|l| l.strip_prefix("snapshot: "))
+            .find_map(|l| l.strip_prefix("Snapshot: "))
             .expect(&text);
         let restore = execute(
             &scenario,
@@ -498,7 +498,7 @@ fi
         let text = String::from_utf8(capture.stdout).unwrap();
         let snapshot = text
             .lines()
-            .find_map(|l| l.strip_prefix("snapshot: "))
+            .find_map(|l| l.strip_prefix("Snapshot: "))
             .expect(&text);
         assert_success(&execute(
             &scenario,
@@ -561,11 +561,13 @@ fn service_migration_preview_is_readable_unobserved_and_machine_complete() {
     assert_success(&human);
     let text = String::from_utf8(human.stdout).unwrap();
     assert!(
-        text.contains("source/active resource data: required present"),
+        text.contains("View: source")
+            && text.contains("Role: active")
+            && text.contains("Resource ID: data")
+            && text.contains("Presence: present"),
         "{text}"
     );
-    assert!(text.contains("live_service_observation: not_performed"));
-    assert!(text.contains("Binding consumption does not delete service bytes"));
+    assert!(text.contains("Live Observation: not_performed"));
     assert!(!text.contains("ServiceReferenceV2") && !text.contains("InputIdentity("));
     let machine = execute(
         &scenario,
@@ -658,12 +660,21 @@ fn shell_loader_transform_proposal_receipt_and_exit_preserve_target_boundary() {
                 "{}",
                 String::from_utf8_lossy(&result.stderr)
             );
-            let shown = scenario.run(["instance", "show", "sample"]);
+            let shown = scenario.run(["--format", "json", "instance", "show", "sample"]);
             assert_success(&shown);
-            let text = String::from_utf8_lossy(&shown.stdout);
-            assert!(
-                text.contains(if code == 0 { &target } else { &old }),
-                "{text}"
+            let shown: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+            let active = &shown["result"]["active_revision"];
+            assert_eq!(
+                format!(
+                    "exact:{}/{}",
+                    active["package_id"].as_str().unwrap(),
+                    active["content_digest"].as_str().unwrap()
+                ),
+                if code == 0 {
+                    target.clone()
+                } else {
+                    old.clone()
+                }
             );
         }
     }
@@ -773,7 +784,7 @@ fn shell_loader_helpers_reuse_session_and_preserve_binary_output() {
         );
         let run = text
             .lines()
-            .find_map(|line| line.strip_prefix("run: "))
+            .find_map(|line| line.strip_prefix("Run: "))
             .expect(&text);
         let exported = scenario.path("export.bin");
         let mut export = command(
@@ -975,8 +986,8 @@ fn shell_loader_explicit_failure_with_open_risk_is_valid_failure_not_success() {
         let output = invoke(&scenario);
         assert!(!output.status.success());
         let text = String::from_utf8_lossy(&output.stderr);
-        assert!(text.contains("hook_completion_status: failure"), "{text}");
-        assert!(text.contains("terminal_risk: open"), "{text}");
+        assert!(text.contains("Hook completion: failure"), "{text}");
+        assert!(text.contains("Recovery risk: open"), "{text}");
     }
 }
 
@@ -1127,7 +1138,7 @@ fn shell_loader_unsupported_host_pair_fails_before_script_start() {
     let result = invoke(&scenario);
     assert!(!result.status.success());
     assert!(String::from_utf8_lossy(&result.stderr).contains("unsupported on this host"));
-    assert!(!String::from_utf8_lossy(&result.stderr).contains("run: "));
+    assert!(!String::from_utf8_lossy(&result.stderr).contains("Run: "));
 }
 
 // Test-ID: PR-TEST-0517
@@ -1242,7 +1253,7 @@ fn hook_diagnostics_survive_process_exit_with_explicit_retention_and_safe_displa
                 );
                 let run = live
                     .lines()
-                    .find_map(|line| line.strip_prefix("run: "))
+                    .find_map(|line| line.strip_prefix("Run: "))
                     .unwrap()
                     .split_whitespace()
                     .next()
@@ -1255,9 +1266,9 @@ fn hook_diagnostics_survive_process_exit_with_explicit_retention_and_safe_displa
                     !disabled,
                     "{history}"
                 );
-                assert!(history.contains("collection_closed=true"), "{history}");
+                assert!(history.contains("Collection Closed: Yes"), "{history}");
                 assert!(
-                    history.contains("outcome: succeeded"),
+                    history.contains("Outcome: succeeded"),
                     "diagnostic error must not change outcome: {history}"
                 );
                 let list = scenario.run(["run", "list", "sample", "--no-trunc"]);

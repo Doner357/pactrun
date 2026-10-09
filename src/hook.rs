@@ -3,6 +3,8 @@
 #![allow(dead_code)]
 
 mod capture;
+#[cfg(test)]
+pub(crate) use capture::{capture_clock_for_test, install_capture_clock_for_test};
 mod deletions;
 pub(crate) mod delivery;
 mod diagnostic_scope;
@@ -916,6 +918,7 @@ fn finish_for_state(state: &FinalizationState) -> RunFinish {
         if finish.primary_failure.is_none() && finish.outcome == RunOutcome::Succeeded {
             finish.outcome = RunOutcome::Failed;
             finish.primary_failure = Some(RunPrimaryFailure {
+                cause: None,
                 failure,
                 step: RunFailedStep::Plan(ActionPlanStep::PublishDeclaredOutputs),
             });
@@ -1015,6 +1018,7 @@ pub(super) fn outcome_and_failure(
             (
                 RunOutcome::Failed,
                 Some(RunPrimaryFailure {
+                    cause: None,
                     failure: RunFailureRecord {
                         error: PactrunErrorRef::new(owner, code)
                             .expect("execution diagnostics are valid stable names"),

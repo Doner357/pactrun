@@ -187,21 +187,11 @@ fn application_export_requires_one_shot_authorization_and_atomic_no_clobber() {
     drop(p);
     let app = crate::application::PactrunApplication::open(&path).unwrap();
     let output = tmp.path().join("export.zip");
-    let mut warning = Vec::new();
-    assert!(
-        app.export_snapshot_file(id, &output, false, &mut warning)
-            .is_err()
-    );
+    assert!(app.export_snapshot_file(id, &output, false).is_err());
     assert!(!output.exists());
-    assert!(warning.is_empty());
-    app.export_snapshot_file(id, &output, true, &mut warning)
-        .unwrap();
-    assert!(String::from_utf8(warning).unwrap().contains("unencrypted"));
+    app.export_snapshot_file(id, &output, true).unwrap();
     let before = fs::read(&output).unwrap();
-    assert!(
-        app.export_snapshot_file(id, &output, true, &mut Vec::new())
-            .is_err()
-    );
+    assert!(app.export_snapshot_file(id, &output, true).is_err());
     assert_eq!(fs::read(&output).unwrap(), before);
     #[cfg(unix)]
     {

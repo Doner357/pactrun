@@ -38,8 +38,11 @@ const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
 pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
 // Private SQLite bootstrap/admission marker, not the public format version.
-pub(crate) const SCHEMA_VERSION: i64 = 0;
+pub(crate) const SCHEMA_VERSION: i64 = 2;
 pub(super) const BASELINE_SQL: &str = include_str!("persistence_baseline.sql");
+pub(super) const ALPHA1_SQL: &str = include_str!("persistence_alpha1.sql");
+pub(super) const ALPHA2_SQL: &str = include_str!("persistence_alpha2.sql");
+pub(super) const FAILURE_CAUSES_SQL: &str = include_str!("failure_causes.sql");
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
@@ -243,8 +246,18 @@ impl PactrunPersistence {
         let reader = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|error| PersistenceError::sqlite("inspect persistence contract", error))?;
         configure_read_connection(&reader)?;
-        match classify_database(&reader)? {
+        let state = {
+            let snapshot = reader.unchecked_transaction().map_err(|error| {
+                PersistenceError::sqlite("inspect Store version snapshot", error)
+            })?;
+            classify_database(&snapshot)?
+        };
+        match state {
             DatabaseState::Baseline => Ok(()),
+            DatabaseState::Alpha1 | DatabaseState::Alpha2 => {
+                drop(reader);
+                super::schema_upgrade::upgrade(&root)
+            }
             DatabaseState::Pristine if !collection => Ok(()),
             _ => Err(PersistenceError::DatabaseOwnership(
                 "operation requires a supported persistence baseline".to_owned(),
@@ -314,6 +327,7 @@ impl PactrunPersistence {
     /// lock. Inspection and plan preview use this narrower path.
     pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
+        Self::preflight_storage(&root, false)?;
         let database_root = validate_supported_storage_root(&root.join(DATABASE_DIRECTORY))?;
         let runtime_root = validate_supported_storage_root(&root.join(RUNTIME_CONTENT_DIRECTORY))?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
@@ -400,10 +414,12 @@ impl PactrunPersistence {
             publications,
             metadata,
             None,
+            &crate::domain::InstallNames::default(),
             &super::UnconditionalAcceptance,
         )
-        .map(|r| r.0)
+        .map(|r| r.0.identity)
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn persist_pack_revision(
         &self,
         package_id: PackageId,
@@ -411,10 +427,11 @@ impl PactrunPersistence {
         publications: &[StoredRuntimeBlob],
         metadata: Option<&RevisionMetadataMutationBatch>,
         policy: Option<crate::domain::PackMetadataConflict>,
+        names: &crate::domain::InstallNames,
         cancellation: &impl super::AcceptanceArbiter,
     ) -> Result<
         (
-            RevisionIdentity,
+            crate::domain::RevisionInstallReceipt,
             Vec<(
                 crate::domain::PresentationTargetV1,
                 crate::domain::PresentationField,
@@ -461,8 +478,10 @@ impl PactrunPersistence {
                     policy,
                 )?;
             }
+            super::local_catalog::install_names(&transaction, &identity, names)?;
+            let receipt = super::local_catalog::install_receipt(&transaction, &identity, false)?;
             super::pack_publication::commit_install(transaction, cancellation)?;
-            return Ok((identity, kept));
+            return Ok((receipt, kept));
         }
 
         validate_publications(
@@ -515,10 +534,22 @@ impl PactrunPersistence {
                 policy,
             )?;
         }
+        super::local_catalog::install_names(&transaction, &identity, names)?;
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|d| i64::try_from(d.as_millis()).ok())
+            .ok_or_else(|| {
+                PersistenceError::InvalidMetadata(
+                    "system clock cannot represent installation time".into(),
+                )
+            })?;
+        super::local_catalog::record_install(&transaction, &identity, millis)?;
+        let receipt = super::local_catalog::install_receipt(&transaction, &identity, true)?;
         fault(FaultPoint::BeforeRevisionCommit);
         super::pack_publication::commit_install(transaction, cancellation)?;
         fault(FaultPoint::AfterRevisionCommit);
-        Ok((identity, kept))
+        Ok((receipt, kept))
     }
 
     pub(crate) fn load_revision(
@@ -571,7 +602,7 @@ pub(super) fn validate_core_storage_version(
             "unsupported revision storage marker".to_owned(),
         ));
     }
-    require_persistence_version(database)?;
+    require_persistence_version(database, SCHEMA_VERSION)?;
     Ok(())
 }
 
@@ -680,6 +711,8 @@ pub(super) fn configure_connection(database: &Connection) -> Result<(), Persiste
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum DatabaseState {
     Pristine,
+    Alpha1,
+    Alpha2,
     Baseline,
 }
 
@@ -694,9 +727,17 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
 
     match (application_id, user_version, has_user_objects) {
         (0, 0, false) => Ok(DatabaseState::Pristine),
+        (APPLICATION_ID, 0, true) => {
+            validate_schema(database, 0)?;
+            Ok(DatabaseState::Alpha1)
+        }
         (APPLICATION_ID, SCHEMA_VERSION, true) => {
             validate_schema(database, SCHEMA_VERSION)?;
             Ok(DatabaseState::Baseline)
+        }
+        (APPLICATION_ID, 1, true) => {
+            validate_schema(database, 1)?;
+            Ok(DatabaseState::Alpha2)
         }
         (APPLICATION_ID, version, _) => Err(PersistenceError::DatabaseOwnership(format!(
             "unsupported persistence bootstrap marker {version}; development stores are not upgraded"
@@ -757,7 +798,10 @@ struct ForeignKeyRow {
 
 /// Keep even corrupt metadata diagnostics bounded; 129 characters cannot parse as
 /// a supported identifier (the shared grammar is bounded to 128 ASCII bytes).
-fn require_persistence_version(database: &Connection) -> Result<(), PersistenceError> {
+fn require_persistence_version(
+    database: &Connection,
+    version: i64,
+) -> Result<(), PersistenceError> {
     let text: String = database
         .query_row(
             "SELECT substr(format_version,1,129) FROM pactrun_metadata WHERE singleton=1",
@@ -765,6 +809,20 @@ fn require_persistence_version(database: &Connection) -> Result<(), PersistenceE
             |row| row.get(0),
         )
         .map_err(|error| PersistenceError::sqlite("read persistence format version", error))?;
+    if version <= 1 {
+        return if text
+            == if version == 0 {
+                "1.0-alpha.1"
+            } else {
+                "1.0-alpha.2"
+            } {
+            Ok(())
+        } else {
+            Err(PersistenceError::SchemaMismatch(
+                "invalid earlier persistence format".into(),
+            ))
+        };
+    }
     crate::domain::VersionDomain::Persistence
         .require(&text)
         .map(|_| ())
@@ -778,7 +836,14 @@ pub(super) fn validate_schema(database: &Connection, version: i64) -> Result<(),
         expected
             .execute_batch(BASELINE_SQL)
             .map_err(|error| PersistenceError::sqlite("construct expected baseline", error))?;
-        require_persistence_version(database)?;
+        require_persistence_version(database, version)?;
+    } else if version <= 1 {
+        expected
+            .execute_batch(if version == 0 { ALPHA1_SQL } else { ALPHA2_SQL })
+            .map_err(|error| {
+                PersistenceError::sqlite("construct expected alpha.1 schema", error)
+            })?;
+        require_persistence_version(database, version)?;
     } else {
         return Err(PersistenceError::SchemaMismatch(
             "unsupported persistence marker".to_owned(),

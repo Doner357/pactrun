@@ -207,12 +207,6 @@ fn create_output(path: &Path) -> io::Result<fs::File> {
 }
 
 pub(super) fn run(args: &[OsString]) -> i32 {
-    if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
-        println!(
-            "Usage: pactrun hook <command> [options]\nCommands: session, parameter ID, workspace, input ID, resource HANDLE, output ID, output-register ID, candidate, snapshot-content, diagnostic, protocol-error, risk enter|resolve, capture-register, completion, target-ready\nRead results: --output FILE (new file). Input bytes: --copy-to FILE. Output bytes: --file FILE. Structured submissions: --file UTF8_JSON_FILE.\nHelpers require an active Shell Loader Session; registration and receipts are not durable Run success."
-        );
-        return 0;
-    }
     match execute(args) {
         Ok(true) => 0,
         Ok(false) => {

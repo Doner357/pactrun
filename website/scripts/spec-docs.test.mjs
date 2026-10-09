@@ -171,8 +171,11 @@ test('service contracts preserve source consumption, authority and persistence b
   assert.match(get('instances/resource-commands.md'), /Registered|registered/);
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   assert.doesNotMatch(current, /SCHEMA_LADDER|SCHEMA_V9_VERSION|legacy_v4/);
-  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 0;/);
+  const marker = current.match(/pub\(crate\) const SCHEMA_VERSION: i64 = (\d+);/)?.[1];
+  assert.ok(marker, 'The writer must declare its private schema marker');
   const persistence = get('persistence/persistence-baseline.md').replace(/\s+/g, ' ');
+  assert.ok(persistence.includes('private bootstrap marker ' + marker), 'Spec and writer markers must agree');
+  assert.ok(persistence.includes('CHECK(admitted_schema_version = ' + marker + ')'), 'Writer admission must use the same marker');
   assert.match(persistence, /Unsupported stores are not upgraded/);
   assert.match(persistence, /reopening MUST preserve exact Snapshot identities/);
   assert.match(persistence, /schemas are unsupported and no storage upgrade command remains/);

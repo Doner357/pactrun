@@ -330,28 +330,11 @@ impl ProcessSupervisor {
     }
 
     pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
-        let status = self.child.try_wait()?;
-        #[cfg(unix)]
-        if status.is_some() {
-            // A descendant may still hold the PTY. Do not block the owner in
-            // join(): it must continue observing cancellation and deadlines.
-            if self
-                .output_relay
-                .as_ref()
-                .is_some_and(|relay| !relay.is_finished())
-            {
-                return Ok(None);
-            }
-            self.join_output_relay();
-        }
-        Ok(status)
+        self.child.try_wait()
     }
 
     pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
-        let status = self.child.wait()?;
-        #[cfg(unix)]
-        self.join_output_relay();
-        Ok(status)
+        self.child.wait()
     }
 
     pub(super) fn terminate_tree(&mut self) -> io::Result<()> {
@@ -383,8 +366,9 @@ impl ProcessSupervisor {
         }
     }
 
-    #[cfg(unix)]
-    fn join_output_relay(&mut self) {
+    /// Called only after actual tree termination, never as a proxy for it.
+    pub(super) fn finish_output_relay(&mut self) {
+        #[cfg(unix)]
         if let Some(relay) = self.output_relay.take() {
             let _ = relay.join();
         }

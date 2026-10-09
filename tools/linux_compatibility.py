@@ -165,7 +165,7 @@ def smoke(program, work, part):
         (work / 'store' / name).mkdir(parents=True)
     pack = work / 'pack'
     pack.mkdir()
-    (pack / 'pactrun.yaml').write_text('''source_format: 1.0-alpha.1
+    (pack / 'pactrun.yaml').write_text('''source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000001236
 revision:
   inputs: [{id: secret, protection: secret}]

@@ -53,8 +53,9 @@ printf '%s\\n' "$status" "$PWD" "$PACTRUN_STORAGE_ROOT"
     if (existing !== 'none') assert.equal(await readFile(sentinel, 'utf8'), 'preserve me');
     else {
       const {stat} = await import('node:fs/promises');
-      for (const child of ['pack', 'store/database', 'store/runtime-content', 'store/staging'])
-        assert.ok((await stat(path.join(destination, child))).isDirectory());
+      assert.ok((await stat(path.join(destination, 'pack'))).isDirectory());
+      await assert.rejects(stat(path.join(destination, 'store')), {code: 'ENOENT'},
+        'Tutorial setup selects a Store; Pactrun, not the shell snippet, provisions it');
     }
   });
 }

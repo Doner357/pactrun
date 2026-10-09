@@ -687,7 +687,7 @@ requiring an installed PATH alias or copying Pactrun into the Pack.
 
 ## YAML projection
 
-Pack Source YAML baseline explicitly uses the string `source_format: "1.0-alpha.1"` and otherwise
+Pack Source YAML baseline explicitly uses the string `source_format: "1.0-alpha.2"` and otherwise
 retains YAML baseline's closed schema, defaults, scalar handling and source acquisition.
 Its revision projection inserts `format_version: "1.0-alpha.1"`. There is no inferred upgrade
 of a development-era source or installed Revision, and no interpreter argument

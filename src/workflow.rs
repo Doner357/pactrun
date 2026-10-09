@@ -101,6 +101,20 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
         launcher_search_directories,
     )?;
     let facts = CompilationFacts {
+        missing_input_ids: observation
+            .revision_content
+            .core
+            .inputs()
+            .iter()
+            .filter(|input| {
+                input.required
+                    && !observation
+                        .active_bindings
+                        .iter()
+                        .any(|binding| binding.input == input.id)
+            })
+            .map(|input| input.id.clone())
+            .collect(),
         instance: observation.instance,
         observed_state_version: observation.state_version,
         active_revision: observation.active_revision,
@@ -653,6 +667,7 @@ mod tests {
             executable: runtime_content.first().unwrap().clone(),
         };
         let facts = CompilationFacts {
+            missing_input_ids: Vec::new(),
             instance: observation.instance,
             observed_state_version: observation.state_version,
             active_revision: observation.active_revision,

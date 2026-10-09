@@ -21,8 +21,8 @@ pub(crate) use source_acquisition::{SecureSourceRoot, SourceAcquisitionError};
 use crate::domain::{
     ActionIdentity, AttributionText, ContentId, InputIdentity, ManagedOutputIdentity, PackageId,
     ParameterIdentity, PresentationField, PresentationTargetV1, PresentationValue, ProvenanceClaim,
-    PublisherName, PublisherNamespace, ReferenceLabel, ReferenceLabelSource, RevisionContentDigest,
-    RuntimeContentClosureIdentityV1, RuntimePath, SourceUri,
+    PublisherName, PublisherNamespace, RevisionContentDigest, RuntimeContentClosureIdentityV1,
+    RuntimePath, SourceUri,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -302,27 +302,12 @@ fn portable_metadata(node: Node) -> Result<PortableMetadataTemplate, AuthoringEr
     let mut object = closed_map(
         node,
         &[],
-        &["reference_labels", "presentation", "provenance"],
+        &["presentation", "provenance"],
         "portable_metadata",
     )?;
-    let labels = sequence_or_empty(object.remove("reference_labels"), "reference_labels")?;
     let presentations = sequence_or_empty(object.remove("presentation"), "presentation")?;
     let provenance = sequence_or_empty(object.remove("provenance"), "provenance")?;
     let mut result = PortableMetadataTemplate::default();
-    let mut label_keys = BTreeSet::new();
-    for value in labels {
-        let mut value = closed_map(value, &["label", "source"], &[], "reference label")?;
-        let label = ReferenceLabel::parse(string_scalar(take(&mut value, "label")?)?)
-            .map_err(|error| AuthoringError::new(error.to_string()))?;
-        let source = label_source(take(&mut value, "source")?)?;
-        if !label_keys.insert((label.clone(), source.clone())) {
-            return Err(AuthoringError::new(
-                "duplicate reference-label semantic tuple",
-            ));
-        }
-        result.reference_labels.push((label, source));
-    }
-    result.reference_labels.sort();
     let mut presentation_keys = BTreeSet::new();
     for value in presentations {
         let mut value = closed_map(
@@ -343,6 +328,11 @@ fn portable_metadata(node: Node) -> Result<PortableMetadataTemplate, AuthoringEr
                 )));
             }
         };
+        if target == PresentationTargetV1::Revision && field == PresentationField::DisplayName {
+            return Err(AuthoringError::new(
+                "Package and Revision names are local user data; use summary, description or help for author explanations",
+            ));
+        }
         if !presentation_keys.insert((target.clone(), field)) {
             return Err(AuthoringError::new("duplicate presentation semantic key"));
         }
@@ -368,45 +358,6 @@ fn portable_metadata(node: Node) -> Result<PortableMetadataTemplate, AuthoringEr
         result.provenance.push(claim);
     }
     result.provenance.sort();
-    Ok(result)
-}
-
-fn label_source(node: Node) -> Result<ReferenceLabelSource, AuthoringError> {
-    let mut map = mapping(node, "reference-label source")?;
-    let kind = string_scalar(take(&mut map, "kind")?)?;
-    let result = match kind.as_str() {
-        "unattributed" => ReferenceLabelSource::Unattributed,
-        "source_uri" => ReferenceLabelSource::SourceUri(source_uri(take(&mut map, "source_uri")?)?),
-        "publisher" | "publisher_source_uri" => {
-            let name = PublisherName::parse(string_scalar(take(&mut map, "publisher_name")?)?)
-                .map_err(|error| AuthoringError::new(error.to_string()))?;
-            let namespace = map
-                .remove("publisher_namespace")
-                .map(string_scalar)
-                .transpose()?
-                .map(PublisherNamespace::parse)
-                .transpose()
-                .map_err(|error| AuthoringError::new(error.to_string()))?;
-            let uri = map.remove("source_uri").map(source_uri).transpose()?;
-            match (kind.as_str(), uri) {
-                ("publisher", None) => ReferenceLabelSource::Publisher { name, namespace },
-                ("publisher_source_uri", Some(source_uri)) => {
-                    ReferenceLabelSource::PublisherSourceUri {
-                        name,
-                        namespace,
-                        source_uri,
-                    }
-                }
-                _ => {
-                    return Err(AuthoringError::new(
-                        "publisher source URI presence does not match kind",
-                    ));
-                }
-            }
-        }
-        _ => return Err(AuthoringError::new("unknown reference-label source kind")),
-    };
-    require_no_fields(&map, "reference-label source")?;
     Ok(result)
 }
 
@@ -852,7 +803,7 @@ mod tests {
 
     fn minimal(extra: &str) -> String {
         format!(
-            "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000001\nrevision:\n  inputs: []\n  actions: []\n  migrations: []\nruntime_content:\n  files: []\n{extra}"
+            "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000001\nrevision:\n  inputs: []\n  actions: []\n  migrations: []\nruntime_content:\n  files: []\n{extra}"
         )
     }
 
@@ -860,7 +811,7 @@ mod tests {
     // Verifies: PR-REQ-0123
     #[test]
     fn source_defaults_equal_explicit_values_without_inventing_input_transitions() {
-        for version in ["1.0-alpha.1", "\"1.0-alpha.1\""] {
+        for version in ["1.0-alpha.2", "\"1.0-alpha.2\""] {
             let short = format!(
                 "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: config}}]\nruntime_content: {{}}\n"
             );
@@ -892,7 +843,7 @@ mod tests {
     // Verifies: PR-REQ-0159
     #[test]
     fn declarative_input_authoring_rejects_split_merge_and_payload_transformations() {
-        for version in ["1.0-alpha.1", "\"1.0-alpha.1\""] {
+        for version in ["1.0-alpha.2", "\"1.0-alpha.2\""] {
             let source = format!(
                 "source_format: {version}\npackage_id: 00000000000000000000000000000065\nrevision:\n  inputs: [{{id: a}}, {{id: b}}]\n  migrations:\n    - source_revision_digest: sha256:{}\n      transitions: [TRANSITIONS]\n      requires_source: []\n      requires_target: []\n      produces_target: []\nruntime_content: {{}}\n",
                 "1".repeat(64)
@@ -967,7 +918,7 @@ mod tests {
 
     fn parameter_default(parameter_type: &str, default: &str) -> String {
         format!(
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000001
 revision:
   inputs: []
@@ -1002,8 +953,8 @@ runtime_content:
             parse_pack_source_yaml(
                 minimal("")
                     .replace(
-                        "source_format: 1.0-alpha.1\n",
-                        "# 前置 Unicode\r\nsource_format: 1.0-alpha.1 # raw\r\n"
+                        "source_format: 1.0-alpha.2\n",
+                        "# 前置 Unicode\r\nsource_format: 1.0-alpha.2 # raw\r\n"
                     )
                     .as_bytes()
             )
@@ -1042,7 +993,7 @@ runtime_content:
         assert!(
             parse_pack_source_yaml(
                 minimal("")
-                    .replace("source_format: 1.0-alpha.1", "source_format: 1.0")
+                    .replace("source_format: 1.0-alpha.2", "source_format: 1.0")
                     .as_bytes()
             )
             .is_err()
@@ -1050,7 +1001,7 @@ runtime_content:
         assert!(
             parse_pack_source_yaml(
                 minimal("")
-                    .replace("source_format: 1.0-alpha.1", "source_format: !!int 1")
+                    .replace("source_format: 1.0-alpha.2", "source_format: !!int 1")
                     .as_bytes()
             )
             .is_err()
@@ -1077,7 +1028,7 @@ runtime_content:
     // Verifies: PR-REQ-0006, PR-REQ-0011, PR-REQ-0014, PR-REQ-0015, PR-REQ-0121, PR-REQ-0122, PR-REQ-0124, PR-REQ-0125, PR-REQ-0126, PR-REQ-0127, PR-REQ-0136, PR-REQ-0142, PR-REQ-0258, PR-REQ-0260
     #[test]
     fn source_candidate_keeps_authored_content_identity_and_portable_metadata() {
-        let yaml = r#"source_format: 1.0-alpha.1
+        let yaml = r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000001
 revision:
   inputs:
@@ -1132,13 +1083,8 @@ runtime_content:
       path: bin/launcher.exe
       executable: true
 portable_metadata:
-  reference_labels:
-    - { label: stable, source: { kind: unattributed } }
-    - { label: source, source: { kind: source_uri, source_uri: "https://example.test/source#part" } }
-    - { label: publisher, source: { kind: publisher, publisher_name: Example, publisher_namespace: tools } }
-    - { label: release, source: { kind: publisher_source_uri, publisher_name: Example, source_uri: "urn:example:release#v1" } }
   presentation:
-    - { target: { kind: revision }, field: display_name, value: Revision }
+    - { target: { kind: revision }, field: summary, value: Revision }
     - { target: { kind: input, input_id: config }, field: summary, value: Input }
     - { target: { kind: action, action_id: inspect }, field: description, value: Action }
     - { target: { kind: action_parameter, action_id: inspect, parameter_id: detail }, field: help, value: Parameter }
@@ -1167,14 +1113,22 @@ portable_metadata:
             "bin/launcher.exe"
         );
         assert!(candidate.runtime_sources[0].executable);
-        assert_eq!(candidate.portable_metadata.reference_labels.len(), 4);
+        assert!(candidate.portable_metadata.reference_labels.is_empty());
         assert_eq!(candidate.portable_metadata.presentation.len(), 11);
         assert_eq!(candidate.portable_metadata.provenance.len(), 3);
 
         let duplicate = minimal(
-            "portable_metadata:\n  reference_labels:\n    - { label: stable, source: { kind: unattributed } }\n    - { label: stable, source: { kind: unattributed } }\n",
+            "portable_metadata:\n  presentation:\n    - { target: { kind: revision }, field: summary, value: first }\n    - { target: { kind: revision }, field: summary, value: second }\n",
         );
         assert!(parse_pack_source_yaml(duplicate.as_bytes()).is_err());
+        for forbidden in [
+            "portable_metadata:\n  reference_labels: []\n",
+            "portable_metadata:\n  presentation: [{target: {kind: revision}, field: display_name, value: forbidden}]\n",
+            "package_name: forbidden\n",
+            "revision_name: forbidden\n",
+        ] {
+            assert!(parse_pack_source_yaml(minimal(forbidden).as_bytes()).is_err());
+        }
     }
 
     // Supporting lexical coverage for PR-TEST-0070.

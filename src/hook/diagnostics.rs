@@ -28,6 +28,9 @@ impl Diagnostics {
     pub(crate) fn enable_live(&self) {
         self.live.store(true, Ordering::Release);
     }
+    pub(crate) fn disable_live(&self) {
+        self.live.store(false, Ordering::Release);
+    }
     pub(crate) fn retain(&self) -> bool {
         !self.disabled.load(Ordering::Acquire)
     }

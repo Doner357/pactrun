@@ -14,7 +14,7 @@ fn source() -> String {
     };
     let hook = json!({"protocol_version":"1.0-alpha.1","launch":{"kind":"shell_loader","shell":shell,"command":command,"script":"script"},"args":[],"io":{"terminal":"none"}});
     let parameter = json!({"id":"note","type":"string","sensitive":false,"default":"default"});
-    json!({"source_format":"1.0-alpha.1","package_id":"{package_id}","revision":{
+    json!({"source_format":"1.0-alpha.2","package_id":"{package_id}","revision":{
         "actions":[{"id":"inspect","access":"observe","parameters":[parameter.clone()],"outputs":[{"id":"report"}],"hook":hook.clone()}],
         "snapshot":{"capture":{"access":"observe","parameters":[parameter.clone()],"hook":hook.clone()},"restore":{"parameters":[parameter],"hook":hook.clone()}},
         "cleanup":{"requires":[],"hook":hook}},
@@ -29,6 +29,11 @@ fn query(s: &Scenario, args: &[&str]) -> Value {
     serde_json::from_slice::<Value>(&output.stdout).unwrap()["result"].clone()
 }
 fn field(output: &Output, key: &str) -> String {
+    let key = match key {
+        "snapshot" => "Snapshot",
+        "run" => "Run",
+        _ => key,
+    };
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .chain(String::from_utf8_lossy(&output.stderr).lines())
@@ -274,7 +279,7 @@ fn machine_delivery_covers_shell_loader_lifecycle_and_each_migration_hook() {
         for (index, event) in events.iter().enumerate() {
             assert_eq!(event["sequence"], (index + 1).to_string());
             assert_eq!(event["format"], "pactrun.cli");
-            assert_eq!(event["format_version"], "1.0-alpha.1");
+            assert_eq!(event["format_version"], "1.0-alpha.2");
         }
         let result = events.pop().unwrap();
         assert_eq!(result["type"], "result");
@@ -425,6 +430,8 @@ fn capability_metadata_follows_exact_revisions_without_execution_or_history_muta
     }
     fs::write(&file, manifest.to_string()).unwrap();
     let updated = s.run([
+        "--format",
+        "json",
         "pack",
         "install",
         s.source.to_str().unwrap(),
@@ -432,13 +439,16 @@ fn capability_metadata_follows_exact_revisions_without_execution_or_history_muta
         "overwrite",
     ]);
     assert_success(&updated);
+    let updated: Value = serde_json::from_slice(&updated.stdout).unwrap();
+    let identity = &updated["result"]["revision"];
     assert_eq!(
-        String::from_utf8_lossy(&updated.stdout)
-            .lines()
-            .next()
-            .unwrap(),
+        format!(
+            "exact:{}/{}",
+            identity["package_id"].as_str().unwrap(),
+            identity["content_digest"].as_str().unwrap()
+        ),
         first
-    ); // Descriptions are not Revision identity.
+    ); // Descriptions are not identity.
     let restore = query(&s, &["snapshot", "restore", "sample", &snapshot, "--plan"]);
     assert_eq!(entries(&restore).len(), 2);
     assert!(

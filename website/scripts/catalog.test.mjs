@@ -60,7 +60,9 @@ test('service diagnostic identities match the registered catalog rather than dev
 test('main command reference composes with selectors, machine output and retired upgrade policy', () => {
   const source = docs.find(([name]) => name === 'spec/interfaces/commands.md')[1].replace(/\s+/g, ' ');
   assert.ok(source.includes('id-selectors.md'));
-  assert.match(source, /prefixes of at least eight digits in either exact-reference component/);
+  assert.match(source, /local-names\.md/);
+  const names = docs.find(([name]) => name === 'spec/packages/local-names.md')[1];
+  assert.match(names, /ID prefixes require at least eight digits/);
   assert.ok(source.includes('machine-output.md'));
   assert.match(source.replace(/\s+/g, ' '), /Unsupported stores are refused without conversion or data deletion/);
   assert.doesNotMatch(source, /Bare tokens, digest prefixes|explicit storage-upgrade spelling/);
@@ -177,6 +179,14 @@ test('CLI reference derives its version and command text from executable declara
   assert.match(help.text, /pactrun snapshot restore/);
   assert.match(help.text, /pactrun storage gc/);
   assert.ok(help.text.startsWith('Pactrun ' + help.version));
+  assert.equal(help.source, 'src/cli/help_catalog.json');
+  const declaration = JSON.parse(await readFile(path.join(root, help.source), 'utf8'));
+  for (const command of declaration.commands) {
+    for (const form of command.forms) {
+      assert.ok(help.text.includes(form.usage));
+      assert.ok(help.text.includes(form.description));
+    }
+  }
 });
 test('current entry points do not repeat retired storage/approval claims', () => {
   for (const name of ['index.md', 'agents/index.md', 'guides/index.md', 'introduction.md']) {
@@ -203,15 +213,15 @@ test('Windows tutorials supply complete manifests rather than requiring test-sid
 });
 
 
-test('tutorial reference copying identifies install output rather than a catalog row', () => {
+test('introductory tutorial names the installed Revision before using its local reference', () => {
   const document = name => docs.find(([file]) => file === name)[1];
   const intro = document('introduction.md');
-  assert.match(intro, /### Copy a Revision reference/);
-  assert.match(intro, /pack install output/);
-  assert.match(intro.replace(/\s+/g, ' '), /row is not a ready-to-paste reference/);
-  for (const name of ['package-authors/fundamentals/authoring-model.md', 'package-authors/managed-capabilities/snapshots-and-managed-data.md', 'package-authors/managed-capabilities/migrations.md']) {
-    assert.ok(document(name).includes('exact:'), name);
-  }
+  assert.match(intro, /pactrun pack install \.\/pack --package-name demo --revision-name initial/);
+  assert.match(intro, /pactrun instance create demo --revision demo:initial/);
+  assert.doesNotMatch(intro, /### Copy a Revision reference/);
+  const author = document('package-authors/fundamentals/authoring-model.md');
+  assert.match(author, /pack install \.\/pack --package-name hook-example --revision-name initial/);
+  assert.match(author, /instance create hook-demo --revision hook-example:initial/);
 });
 
 test('Snapshot tutorial distinguishes source restoration from fresh-store recovery', () => {
@@ -319,7 +329,7 @@ test('Invoke reference enumerates parser flags and warns about byte-preserving a
   for (const flag of flags) assert.ok(guide.includes('--' + flag), flag);
   assert.match(guide, /5000 milliseconds/);
   assert.match(guide, /does not trim whitespace/);
-  assert.match(guide, /invoke … --help/);
+  assert.match(guide, /pactrun invoke --help/);
   assert.match(guide, /syntax\/option errors are 2/);
 });
 

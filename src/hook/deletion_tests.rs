@@ -317,10 +317,11 @@ fn cleanup_boundary_crashes_require_confirmation_or_finalization_only_never_hook
             let (code, _, _) = command(InstanceStateVersion::from_bytes([91; 16]));
             assert_ne!(code, 0);
             assert_eq!(f.application.inspect_deletion(f.instance.id).unwrap().unwrap().phase, DeletionPhase::ResultUnresolved);
+            let guard = p.load_instance_recovery_guard(f.instance.id).unwrap();
             let (code, output, errors) = command(current.state_version);
             assert_eq!(code, 0, "{errors}");
             assert!(output.contains("operator_confirmed"));
-            assert!(output.contains("trust guard are unchanged"));
+            assert_eq!(p.load_instance_recovery_guard(f.instance.id).unwrap(), guard);
             assert_ne!(f.application.load_instance(f.instance.id).unwrap().unwrap().state_version, current.state_version);
             assert_ne!(command(current.state_version).0, 0);
         }

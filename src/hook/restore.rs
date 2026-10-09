@@ -65,6 +65,7 @@ pub(super) fn advance(
     if let Some(message) = state.publication_failure {
         finish.outcome = RunOutcome::Failed;
         finish.primary_failure = Some(crate::domain::RunPrimaryFailure {
+            cause: None,
             failure: safe_execution_failure("managed_output_publication_failed", message),
             step: RunFailedStep::SnapshotPlan(
                 crate::domain::SnapshotPlanStep::PublishManagedResult,
