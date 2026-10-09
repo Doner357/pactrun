@@ -485,7 +485,7 @@ fn catalog_rejects_invalid_options_before_storage_and_queries_do_not_bootstrap()
     let version: i64 = db
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 }
 
 // Test-ID: PR-TEST-0534

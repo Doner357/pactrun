@@ -37,6 +37,10 @@ fn legacy() -> (tempfile::TempDir, PathBuf, RevisionIdentity) {
 
 fn downgrade_fixture(root: &Path) {
     let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    db.execute_batch(
+        "DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections;",
+    )
+    .unwrap();
     db.execute_batch("DROP TABLE run_missing_input_causes;")
         .unwrap();
     db.execute_batch("DROP TABLE package_local_names; DROP TABLE revision_local_names; DROP TABLE revision_installations; DROP TABLE writable_admissions;").unwrap();
@@ -74,6 +78,10 @@ fn alpha2_upgrade_preserves_names_and_refuses_live_old_writers() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        db.execute_batch(
+            "DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections;",
+        )
+        .unwrap();
         db.execute_batch("DROP TABLE run_missing_input_causes; DROP TABLE writable_admissions;")
             .unwrap();
         let admission = super::super::sqlite_revision_store::ALPHA2_SQL
@@ -137,6 +145,68 @@ fn alpha2_upgrade_preserves_names_and_refuses_live_old_writers() {
 }
 fn alias(db: &Connection, id: &RevisionIdentity, value: &str) {
     db.execute("INSERT INTO revision_local_aliases(alias_utf8,package_id,revision_content_digest) VALUES (?1,?2,?3)",params![value.as_bytes(),id.package_id.as_bytes().as_slice(),id.content_digest.as_bytes().as_slice()]).unwrap();
+}
+
+// Test-ID: PR-TEST-0692
+// Verifies: PR-REQ-0373, PR-REQ-0078, PR-REQ-0378, PR-REQ-0352
+#[test]
+fn alpha3_upgrade_adds_empty_core_history_and_preserves_identity() {
+    for live_writer in [false, true] {
+        let (_temp, root, revision) = legacy();
+        let app = PactrunApplication::open(&root).unwrap();
+        let name = InstanceName::parse("kept").unwrap();
+        let instance = app.resolve_instance_name(&name).unwrap().unwrap();
+        drop(app);
+        let session =
+            live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
+        let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        db.execute_batch("DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
+        let ddl = super::super::sqlite_revision_store::ALPHA3_SQL
+            .split_once("CREATE TABLE writable_admissions (")
+            .unwrap()
+            .1
+            .split_once(';')
+            .unwrap()
+            .0;
+        db.execute_batch(&format!("CREATE TABLE writable_admissions ({ddl}; UPDATE pactrun_metadata SET format_version='1.0-alpha.3'; PRAGMA user_version=2;")).unwrap();
+        validate_schema(&db, 2).unwrap();
+        if let Some(session) = &session {
+            db.execute(
+                "INSERT INTO writable_admissions VALUES (?1,2)",
+                [session.owner().as_str().as_bytes()],
+            )
+            .unwrap();
+            assert!(matches!(
+                PactrunPersistence::open_read_only(&root),
+                Err(PersistenceError::ActiveWriters)
+            ));
+            validate_schema(&db, 2).unwrap();
+        }
+        drop(session);
+        let reopened = PactrunApplication::open(&root).unwrap();
+        assert_eq!(
+            reopened.resolve_instance_name(&name).unwrap(),
+            Some(instance)
+        );
+        assert_eq!(
+            reopened
+                .load_instance(instance)
+                .unwrap()
+                .unwrap()
+                .active_revision,
+            revision
+        );
+        validate_schema(&db, SCHEMA_VERSION).unwrap();
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM run_core_diagnostic_collections",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
 }
 
 // Test-ID: PR-TEST-0665

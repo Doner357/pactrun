@@ -344,9 +344,7 @@ fn write_human_event(
                 delivery::CorePhase::RetryingStorage => {
                     "retrying storage access; execution ownership retained"
                 }
-                delivery::CorePhase::FinalizingExecution => {
-                    "finalizing execution; durable result not yet published"
-                }
+                delivery::CorePhase::FinalizingExecution => "finishing execution",
             };
             writeln!(stderr, "Run {run_id}: {text}")?;
             stderr.flush()
@@ -363,17 +361,44 @@ fn write_human_event(
             out.write_all(&bytes)?;
             out.flush()
         }
+        delivery::Event::CoreDiagnostic {
+            context,
+            diagnostic,
+        } if context.interactive == deferred => {
+            match diagnostic {
+                crate::domain::CoreDiagnostic::HelperFailure { failure } => {
+                    writeln!(stderr, "Pactrun {failure}")?
+                }
+                crate::domain::CoreDiagnostic::CollectionIncomplete { reason } => {
+                    writeln!(stderr, "Pactrun: {}", reason.text())?
+                }
+            }
+            stderr.flush()
+        }
         delivery::Event::Diagnostic {
             context,
             kind,
             severity,
+            completion_status,
             code,
             message,
         } if context.interactive == deferred => {
+            if kind == "completion" && code.is_none() && message.is_none() {
+                return Ok(());
+            }
+            let label = if kind == "completion" {
+                match completion_status.as_deref() {
+                    Some("success") => "completed",
+                    Some("failure") => "failed",
+                    _ => "completion",
+                }
+            } else {
+                severity.as_deref().unwrap_or(kind)
+            };
             writeln!(
                 stderr,
                 "Hook {}{}{}",
-                catalog::safe(severity.as_deref().unwrap_or(kind)),
+                catalog::safe(label),
                 code.as_ref()
                     .map(|s| format!(" [{}]", catalog::safe(s)))
                     .unwrap_or_default(),
@@ -385,5 +410,56 @@ fn write_human_event(
             stderr.flush()
         }
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // Supporting coverage for PR-TEST-0690.
+    #[test]
+    fn core_diagnostics_wait_for_the_interactive_terminal() {
+        use crate::domain::{
+            CoreDiagnostic, HelperCommand, HelperFailure, HelperReason, HelperStage,
+        };
+        let context = delivery::Context {
+            interactive: true,
+            run_id: "0".repeat(32),
+            hook_ordinal: "1".into(),
+            operation: "action".into(),
+            action_id: Some("inspect".into()),
+            revision: delivery::Revision {
+                package_id: "0".repeat(32),
+                content_digest: format!("sha256:{}", "0".repeat(64)),
+            },
+            source_revision: None,
+            target_revision: None,
+        };
+        let record = delivery::Record {
+            format: presentation::FORMAT_KIND.into(),
+            format_version: presentation::FORMAT_VERSION.into(),
+            sequence: "1".into(),
+            received_at_unix_ms: None,
+            command: "invoke".into(),
+            event: delivery::Event::CoreDiagnostic {
+                context,
+                diagnostic: CoreDiagnostic::HelperFailure {
+                    failure: HelperFailure {
+                        command: HelperCommand::Diagnostic,
+                        stage: HelperStage::ReadJson,
+                        reason: HelperReason::NotFound,
+                    },
+                },
+            },
+        };
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        write_human_event(&record, &mut stdout, &mut stderr, false).unwrap();
+        assert!(stdout.is_empty() && stderr.is_empty());
+        write_human_event(&record, &mut stdout, &mut stderr, true).unwrap();
+        assert!(
+            String::from_utf8(stderr)
+                .unwrap()
+                .contains("Pactrun helper diagnostic: read JSON file")
+        );
     }
 }

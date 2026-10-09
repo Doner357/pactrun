@@ -18,6 +18,39 @@ fn show(command: &str, value: &Value) -> String {
     String::from_utf8(output).unwrap()
 }
 
+// Test-ID: PR-TEST-0691
+// Verifies: PR-REQ-0364
+#[test]
+fn guidance_quotes_names_and_keeps_historical_facts_separate_from_advice() {
+    for name in [
+        "sample demo",
+        "quote'and$HOME",
+        "a; exit 17",
+        "curly\u{2018}quote\u{2019}",
+        "\u{6e2c}\u{8a66}",
+    ] {
+        let value = json!({"name":name,"instance_id":"instance","required_inputs_satisfied":false,
+            "inputs":[{"input_id":"config","role":"active","required":true,"present":false,"protection":"secret"}]});
+        let rendered = show("instance show", &value);
+        let command = rendered
+            .lines()
+            .find(|s| s.contains("pactrun input set"))
+            .unwrap();
+        assert!(command.contains("input set '"), "{command}");
+        if name.contains('\'') {
+            #[cfg(windows)]
+            assert!(command.contains("quote''and$HOME"));
+            #[cfg(not(windows))]
+            assert!(command.contains("quote'\"'\"'and$HOME"));
+        }
+    }
+    let historical = json!({"run":{"run_id":"run","instance_id":"instance","operation":{"kind":"action","action_id":"inspect"},
+        "state":{"phase":"finished","outcome":"failed","primary_failure":{"step":"admission","cause":{"kind":"missing_required_inputs","input_ids":["config"]}},"secondary_failures":[]}}});
+    let rendered = show("run show", &historical);
+    assert!(rendered.contains("config") && rendered.contains("admission"));
+    assert!(!rendered.contains("Bind the missing Inputs"));
+}
+
 // Test-ID: PR-TEST-0683
 // Verifies: PR-REQ-0353, PR-REQ-0363, PR-REQ-0377
 #[test]

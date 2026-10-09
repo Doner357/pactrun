@@ -5,6 +5,7 @@
 mod capture;
 #[cfg(test)]
 pub(crate) use capture::{capture_clock_for_test, install_capture_clock_for_test};
+mod core_diagnostics;
 mod deletions;
 pub(crate) mod delivery;
 mod diagnostic_scope;

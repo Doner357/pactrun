@@ -572,7 +572,17 @@ fn parameter_projection_is_redacted_but_hook_explanations_have_explicit_provenan
     assert_success(&private);
     let private = String::from_utf8_lossy(&private.stdout);
     assert!(!private.contains(canary));
-    assert!(private.contains("Retain Text: No"));
+    assert!(private.contains("Hook diagnostic text: not retained"));
+    let stored = scenario.run(["--format", "json", "run", "show", &run_id(&unretained)]);
+    assert_success(&stored);
+    let stored: serde_json::Value = serde_json::from_slice(&stored.stdout).unwrap();
+    assert_eq!(stored["result"]["diagnostics"]["retain_text"], false);
+    assert!(
+        stored["result"]["diagnostics"]["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     let original = scenario.run(["run", "show", &run_id(&invoked)]);
     assert!(String::from_utf8_lossy(&original.stdout).contains(canary));
 }

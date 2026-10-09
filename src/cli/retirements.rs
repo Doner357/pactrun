@@ -128,6 +128,9 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     };
     while let Some(arg) = parser.next().map_err(lex_error)? {
         match arg {
+            Arg::Long("no-retain-hook-text") if !options.no_retain_hook_text => {
+                options.no_retain_hook_text = true
+            }
             Arg::Long("cancel-on-output-close") if !options.cancel_on_output_close => {
                 options.cancel_on_output_close = true
             }
@@ -351,6 +354,7 @@ pub(super) fn execute(
                 }
                 thread::sleep(Duration::from_millis(100));
             }
+            cancellation.diagnostics.finish();
             let inspection = app
                 .managed_run_inspection(run)
                 .map_err(|error| safe_error(error).with_run_context(run))?
@@ -366,9 +370,8 @@ pub(super) fn execute(
                 {
                     return presentation::emit_result(format, command_name, &result);
                 }
-                let mut error = CliError::operation(
-                    "retirement Run did not succeed; inspect the typed outcome before retrying",
-                );
+                let mut error =
+                    CliError::operation("Instance retirement did not complete successfully");
                 error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                 Err(error)
             }

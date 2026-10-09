@@ -38,6 +38,7 @@ pub(super) struct ProtocolListener {
     endpoint: String,
     inner: PlatformProtocolListener,
     startup: Option<std::sync::Arc<super::startup::Setup>>,
+    core_endpoint: String,
     #[cfg(unix)]
     directory: Option<super::startup::PrivateDirectory>,
 }
@@ -75,6 +76,7 @@ impl ProtocolListener {
             endpoint,
             inner,
             startup: None,
+            core_endpoint: String::new(),
             directory: Some(owned),
         };
         listener.inner.set_nonblocking(true)?;
@@ -117,6 +119,7 @@ impl ProtocolListener {
                 endpoint,
                 inner,
                 startup: None,
+                core_endpoint: String::new(),
             })
         }
     }
@@ -128,8 +131,26 @@ impl ProtocolListener {
         command.envs(self.environment());
     }
 
-    fn environment(&self) -> [(&str, &str); 3] {
+    pub(super) fn attach_core_diagnostics(
+        &mut self,
+        scope: Option<&super::diagnostics::DiagnosticScope>,
+    ) -> Option<super::core_diagnostics::Bridge> {
+        self.startup.as_ref()?;
+        let sink = scope?.core_sink();
+        match super::core_diagnostics::Bridge::start(sink.clone()) {
+            Ok(bridge) => {
+                self.core_endpoint = bridge.endpoint().into();
+                Some(bridge)
+            }
+            Err(_) => {
+                sink.incomplete();
+                None
+            }
+        }
+    }
+    fn environment(&self) -> [(&str, &str); 4] {
         [
+            (super::core_diagnostics::ENDPOINT_ENV, &self.core_endpoint),
             (TRANSPORT_ENVIRONMENT, platform_transport_name()),
             (ENDPOINT_ENVIRONMENT, &self.endpoint),
             (
@@ -1051,6 +1072,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         endpoint,
         inner,
         startup: None,
+        core_endpoint: String::new(),
     })
 }
 
@@ -1081,6 +1103,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         endpoint,
         inner,
         startup: None,
+        core_endpoint: String::new(),
         directory: Some(directory),
     })
 }

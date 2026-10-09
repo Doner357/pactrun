@@ -28,9 +28,10 @@ suffixes do not select a format. Reader selection uses the explicit version stri
 
 Each domain owns its implemented readers and writers. A matching Major or an
 ordered newer identifier MUST NOT be interpreted as automatic support. Format
-Minor does not imply minimum product Minor. Pack source, Pack distribution, CLI
-machine interface currently write `1.0-alpha.2`. Persistence writes
-`1.0-alpha.3` and accepts the exact `1.0-alpha.1` and `1.0-alpha.2` Store schemas
+Minor does not imply minimum product Minor. Pack source and Pack distribution
+write `1.0-alpha.2`; the CLI machine interface writes `1.0-alpha.3`. Persistence
+writes `1.0-alpha.4` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2` and
+`1.0-alpha.3` Store schemas
 through its supported upgrade path.
 Revision, Hook, Snapshot integrity and Snapshot bundle remain `1.0-alpha.1`.
 Changes follow the owning contract rather than synchronizing
@@ -73,7 +74,7 @@ non-terminal Runs and unresolved recovery obligations without reconciliation.
 Any future internal migration requires an explicit supported contract and must
 preserve those same obligations. No other storage conversion is defined.
 
-**Verification: PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
+**Verification: PR-TEST-0692, PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
 
 **Verification: PR-TEST-0687.**
 

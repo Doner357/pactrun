@@ -319,6 +319,18 @@ fn declared_hook_failure_is_durable_and_its_explanation_is_attributed() {
     assert_eq!(run.outcome, "failed");
     let view = String::from_utf8_lossy(&shown.stdout);
     assert!(view.contains("fixture failure"));
-    assert!(view.contains("Kind: completion"));
+    let structured = scenario.run(["--format", "json", "run", "show", &id]);
+    assert_success(&structured);
+    let structured: serde_json::Value = serde_json::from_slice(&structured.stdout).unwrap();
+    assert!(
+        structured["result"]["diagnostics"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "completion"
+                && event["source"] == "hook"
+                && event["completion_status"] == "failure")
+    );
+    assert!(view.contains("Hook #"));
     assert!(view.contains("Hook completion: failure"));
 }

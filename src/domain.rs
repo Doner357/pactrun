@@ -9,6 +9,8 @@ pub(crate) use catalog::*;
 mod deletion;
 mod diagnostics;
 pub(crate) use diagnostics::*;
+mod core_diagnostics;
+pub(crate) use core_diagnostics::*;
 mod error;
 mod execution;
 mod identity;

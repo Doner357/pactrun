@@ -134,7 +134,7 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
     assert_eq!(
         db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        2
+        3
     );
     assert_eq!(
         db.query_row(
@@ -143,6 +143,6 @@ fn lifecycle_cli_deletes_history_and_installation_before_explicit_collection() {
             |r| r.get::<_, String>(0)
         )
         .unwrap(),
-        "1.0-alpha.3"
+        "1.0-alpha.4"
     );
 }

@@ -593,6 +593,7 @@ fn execute_intent(
         }
         thread::sleep(Duration::from_millis(100));
     }
+    cancellation.diagnostics.finish();
     let inspection = app
         .managed_run_inspection(run)
         .map_err(|error| safe_error(error).with_run_context(run))?
@@ -618,9 +619,7 @@ fn execute_intent(
                 &result,
             );
         }
-        let mut error = CliError::operation(
-            "Snapshot Run did not succeed; inspect the typed outcome before retrying",
-        );
+        let mut error = CliError::operation("Snapshot operation did not complete successfully");
         error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
         Err(error)
     }

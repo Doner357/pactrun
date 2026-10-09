@@ -128,6 +128,11 @@ pub(crate) enum Event {
         phase: CorePhase,
         interactive: bool,
     },
+    CoreDiagnostic {
+        context: Context,
+        #[serde(flatten)]
+        diagnostic: crate::domain::CoreDiagnostic,
+    },
     Output {
         context: Context,
         channel: Channel,
@@ -140,6 +145,7 @@ pub(crate) enum Event {
         context: Context,
         kind: String,
         severity: Option<String>,
+        completion_status: Option<String>,
         code: Option<String>,
         message: Option<String>,
     },
@@ -493,6 +499,27 @@ pub(super) struct Scope {
     context: Context,
 }
 impl Scope {
+    pub(super) fn core_incomplete(&self, reason: crate::domain::CoreCollectionIssue) {
+        if !matches!(reason, crate::domain::CoreCollectionIssue::Storage) {
+            self.delivery.shared.fail("core_diagnostics_incomplete");
+        }
+        self.delivery.emit(
+            Event::CoreDiagnostic {
+                context: self.context.clone(),
+                diagnostic: crate::domain::CoreDiagnostic::CollectionIncomplete { reason },
+            },
+            false,
+        );
+    }
+    pub(super) fn core_diagnostic(&self, failure: crate::domain::HelperFailure) {
+        self.delivery.emit(
+            Event::CoreDiagnostic {
+                context: self.context.clone(),
+                diagnostic: crate::domain::CoreDiagnostic::HelperFailure { failure },
+            },
+            false,
+        );
+    }
     pub(super) fn diagnostic(&self, text: &HookText) {
         use crate::domain::{DiagnosticKind, DiagnosticSeverity};
         self.delivery.emit(
@@ -513,6 +540,10 @@ impl Scope {
                     .into()
                 }),
                 code: text.code.clone(),
+                completion_status: text.completion_status.map(|s| match s {
+                    crate::domain::HookCompletionStatus::Success => "success".into(),
+                    crate::domain::HookCompletionStatus::Failure => "failure".into(),
+                }),
                 message: text.message.clone(),
             },
             false,

@@ -122,6 +122,7 @@ mod tests {
             "launch_failed"
         );
         let mut view = DiagnosticInspection {
+            core: None,
             retain_text: false,
             started: true,
             closed: false,
@@ -366,6 +367,7 @@ struct HookEvent {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Diagnostics {
+    pactrun: Option<CoreDiagnostics>,
     retain_text: bool,
     started: bool,
     collection_closed: bool,
@@ -377,6 +379,24 @@ struct Diagnostics {
 impl From<&crate::domain::DiagnosticInspection> for Diagnostics {
     fn from(view: &crate::domain::DiagnosticInspection) -> Self {
         Self {
+            pactrun: view.core.as_ref().map(|v| CoreDiagnostics {
+                started: v.started,
+                observed: v.observed.to_string(),
+                collection_closed: v.collection_closed,
+                persistence_failed: v.persistence_failed,
+                events: v
+                    .events
+                    .iter()
+                    .map(|e| CoreEvent {
+                        source: "pactrun",
+                        sequence: e.sequence.to_string(),
+                        received_at_unix_ms: e.received_at_unix_ms.map(|v| v.to_string()),
+                        stage: e.stage.clone(),
+                        failure: e.failure,
+                        message: e.failure.to_string(),
+                    })
+                    .collect(),
+            }),
             retain_text: view.retain_text,
             started: view.started,
             collection_closed: view.closed,
@@ -414,6 +434,25 @@ impl From<&crate::domain::DiagnosticInspection> for Diagnostics {
     }
 }
 
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct CoreEvent {
+    source: &'static str,
+    sequence: String,
+    received_at_unix_ms: Option<String>,
+    stage: String,
+    failure: crate::domain::HelperFailure,
+    message: String,
+}
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct CoreDiagnostics {
+    started: bool,
+    observed: String,
+    collection_closed: bool,
+    persistence_failed: bool,
+    events: Vec<CoreEvent>,
+}
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct MigrationProgress {

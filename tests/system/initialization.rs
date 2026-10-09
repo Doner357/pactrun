@@ -279,7 +279,7 @@ fn machine_delivery_covers_shell_loader_lifecycle_and_each_migration_hook() {
         for (index, event) in events.iter().enumerate() {
             assert_eq!(event["sequence"], (index + 1).to_string());
             assert_eq!(event["format"], "pactrun.cli");
-            assert_eq!(event["format_version"], "1.0-alpha.2");
+            assert_eq!(event["format_version"], "1.0-alpha.3");
         }
         let result = events.pop().unwrap();
         assert_eq!(result["type"], "result");

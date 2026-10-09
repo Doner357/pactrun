@@ -37,7 +37,7 @@ runtime, such as Docker, systemd, or Kubernetes.
 ## CLI output
 
 Human output provides summaries, descriptions, and actionable errors. `run show`
-provides execution diagnostics.
+provides Hook and Pactrun execution diagnostics, including handled shell-helper failures.
 
 Object IDs accept unique prefixes of at least eight lowercase hexadecimal digits,
 for example `pactrun run show 6fb391d6`. Human lists display usable short IDs;
@@ -46,7 +46,7 @@ for Revision and Migration forms.
 
 - `--format json` returns one complete response.
 - `--format jsonl` streams events and ends with a result.
-- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.2"`.
+- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.3"`.
 - Noninteractive Hook output is delivered as Base64 byte chunks in machine modes.
   Human mode keeps the Hook's stdout and stderr streams.
 - `--cancel-on-output-close` requests cancellation when a JSONL execution's

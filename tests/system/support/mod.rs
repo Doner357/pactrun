@@ -462,7 +462,7 @@ pub(crate) fn assert_empty_json_result(output: &Output, field: &str) {
     assert_success(output);
     let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.2");
+    assert_eq!(response["format_version"], "1.0-alpha.3");
     assert_eq!(response["status"], "success");
     assert!(response["error"].is_null());
     assert!(
@@ -528,7 +528,7 @@ pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.2");
+    assert_eq!(response["format_version"], "1.0-alpha.3");
     assert_eq!(response["status"], "success");
     response["result"]["items"]
         .as_array()

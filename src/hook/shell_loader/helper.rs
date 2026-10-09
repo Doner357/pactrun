@@ -1,13 +1,64 @@
 //! Explicit helper CLI; file copying never passes payload bytes through IPC.
 use super::*;
+use crate::domain::{HelperCommand, HelperFailure, HelperReason, HelperStage};
+
+#[derive(Debug)]
+struct LocalProblem(HelperStage, HelperReason);
+impl std::fmt::Display for LocalProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.0.text(), self.1.text())
+    }
+}
+impl std::error::Error for LocalProblem {}
+fn problem(stage: HelperStage, reason: HelperReason) -> io::Error {
+    io::Error::other(LocalProblem(stage, reason))
+}
+fn io_reason(error: &io::Error) -> HelperReason {
+    match error.kind() {
+        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory => HelperReason::NotFound,
+        io::ErrorKind::PermissionDenied => HelperReason::PermissionDenied,
+        io::ErrorKind::AlreadyExists => HelperReason::AlreadyExists,
+        _ => HelperReason::Io,
+    }
+}
+fn at(stage: HelperStage, error: io::Error) -> io::Error {
+    problem(stage, io_reason(&error))
+}
+enum HelperError {
+    Failure(HelperFailure),
+    TerminalProtocolError,
+}
+fn classified(
+    command: HelperCommand,
+    error: io::Error,
+    stage: HelperStage,
+    reason: HelperReason,
+) -> HelperError {
+    let (stage, reason) = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<LocalProblem>())
+        .map_or((stage, reason), |e| (e.0, e.1));
+    HelperError::Failure(HelperFailure {
+        command,
+        stage,
+        reason,
+    })
+}
 
 fn json_file(path: &Path) -> io::Result<Value> {
     let mut bytes = vec![];
-    fs::File::open(path)?
+    fs::File::open(path)
+        .map_err(|e| at(HelperStage::ReadJson, e))?
         .take((LIMIT + 1) as u64)
-        .read_to_end(&mut bytes)?;
-    strict_json::parse_json(&bytes, LIMIT).map_err(|_| failure())?;
-    serde_json::from_slice(&bytes).map_err(|_| failure())
+        .read_to_end(&mut bytes)
+        .map_err(|e| at(HelperStage::ReadJson, e))?;
+    if bytes.len() > LIMIT {
+        return Err(problem(HelperStage::ParseJson, HelperReason::TooLarge));
+    }
+    strict_json::parse_json(&bytes, LIMIT)
+        .map_err(|_| problem(HelperStage::ParseJson, HelperReason::InvalidJson))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|_| problem(HelperStage::ParseJson, HelperReason::InvalidJson))
 }
 
 struct Call {
@@ -139,12 +190,11 @@ fn parse(args: &[OsString]) -> io::Result<Call> {
     })
 }
 
-fn execute(args: &[OsString]) -> io::Result<bool> {
-    let call = parse(args)?;
+fn connection() -> io::Result<ProtocolStream> {
     let endpoint = env::var(HELPER_ENDPOINT).map_err(|_| failure())?;
-    let mut stream = loop {
+    loop {
         match connect(&endpoint) {
-            Ok(stream) => break stream,
+            Ok(stream) => return Ok(stream),
             // Busy connection admission is mechanical, not a request replay.
             // The execution owner controls deadlines and the helper process
             // tree; do not impose a second deadline on a healthy busy Session.
@@ -153,22 +203,61 @@ fn execute(args: &[OsString]) -> io::Result<bool> {
             }
             Err(error) => return Err(error),
         }
-    };
+    }
+}
+fn execute(args: &[OsString]) -> Result<(), HelperError> {
+    let command = HelperCommand::parse(args.first().and_then(|v| v.to_str()).unwrap_or_default());
+    let call = parse(args).map_err(|e| {
+        classified(
+            command,
+            e,
+            HelperStage::Arguments,
+            HelperReason::InvalidArguments,
+        )
+    })?;
+    let mut stream = connection()
+        .map_err(|e| classified(command, e, HelperStage::Connect, HelperReason::Unavailable))?;
     write_helper_frame(
         &mut stream,
-        &serde_json::to_value(call.request).map_err(|_| failure())?,
-    )?;
-    let reply = read_helper_frame(&mut stream)?;
-    let ok = reply["ok"].as_bool().ok_or_else(failure)?;
+        &serde_json::to_value(call.request).expect("typed helper request"),
+    )
+    .map_err(|e| classified(command, e, HelperStage::Submit, HelperReason::Io))?;
+    let reply = read_helper_frame(&mut stream).map_err(|e| {
+        if command == HelperCommand::ProtocolError
+            && matches!(
+                e.kind(),
+                io::ErrorKind::UnexpectedEof
+                    | io::ErrorKind::BrokenPipe
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::NotConnected
+            )
+        {
+            return HelperError::TerminalProtocolError;
+        }
+        classified(command, e, HelperStage::Reply, HelperReason::InvalidReply)
+    })?;
+    let ok = reply["ok"].as_bool().ok_or_else(|| {
+        classified(
+            command,
+            failure(),
+            HelperStage::Reply,
+            HelperReason::InvalidReply,
+        )
+    })?;
     let delivery = (|| -> io::Result<()> {
         if ok {
-            let value = reply.get("value").ok_or_else(failure)?;
+            let value = reply
+                .get("value")
+                .ok_or_else(|| problem(HelperStage::Reply, HelperReason::InvalidReply))?;
             if let Some(source) = call.copy_from {
-                fs::copy(source, value.as_str().ok_or_else(failure)?)?;
+                fs::copy(source, value.as_str().ok_or_else(failure)?)
+                    .map_err(|e| at(HelperStage::CopyData, e))?;
             } else if let Some(destination) = call.copy_to {
-                let source = fs::File::open(value.as_str().ok_or_else(failure)?)?;
+                let source = fs::File::open(value.as_str().ok_or_else(failure)?)
+                    .map_err(|e| at(HelperStage::ReadInput, e))?;
                 let mut out = create_output(Path::new(&destination))?;
-                io::copy(&mut io::BufReader::new(source), &mut out)?;
+                io::copy(&mut io::BufReader::new(source), &mut out)
+                    .map_err(|e| at(HelperStage::CopyData, e))?;
                 out.flush()?;
             } else if !value.is_null() {
                 let bytes = if call.text {
@@ -190,9 +279,21 @@ fn execute(args: &[OsString]) -> io::Result<bool> {
         }
         Ok(())
     })();
-    write_helper_frame(&mut stream, &json!({"received":true}))?;
-    delivery?;
-    Ok(ok)
+    write_helper_frame(&mut stream, &json!({"received":true}))
+        .map_err(|e| classified(command, e, HelperStage::Submit, HelperReason::Io))?;
+    delivery.map_err(|e| classified(command, e, HelperStage::WriteOutput, HelperReason::Io))?;
+    if !ok {
+        return Err(classified(
+            command,
+            failure(),
+            HelperStage::Request,
+            reply
+                .get("reason")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or(HelperReason::InvalidRequest),
+        ));
+    }
+    Ok(())
 }
 
 fn create_output(path: &Path) -> io::Result<fs::File> {
@@ -203,18 +304,19 @@ fn create_output(path: &Path) -> io::Result<fs::File> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    options.open(path)
+    options
+        .open(path)
+        .map_err(|e| at(HelperStage::WriteOutput, e))
 }
 
 pub(super) fn run(args: &[OsString]) -> i32 {
     match execute(args) {
-        Ok(true) => 0,
-        Ok(false) => {
-            eprintln!("error: shell helper request rejected");
-            1
-        }
-        Err(_) => {
-            eprintln!("error: shell helper failed; no request was retried");
+        Ok(()) => 0,
+        Err(HelperError::TerminalProtocolError) => 1,
+        Err(HelperError::Failure(failure)) => {
+            if !crate::hook::core_diagnostics::publish(&failure) {
+                eprintln!("error: Pactrun {failure}");
+            }
             1
         }
     }

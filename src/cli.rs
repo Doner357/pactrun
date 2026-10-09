@@ -1725,9 +1725,7 @@ fn execute(
                 {
                     return emit_result(format, "invoke", &result);
                 }
-                let mut error = CliError::operation(
-                    "Run did not succeed; inspect the typed Run outcome before deciding what to do next",
-                );
+                let mut error = CliError::operation("Action did not complete successfully");
                 error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                 return Err(error);
             }

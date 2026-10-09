@@ -27,6 +27,23 @@ fn scalar(value: &Value) -> String {
 pub(super) fn quoted(value: &str) -> String {
     serde_json::to_string(value).expect("string serialization")
 }
+fn command_argument(value: &str) -> String {
+    if !value.is_empty()
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_-.".contains(&c))
+    {
+        return value.to_owned();
+    }
+    #[cfg(windows)]
+    let escaped = value
+        .replace('\'', "''")
+        .replace('\u{2018}', "\u{2018}\u{2018}")
+        .replace('\u{2019}', "\u{2019}\u{2019}");
+    #[cfg(not(windows))]
+    let escaped = value.replace('\'', "'\"'\"'");
+    format!("'{escaped}'")
+}
 pub(super) fn path_text(value: &Value) -> String {
     match value["encoding"].as_str() {
         Some("utf8") => value["value"]
@@ -258,10 +275,9 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                     ),
                 )?;
                 write(out, format!("  Stage: {}", text(f, "step")))?;
-                write(
-                    out,
-                    "  Bind the missing Inputs before invoking again. This Run keeps its original failure.",
-                )?;
+                if !details {
+                    write(out, "  Bind the missing Inputs before invoking again.")?;
+                }
             } else {
                 tree(f, out, 2)?;
             }
@@ -317,8 +333,7 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
             }
         }
         if let Some(v) = value.get("diagnostics").filter(|v| !v.is_null()) {
-            write(out, "\nDiagnostics")?;
-            tree(v, out, 2)?;
+            diagnostic_details(v, out)?;
         }
     } else if state
         .get("outcome")
@@ -332,6 +347,77 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                 text(run, "run_id")
             ),
         )?;
+    }
+    Ok(())
+}
+fn diagnostic_details(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
+    for (source, collection) in [("Hook", value), ("Pactrun", &value["pactrun"])] {
+        if collection.is_null() {
+            continue;
+        }
+        let events = collection["events"].as_array();
+        if source == "Hook" && collection["retain_text"] == false {
+            write(out, "Hook diagnostic text: not retained")?;
+        }
+        if let Some(events) = events {
+            for event in events {
+                let summary = event["message"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(catalog::safe)
+                    .unwrap_or_else(|| {
+                        if event["kind"] == "completion" {
+                            format!("completion: {}", text(event, "completion_status"))
+                        } else {
+                            text(event, "kind")
+                        }
+                    });
+                let code = event["code"]
+                    .as_str()
+                    .map(|v| format!(" [{}]", catalog::safe(v)))
+                    .unwrap_or_default();
+                let severity = event["severity"]
+                    .as_str()
+                    .map(|v| format!(" {}", catalog::safe(v)))
+                    .unwrap_or_default();
+                write(
+                    out,
+                    format!(
+                        "{source} #{}{}{}: {summary}",
+                        text(event, "sequence"),
+                        severity,
+                        code
+                    ),
+                )?;
+                if let Some(stage) = event["stage"].as_str() {
+                    write(out, format!("  Context: {}", catalog::safe(stage)))?;
+                }
+                if event["truncated"] == true {
+                    write(out, "  Message: middle omitted")?;
+                }
+            }
+            if let Some(observed) = collection["observed"]
+                .as_str()
+                .and_then(|s| s.parse::<u64>().ok())
+            {
+                let omitted = observed.saturating_sub(events.len() as u64);
+                if omitted > 0 && (source != "Hook" || collection["retain_text"] != false) {
+                    write(
+                        out,
+                        format!("{source}: {omitted} diagnostic events not retained"),
+                    )?;
+                }
+            }
+        }
+        if collection["persistence_failed"] == true {
+            write(out, format!("{source}: diagnostic storage failed"))?;
+        }
+        if collection["collection_closed"] == false && collection["started"] == true {
+            write(
+                out,
+                format!("{source}: diagnostic collection did not finish"),
+            )?;
+        }
     }
     Ok(())
 }
@@ -498,7 +584,7 @@ fn instance(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
                     out,
                     format!(
                         "  pactrun input set {} {} --file <path>",
-                        text(value, "name"),
+                        command_argument(value["name"].as_str().unwrap_or_default()),
                         text(input, "input_id")
                     ),
                 )?;

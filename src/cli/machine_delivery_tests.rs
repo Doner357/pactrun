@@ -1,4 +1,17 @@
 // Included in cli::tests to reuse the real Hook worker and isolated stores.
+// Test-ID: PR-TEST-0694
+// Verifies: PR-REQ-0366, PR-REQ-0367
+#[test]
+fn machine_completion_events_preserve_status_independently_of_retention() {
+    let (temp, root, expected, sensitive) = prepared_cli_hook_instance_with_terminal("output");
+    let marker = temp.path().join("completion-status");
+    let (code, value, _) = json_invoke(&root, machine_args(&marker, &expected, &sensitive));
+    assert_eq!(code, 0);
+    let event = value["delivery"]["events"].as_array().unwrap().iter().find(|e| e["type"] == "diagnostic" && e["kind"] == "completion").unwrap();
+    assert_eq!(event["completion_status"], "success");
+    assert_eq!(value["result"]["run"]["state"]["hook_completion_status"], "success");
+    assert!(value["result"]["diagnostics"]["events"].as_array().unwrap().is_empty());
+}
 // Test-ID: PR-TEST-0685
 // Verifies: PR-REQ-0366, PR-REQ-0367, PR-REQ-0377, PR-REQ-0286
 #[test]

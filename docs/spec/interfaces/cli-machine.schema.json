@@ -532,6 +532,78 @@
       ],
       "type": "object"
     },
+    "CoreCollectionIssue": {
+      "enum": [
+        "transport",
+        "capacity",
+        "storage"
+      ],
+      "type": "string"
+    },
+    "CoreDiagnostics": {
+      "properties": {
+        "collection_closed": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CoreEvent"
+          },
+          "type": "array"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "persistence_failed": {
+          "type": "boolean"
+        },
+        "started": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "started",
+        "observed",
+        "collection_closed",
+        "persistence_failed",
+        "events"
+      ],
+      "type": "object"
+    },
+    "CoreEvent": {
+      "properties": {
+        "failure": {
+          "$ref": "#/$defs/HelperFailure"
+        },
+        "message": {
+          "type": "string"
+        },
+        "received_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "source": {
+          "const": "pactrun"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "sequence",
+        "received_at_unix_ms",
+        "stage",
+        "failure",
+        "message"
+      ],
+      "type": "object"
+    },
     "CorePhase": {
       "enum": [
         "waiting_for_process_tree",
@@ -849,6 +921,16 @@
         "observed": {
           "type": "string"
         },
+        "pactrun": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "persistence_failed": {
           "type": "boolean"
         },
@@ -860,6 +942,7 @@
         }
       },
       "required": [
+        "pactrun",
         "retain_text",
         "started",
         "collection_closed",
@@ -1261,6 +1344,79 @@
       ],
       "type": "object"
     },
+    "HelperCommand": {
+      "enum": [
+        "unknown",
+        "session",
+        "parameter",
+        "workspace",
+        "input",
+        "resource",
+        "output",
+        "output_register",
+        "candidate",
+        "snapshot_content",
+        "diagnostic",
+        "protocol_error",
+        "risk",
+        "capture_register",
+        "completion",
+        "target_ready"
+      ],
+      "type": "string"
+    },
+    "HelperFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/HelperCommand"
+        },
+        "reason": {
+          "$ref": "#/$defs/HelperReason"
+        },
+        "stage": {
+          "$ref": "#/$defs/HelperStage"
+        }
+      },
+      "required": [
+        "command",
+        "stage",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "HelperReason": {
+      "enum": [
+        "invalid_arguments",
+        "not_found",
+        "permission_denied",
+        "already_exists",
+        "invalid_json",
+        "too_large",
+        "unavailable",
+        "invalid_request",
+        "invalid_reply",
+        "parameter_unavailable",
+        "invalid_message",
+        "io"
+      ],
+      "type": "string"
+    },
+    "HelperStage": {
+      "enum": [
+        "arguments",
+        "read_json",
+        "parse_json",
+        "connect",
+        "submit",
+        "reply",
+        "read_input",
+        "copy_data",
+        "write_output",
+        "request"
+      ],
+      "type": "string"
+    },
     "History": {
       "properties": {
         "current_name": {
@@ -1378,7 +1534,7 @@
           ]
         },
         "source": {
-          "type": "string"
+          "const": "hook"
         },
         "stage": {
           "type": "string"
@@ -3337,6 +3493,56 @@
           "type": "object"
         },
         {
+          "oneOf": [
+            {
+              "properties": {
+                "failure": {
+                  "$ref": "#/$defs/HelperFailure"
+                },
+                "kind": {
+                  "const": "helper_failure",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "failure"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "collection_incomplete",
+                  "type": "string"
+                },
+                "reason": {
+                  "$ref": "#/$defs/CoreCollectionIssue"
+                }
+              },
+              "required": [
+                "kind",
+                "reason"
+              ],
+              "type": "object"
+            }
+          ],
+          "properties": {
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "type": {
+              "const": "core_diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "byte_length": {
               "type": "string"
@@ -3383,6 +3589,13 @@
                 "null"
               ]
             },
+            "completion_status": {
+              "enum": [
+                null,
+                "success",
+                "failure"
+              ]
+            },
             "context": {
               "$ref": "#/$defs/Context"
             },
@@ -3411,6 +3624,7 @@
             "context",
             "kind",
             "severity",
+            "completion_status",
             "code",
             "message"
           ],
@@ -3425,7 +3639,7 @@
           "const": "pactrun.cli"
         },
         "format_version": {
-          "const": "1.0-alpha.2"
+          "const": "1.0-alpha.3"
         },
         "received_at_unix_ms": {
           "type": [
@@ -8708,7 +8922,7 @@
       "const": "pactrun.cli"
     },
     "format_version": {
-      "const": "1.0-alpha.2"
+      "const": "1.0-alpha.3"
     },
     "result": {
       "type": [
@@ -8731,6 +8945,6 @@
     "result",
     "error"
   ],
-  "title": "Pactrun CLI machine interface 1.0-alpha.2",
+  "title": "Pactrun CLI machine interface 1.0-alpha.3",
   "type": "object"
 }

@@ -252,6 +252,8 @@ impl VersionDomain {
                     prerelease: Some(Prerelease {
                         stage: Stage::Alpha,
                         number: if matches!(self, Self::Persistence) {
+                            4
+                        } else if matches!(self, Self::Machine) {
                             3
                         } else {
                             2
@@ -263,8 +265,9 @@ impl VersionDomain {
     }
     pub(crate) const fn current_text(self) -> &'static str {
         match self {
-            Self::Persistence => "1.0-alpha.3",
-            Self::PackSource | Self::PackDistribution | Self::Machine => "1.0-alpha.2",
+            Self::Persistence => "1.0-alpha.4",
+            Self::Machine => "1.0-alpha.3",
+            Self::PackSource | Self::PackDistribution => "1.0-alpha.2",
             _ => "1.0-alpha.1",
         }
     }

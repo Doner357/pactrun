@@ -1641,7 +1641,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            76 // Includes local names, installation facts and safe Run causes.
+            78 // Includes local names, safe Run causes and separate Core evidence.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),

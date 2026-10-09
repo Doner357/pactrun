@@ -57,7 +57,7 @@ pub(super) fn open_writer_database(
             fault(FaultPoint::BeforeBootstrapCommit);
         }
         DatabaseState::Baseline => {}
-        state @ (DatabaseState::Alpha1 | DatabaseState::Alpha2) => {
+        state @ (DatabaseState::Alpha1 | DatabaseState::Alpha2 | DatabaseState::Alpha3) => {
             return Err(unsupported_source(state));
         }
     }

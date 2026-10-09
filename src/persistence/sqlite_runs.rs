@@ -404,6 +404,8 @@ impl PactrunPersistence {
                 run,
                 source: PersistenceError::sqlite("initialize diagnostic policy", error),
             })?;
+        transaction.execute("INSERT INTO run_core_diagnostic_collections(run_id,observed,closed,failed) VALUES (?1,0,0,0)", [run.as_bytes().as_slice()])
+            .map_err(|error| AcceptanceError::NotCommitted { run, source: PersistenceError::sqlite("initialize Core diagnostic collection", error) })?;
         insert_managed_invocation(&transaction, run, operation)
             .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         transaction
@@ -4315,7 +4317,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            32 // Run relations, diagnostic evidence and safe missing-Input causes.
+            34 // Run relations, separate Hook/Core evidence and safe missing-Input causes.
         );
         assert!(
             columns

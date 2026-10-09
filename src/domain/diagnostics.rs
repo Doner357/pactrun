@@ -35,6 +35,7 @@ impl std::fmt::Debug for HookText {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DiagnosticInspection {
+    pub(crate) core: Option<super::CoreDiagnosticInspection>,
     pub(crate) retain_text: bool,
     pub(crate) started: bool,
     pub(crate) closed: bool,

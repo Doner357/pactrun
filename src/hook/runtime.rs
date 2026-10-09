@@ -82,6 +82,7 @@ pub(crate) struct LiveExecution {
     run: RunId,
     materialized: MaterializedAction,
     supervisor: ProcessSupervisor,
+    _core_diagnostics: Option<super::core_diagnostics::Bridge>,
     // Rust drops fields in declaration order: return terminal ownership before
     // enabling deferred diagnostic presentation.
     diagnostics: Option<super::diagnostics::DiagnosticScope>,
@@ -185,7 +186,7 @@ pub(super) fn execute_materialized(
             false,
         );
     }
-    let listener = match ProtocolListener::for_execution(
+    let mut listener = match ProtocolListener::for_execution(
         materialized.program(),
         materialized.arguments(),
         materialized.execution_root(),
@@ -214,6 +215,7 @@ pub(super) fn execute_materialized(
     if let Some(diagnostics) = &mut diagnostics {
         diagnostics.delivery = delivery.clone();
     }
+    let mut core_diagnostics = listener.attach_core_diagnostics(diagnostics.as_ref());
     let supervisor = match cancellation.arbitrate_launch(|| {
         ProcessSupervisor::spawn_delivered(
             materialized.program(),
@@ -241,6 +243,9 @@ pub(super) fn execute_materialized(
             );
         }
     };
+    if let Some(bridge) = &mut core_diagnostics {
+        bridge.mark_launched();
+    }
     let started = Instant::now();
     let state = if let Some(state) = materialized.take_protocol_state() {
         ProtocolState(state)
@@ -260,6 +265,7 @@ pub(super) fn execute_materialized(
     drive_execution(
         risk_persistence,
         LiveExecution {
+            _core_diagnostics: core_diagnostics,
             diagnostics,
             run,
             materialized,
@@ -357,7 +363,7 @@ pub(super) fn execute_snapshot_with_risk(
             return run;
         }
     };
-    let listener = match ProtocolListener::for_execution(
+    let mut listener = match ProtocolListener::for_execution(
         materialized.program(),
         materialized.arguments(),
         materialized.execution_root(),
@@ -381,6 +387,7 @@ pub(super) fn execute_snapshot_with_risk(
     if let Some(diagnostics) = &mut diagnostics {
         diagnostics.delivery = delivery.clone();
     }
+    let mut core_diagnostics = listener.attach_core_diagnostics(diagnostics.as_ref());
     let mut pending_materialization = Some(materialized);
     match claim.launch_once(|_| {
         let mut materialized = pending_materialization.take().expect("one launch attempt");
@@ -392,6 +399,9 @@ pub(super) fn execute_snapshot_with_risk(
             delivery.as_ref(),
         ) {
             Ok(supervisor) => {
+                if let Some(bridge) = &mut core_diagnostics {
+                    bridge.mark_launched();
+                }
                 let started = Instant::now();
                 let state = if let Some(state) = materialized.take_protocol_state() {
                     ProtocolState(state)
@@ -401,6 +411,7 @@ pub(super) fn execute_snapshot_with_risk(
                     ProtocolState::new_capture(materialized.session_id().to_owned())
                 };
                 Ok(LiveExecution {
+                    _core_diagnostics: core_diagnostics,
                     diagnostics,
                     run,
                     materialized,

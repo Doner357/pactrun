@@ -18,7 +18,7 @@ is local fixed NTFS; on Linux it is limited to the ext4, XFS, Btrfs, and ZFS
 profiles supported by the blob store. Preparation MUST complete required
 directory durability barriers before publishing the new Store.
 
-The SQLite database MUST use application ID `0x50414354`, private user version `2`, WAL
+The SQLite database MUST use application ID `0x50414354`, private user version `3`, WAL
 journal mode, `synchronous=FULL`, foreign-key enforcement, and a five-second
 busy timeout. In WAL mode, the main database and a live WAL MAY together carry
 committed database state. The SHM WAL index is reconstructible coordination and

@@ -36,7 +36,7 @@ no valid presentation was selected. Existing exit codes retain their meanings.
 
 An ordinary JSON response MUST be a single UTF-8 JSON object followed by a newline
 on stdout, with `format` equal to `pactrun.cli`, `format_version` equal to the string
-`1.0-alpha.2`, `command` (canonical command
+`1.0-alpha.3`, `command` (canonical command
 name, or null before dispatch including parsing/startup failures), `status`
 (`success` or `failure`), `result` (a
 command-specific typed object or null) and `error` (a typed error or null).
@@ -206,10 +206,14 @@ authentication, internal admission/pins or omitted internal work MUST NOT be add
 to ordinary output. Diagnostic inspection retains technical context and real gaps.
 Author content retains its meaning; terminal-control characters remain escaped in
 Pactrun-rendered text. Raw Hook terminal streams retain their channel contract.
+Copyable Human command suggestions use PowerShell quoting on Windows and POSIX
+shell quoting on Unix. Names keep their exact characters.
 
 **Verification: PR-TEST-0578, PR-TEST-0651.**
 
 **Verification: PR-TEST-0688.**
+
+**Verification: PR-TEST-0691.**
 
 ### PR-REQ-0365 - Complete public machine projections
 
@@ -271,7 +275,7 @@ Core supervision. Resource failure stops capture but drains subsequent terminal
 bytes, preserving cancellation and finalization. Broken output never triggers
 replay or compensation. Interactive execution is outside this contract.
 
-**Verification: PR-TEST-0580, PR-TEST-0581, PR-TEST-0583, PR-TEST-0585.**
+**Verification: PR-TEST-0580, PR-TEST-0581, PR-TEST-0583, PR-TEST-0585, PR-TEST-0690, PR-TEST-0694.**
 
 <a id="pr-req-0367---cli-event-stream-v1" />
 
@@ -280,12 +284,12 @@ replay or compensation. Interactive execution is outside this contract.
 ### PR-REQ-0367 - CLI event stream
 
 `--format jsonl` selects the same `pactrun.cli` interface and string
-`format_version: "1.0-alpha.2"` as ordinary results, not another version domain. Each physical LF-terminated
+`format_version: "1.0-alpha.3"` as ordinary results, not another version domain. Each physical LF-terminated
 line follows the [event schema](./cli-events.schema.json). Each
 UTF-8 line contains one compact JSON object with format, format_version, sequence, receipt time,
 command and a typed event. Sequence is a decimal string and orders observation
 within this invocation. Events are acceptance_pending, run_accepted, core_progress,
-output, diagnostic and result.
+output, diagnostic, core_diagnostic and result.
 Only a confirmed durable acceptance may produce run_accepted. Output preserves
 each stream's byte order; stderr bytes do not imply failure. Result carries the
 current response and delivery summary without duplicating previously delivered bytes.
@@ -293,6 +297,19 @@ Queries and previews emit one result. Absence of a complete final result indicat
 incomplete delivery, not a Run outcome. No reconnect/replay service is introduced.
 Raw stdout export is refused in JSONL before acquisition/publication; a file
 destination remains supported. Existing human/JSON raw export behavior is retained.
+
+Hook diagnostic events include nullable `completion_status` (`success` or
+`failure`) independently of severity. Completion status describes the Hook result,
+not the final Run outcome. `core_diagnostic` carries its invocation `context` and
+`kind: helper_failure` with a typed `failure` containing `command`, `stage` and
+`reason`. A `kind: collection_incomplete` event instead identifies a transport,
+capacity or storage recording problem. These events are Pactrun-owned evidence.
+Run inspection exposes retained Core events under `diagnostics.pactrun`, with
+`started`, `observed`, `collection_closed`, `persistence_failed` and `events`. Each event has
+`source: pactrun`, sequence, receipt time, context stage, the same failure fact and
+a generated safe message. Existing `diagnostics.events` remain Hook-owned.
+
+**Verification: PR-TEST-0690, PR-TEST-0694.**
 
 Core progress contains the exact accepted `run_id`, `interactive`, and a closed
 `phase`: `waiting_for_process_tree`, `retrying_storage`, or `finalizing_execution`.
@@ -392,7 +409,7 @@ target/, never silently update this specification. The following meanings apply:
   from Restore's compiler checks passed without Admission.
 - Run `state.phase` distinguishes running from finished. Finished `outcome`,
   boundary, recovery risk and failure references retain the execution contract.
-  Legacy free-form failure/completion text stays withheld. Diagnostic `source`
+  Legacy free-form failure/completion text stays withheld. Hook diagnostic `source`
   is `hook`, never Pactrun. A null diagnostic collection means no feature record;
   a non-closed collection has unknown tail completeness. Sequence gaps and the
   `observed` count represent omissions, not proof of non-emission. Retention
@@ -423,11 +440,11 @@ interface or an event stream. A completed JSON document never contains that text
 ## Examples {#examples-informative}
 
 ```json
-{"format":"pactrun.cli","format_version":"1.0-alpha.2","command":"version","status":"success","result":{"product_version":"0.1.0"},"error":null}
+{"format":"pactrun.cli","format_version":"1.0-alpha.3","command":"version","status":"success","result":{"product_version":"0.1.0"},"error":null}
 ```
 
 ```json
-{"format":"pactrun.cli","format_version":"1.0-alpha.2","command":null,"status":"failure","result":null,"error":{"kind":"usage","message":"unknown command","reference":null}}
+{"format":"pactrun.cli","format_version":"1.0-alpha.3","command":null,"status":"failure","result":null,"error":{"kind":"usage","message":"unknown command","reference":null}}
 ```
 
 A missing `format`, an unknown interface version, a numeric `product_version`,

@@ -27,10 +27,15 @@ with an explanation of the required correction. Authors' labels MUST NOT become
 user names. Package names remain unset and unavailable installation times remain
 unknown. Existing Revision and Instance identities remain unchanged.
 
-The exact alpha.1 and alpha.2 schemas upgrade to Persistence `1.0-alpha.3`.
+The exact alpha.1, alpha.2 and alpha.3 schemas upgrade to Persistence `1.0-alpha.4`.
 Existing failure text remains unchanged. An upgrade MUST NOT parse old messages
 to manufacture structured historical causes. Such a cause is unavailable for
 older Runs unless it was recorded as typed evidence at failure time.
+
+The upgrade adds the separate Core diagnostic collections and events without
+reclassifying Hook history or creating diagnostic facts for earlier Runs.
+
+**Verification: PR-TEST-0692.**
 
 **Verification: PR-TEST-0687.**
 

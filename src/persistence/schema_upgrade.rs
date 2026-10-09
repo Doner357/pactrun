@@ -35,6 +35,7 @@ pub(super) fn upgrade(root: &Path) -> Result<(), PersistenceError> {
         DatabaseState::Baseline => return Ok(()),
         DatabaseState::Alpha1 => 0,
         DatabaseState::Alpha2 => 1,
+        DatabaseState::Alpha3 => 2,
         DatabaseState::Pristine => {
             return Err(PersistenceError::SchemaMismatch(
                 "upgrade requires an existing supported Store".into(),
@@ -95,7 +96,11 @@ pub(super) fn upgrade(root: &Path) -> Result<(), PersistenceError> {
         tx.execute("INSERT INTO revision_local_names(package_id,revision_content_digest,name) SELECT package_id,revision_content_digest,CAST(alias_utf8 AS TEXT) FROM revision_local_aliases",[]).map_err(sql)?;
         tx.execute("INSERT INTO revision_installations(package_id,revision_content_digest,installed_at_unix_ms) SELECT package_id,revision_content_digest,NULL FROM revisions",[]).map_err(sql)?;
     }
-    tx.execute_batch(super::sqlite_revision_store::FAILURE_CAUSES_SQL)
+    if old_version < 2 {
+        tx.execute_batch(super::sqlite_revision_store::FAILURE_CAUSES_SQL)
+            .map_err(sql)?;
+    }
+    tx.execute_batch(super::sqlite_revision_store::CORE_DIAGNOSTICS_SQL)
         .map_err(sql)?;
     // Empty owner rows are bookkeeping, not Run history. Live owners were refused.
     tx.execute_batch("DROP TABLE writable_admissions;")
@@ -112,7 +117,7 @@ pub(super) fn upgrade(root: &Path) -> Result<(), PersistenceError> {
     ))
     .map_err(sql)?;
     tx.execute(
-        "UPDATE pactrun_metadata SET format_version='1.0-alpha.3' WHERE singleton=1",
+        "UPDATE pactrun_metadata SET format_version='1.0-alpha.4' WHERE singleton=1",
         [],
     )
     .map_err(sql)?;

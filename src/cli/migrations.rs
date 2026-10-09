@@ -498,6 +498,7 @@ pub(super) fn execute(
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
+                cancellation.diagnostics.finish();
                 let inspection=writer.managed_run_inspection(run).map_err(|error|app_error(error).with_run_context(run))?.ok_or_else(||CliError::operation("Migration acceptance was proven absent; no replacement Run was created").with_run_context(run))?;
                 {
                     let result = execution_presentation::Inspection::from(&inspection);

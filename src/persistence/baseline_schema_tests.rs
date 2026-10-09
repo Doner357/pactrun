@@ -142,7 +142,7 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
     assert!(PactrunPersistence::open_read_only(temp.path()).is_err());
     assert!(PactrunPersistence::open(temp.path()).is_err());
     db.execute(
-        "UPDATE pactrun_metadata SET format_version='1.0-alpha.3'",
+        "UPDATE pactrun_metadata SET format_version='1.0-alpha.4'",
         [],
     )
     .unwrap();
@@ -301,7 +301,7 @@ fn unsupported_wal_inspection_preserves_committed_frames_and_the_live_writer() {
         .unwrap();
     writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let main_before = std::fs::read(&database_path).unwrap();
-    writer.execute_batch("BEGIN IMMEDIATE; UPDATE pactrun_metadata SET format_version='1.0-alpha.3'; INSERT INTO packages VALUES(zeroblob(16)); COMMIT;").unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE; UPDATE pactrun_metadata SET format_version='1.0-alpha.4'; INSERT INTO packages VALUES(zeroblob(16)); COMMIT;").unwrap();
     let committed_wal = std::fs::read(&wal_path).unwrap();
     assert!(!committed_wal.is_empty());
     assert_eq!(std::fs::read(&database_path).unwrap(), main_before);
