@@ -1085,7 +1085,7 @@ impl PactrunApplication {
         if FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|remaining| {
             remaining
                 .borrow()
-                .fetch_update(
+                .try_update(
                     std::sync::atomic::Ordering::SeqCst,
                     std::sync::atomic::Ordering::SeqCst,
                     |n| n.checked_sub(1),
