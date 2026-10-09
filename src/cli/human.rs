@@ -275,9 +275,6 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                     ),
                 )?;
                 write(out, format!("  Stage: {}", text(f, "step")))?;
-                if !details {
-                    write(out, "  Bind the missing Inputs before invoking again.")?;
-                }
             } else {
                 tree(f, out, 2)?;
             }
@@ -580,13 +577,10 @@ fn instance(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
                 "\nNext: bind the required Inputs before running an Action.",
             )?;
             for input in missing {
-                write(
+                input_binding_command(
+                    value["name"].as_str().unwrap_or_default(),
+                    input["input_id"].as_str().unwrap_or_default(),
                     out,
-                    format!(
-                        "  pactrun input set {} {} --file <path>",
-                        command_argument(value["name"].as_str().unwrap_or_default()),
-                        text(input, "input_id")
-                    ),
                 )?;
             }
         }
@@ -610,6 +604,31 @@ fn instance(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
         out,
         format!("  State version: {}", text(value, "state_version")),
     )
+}
+
+fn input_binding_command(instance: &str, input: &str, out: &mut dyn Write) -> Result<(), CliError> {
+    write(
+        out,
+        format!(
+            "  pactrun input set {} {} --file <path>",
+            command_argument(instance),
+            command_argument(input)
+        ),
+    )
+}
+
+pub(super) fn input_binding_advice(
+    advice: &reply::InputBindingAdvice,
+    out: &mut dyn Write,
+) -> Result<(), CliError> {
+    write(
+        out,
+        "\nNext: bind the missing Inputs before invoking again.",
+    )?;
+    for input in &advice.inputs {
+        input_binding_command(advice.instance.as_str(), input.as_str(), out)?;
+    }
+    Ok(())
 }
 
 pub(super) fn partial(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {

@@ -3,6 +3,14 @@ use super::*;
 use serde::Serialize;
 use std::sync::Mutex;
 
+/// Human-only advice prepared from this invocation's typed refusal and target.
+/// It is not part of the public result or the persisted Run.
+#[derive(Debug)]
+pub(super) struct InputBindingAdvice {
+    pub(super) instance: InstanceName,
+    pub(super) inputs: Vec<InputIdentity>,
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct OutputContext<'a>(pub(super) &'a Capture);
 impl OutputContext<'_> {
@@ -397,6 +405,50 @@ fn quote(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Supporting coverage for PR-TEST-0691.
+    #[test]
+    fn input_binding_advice_is_human_only_and_does_not_require_run_inspection() {
+        for format in [
+            presentation::Format::Human,
+            presentation::Format::Json,
+            presentation::Format::Jsonl,
+        ] {
+            let mut error = CliError::operation("required Inputs are not bound: config");
+            error.details.input_binding_advice = Some(InputBindingAdvice {
+                instance: InstanceName::parse("sample demo").unwrap(),
+                inputs: vec![InputIdentity::parse("config").unwrap()],
+            });
+            let capture = Capture::new("invoke", false, DisplayOptions::default());
+            let response = capture.finish(Some(error), false);
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            assert_eq!(response.render(format, &mut stdout, &mut stderr), 1);
+            if format == presentation::Format::Human {
+                assert!(stdout.is_empty());
+                assert!(
+                    String::from_utf8(stderr)
+                        .unwrap()
+                        .contains("pactrun input set 'sample demo' config --file <path>")
+                );
+            } else {
+                assert!(stderr.is_empty());
+                let text = String::from_utf8(stdout).unwrap();
+                assert!(!text.contains("pactrun input set") && !text.contains("sample demo"));
+                let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let response = if format == presentation::Format::Jsonl {
+                    &value["response"]
+                } else {
+                    &value
+                };
+                assert_eq!(response["result"], serde_json::Value::Null);
+                assert_eq!(
+                    response["error"]["message"],
+                    "required Inputs are not bound: config"
+                );
+            }
+        }
+    }
+
     // Test-ID: PR-TEST-0675
     // Verifies: PR-REQ-0375
     #[test]

@@ -303,7 +303,7 @@ fn suggested_input_commands_roundtrip_shell_sensitive_names() {
         let (shell, executable) = shells()[0];
         let yaml = source(shell, executable, &[]).replace(
             "revision:\n",
-            "revision:\n  inputs: [{id: config, required: true}]\n",
+            "revision:\n  inputs: [{id: config, required: true}, {id: token, required: true, protection: secret}, {id: spare, required: false}]\n",
         );
         let scenario = Scenario::new(791, &yaml);
         fs::write(scenario.source.join("script.txt"), "exit 0\n").unwrap();
@@ -311,43 +311,68 @@ fn suggested_input_commands_roundtrip_shell_sensitive_names() {
         let shown = execute(&scenario, &["instance", "show", name]);
         assert_success(&shown);
         let shown = String::from_utf8(shown.stdout).unwrap();
-        let hint = shown
+        let expected: Vec<_> = shown
             .lines()
-            .find(|l| l.contains("pactrun input set"))
-            .unwrap()
-            .trim();
+            .filter(|l| l.contains("pactrun input set"))
+            .map(str::trim)
+            .collect();
+        let refused = execute(&scenario, &["invoke", name, "run"]);
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(refused.stdout.is_empty());
+        let refused = String::from_utf8(refused.stderr).unwrap();
+        let hints: Vec<_> = refused
+            .lines()
+            .filter(|l| l.contains("pactrun input set"))
+            .map(str::trim)
+            .collect();
+        assert_eq!(hints.len(), 2, "{refused}");
+        assert_eq!(hints, expected);
+        assert!(!hints.iter().any(|hint| hint.contains(" spare ")));
+        let run = refused
+            .lines()
+            .find_map(|line| line.strip_prefix("Run: "))
+            .unwrap();
         fs::write(scenario.path("binding.txt"), "synthetic input").unwrap();
         let binary = env!("CARGO_BIN_EXE_pactrun");
-        let line = if cfg!(windows) {
-            format!(
-                "& '{}' {}",
-                binary.replace('\'', "''"),
-                hint.strip_prefix("pactrun ")
-                    .unwrap()
-                    .replace("<path>", "binding.txt")
-            )
-        } else {
-            format!(
-                "'{}' {}",
-                binary.replace('\'', "'\"'\"'"),
-                hint.strip_prefix("pactrun ")
-                    .unwrap()
-                    .replace("<path>", "binding.txt")
-            )
-        };
-        let mut cmd = Command::new(if cfg!(windows) { "pwsh" } else { "sh" });
-        if cfg!(windows) {
-            cmd.args(["-NoLogo", "-NoProfile", "-Command", &line]);
-        } else {
-            cmd.args(["-c", &line]);
+        for hint in hints {
+            let line = if cfg!(windows) {
+                format!(
+                    "& '{}' {}",
+                    binary.replace('\'', "''"),
+                    hint.strip_prefix("pactrun ")
+                        .unwrap()
+                        .replace("<path>", "binding.txt")
+                )
+            } else {
+                format!(
+                    "'{}' {}",
+                    binary.replace('\'', "'\"'\"'"),
+                    hint.strip_prefix("pactrun ")
+                        .unwrap()
+                        .replace("<path>", "binding.txt")
+                )
+            };
+            let mut cmd = Command::new(if cfg!(windows) { "pwsh" } else { "sh" });
+            if cfg!(windows) {
+                cmd.args(["-NoLogo", "-NoProfile", "-Command", &line]);
+            } else {
+                cmd.args(["-c", &line]);
+            }
+            cmd.current_dir(scenario.path(""))
+                .env("PACTRUN_STORAGE_ROOT", &scenario.storage);
+            assert_success(&run_command(cmd));
         }
-        cmd.current_dir(scenario.path(""))
-            .env("PACTRUN_STORAGE_ROOT", &scenario.storage);
-        assert_success(&run_command(cmd));
         let detail = execute(&scenario, &["--format", "json", "instance", "show", name]);
         assert_success(&detail);
         let detail: serde_json::Value = serde_json::from_slice(&detail.stdout).unwrap();
         assert_eq!(detail["result"]["required_inputs_satisfied"], true);
+        let history = execute(&scenario, &["run", "show", run]);
+        assert_success(&history);
+        let history = String::from_utf8(history.stdout).unwrap();
+        assert!(history.contains("Missing required Inputs: config, token"));
+        assert!(!history.contains("pactrun input set"));
+        assert!(!history.contains("Next:"));
+        assert_success(&execute(&scenario, &["invoke", name, "run"]));
     }
 }
 

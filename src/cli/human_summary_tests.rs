@@ -49,6 +49,8 @@ fn guidance_quotes_names_and_keeps_historical_facts_separate_from_advice() {
     let rendered = show("run show", &historical);
     assert!(rendered.contains("config") && rendered.contains("admission"));
     assert!(!rendered.contains("Bind the missing Inputs"));
+    assert!(!rendered.contains("pactrun input set"));
+    assert!(!rendered.contains("Next:"));
 }
 
 // Test-ID: PR-TEST-0683

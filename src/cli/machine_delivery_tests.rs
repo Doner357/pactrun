@@ -83,6 +83,8 @@ fn missing_input_cause_survives_reopening_and_later_binding_changes() {
         if format == "human" {
             let text = format!("{}{}", String::from_utf8_lossy(&out), String::from_utf8_lossy(&err));
             assert!(text.contains("Missing required Inputs: config"), "{text}");
+            assert!(text.contains("pactrun input set missing config --file <path>"), "{text}");
+            assert!(!text.contains("pactrun input set missing spare"), "{text}");
         } else {
             let lines: Vec<serde_json::Value> = out.split(|b| *b == b'\n').filter(|l| !l.is_empty()).map(|l| serde_json::from_slice(l).unwrap()).collect();
             for line in &lines { schema_tests::assert_event(line); }

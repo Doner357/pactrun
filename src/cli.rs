@@ -193,6 +193,7 @@ struct CliError {
 
 #[derive(Debug, Default)]
 struct ErrorDetails {
+    input_binding_advice: Option<reply::InputBindingAdvice>,
     diagnostic: Option<presentation::AcquisitionDiagnostic>,
     deletion_obligation: Option<presentation::DeletionObligationDiagnostic>,
     retirement_reason: Option<&'static str>,
@@ -707,6 +708,11 @@ fn report_cli_failure(
         }
     } else {
         let _ = writeln!(stderr, "error: {error}");
+        if format == presentation::Format::Human
+            && let Some(advice) = &error.details.input_binding_advice
+        {
+            let _ = human::input_binding_advice(advice, stderr);
+        }
         if let Some(presentation::PartialResult::Publication(publication)) = &error.partial {
             let _ = writeln!(
                 stderr,
@@ -1644,12 +1650,23 @@ fn execute(
             ) {
                 Ok(admitted) => admitted,
                 Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
-                    let ApplicationError::Execution(ExecutorError::Refused { run, .. }) = &error
+                    let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
+                        &error
                     else {
                         unreachable!()
                     };
                     let run = *run;
+                    let input_binding_advice = match refusal {
+                        crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
+                            Some(reply::InputBindingAdvice {
+                                instance: name.clone(),
+                                inputs: inputs.clone(),
+                            })
+                        }
+                        _ => None,
+                    };
                     let mut error = app_error(error);
+                    error.details.input_binding_advice = input_binding_advice;
                     // The accepted no-launch Run is already durable. Return the
                     // same safe historical projection as a subsequent query.
                     if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
