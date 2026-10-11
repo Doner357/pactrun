@@ -22,9 +22,16 @@ where appropriate. A new Revision by itself does not prove a safe transition.
 
 ## References and names
 
-Use an exact reference for reproducible selection. Labels and aliases are useful
-lookup names; they are not substitutes for immutable identity. Inspect the
-resolved Revision before a consequential operation.
+Users can give a Package a local name and each of its Revisions a name within
+that Package. A reference such as `demo:stable` selects the matching installed
+Revision. Names are case-sensitive and can be changed with the
+[naming commands](../../guides/pack-management.md); an existing Instance keeps
+its exact Revision when a name changes.
+
+Use the full `<package-id>:<revision-digest>` pair for reproducible selection,
+without the `sha256:` prefix on the digest. Each component can also be a local
+name or an eligible ID prefix, provided the complete reference identifies one
+Revision. Inspect the resolved identity before a consequential operation.
 
 Human object listings can display usable unique ID prefixes. Authored names and
 state-version tokens require their complete values. Use `--no-trunc` on supported

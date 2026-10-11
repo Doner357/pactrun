@@ -67,7 +67,9 @@ An existing WAL can contain committed data and MUST NOT be discarded as a
 admission MUST repeat qualification after acquiring the serialized transaction;
 preflight is advisory only. Fresh bootstrap publishes the complete schema and
 admission atomically. Interrupted bootstrap cannot expose a partially admitted
-schema. Read-only opening cannot initialize or upgrade storage. Merely reopening
+schema. A read-only command leaves a missing Store absent. Opening a supported
+earlier Store first performs the maintenance required by PR-REQ-0373, then opens
+the operation's read snapshot. Merely reopening
 or updating the product MUST preserve existing identities, bytes, bindings,
 non-terminal Runs and unresolved recovery obligations without reconciliation.
 

@@ -17,8 +17,6 @@ binary = Path(args.binary).resolve(strict=True)
 base = Path(args.workspace).resolve()
 base.mkdir(parents=True, exist_ok=True)
 work = Path(tempfile.mkdtemp(prefix='reader-fields-', dir=base))
-for child in ('database', 'runtime-content', 'staging'):
-    (work / 'store' / child).mkdir(parents=True, exist_ok=True)
 env = dict(os.environ, PACTRUN_STORAGE_ROOT=str(work / 'store'))
 commands = []
 
@@ -61,13 +59,16 @@ def install(name, source, success=True, hook=False):
     (directory / 'pactrun.yaml').write_text(source, encoding='utf-8')
     if hook:
         (directory / script_name).write_text(script, encoding='utf-8')
-    result = run('pack', 'install', str(directory), success=success)
-    return re.search(r'^exact:[a-f0-9]{32}/sha256:[a-f0-9]{64}$', result, re.M).group() if success else None
+    result = run('--format', 'json', 'pack', 'install', str(directory), success=success)
+    if not success:
+        return None
+    revision = json.loads(result)['result']['revision']
+    return revision['package_id'] + ':' + revision['content_digest'].removeprefix('sha256:')
 
 required_source = manifest(input_block)
 reference = install('input', required_source)
 run('instance', 'create', 'reader-input', '--revision', reference)
-assert 'required_inputs_satisfied: false' in run('instance', 'show', 'reader-input')
+assert json.loads(run('--format', 'json', 'instance', 'show', 'reader-input'))['result']['required_inputs_satisfied'] is False
 run('instance', 'delete', 'reader-input')
 install('quoted-boolean', required_source.replace('required: true', 'required: "true"'), success=False)
 

@@ -208,8 +208,8 @@ pactrun snapshot restore snapshot-demo <snapshot-id> --plan
 pactrun snapshot restore snapshot-demo <snapshot-id>
 ```
 
-Save the value after `snapshot:` in the Capture output as `<snapshot-id>`;
-the separately printed `run:` value identifies the Run. Expect
+Save the value after `Snapshot:` in the Capture output as `<snapshot-id>`;
+the separately printed `Run:` value identifies the Run. Expect
 `Verified snapshot bytes` and a successful Restore Run. This first Restore uses
 the original store. It does not yet prove recovery from exported files.
 

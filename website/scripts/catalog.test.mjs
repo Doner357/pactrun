@@ -247,7 +247,8 @@ test('Migration tutorial provides executable byte comparisons and a separate Pac
   assert.match(body, /pactrun pack generate-id/);
   assert.match(body, /migration-unrelated\/pactrun\.yaml/);
   assert.match(body, /--to <unrelated-reference> --plan/);
-  assert.match(body, /value after.*path_id:/);
+  assert.match(body, /value after `Path ID:`/);
+  assert.match(body, /--no-trunc/);
 });
 
 test('operator Snapshot guidance links to the same fresh-store recovery example', () => {

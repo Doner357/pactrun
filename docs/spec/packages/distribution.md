@@ -51,7 +51,7 @@ ASCII case aliases and file/directory collisions are rejected. These are structu
 limits, not runtime-content byte ceilings. Resource exhaustion remains an I/O
 failure. Optional JSON members are omitted rather than null. Portable metadata
 arrays default to empty, reject duplicate semantic keys and use the exact closed
-target, field, label-source and provenance variants of PackSourceYaml.
+target, field and provenance variants of PackSourceYaml.
 
 The common installation boundary uses crate-private typed content, owned staged
 bytes and metadata plans. Frontend/container types do not become Domain contracts.
@@ -62,17 +62,18 @@ No public Candidate API or stable Rust API is introduced.
 ### PR-REQ-0355 - Pack metadata conflict policy
 
 Export omits metadata by default. `--include-portable-metadata` carries all portable
-labels, presentation and provenance for the exact Revision, never aliases, notes
-or trust. Portable JSON uses closed source-format metadata shapes independently
-of authoring; distribution installation MUST NOT generate or parse source YAML.
+presentation and provenance for the exact Revision. Local names, installation
+times, notes and trust remain in their Store. Portable JSON uses closed
+source-format metadata shapes independently of authoring; distribution
+installation MUST NOT generate or parse source YAML.
 
 All installation forms accept `--metadata-conflict overwrite|keep`. Without a
 policy, different current presentation values reject the whole authoritative
 transaction with actionable non-interactive diagnostics. Missing values are added,
 equal values are idempotent. Overwrite applies only carried conflicting fields;
 keep preserves those local fields and reports skipped items. Absent fields are
-unchanged. Label/provenance semantic tuples are unioned without resolving legal
-label ambiguity. No policy bypasses immutable validation. Conflict observation and
+unchanged. Provenance semantic tuples are unioned, preserving distinct claims.
+No policy bypasses immutable validation. Conflict observation and
 mutation MUST share the publication transaction, including concurrent installs.
 
 **Verification: PR-TEST-0539, PR-TEST-0543, PR-TEST-0545, PR-TEST-0546.**

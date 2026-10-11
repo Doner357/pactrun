@@ -4,19 +4,15 @@ title: Hook Protocol V1 (moved)
 
 # Hook Protocol V1 has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Hook Protocol](../../spec/interfaces/hook-protocol.md).
 
-Read [the current document](../../spec/interfaces/hook-protocol.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="protocol-lifecycle" />
 [Protocol lifecycle](../../spec/interfaces/hook-protocol.md#protocol-lifecycle)
 
 <a id="pr-req-0204---candidate-and-frozen-protocol-contract" />
-[PR-REQ-0204 - Candidate and Frozen protocol contract](../../spec/interfaces/hook-protocol.md#pr-req-0204---candidate-and-frozen-protocol-contract)
+[PR-REQ-0204 - Protocol compatibility](../../spec/interfaces/hook-protocol.md#pr-req-0204---candidate-and-frozen-protocol-contract)
 
 <a id="transport-and-input-profile" />
 [Transport and input profile](../../spec/interfaces/hook-protocol.md#transport-and-input-profile)

@@ -1064,6 +1064,12 @@ CREATE TABLE run_core_diagnostic_events (
 The SQL above defines the complete table layout. The following rules define
 validation, transaction boundaries, ordering, and ownership for those tables.
 
+Reference-label and alias tables retain metadata from supported earlier Stores.
+Current public naming and resolution use the local catalog in
+[PR-REQ-0371/0372](../packages/local-names.md); descriptive projections follow
+[PR-REQ-0250](../packages/metadata.md#pr-req-0250---reference-label-binding-lookup-and-ordering).
+The legacy record operations below remain part of the crate-private repository.
+
 ### PR-REQ-0255 - Typed metadata mutation and repository contract
 
 The crate-private repository MUST accept only typed metadata values and a

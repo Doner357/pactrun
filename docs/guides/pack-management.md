@@ -8,6 +8,9 @@ Use this after [installing a Pack](./use-pack.md). Packages and Revisions have
 stable IDs; local names are optional conveniences you control in the selected
 Store. Authors supply descriptions, not your local names.
 
+The [command overview](/commands) lists the available command forms and options
+for this documentation edition.
+
 ## Find an installed Revision
 
 ```text

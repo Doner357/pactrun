@@ -5,9 +5,9 @@ title: Commands and output
 # Commands and output
 
 Use `pactrun --help` to inspect the executable you are running. The website's
-**Command help** page is generated from this source tree's CLI declaration and
-identifies its product version. It is reference material for this tree, not a
-claim about every installed binary.
+**Command help** page is generated from the edition's CLI help catalog and
+identifies its product version. Select the documentation edition matching your
+executable when following examples.
 
 Help follows the command hierarchy. For example, `pactrun instance --help`
 lists Instance operations, while `pactrun instance create --help` shows creation

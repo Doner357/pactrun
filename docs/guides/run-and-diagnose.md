@@ -40,21 +40,32 @@ pactrun run list demo
 pactrun run show <run-id>
 ```
 
-Read the durable outcome and diagnostics. A progress line or a child-process
-exit alone is not proof of durable success. Retained diagnostic text and live
-streams are distinct. Use `--no-retain-hook-text` only when you accept losing
-saved Hook text; it does not disable live output.
+Read the final outcome, failure cause, and diagnostics together. `run show`
+distinguishes Hook-authored messages from Pactrun's own helper diagnostics. A
+helper diagnostic identifies the command, failed stage, and reason; the Run can
+still succeed when the script handles that error. The final outcome records
+whether the operation succeeded.
+
+`--no-retain-hook-text` leaves live output enabled and omits saved Hook text.
+Pactrun's safe helper classifications remain available. Sequence gaps mark
+omitted events; an incomplete collection can have an unknown tail.
 
 ## Diagnose a refusal or failure
 
 | Situation | Next action |
 | --- | --- |
-| Missing Input or parameter | Inspect Action requirements and configure the missing value |
+| Missing required Input | Use the suggested `input set` commands, then preview again |
+| Missing or invalid parameter | Inspect `action show` and supply the declared parameter |
 | Conflict or changed state | Reinspect the Instance; plan again before retrying |
 | Host executable unavailable | Check the Pack's interpreter/program prerequisites |
 | Hook failure or cancellation | Inspect the Run; check service state before another write |
 | Manual recovery required | Follow the Pack's recovery procedure before acknowledging recovery |
 | Missing retained output | Check retention policy and whether output was registered |
+
+An invocation refused for missing Inputs prints a command for each missing value,
+for example `pactrun input set demo config --file <path>`. Replace `<path>` with
+your configuration file. After binding, `run show` still records the Inputs that
+were missing in that earlier attempt; inspect the Instance for current readiness.
 
 `run reconcile` addresses retained execution bookkeeping; it does not repair
 an external service. `instance resolve-manual-recovery` is an operator assertion

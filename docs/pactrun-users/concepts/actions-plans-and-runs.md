@@ -20,8 +20,13 @@ Execution produces a Run with an identity and durable outcome. Live Hook output
 is progress information; the command and Run result determine completion.
 Use `run show` to inspect failure diagnostics and retained output availability.
 
-Hook text can be omitted with `--no-retain-hook-text`; live output stays enabled.
-Absence of retained text therefore does not establish that the Hook was silent.
+Run inspection separates Hook-authored messages from Pactrun's safe helper
+diagnostics. A handled helper error can be recorded in a successful Run. Use the
+final outcome to determine how execution ended.
+
+`--no-retain-hook-text` omits saved Hook text while keeping live output and
+Pactrun's helper classifications available. Missing Input failures retain the
+IDs observed at admission, even after the Instance is configured.
 
 ## Concurrent changes
 

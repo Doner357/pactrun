@@ -126,7 +126,7 @@ finite IEEE-754 binary64 using round-to-nearest, ties-to-even; overflow is
 invalid, underflow to zero is allowed, and negative zero normalizes to positive
 zero. Fixed integral fields use exact mathematical-integral validation without a
 binary64 intermediate. Hook `protocol_version` is a FormatVersion string; the
-current supported value is `"1.0-alpha.2"`, and numeric markers are rejected.
+current supported value is `"1.0-alpha.1"`, and numeric markers are rejected.
 `source_format` is a FormatVersion string. Only `1.0-alpha.2` is supported;
 quoted and unquoted string spellings normalize identically. Numeric, malformed
 and unsupported markers are rejected without trying another schema.
@@ -198,12 +198,10 @@ metadata operation, and order the operations with the typed metadata
 comparators. Portable metadata remains outside Revision identity.
 
 Source normalization MUST reject duplicate semantic keys rather than silently
-coalesce them. A reference-label semantic key is `(label, source tuple)` for
-the implicit installed Revision; the same label with a different source tuple
-is valid. A presentation semantic key is `(target, field)`; repeating it is
+coalesce them. A presentation semantic key is `(target, field)`; repeating it is
 invalid whether its value is equal or different. A provenance key is its
 complete typed claim tuple; an identical claim is invalid while distinct claims
-may coexist. Local alias, note, and trust values MUST NOT occur in source.
+may coexist. Local name, note, and trust values MUST NOT occur in source.
 YAML syntax and bytes are not Revision identity.
 
 ### SourceRelativePathV1 and safe source acquisition {#pr-req-0259---sourcerelativepathv1-and-safe-source-acquisition}
@@ -311,8 +309,8 @@ same bytes and physical blob.
 Projection MUST produce the complete Frozen semantic model and its sibling
 runtime-content closure rather than treating raw Core JSON as authoring input.
 
-The source-projected metadata plan contains reference-label, current
-presentation, and provenance metadata only. It MUST validate presentation
+The source-projected metadata plan contains current presentation and provenance
+metadata only. It MUST validate presentation
 membership against the normalized Revision before projection; after
 `RevisionCoreV1` and runtime-content projection derive the exact
 `RevisionIdentity`, that identity becomes the implicit target of every source-

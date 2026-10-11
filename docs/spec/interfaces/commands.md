@@ -79,7 +79,8 @@ pactrun revision trust clear <exact-ref> (--expect-absent | --expect <trusted|di
 Name-selected Run continuations MUST retain the resolved InstanceId rather than
 resolving a potentially reused name on the next page. Human escaped text MUST
 distinguish literal backslashes from escape sequences and present strings from
-absence markers. Revision references retain their exact/label/alias grammar.
+absence markers. Revision references use `<package>:<revision>` under
+[PR-REQ-0371](../packages/local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution).
 
 ```text
 pactrun
@@ -233,8 +234,9 @@ These operations are not a stable public Rust API. In particular,
 `InstallPackSource(..., explicit_local_metadata)` is an intentional internal
 orchestration capability for a typed local-metadata batch. Source YAML cannot carry local
 metadata, and the CLI install command MUST pass an empty local-metadata
-batch. The install command MUST NOT infer alias, note, or trust options or a `LocalInstall`
-record from this internal parameter.
+batch. Requested Package and Revision names use the separate installation inputs
+in PR-REQ-0372. The internal batch does not imply note, trust or `LocalInstall`
+options on the install command.
 
 The core management commands have these forms:
 

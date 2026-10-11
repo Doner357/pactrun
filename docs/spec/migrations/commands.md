@@ -61,7 +61,7 @@ A path ID MUST bind one Package and one ordered exact Revision sequence,
 including both endpoints. It MUST NOT be a display ordinal, persisted object,
 authorization capability, Plan, pin, or reservation. The same sequence MUST keep
 the same ID despite changes to graph order, installed unrelated Revisions,
-labels, Instance binding state, or storage location. It is deliberately not
+local names, Instance binding state, or storage location. It is deliberately not
 bound to an Instance or InstanceStateVersion; compilation and Admission still
 check their own current state. No ID lookup may silently choose another path.
 

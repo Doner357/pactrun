@@ -83,7 +83,8 @@ pactrun revision trust clear <exact-ref> (--expect-absent | --expect <trusted|di
 Name-selected Run continuations MUST retain the resolved InstanceId rather than
 resolving a potentially reused name on the next page. Human escaped text MUST
 distinguish literal backslashes from escape sequences and present strings from
-absence markers. Revision references retain their exact/label/alias grammar.
+absence markers. Revision references use `<package>:<revision>` under
+PR-REQ-0371.
 
 ```text
 pactrun
@@ -221,8 +222,9 @@ These operations are not a stable public Rust API. In particular,
 `InstallPackSource(..., explicit_local_metadata)` is an intentional internal
 orchestration capability for a typed local-metadata batch. Source YAML cannot carry local
 metadata, and the CLI install command MUST pass an empty local-metadata
-batch. The install command MUST NOT infer alias, note, or trust options or a `LocalInstall`
-record from this internal parameter.
+batch. Requested Package and Revision names use the separate installation inputs
+in PR-REQ-0372. The internal batch does not imply note, trust or `LocalInstall`
+options on the install command.
 
 The core management commands have these forms:
 
@@ -397,8 +399,8 @@ NOT be inferred from an internal application API.
 - [ID selector contract](../../spec/interfaces/id-selectors.md)
 - [PR-REQ-0376](../../spec/packages/local-names.md#pr-req-0376---revision-catalog-order-and-local-facts)
 - [PR-REQ-0373](../../spec/storage/store-opening.md#pr-req-0373---store-opening-and-supported-catalog-upgrades)
-- [Pack transport](../../spec/packages/distribution.md)
 - [PR-REQ-0371](../../spec/packages/local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution)
+- [Pack transport](../../spec/packages/distribution.md)
 - [error taxonomy](../../spec/interfaces/errors.md)
 
 </details>

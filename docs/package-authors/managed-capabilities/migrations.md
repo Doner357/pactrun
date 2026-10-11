@@ -182,8 +182,8 @@ target references separate. Discover the path:
 pactrun instance migration-paths migration-demo --to <target-reference> --no-trunc
 ```
 
-Copy the complete value after `path_id:`, including its `mp1-` prefix, as
-`<path-id>`. Do not copy the `route:` line or its labels.
+Copy the complete value after `Path ID:`, including its `mp1-` prefix, as
+`<path-id>`. The `--no-trunc` option above displays the complete path selector.
 
 ```text
 pactrun instance migrate migration-demo --to <target-reference> --path <path-id> --plan
