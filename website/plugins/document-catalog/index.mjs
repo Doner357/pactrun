@@ -60,14 +60,29 @@ export function makeCatalog(documents) {
   return {edition: 2, source_digest: documentDigest(documents), pages};
 }
 export async function commandHelp(root) {
-  const cli = await readFile(path.join(root, 'src/cli.rs'), 'utf8');
+  const source = 'src/cli/help_catalog.json';
+  const catalog = JSON.parse(await readFile(path.join(root, source), 'utf8'));
   const version = (await readFile(path.join(root, 'Cargo.toml'), 'utf8')).match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-  const block = cli.match(/const HELP: &str = concat!\(([\s\S]*?)\n\);/)?.[1];
-  if (!block || !version) throw new Error('CLI help declaration changed; update the extractor');
-  const strings = [...block.matchAll(/"((?:[^"\\]|\\[\s\S])*)"/g)].map(m => m[1] === 'CARGO_PKG_VERSION' ? version : JSON.parse('"' + m[1].replace(/\\\r?\n[ \t]*/g, '') + '"'));
-  const text = strings.join('');
-  if (!text.startsWith('Pactrun ' + version + '\nUsage:')) throw new Error('Unexpected CLI help');
-  return {version, source: 'src/cli.rs', text};
+  if (!version || !Array.isArray(catalog.commands)) throw new Error('Invalid CLI help catalog');
+  const lines = ['Pactrun ' + version, 'Usage:', '  pactrun [--format human|json|jsonl] <command> [options]', '', catalog.description];
+  const options = values => values.flatMap(option => [
+    '  ' + option.name + (option.value === null ? '' : ' <' + option.value + '>'),
+    '    ' + option.description,
+  ]);
+  for (const command of catalog.commands) {
+    lines.push('', command.path.join(' '));
+    if (!command.forms.length) lines.push('  ' + command.description);
+    for (const form of command.forms) lines.push(form.usage, '  ' + form.description);
+    if (command.options.length) lines.push('Options:', ...options(command.options.map(name => {
+      const option = catalog.options[name];
+      if (!option || !option.name.startsWith('--')) throw new Error('Unknown help option: ' + name);
+      return option;
+    })));
+    for (const note of command.notes) lines.push('  ' + note);
+    if (command.examples.length) lines.push('Examples:', ...command.examples.map(example => '  ' + example));
+  }
+  lines.push('', 'Global options:', ...options(catalog.global_options));
+  return {version, source, text: lines.join('\n') + '\n'};
 }
 export async function editionCatalog(siteDir, edition) {
   const docs = await readDocuments(edition.docsDir);

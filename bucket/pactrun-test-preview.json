@@ -1,8 +1,8 @@
 {
   "architecture": {
     "64bit": {
-      "hash": "9a6843ba00dc4ccfa7f97003d0c6c8af30293e6ef95c9337fe4b8f1e38fc544e",
-      "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.4/pactrun-test-1.0.0-alpha.4-windows-x86_64.zip"
+      "hash": "749275aa6cb3e23c9146009f13a3e4974342476186846a080aa714eb6c6ebac7",
+      "url": "https://github.com/Doner357/pactrun/releases/download/v1.0.0-alpha.5/pactrun-test-1.0.0-alpha.5-windows-x86_64.zip"
     }
   },
   "bin": [
@@ -15,5 +15,5 @@
   "homepage": "https://github.com/Doner357/pactrun",
   "license": "MIT",
   "pre_install": "$root = if ($global) { $globaldir } else { $scoopdir }; Get-ChildItem (Join-Path $root 'apps') -Directory | Where-Object { $_.Name -ne $app } | ForEach-Object { $manifest = Join-Path $_.FullName 'current/manifest.json'; $installed = Join-Path $_.FullName 'current/install.json'; if ((Test-Path -LiteralPath $manifest) -and (Test-Path -LiteralPath $installed)) { $bins = (Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json).bin; foreach ($entry in $bins) { if ($entry -is [array] -and $entry.Count -ge 2 -and $entry[1] -eq 'pactrun-test') { abort \"Uninstall $($_.Name) before installing $app; managed data is retained.\" } } } }",
-  "version": "1.0.0-alpha.4"
+  "version": "1.0.0-alpha.5"
 }

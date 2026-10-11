@@ -14,7 +14,7 @@ occurrence time. Primary and secondary Pactrun failures, outcome, result referen
 and the current Instance recovery guard MUST remain distinct.
 
 Only protocol/state-machine-accepted Hook messages qualify for the retained
-journal. Diagnostic error severity MUST NOT become a second Run failure rule.
+Hook journal. Diagnostic error severity MUST NOT become a second Run failure rule.
 Invalid raw frames, terminal streams and Input/Secret payloads MUST NOT enter
 that journal. CLI machine delivery may temporarily spool terminal streams and
 accepted live diagnostics under PR-REQ-0366/0367, independently of journal budgets.
@@ -63,4 +63,33 @@ needed after failure. Separate prefix, suffix and terminal budgets retain startu
 context and recent failure explanations without unbounded storage. Evidence does
 not become a second recovery authority.
 
-**Verification: PR-TEST-0518, PR-TEST-0519, PR-TEST-0520, PR-TEST-0526, PR-TEST-0527, PR-TEST-0528, PR-TEST-0489, PR-TEST-0495, PR-TEST-0113.**
+**Verification: PR-TEST-0690, PR-TEST-0518, PR-TEST-0519, PR-TEST-0520, PR-TEST-0526, PR-TEST-0527, PR-TEST-0528, PR-TEST-0489, PR-TEST-0495, PR-TEST-0113.**
+
+### PR-REQ-0378 - Pactrun-owned execution diagnostics
+
+Runs retain Pactrun-owned diagnostic facts separately from Hook-authored evidence.
+Built-in shell-helper failures identify the helper command, failed stage and a
+closed, safe reason. These facts are available in live delivery and Run inspection,
+including when the script handles the failure and the Run succeeds. A diagnostic
+does not establish failure causality or change the Run outcome.
+
+Built-in helpers use a private diagnostic channel, separate from operational
+helper requests and Hook Protocol messages. Reporting cannot invalidate a helper
+Session.
+Its producer has bounded memory and performs no diagnostic storage or terminal I/O.
+Delivery and persistence are independent of execution supervision. Lost channel
+data and incomplete collection are explicit. Collection closes after the supervised
+process tree and queued diagnostic connections finish, with a bounded drain wait.
+An incomplete drain leaves an unknown tail.
+
+Core history keeps the first 1,024 and newest 3,072 observed events per Run.
+Sequence, receipt time and exact execution context accompany each fact. Retention
+gaps remain visible. Core facts contain no user-provided paths, argument values,
+JSON contents or raw operating-system messages. `--no-retain-hook-text` controls
+Hook-authored text, not these safe Core classifications.
+
+Human presentation states the concrete reason. Machine events and historical
+projections expose the same classification. Legacy Runs have no invented Core
+diagnostic collection. Storage failure does not change execution outcome.
+
+**Verification: PR-TEST-0689, PR-TEST-0690, PR-TEST-0692, PR-TEST-0693.**

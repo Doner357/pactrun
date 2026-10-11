@@ -43,24 +43,26 @@ PR-REQ-0258 through PR-REQ-0260.
 
 Before installation, Pactrun MUST validate the normalized definition and
 project it into identity-bearing `RevisionCore`, the runtime-content closure,
-typed reference-label bindings, typed current presentation metadata, and typed
-provenance claims. The normalized authoring model MUST NOT itself be treated as
+typed current presentation metadata, and typed provenance claims. The normalized
+authoring model MUST NOT itself be treated as
 the hash or persistence object, and the projection MUST NOT emit a generic
 metadata map, arbitrary JSON payload, or storage row shape.
 
-Reference-label projection MUST use PR-REQ-0250, presentation projection MUST
-use the closed targets and fields in PR-REQ-0251, and provenance projection
-MUST use the closed claims in PR-REQ-0252. Revision-scoped portable metadata
-MUST acquire the exact installed Revision target only after identity projection;
+Presentation projection MUST use the closed targets and fields in PR-REQ-0251.
+Provenance projection MUST use the closed claims in PR-REQ-0252. Revision-scoped
+portable metadata MUST acquire the exact installed Revision target only after
+identity projection;
 an authoring source MUST NOT be required or permitted to restate that derived
 identity.
 
-Local aliases, notes, and trust assessments are not part of
+Local names, notes, and trust assessments are not part of
 `NormalizedPackDefinition`. A crate-private installation orchestrator MAY
 supply a separate explicit local metadata mutation batch. The built-in source
 frontend carries portable metadata only, and the human install command supplies
-an empty local batch. Source syntax and installation publication are owned by
-PR-REQ-0258 through PR-REQ-0261; transport encoding is owned separately by the
+an empty local metadata batch. Requested Package and Revision names are separate
+installation inputs governed by PR-REQ-0372. Source syntax and installation
+publication are owned by PR-REQ-0258 through PR-REQ-0261; transport encoding is
+owned separately by the
 [Pack distribution contract](./distribution.md).
 
 Source-stage locators, directory handles, acquisition evidence, and transient
@@ -79,7 +81,6 @@ The model may contain:
 ```text
 NormalizedPackDefinition
 |- PackageIdentityDeclaration
-|- ReferenceLabelMetadata
 |- PresentationMetadata
 |- ProvenanceMetadata
 |- InputDeclarations
@@ -93,7 +94,7 @@ NormalizedPackDefinition
 ```
 
 Each Action and lifecycle capability owns its own parameters, requirements, and
-implementation. Reference labels, presentation, and provenance may coexist with
+implementation. Presentation and provenance may coexist with
 semantics in the authoring model, but the installation projection separates
 their identity roles. A separate orchestration-supplied local metadata batch is
 installation context, not authoring content.

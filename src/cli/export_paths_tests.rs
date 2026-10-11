@@ -107,16 +107,23 @@ fn revision_and_snapshot_exports_use_final_names_for_publication_and_import() {
     fs::write(
         source.join("pactrun.yaml"),
         format!(
-            "source_format: 1.0-alpha.1\npackage_id: {ID}\nrevision: {{}}\nruntime_content: {{}}\n"
+            "source_format: 1.0-alpha.2\npackage_id: {ID}\nrevision: {{}}\nruntime_content: {{}}\n"
         ),
     )
     .unwrap();
     let (code, reference, error) = run(
         &root,
-        &["pack".into(), "install".into(), source.into_os_string()],
+        &[
+            "--format".into(),
+            "json".into(),
+            "pack".into(),
+            "install".into(),
+            source.into_os_string(),
+        ],
     );
     assert_eq!(code, 0, "{error}");
-    let reference = reference.trim();
+    let installed: serde_json::Value = serde_json::from_str(&reference).unwrap();
+    let reference = installed["result"]["reference"].as_str().unwrap();
     let manifest = serde_json::json!({"format_version":"1.0-alpha.1","snapshot_id":ID,"producer":{"package_id":ID,"revision_content_digest":format!("sha256:{}","0".repeat(64))},"origin_instance_id":ID,"captured_at":{"unix_seconds":0,"nanoseconds":0},"managed_bindings":[],"service_content":[]});
     let verified = crate::snapshot_integrity::decode_snapshot_manifest(
         crate::domain::SnapshotIntegrityVersion::BASELINE,
@@ -173,7 +180,15 @@ fn revision_and_snapshot_exports_use_final_names_for_publication_and_import() {
             assert_eq!(code, 0, "{error}");
             assert!(output.exists());
             assert!(
-                text.contains(&format!("output: {}", cli::format_path(&output))),
+                text.contains(&format!(
+                    "Output: {}",
+                    cli::human::path_text(
+                        &serde_json::to_value(cli::presentation::NativePath::from(
+                            output.as_path()
+                        ))
+                        .unwrap()
+                    )
+                )),
                 "{text}"
             );
             let bytes = fs::read(&output).unwrap();

@@ -43,8 +43,7 @@ pub(super) fn parse_run_delete(parser: &mut Parser) -> Result<LifecycleCommand, 
 pub(super) fn execute(
     command: LifecycleCommand,
     root: &Path,
-    stdout: &mut dyn Write,
-    format: presentation::Format,
+    format: reply::OutputContext,
 ) -> Result<(), CliError> {
     if let LifecycleCommand::Collect { plan } = command {
         let app = if plan {
@@ -56,22 +55,13 @@ pub(super) fn execute(
         let report = app.collect_content(!plan).map_err(app_error)?;
         let result = presentation::Collection::new(plan, &report);
         if report.failed != 0 {
-            if format == presentation::Format::Human {
-                result.human(stdout)?;
-            }
             let mut error = CliError::operation(
                 "collection incomplete; some removals could not be confirmed and may already be absent; retry after resolving the storage problem",
             );
             error.partial = Some(presentation::PartialResult::Collection(Box::new(result)));
             return Err(error);
         }
-        return presentation::render(
-            format,
-            "storage gc",
-            &result,
-            stdout,
-            presentation::Collection::human,
-        );
+        return presentation::emit_result(format, "storage gc", &result);
     }
     let app = PactrunApplication::open(root).map_err(app_error)?;
     let target = match command {
@@ -93,18 +83,12 @@ pub(super) fn execute(
         ObjectDeletion::Revision(_) => "revision delete",
         _ => unreachable!(),
     };
-    render_deletion(
-        format,
-        name,
-        stdout,
-        app.delete_object(&target).map_err(app_error)?,
-    )
+    render_deletion(format, name, app.delete_object(&target).map_err(app_error)?)
 }
 
 pub(super) fn render_deletion(
-    format: presentation::Format,
+    format: reply::OutputContext,
     command: &str,
-    out: &mut dyn Write,
     result: ObjectDeletionResult,
 ) -> Result<(), CliError> {
     let outcome = match result {
@@ -112,22 +96,5 @@ pub(super) fn render_deletion(
         ObjectDeletionResult::AlreadyAbsent => "already_absent",
         ObjectDeletionResult::Blocked(reason) => return Err(CliError::operation(reason.message())),
     };
-    presentation::render(
-        format,
-        command,
-        &presentation::Deletion { outcome },
-        out,
-        |value, out| {
-            writeln!(
-                out,
-                "object {}",
-                if value.outcome == "deleted" {
-                    "deleted"
-                } else {
-                    "already absent"
-                }
-            )
-            .map_err(io_operation)
-        },
-    )
+    presentation::emit_result(format, command, &presentation::Deletion { outcome })
 }

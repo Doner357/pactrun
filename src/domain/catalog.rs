@@ -25,6 +25,8 @@ pub(crate) struct RevisionCatalogEntry {
     pub(crate) identity: RevisionIdentity,
     pub(crate) core: RevisionCore,
     pub(crate) metadata: RevisionMetadataView,
+    pub(crate) local: LocalRevisionFacts,
+    pub(crate) reference: String,
 }
 
 pub(crate) struct InstanceCatalog {
@@ -32,6 +34,7 @@ pub(crate) struct InstanceCatalog {
     pub(crate) revisions: Vec<RevisionCatalogEntry>,
 }
 pub(crate) struct RunCatalog {
+    pub(crate) selectors: std::collections::BTreeMap<RunId, (usize, usize)>,
     pub(crate) page: CatalogPage<ManagedRunView, RunId>,
     pub(crate) inspections: Vec<ManagedRunInspectionData>,
     pub(crate) revisions: Vec<RevisionCatalogEntry>,
@@ -47,6 +50,7 @@ pub(crate) struct RetirementCatalogEntry {
 
 #[derive(Clone, Debug)]
 pub(crate) struct InstanceHistoryEntry {
+    pub(crate) unique_prefix_length: usize,
     pub(crate) id: InstanceId,
     pub(crate) recorded_name: InstanceName,
     pub(crate) current_name: Option<InstanceName>,

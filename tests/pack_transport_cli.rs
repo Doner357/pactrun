@@ -37,10 +37,29 @@ fn unified_pack_cli_exports_imports_and_reports_metadata_conflicts() {
             fs::create_dir_all(root.join(part)).unwrap();
         }
     }
-    let yaml = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\nportable_metadata:\n  presentation: [{target: {kind: revision}, field: display_name, value: Published}]\n";
+    let yaml = "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\nportable_metadata:\n  presentation: [{target: {kind: revision}, field: summary, value: Published}]\n";
     fs::write(source.join("pactrun.yaml"), yaml).unwrap();
-    let identity = ok(&a, &["pack", "install", source.to_str().unwrap()]);
-    let reference = identity.trim().to_owned();
+    let identity: serde_json::Value = serde_json::from_str(&ok(
+        &a,
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
+    ))
+    .unwrap();
+    let revision = &identity["result"]["revision"];
+    let reference = format!(
+        "{}:{}",
+        revision["package_id"].as_str().unwrap(),
+        revision["content_digest"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("sha256:")
+            .unwrap()
+    );
     let exported = temp.path().join("portable.pack");
     let export_base = temp.path().join("portable");
     let output = call(
@@ -60,10 +79,18 @@ fn unified_pack_cli_exports_imports_and_reports_metadata_conflicts() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("unencrypted"));
-    assert_eq!(
-        ok(&b, &["pack", "install", exported.to_str().unwrap()]),
-        identity
-    );
+    let imported: serde_json::Value = serde_json::from_str(&ok(
+        &b,
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            exported.to_str().unwrap(),
+        ],
+    ))
+    .unwrap();
+    assert_eq!(&imported["result"]["revision"], revision);
     fs::write(
         source.join("pactrun.yaml"),
         yaml.replace("Published", "Local"),

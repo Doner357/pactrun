@@ -8,6 +8,7 @@ title: Vocabulary
 | --- | --- | --- |
 | Package / Pack | Stable product lineage; Pack is the supported package kind | [System model](./system-model.md), [identity](../packages/identity.md) |
 | Revision | Exact immutable operational definition and owned runtime content | [Object model](./objects.md), [Core format](../packages/revision-format.md) |
+| Local name | User-assigned Package or Revision reference within a Store | [Local names and resolution](../packages/local-names.md) |
 | Instance | Long-lived managed object with stable identity and an active Revision | [Instance identity and state](../instances/identity-state.md) |
 | Managed Input Binding | Detached value whose authoritative bytes are owned by Pactrun | [Bindings and protection](../instances/bindings.md), [Input behavior](../instances/inputs-secrets.md) |
 | Secret | Protection and disclosure rules, not a claim that Pactrun is a secret vault | [System model](./system-model.md), [Input behavior](../instances/inputs-secrets.md) |

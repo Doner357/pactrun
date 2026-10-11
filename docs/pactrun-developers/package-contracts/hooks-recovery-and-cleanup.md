@@ -4,13 +4,9 @@ title: Hooks, Recovery, and Cleanup (moved)
 
 # Hooks, Recovery, and Cleanup has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Hook Execution and Authority](../../spec/interfaces/hooks.md).
 
-Read [the current document](../../spec/interfaces/hooks.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="hooks-and-the-canonical-protocol" />
 [Hooks and the canonical protocol](../../spec/interfaces/hooks.md#hooks-and-the-canonical-protocol)
@@ -31,7 +27,7 @@ anchors only and adds no product rules.
 [PR-REQ-0170 - Session authority is not host isolation](../../spec/interfaces/hooks.md#pr-req-0170---session-authority-is-not-host-isolation)
 
 <a id="pr-req-0171---future-isolation-must-be-enforced" />
-[PR-REQ-0171 - Future isolation must be enforced](../../spec/interfaces/hooks.md#pr-req-0171---future-isolation-must-be-enforced)
+[PR-REQ-0171 - Isolation claims require enforcement](../../spec/interfaces/hooks.md#pr-req-0171---future-isolation-must-be-enforced)
 
 <a id="pr-req-0172---terminal-and-protocol-channels" />
 [PR-REQ-0172 - Terminal and protocol channels](../../spec/interfaces/hooks.md#pr-req-0172---terminal-and-protocol-channels)

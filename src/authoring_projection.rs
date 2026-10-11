@@ -155,7 +155,7 @@ mod tests {
     // Verifies: PR-REQ-0016, PR-REQ-0018, PR-REQ-0350
     #[test]
     fn source_preserves_closed_shell_projection_and_rejects_implicit_fallback() {
-        let text = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: script}\n        args: []\n        io: {terminal: none}\nruntime_content:\n  files: [{id: script, source: script.sh, path: script.sh, executable: false}]\n";
+        let text = "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: script}\n        args: []\n        io: {terminal: none}\nruntime_content:\n  files: [{id: script, source: script.sh, path: script.sh, executable: false}]\n";
         let candidate = super::super::parse_pack_source_yaml(text.as_bytes()).unwrap();
         assert_eq!(
             candidate.revision.version(),
@@ -172,7 +172,7 @@ mod tests {
             assert!(
                 super::super::parse_pack_source_yaml(
                     text.replace(
-                        "source_format: 1.0-alpha.1",
+                        "source_format: 1.0-alpha.2",
                         &format!("source_format: {token}")
                     )
                     .as_bytes()
@@ -190,7 +190,7 @@ mod tests {
             assert!(super::super::parse_pack_source_yaml(changed.as_bytes()).is_err());
         }
     }
-    const BASIC: &str = "source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
+    const BASIC: &str = "source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
 
     // Test-ID: PR-TEST-0336
     // Verifies: PR-REQ-0124, PR-REQ-0320
@@ -202,12 +202,19 @@ mod tests {
         assert_eq!(r.user_mutation, ServiceUserMutation::Unavailable);
         assert_eq!(r.locator.as_str(), "Config.json");
         assert!(candidate.runtime_sources.is_empty());
-        for token in ["1", "2", "3", "\"1.0\"", "\"1.0-alpha.2\""] {
+        for token in [
+            "1",
+            "2",
+            "3",
+            "\"1.0\"",
+            "\"1.0-alpha.1\"",
+            "\"1.0-alpha.3\"",
+        ] {
             assert!(
                 parse_pack_source_yaml(
                     BASIC
                         .replace(
-                            "source_format: 1.0-alpha.1",
+                            "source_format: 1.0-alpha.2",
                             &format!("source_format: {token}")
                         )
                         .as_bytes()
@@ -223,8 +230,8 @@ mod tests {
             "1.0-alpha.1"
         );
         for bad in [
-            BASIC.replace("source_format: 1.0-alpha.1", "source_format: 2.0"),
-            BASIC.replace("source_format: 1.0-alpha.1", "source_format: '2'"),
+            BASIC.replace("source_format: 1.0-alpha.2", "source_format: 2.0"),
+            BASIC.replace("source_format: 1.0-alpha.2", "source_format: '2'"),
             BASIC.replace("id: state", "id: !!str state"),
             BASIC.replace("id: state", "id: state, id: other"),
             BASIC.replace("kind: file", "kind: file, observed_presence: present"),
@@ -233,7 +240,7 @@ mod tests {
         ] {
             assert!(parse_pack_source_yaml(bad.as_bytes()).is_err(), "{bad}");
         }
-        let legacy=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
+        let legacy=b"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
         let v1 = parse_pack_source_yaml(legacy).unwrap();
         assert_eq!(
             super::parse_pack_source_yaml(legacy)
@@ -299,13 +306,13 @@ mod tests {
     // Verifies: PR-REQ-0331
     #[test]
     fn unsupported_source_header_is_selected_before_interpreting_future_body_fields() {
-        let error = super::parse_source(b"source_format: 1.0-alpha.2\nfuture_body: {}\n")
+        let error = super::parse_source(b"source_format: 1.0-alpha.3\nfuture_body: {}\n")
             .unwrap_err()
             .to_string();
         for part in [
             "pack_source",
+            "1.0-alpha.3",
             "1.0-alpha.2",
-            "1.0-alpha.1",
             "supporting release",
         ] {
             assert!(error.contains(part), "{error}");

@@ -33,8 +33,8 @@ def block(body, lang):
 
 installation = block(documents[names[0]], language)
 storage = block(documents[names[1]], language)
-archive_name = ('pactrun-1.0.0-alpha.4-windows-x86_64-standalone.zip' if windows
-                else 'pactrun-1.0.0-alpha.4-linux-x86_64-standalone.tar.gz')
+archive_name = archive.name
+assert archive_name in installation, 'Use the archive named by this documentation edition'
 environment = dict(os.environ)
 environment.pop('PACTRUN_STORAGE_ROOT', None)
 if windows:
@@ -95,6 +95,7 @@ for case in ('fresh', 'wrong-checksum', 'missing-checksum', 'existing-directory'
 assert program is not None
 test_env = dict(environment, PATH=str(program.parent) + os.pathsep + environment['PATH'])
 store = None
+invalid_stores = []
 for case in ('fresh', 'existing-directory', 'existing-file'):
     cwd = work / ('storage ' + case)
     cwd.mkdir()
@@ -102,37 +103,51 @@ for case in ('fresh', 'existing-directory', 'existing-file'):
         (cwd / 'pactrun-data').mkdir()
         (cwd / 'pactrun-data/sentinel').write_text('preserve')
     elif case == 'existing-file': (cwd / 'pactrun-data').write_text('preserve')
-    state = execute_snippet(storage, cwd, dict(test_env, PACTRUN_STORAGE_ROOT='unchanged-test-store'), case == 'fresh')
+    state = execute_snippet(storage, cwd, dict(test_env, PACTRUN_STORAGE_ROOT='unchanged-test-store'), True)
+    selected = cwd / 'pactrun-data'
+    assert Path(state['store']).resolve() == selected.resolve()
     if case == 'fresh':
         store = cwd / 'pactrun-data'
         assert Path(state['store']).resolve() == store.resolve()
-        for child in ('database', 'runtime-content', 'staging'): assert (store / child).is_dir()
+        assert not store.exists(), 'Selecting a missing Store must not provision it'
     else:
-        assert state['store'] == 'unchanged-test-store'
         sentinel = cwd / ('pactrun-data/sentinel' if case == 'existing-directory' else 'pactrun-data')
         assert sentinel.read_text() == 'preserve'
-    cases.append({'case': 'store-' + case, 'accepted': state['ok']})
+        invalid_stores.append((case, selected, sentinel))
+    cases.append({'case': 'select-store-' + case, 'accepted': state['ok'], 'no_data_created_or_changed': True})
 
-def run(binary, selected_store, *arguments):
+def run(binary, selected_store, *arguments, success=True):
     result = subprocess.run([str(binary), *arguments], cwd=work, env=dict(test_env, PACTRUN_STORAGE_ROOT=str(selected_store)), capture_output=True, text=True, encoding='utf-8', timeout=45)
-    assert result.returncode == 0, (arguments, result.stdout, result.stderr)
+    assert (result.returncode == 0) == success, (arguments, result.stdout, result.stderr)
     commands.append({'args': list(arguments), 'exit': result.returncode, 'store': str(selected_store)})
     return result.stdout
 
 # The supplied Pack is an explicit fixture produced outside the reader's store.
 producer = work / 'fixture-store'
-for child in ('database', 'runtime-content', 'staging'): (producer / child).mkdir(parents=True)
 author = (root / 'docs/package-authors/fundamentals/authoring-model.md').read_text(encoding='utf-8')
 if windows: author = author.split('### Windows variant\n')[1]
 manifest = block(author, 'yaml')
-package_id = run(fixture_binary, producer, 'pack', 'generate-id').strip()
+package_id = json.loads(run(fixture_binary, producer, '--format', 'json', 'pack', 'generate-id'))['result']['package_id']
+assert not producer.exists(), 'Identity generation must not open a Store'
 manifest = re.sub(r'package_id: "[a-f0-9]{32}"', 'package_id: "' + package_id + '"', manifest)
 source = work / 'fixture-pack'; source.mkdir()
 (source / 'pactrun.yaml').write_text(manifest, encoding='utf-8')
 (source / ('inspect.ps1' if windows else 'inspect.sh')).write_text(block(author, language), encoding='utf-8')
-reference = run(fixture_binary, producer, 'pack', 'install', str(source)).splitlines()[0]
+installed = json.loads(run(fixture_binary, producer, '--format', 'json', 'pack', 'install', str(source)))['result']['revision']
+reference = installed['package_id'] + ':' + installed['content_digest'].removeprefix('sha256:')
 run(fixture_binary, producer, 'revision', 'export', reference, '--output', str(work / 'supplied'))
-reference = run(program, store, 'pack', 'install', str(work / 'supplied.pack')).splitlines()[0]
+for case, selected, sentinel in invalid_stores:
+    refused = json.loads(run(program, selected, '--format', 'json', 'pack', 'install', str(work / 'supplied.pack'), success=False))
+    assert refused['status'] == 'failure' and refused['error'] is not None
+    assert sentinel.read_text() == 'preserve'
+    if selected.is_dir(): assert list(selected.iterdir()) == [sentinel], 'Refusal must not add Store files'
+    cases.append({'case': 'write-store-' + case, 'accepted': False, 'original_data_unchanged': True})
+assert not json.loads(run(program, store, '--format', 'json', 'instance', 'list'))['result']['items']
+assert not store.exists(), 'Read-only collection query must not provision a missing Store'
+received = json.loads(run(program, store, '--format', 'json', 'pack', 'install', str(work / 'supplied.pack'), '--package-name', 'app', '--revision-name', 'initial'))['result']['revision']
+assert received == installed, 'Pack transport must preserve the exact installed Revision identity'
+for child in ('database', 'runtime-content', 'staging'): assert (store / child).is_dir()
+reference = 'app:initial'
 for arguments in [('revision', 'show', reference), ('instance', 'list'),
                   ('instance', 'create', 'demo', '--revision', reference), ('instance', 'show', 'demo'),
                   ('input', 'list', 'demo'), ('action', 'list', 'demo'), ('invoke', 'demo', 'inspect', '--plan')]:

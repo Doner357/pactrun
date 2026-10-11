@@ -148,7 +148,7 @@ fn typed_acceptance_and_operation_aware_loading_preserve_action_ranks_and_cancel
     let run = capture_run(&p, &view, &owner());
     capture_admit(&p, &view, run, &owner()).unwrap().unwrap();
     let mut finish = plain_finish(RunOutcome::Failed);
-    finish.primary_failure = Some(RunPrimaryFailure {
+    finish.primary_failure = Some(RunPrimaryFailure { cause: None,
         failure: RunFailureRecord {
             error: error("execution", "workspace_cleanup_failed"),
             message: "fixed diagnostic".to_owned(),
@@ -193,7 +193,7 @@ fn capture_admission_rechecks_readiness_owner_and_exact_facts_without_caller_aut
     let run = capture_run(&p, &incomplete, &owner());
     assert!(
         matches!(capture_admit(&p, &incomplete, run, &owner()).unwrap(),
-        Err(AdmissionRefusal::PlanInvalidated(message)) if message.contains("required Inputs") && message.contains("required"))
+        Err(AdmissionRefusal::MissingRequiredInputs(ids)) if ids == vec![InputIdentity::parse("required").unwrap()])
     );
     let outcome = managed_finished(&p, run);
     assert_eq!(outcome.boundary, ActionRunBoundary::Accepted);
@@ -789,7 +789,7 @@ fn capture_and_action_race_across_real_owners_and_explicit_reconciliation_never_
     );
     assert!(matches!(
         managed_finished(&p, runs[loser]).primary_failure,
-        Some(RunPrimaryFailure {
+        Some(RunPrimaryFailure { cause: None,
             step: RunFailedStep::Admission,
             ..
         })

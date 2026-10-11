@@ -13,9 +13,10 @@ pub(super) fn command_name(command: &Command) -> &'static str {
     use retirements::RetirementCommand as R;
     use snapshots::SnapshotCommand as S;
     match command {
-        Command::Help => "help",
+        Command::Help(_) => "help",
         Command::Version => "version",
         Command::GeneratePackageId => "pack generate-id",
+        Command::Name(command) => command.command_name(),
         Command::Install { .. } => "pack install",
         Command::ExportRevision { .. } => "revision export",
         Command::CreateInstance { .. } | Command::CreateAndRestore(_) => "instance create",
@@ -65,24 +66,11 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         Command::Catalog(C::History(_, false)) => "instance history list",
         Command::Catalog(C::Instance(_)) => "instance history show",
         Command::Catalog(C::Runs(..)) => "run list",
-        Command::Catalog(C::Alias(_)) => "revision alias show",
         Command::Catalog(C::Local(_, catalog::LocalKind::Note)) => "revision note show",
         Command::Catalog(C::Local(_, catalog::LocalKind::Trust)) => "revision trust show",
-        Command::Catalog(C::AliasMutation { desired, .. }) => {
-            if *desired {
-                "revision alias set"
-            } else {
-                "revision alias clear"
-            }
-        }
         Command::Catalog(C::Mutation { operation, .. }) => {
             use crate::domain::{CurrentState, RevisionMetadataMutation as Mutation};
             match operation {
-                Mutation::CompareAndSetLocalAlias {
-                    desired: CurrentState::Absent,
-                    ..
-                } => "revision alias clear",
-                Mutation::CompareAndSetLocalAlias { .. } => "revision alias set",
                 Mutation::CompareAndSetLocalNote {
                     desired: CurrentState::Absent,
                     ..
@@ -105,6 +93,11 @@ pub(super) enum Format {
     Human,
     Json,
     Jsonl,
+}
+impl Format {
+    pub(super) fn requires_noninteractive(self) -> bool {
+        self != Self::Human
+    }
 }
 
 /// Inspect only the prefix. Never scan operands (which may themselves be flags).
@@ -177,7 +170,7 @@ pub(super) struct ErrorReference {
     pub(super) code: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Error<'a> {
     kind: ErrorKind,
@@ -191,14 +184,14 @@ struct Error<'a> {
     retirement_reason: Option<&'static str>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct DeletionObligationDiagnostic {
     pub(super) instance_id: String,
     pub(super) run_id: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct AcquisitionDiagnostic {
     kind: &'static str,
@@ -223,7 +216,7 @@ impl From<&crate::application::migration_input::Failure> for AcquisitionDiagnost
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Response<'a, T: Serialize> {
     format: &'static str,
@@ -253,7 +246,114 @@ pub(super) fn output_error(error: io::Error) -> CliError {
     result
 }
 
-pub(super) fn render<T: Serialize>(
+pub(super) struct Envelope<'a> {
+    pub(super) command: &'a str,
+    pub(super) error: Option<&'a CliError>,
+    pub(super) delivery: Option<&'a streaming::DeliveryResult>,
+    pub(super) sequence: Option<&'a str>,
+}
+
+pub(super) fn write_reply<T: Serialize>(
+    envelope: Envelope<'_>,
+    result: Option<&T>,
+    out: &mut dyn Write,
+) -> Result<(), CliError> {
+    let mut error = envelope.error.map(|e| Error {
+        kind: e.kind,
+        message: &e.message,
+        reference: &e.reference,
+        diagnostic: e.details.diagnostic.as_ref(),
+        deletion_obligation: e.details.deletion_obligation.as_ref(),
+        retirement_reason: e.details.retirement_reason,
+    });
+    let failed_delivery = envelope.delivery.is_some_and(|d| !d.complete);
+    let no_reference = None;
+    if failed_delivery && error.is_none() {
+        error = Some(Error {
+            kind: ErrorKind::Output,
+            message: "Output delivery incomplete",
+            reference: &no_reference,
+            diagnostic: None,
+            deletion_obligation: None,
+            retirement_reason: None,
+        });
+    }
+    let response = Response {
+        format: FORMAT_KIND,
+        format_version: FORMAT_VERSION,
+        command: Some(envelope.command),
+        status: if error.is_some() {
+            "failure"
+        } else {
+            "success"
+        },
+        result,
+        error,
+    };
+    #[derive(Serialize)]
+    struct Delivered<'a, T: Serialize> {
+        #[serde(flatten)]
+        response: Response<'a, T>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        delivery: Option<&'a streaming::DeliveryResult>,
+    }
+    #[derive(Serialize)]
+    struct Event<'a, T: Serialize> {
+        format: &'static str,
+        format_version: &'static str,
+        sequence: &'a str,
+        received_at_unix_ms: Option<String>,
+        command: &'a str,
+        #[serde(rename = "type")]
+        kind: &'static str,
+        response: Delivered<'a, T>,
+    }
+    let response = Delivered {
+        response,
+        delivery: envelope.delivery,
+    };
+    fn encode<T: Serialize>(value: &T, out: &mut dyn Write, stream: bool) -> Result<(), CliError> {
+        if stream {
+            serde_json::to_writer(&mut *out, value)
+                .map_err(|e| output_error(io::Error::other(e)))?;
+            out.write_all(b"\n").map_err(output_error)?;
+        } else {
+            let mut bytes = serde_json::to_vec(value)
+                .map_err(|e| CliError::operation(format!("serialize CLI response: {e}")))?;
+            bytes.push(b'\n');
+            out.write_all(&bytes).map_err(output_error)?;
+        }
+        out.flush().map_err(output_error)
+    }
+    if let Some(sequence) = envelope.sequence {
+        encode(
+            &Event {
+                format: FORMAT_KIND,
+                format_version: FORMAT_VERSION,
+                sequence,
+                received_at_unix_ms: crate::hook::delivery::now(),
+                command: envelope.command,
+                kind: "result",
+                response,
+            },
+            out,
+            envelope.delivery.is_some(),
+        )
+    } else {
+        encode(&response, out, envelope.delivery.is_some())
+    }
+}
+
+pub(super) fn emit_result<T: Serialize + Clone + Send + 'static>(
+    context: reply::OutputContext<'_>,
+    command: &str,
+    result: &T,
+) -> Result<(), CliError> {
+    context.publish(command, result.clone())
+}
+
+#[cfg(test)]
+pub(super) fn render<T: Serialize + Clone + Send + 'static>(
     format: Format,
     command: &str,
     result: &T,
@@ -307,13 +407,7 @@ pub(super) fn failure<T: Serialize>(
     )
 }
 
-#[derive(Serialize)]
-#[cfg_attr(test, derive(schemars::JsonSchema))]
-pub(super) struct Help<'a> {
-    pub(super) usage: &'a str,
-}
-
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Version<'a> {
     pub(super) product_version: &'a str,
@@ -325,26 +419,34 @@ pub(super) struct Version<'a> {
     pub(super) default_formats: std::collections::BTreeMap<&'a str, &'a str>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Package {
     pub(super) package_id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct StateVersion {
     pub(super) state_version: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct InputMutation {
+    pub(super) instance_id: String,
+    pub(super) input_id: String,
+    pub(super) state_version: String,
+}
+
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct InputExport {
     pub(super) input_id: String,
     pub(super) state_version: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(untagged)]
 pub(super) enum PartialResult {
@@ -352,13 +454,14 @@ pub(super) enum PartialResult {
     Publication(Box<Publication>),
     Collection(Box<Collection>),
     Run(KnownRun),
+    RefusedExecution(Box<execution_presentation::RefusedExecution>),
     Inspection(Box<execution_presentation::Inspection>),
     Observation(service_storage::Observation),
     CreatedRestore(Box<transport_presentation::CreatedRestore>),
     MigrationPaths(Box<migration_presentation::Paths>),
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Publication {
     pub(super) destination: NativePath,
@@ -371,7 +474,7 @@ impl fmt::Debug for PartialResult {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "encoding", rename_all = "snake_case")]
 // The public path union is platform independent; each producer uses its native arm.
@@ -406,13 +509,13 @@ impl From<&Path> for NativePath {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct KnownRun {
     pub(super) run_id: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Collection {
     pub(super) plan: bool,
@@ -434,33 +537,15 @@ impl Collection {
             failed: report.failed.to_string(),
         }
     }
-
-    pub(super) fn human(&self, out: &mut dyn Write) -> Result<(), CliError> {
-        writeln!(
-            out,
-            "{}: candidates={}, removed={}, retained={}, unsupported={}, failed={}",
-            if self.plan {
-                "collection preview"
-            } else {
-                "collection"
-            },
-            self.candidates,
-            self.removed,
-            self.retained,
-            self.unsupported,
-            self.failed
-        )
-        .map_err(io_operation)
-    }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Deletion {
     pub(super) outcome: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct ArtifactResult {
     pub(super) run_id: String,
@@ -468,7 +553,7 @@ pub(super) struct ArtifactResult {
     pub(super) outcome: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Revision {
     package_id: String,
@@ -484,7 +569,7 @@ impl From<&RevisionIdentity> for Revision {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Input {
     input_id: String,
@@ -513,7 +598,7 @@ impl From<&crate::domain::ManagedInputBindingView> for Input {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Guard {
     trigger: &'static str,
@@ -531,7 +616,7 @@ impl From<&crate::domain::RecoveryGuardView> for Guard {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Instance {
     instance_id: String,
@@ -557,34 +642,7 @@ impl From<&crate::domain::InstanceView> for Instance {
     }
 }
 
-impl Instance {
-    pub(super) fn human(&self, out: &mut dyn Write) -> Result<(), CliError> {
-        writeln!(out, "instance_id: {}", self.instance_id).map_err(io_operation)?;
-        if let Some(guard) = &self.recovery_guard {
-            writeln!(
-                out,
-                "current_recovery_guard: {} run={} entered_at_unix_ms={}",
-                guard.trigger, guard.run_id, guard.entered_at_unix_ms
-            )
-            .map_err(io_operation)?;
-        } else {
-            writeln!(out, "current_recovery_guard: none").map_err(io_operation)?;
-        }
-        writeln!(
-            out,
-            "name: {}\nrevision: exact:{}/{}\nstate_version: {}\nrequired_inputs_satisfied: {}",
-            self.name,
-            self.active_revision.package_id,
-            self.active_revision.content_digest,
-            self.state_version,
-            self.required_inputs_satisfied
-        )
-        .map_err(io_operation)?;
-        Inputs::human_items(&self.inputs, out)
-    }
-}
-
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Inputs {
     pub(super) instance_id: String,
@@ -599,94 +657,6 @@ impl Inputs {
             state_version: view.state_version.to_string(),
             items: view.bindings.iter().map(Into::into).collect(),
         }
-    }
-
-    fn human_items(items: &[Input], out: &mut dyn Write) -> Result<(), CliError> {
-        if items.is_empty() {
-            return writeln!(out, "inputs: none").map_err(io_operation);
-        }
-        for input in items {
-            let role = match input.required {
-                Some(true) => "active_required",
-                Some(false) => "active_optional",
-                None => "retained",
-            };
-            writeln!(
-                out,
-                "input: {}\t{}\t{}\t{}",
-                input.input_id,
-                role,
-                if input.present { "present" } else { "absent" },
-                input.protection
-            )
-            .map_err(io_operation)?;
-        }
-        Ok(())
-    }
-
-    pub(super) fn human(&self, out: &mut dyn Write) -> Result<(), CliError> {
-        Self::human_items(&self.items, out)
-    }
-}
-
-#[derive(Serialize)]
-#[cfg_attr(test, derive(schemars::JsonSchema))]
-pub(super) struct InstanceSummary {
-    instance_id: String,
-    name: String,
-    active_revision: Revision,
-    state_version: String,
-    required_inputs_satisfied: bool,
-    recovery_guard: Option<Guard>,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(test, derive(schemars::JsonSchema))]
-pub(super) struct Instances {
-    pub(super) items: Vec<InstanceSummary>,
-}
-
-impl Instances {
-    pub(super) fn from_views(views: &[crate::domain::InstanceSummary]) -> Self {
-        Self {
-            items: views
-                .iter()
-                .map(|view| InstanceSummary {
-                    instance_id: view.id.to_string(),
-                    name: view.name.as_str().into(),
-                    active_revision: (&view.active_revision).into(),
-                    state_version: view.state_version.to_string(),
-                    required_inputs_satisfied: view.required_inputs_satisfied,
-                    recovery_guard: view.recovery_guard.as_ref().map(Into::into),
-                })
-                .collect(),
-        }
-    }
-
-    pub(super) fn human(&self, out: &mut dyn Write) -> Result<(), CliError> {
-        if self.items.is_empty() {
-            return writeln!(out, "No managed Instances.").map_err(io_operation);
-        }
-        writeln!(out, "NAME  INPUTS  RECOVERY").map_err(io_operation)?;
-        for item in &self.items {
-            writeln!(
-                out,
-                "{}  {}  {}",
-                item.name,
-                if item.required_inputs_satisfied {
-                    "complete"
-                } else {
-                    "missing required values"
-                },
-                if item.recovery_guard.is_some() {
-                    "required"
-                } else {
-                    "none"
-                }
-            )
-            .map_err(io_operation)?;
-        }
-        Ok(())
     }
 }
 

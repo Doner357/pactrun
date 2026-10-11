@@ -16,7 +16,7 @@ use super::support::{
 const LAUNCHER_NAME: &str = "pactrun-system-launcher";
 
 fn interpreter_source() -> String {
-    r#"source_format: 1.0-alpha.1
+    r#"source_format: 1.0-alpha.2
 package_id: {package_id}
 revision:
   inputs: []
@@ -38,10 +38,6 @@ revision:
 runtime_content:
   files:
     - { id: script, source: {worker_name}, path: bin/script }
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#
     .to_owned()
 }
@@ -222,10 +218,10 @@ if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 1:
     let shown = scenario.run(["run", "show", &run.id]);
     assert_success(&shown);
     let shown = String::from_utf8_lossy(&shown.stdout);
-    assert!(shown.contains("phase: finished"));
-    assert!(shown.contains("outcome: cancelled"));
-    assert!(shown.contains("hook_completion_status: failure"));
-    assert!(shown.contains("artifact: report\tbytes: 13"));
+    assert!(shown.contains("Phase: finished"));
+    assert!(shown.contains("Outcome: cancelled"));
+    assert!(shown.contains("Hook completion: failure"));
+    assert!(shown.contains("Artifact: report (13 bytes)"));
 }
 
 // Test-ID: PR-TEST-0161
@@ -311,7 +307,7 @@ fn interpreter_lookup_requires_an_executable_candidate_and_preserves_invalid_utf
     );
     assert_success(&planned);
     let planned = String::from_utf8_lossy(&planned.stdout);
-    assert!(planned.contains("unix-bytes["), "{planned}");
+    assert!(planned.contains("Unix bytes ["), "{planned}");
     assert!(!planned.contains('\u{fffd}'), "{planned}");
     let invoked =
         scenario.run_with_environment(["invoke", "node", "interpreter"], &byte_environment);

@@ -7,6 +7,7 @@ use crate::domain::*;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub(crate) struct SnapshotCatalog {
+    pub(crate) selectors: std::collections::BTreeMap<SnapshotId, usize>,
     pub(crate) items: Vec<super::SnapshotInspection>,
     pub(crate) revisions: Vec<RevisionCatalogEntry>,
     pub(crate) unavailable_revisions: Vec<RevisionIdentity>,
@@ -41,32 +42,47 @@ fn revision(
 ) -> Result<RevisionCatalogEntry, PersistenceError> {
     let stored =
         load_revision_from(db, id)?.ok_or_else(|| PersistenceError::MissingRevision(id.clone()))?;
-    let metadata = load_revision_metadata_from(db, id, stored.content.core.common())?;
+    let mut metadata = load_revision_metadata_from(db, id, stored.content.core.common())?;
+    metadata.items.retain(|item| !matches!(item,RevisionMetadataItem::ReferenceLabel(_) | RevisionMetadataItem::LocalAlias{..})
+        && !matches!(item,RevisionMetadataItem::Presentation(p) if p.target==PresentationTargetV1::Revision && p.field==PresentationField::DisplayName));
+    let local = super::local_catalog::read_facts(db, id)?;
+    let reference = super::local_catalog::readable_reference(db, id, &local)?;
     Ok(RevisionCatalogEntry {
         identity: id.clone(),
         core: stored.content.core,
         metadata,
+        local,
+        reference,
     })
 }
 
-impl PactrunPersistence {
-    pub(crate) fn revision_abbreviations(
-        &self,
-        ids: &[RevisionIdentity],
-    ) -> Result<Vec<(String, String)>, PersistenceError> {
-        let mut db = self.open_read_connection()?;
-        let tx = db.transaction().map_err(sql)?;
-        ids.iter().map(|id| {
-            let package=id.package_id.to_string();let digest=hex::encode(id.content_digest.as_bytes());
-            let mut p=Vec::new();let mut d=Vec::new();
-            for (comparison,order) in [("<","DESC"),(">","ASC")] {
-                if let Some(v)=tx.query_row(&format!("SELECT lower(hex(package_id)) FROM revisions WHERE package_id {comparison} ?1 ORDER BY package_id {order} LIMIT 1"),[id.package_id.as_bytes().as_slice()],|r|r.get::<_,String>(0)).optional().map_err(sql)?{p.push(v);}
-                if let Some(v)=tx.query_row(&format!("SELECT lower(hex(revision_content_digest)) FROM revisions WHERE package_id=?1 AND revision_content_digest {comparison} ?2 ORDER BY revision_content_digest {order} LIMIT 1"),params![id.package_id.as_bytes().as_slice(),id.content_digest.as_bytes().as_slice()],|r|r.get::<_,String>(0)).optional().map_err(sql)?{d.push(v);}
+pub(super) fn unique_prefix_length(
+    db: &Connection,
+    kind: CatalogIdentityKind,
+    id: &str,
+) -> Result<usize, PersistenceError> {
+    let (table, column) = identity_table(kind);
+    let bytes = hex::decode(id).map_err(|_| corrupt())?;
+    let mut width = 1;
+    for (comparison, order) in [("<", "DESC"), (">", "ASC")] {
+        let neighbor:Option<String>=db.query_row(&format!("SELECT lower(hex({column})) FROM {table} WHERE {column} {comparison} ?1 ORDER BY {column} {order} LIMIT 1"),[&bytes],|r|r.get(0)).optional().map_err(sql)?;
+        if let Some(neighbor) = neighbor {
+            if neighbor.len() != id.len() {
+                return Err(corrupt());
             }
-            let short=|s:&str,others:Vec<String>|{let n=others.iter().map(|v|s.bytes().zip(v.bytes()).take_while(|(a,b)|a==b).count()+1).max().unwrap_or(12).max(12).min(s.len());s[..n].to_string()};
-            Ok((short(&package,p),format!("sha256:{}",short(&digest,d))))
-        }).collect()
+            width = width.max(
+                id.bytes()
+                    .zip(neighbor.bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+                    + 1,
+            );
+        }
     }
+    Ok(width.min(id.len()))
+}
+
+impl PactrunPersistence {
     pub(crate) fn identity_prefix(
         &self,
         kind: CatalogIdentityKind,
@@ -190,6 +206,7 @@ impl PactrunPersistence {
         let tx = db.transaction().map_err(sql)?;
         let run = load_managed_run_from(&tx, id)?;
         let mut result = RunCatalog {
+            selectors: std::collections::BTreeMap::new(),
             page: CatalogPage {
                 items: vec![run],
                 next: None,
@@ -229,6 +246,7 @@ impl PactrunPersistence {
                 .collect::<Result<Vec<_>, _>>()?
         };
         let mut full = SnapshotCatalog {
+            selectors: std::collections::BTreeMap::new(),
             items: Vec::new(),
             revisions: Vec::new(),
             unavailable_revisions: Vec::new(),
@@ -238,6 +256,10 @@ impl PactrunPersistence {
             if origin.is_some_and(|i| i != item.origin) {
                 continue;
             }
+            full.selectors.insert(
+                id,
+                unique_prefix_length(&tx, CatalogIdentityKind::Snapshot, &id.to_string())?,
+            );
             let revision_id = &item.producer;
             if !full.revisions.iter().any(|r| &r.identity == revision_id)
                 && !full.unavailable_revisions.contains(revision_id)
@@ -372,17 +394,19 @@ impl PactrunPersistence {
     pub(crate) fn catalog_revisions(
         &self,
         limit: usize,
-        after: Option<&RevisionIdentity>,
-    ) -> Result<CatalogPage<RevisionCatalogEntry, RevisionIdentity>, PersistenceError> {
+        after: Option<&RevisionCursor>,
+    ) -> Result<CatalogPage<RevisionCatalogEntry, RevisionCursor>, PersistenceError> {
         let take = bound(limit)?;
         let mut db = self.open_read_connection()?;
         let tx = db.transaction().map_err(sql)?;
-        let mut stmt = tx.prepare("SELECT package_id,revision_content_digest FROM revisions WHERE ?1 IS NULL OR (package_id,revision_content_digest)>(?1,?2) ORDER BY package_id,revision_content_digest LIMIT ?3").map_err(sql)?;
+        let mut stmt = tx.prepare("SELECT r.package_id,r.revision_content_digest FROM revisions r JOIN revision_installations i USING(package_id,revision_content_digest) WHERE ?1=0 OR coalesce(i.installed_at_unix_ms,-1)<?2 OR (coalesce(i.installed_at_unix_ms,-1)=?2 AND (r.package_id,r.revision_content_digest)>(?3,?4)) ORDER BY coalesce(i.installed_at_unix_ms,-1) DESC,r.package_id,r.revision_content_digest LIMIT ?5").map_err(sql)?;
         let ids = stmt
             .query_map(
                 params![
-                    after.map(|v| v.package_id.as_bytes().as_slice()),
-                    after.map(|v| v.content_digest.as_bytes().as_slice()),
+                    after.is_some(),
+                    after.and_then(|v| v.installed_at_unix_ms).unwrap_or(-1),
+                    after.map(|v| v.identity.package_id.as_bytes().as_slice()),
+                    after.map(|v| v.identity.content_digest.as_bytes().as_slice()),
                     take
                 ],
                 |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?)),
@@ -398,7 +422,10 @@ impl PactrunPersistence {
             );
             entries.push(revision(&tx, &id)?);
         }
-        Ok(page(entries, limit, |v| v.identity.clone()))
+        Ok(page(entries, limit, |v| RevisionCursor {
+            identity: v.identity.clone(),
+            installed_at_unix_ms: v.local.installed_at_unix_ms,
+        }))
     }
 
     pub(crate) fn catalog_history(
@@ -498,6 +525,7 @@ impl PactrunPersistence {
             .collect::<Result<Vec<_>, _>>()?;
         let page = page(entries, limit, |v| v.id);
         let mut result = RunCatalog {
+            selectors: std::collections::BTreeMap::new(),
             page,
             inspections: Vec::new(),
             revisions: Vec::new(),
@@ -569,6 +597,13 @@ fn retirement(db: &Connection, id: InstanceId) -> Result<RetirementCatalogEntry,
 
 fn complete_runs(db: &Connection, result: &mut RunCatalog) -> Result<(), PersistenceError> {
     for run in &result.page.items {
+        result.selectors.insert(
+            run.id,
+            (
+                unique_prefix_length(db, CatalogIdentityKind::Run, &run.id.to_string())?,
+                unique_prefix_length(db, CatalogIdentityKind::Instance, &run.instance.to_string())?,
+            ),
+        );
         result
             .inspections
             .push(super::sqlite_runs::inspect_run_from(db, run.clone())?);
@@ -603,6 +638,11 @@ fn history(db: &Connection, id: InstanceId) -> Result<InstanceHistoryEntry, Pers
         return Err(corrupt());
     }
     Ok(InstanceHistoryEntry {
+        unique_prefix_length: unique_prefix_length(
+            db,
+            CatalogIdentityKind::Instance,
+            &id.to_string(),
+        )?,
         id,
         recorded_name: name(row.0)?,
         current_name: row.1.map(name).transpose()?,

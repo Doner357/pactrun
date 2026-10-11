@@ -30,9 +30,11 @@ Text MUST be rendered without terminal-control injection. Machine-readable outpu
 [CLI machine interface](./machine-output.md).
 
 `revision list`, `run list`, `instance history list` and `instance deletion list`
-MUST use exclusive identity keyset pagination, default 50 and `--limit` 1-500.
-`--after` need not identify a still-present row. Revision ordering uses exact
-identity; Run and Instance lists use their respective IDs, not chronology.
+MUST use exclusive keyset pagination, default 50 and `--limit` 1-500.
+`--after` need not identify a still-present row. Revision ordering uses local
+installation time and exact identity under
+PR-REQ-0376.
+Run and Instance lists use their respective IDs, not chronology.
 Queries MUST fetch at most limit plus one base objects, report additional rows,
 and provide a continuation preserving selectors and presentation options.
 Each command MUST observe one read snapshot; separate pages are not frozen.
@@ -42,13 +44,15 @@ name resolves only a live Instance; mutually exclusive `--instance-id` selects
 retained history. Unknown identities fail; known identities without Runs return
 an empty result. Instance history MUST distinguish recorded and current names;
 deletion lists MUST discover obligations and receipts without duplicating IDs.
-Queries MUST NOT initialize or upgrade storage, reconcile, create Runs, invoke
-Hooks, expose native storage paths or read Input/Secret payloads.
+Queries MUST NOT initialize storage, reconcile, create Runs, invoke Hooks, expose
+native storage paths or read Input/Secret payloads. Opening an existing Store may
+perform a supported schema upgrade before query dispatch, as defined by
+PR-REQ-0373.
 
-`revision alias`, `revision note` and `revision trust` show/set/clear MUST use
-typed values. Writes require exact Revision identities and explicit expected
+`revision note` and `revision trust` show/set/clear MUST use typed values.
+References are resolved once to exact Revision identities; writes require explicit expected
 states (`--expect` or `--expect-absent`), never an implicitly read expectation.
-Alias clearing requires its exact expected target. PR-REQ-0253/0255 govern
+Local names use the separate rename/unname commands. PR-REQ-0253/0255 govern
 validation, atomic semantic CAS, idempotency and absence. Conflicts MUST NOT
 overwrite current state and MUST provide a reinspection instruction. Local trust
 remains descriptive. No generic force, metadata history or version token is added.
@@ -64,9 +68,10 @@ pactrun run list [<name> | --instance-id <id>]
 pactrun instance history list
 pactrun instance history show <instance-id>
 pactrun instance deletion list
-pactrun revision alias show <alias>
-pactrun revision alias set <alias> <exact-ref> (--expect-absent | --expect <exact-ref>)
-pactrun revision alias clear <alias> --expect <exact-ref>
+pactrun package rename <package> <name>
+pactrun package unname <package>
+pactrun revision rename <package>:<revision> <name>
+pactrun revision unname <package>:<revision>
 pactrun revision note show <revision-ref>
 pactrun revision note set <exact-ref> --value <text> (--expect-absent | --expect <text>)
 pactrun revision note clear <exact-ref> (--expect-absent | --expect <text>)
@@ -78,7 +83,8 @@ pactrun revision trust clear <exact-ref> (--expect-absent | --expect <trusted|di
 Name-selected Run continuations MUST retain the resolved InstanceId rather than
 resolving a potentially reused name on the next page. Human escaped text MUST
 distinguish literal backslashes from escape sequences and present strings from
-absence markers. Revision references retain their exact/label/alias grammar.
+absence markers. Revision references use `<package>:<revision>` under
+PR-REQ-0371.
 
 ```text
 pactrun
@@ -183,23 +189,42 @@ storage root from `PACTRUN_STORAGE_ROOT` and use its fixed `database/`,
 `runtime-content/`, and `staging/` children. A missing or invalid value MUST
 fail before data acquisition, schema migration, or persistent side effects.
 The standalone executable has no `--storage-root` option or platform default. `pack generate-id`,
-root `--help`, and root `--version` do not need the variable; the variable is
+help queries, and root `--version` do not need the variable; the variable is
 process configuration and is not an Input acquisition channel. Native package
 launchers supply a platform-selected root when this variable is absent; they
 do not replace an explicitly supplied value, including an invalid one.
 
-Root help MUST describe each listed public command form and the important listed
-options in concise task-facing language, including destructive and explicit
-authorization boundaries. Human and machine help MUST expose the same complete
-documentation text (machine `result.usage`), without opening storage or launching
-a Hook. Descriptions do not introduce new command spellings or options.
+Help queries use `pactrun [--format human|json|jsonl] <command-path> --help`,
+where the path contains only command words and may be empty for root help.
+No Instance, Pack, parameter or other operation operands are needed. The same
+paths MUST be available in every format, without opening storage, reading stdin,
+acquiring files or launching a Hook. Literal operand values named `--help` MUST
+NOT be reinterpreted as help queries.
+
+Root Human help shows the first-level command navigation and global options.
+Group help shows its immediate children; leaf help describes its complete forms,
+options and applicable notes, including destructive and explicit authorization
+boundaries. All views derive from the same command catalog. Descriptions do not
+introduce execution spellings or authorizations.
+
+Machine `result.usage` contains the Human text for the same scope. `scope` is the
+command-word array, empty at the root. `command` describes the selected entry,
+or is null at the root. `commands` contains all strict descendants, not only the
+children shown in the Human navigation; a root query therefore provides the
+complete catalog. Entries include `path`, `description`, `forms`, `options`,
+`notes` and `examples`. Forms retain their syntax and description; options expose
+their name, nullable value placeholder and description. `global_options` lists
+the applicable global help options. These fields are additive; earlier
+usage-only machine help responses remain valid. Consumers use the structured
+catalog rather than parsing Human layout.
 
 These operations are not a stable public Rust API. In particular,
 `InstallPackSource(..., explicit_local_metadata)` is an intentional internal
 orchestration capability for a typed local-metadata batch. Source YAML cannot carry local
 metadata, and the CLI install command MUST pass an empty local-metadata
-batch. The install command MUST NOT infer alias, note, or trust options or a `LocalInstall`
-record from this internal parameter.
+batch. Requested Package and Revision names use the separate installation inputs
+in PR-REQ-0372. The internal batch does not imply note, trust or `LocalInstall`
+options on the install command.
 
 The core management commands have these forms:
 
@@ -235,15 +260,12 @@ applies only source-projected portable metadata. Duplicate initial Input
 identities and multiple stdin sources fail before acquisition. File and stdin
 sources preserve exact bytes.
 
-The `<reference>` grammar uses
-`label:<ReferenceLabel>`, `alias:<LocalAlias>`, or
-`exact:<PackageId>/sha256:<RevisionContentDigest-hex>`. The
-ID selector contract permits unique lowercase
-hexadecimal prefixes of at least eight digits in either exact-reference component.
-Bare tokens, uppercase spellings, missing Package identity or algorithm, and
-repository guessing remain invalid. Resolution MUST produce one fixed exact
-`RevisionIdentity` before the typed operation begins. Labels, aliases, and
-state-version tokens retain their exact meanings.
+The `<reference>` grammar is `<package>:<revision>`. Each component is a local
+name or ID under PR-REQ-0371.
+The ID selector contract permits unique lowercase
+hexadecimal prefixes of at least eight digits. Resolution MUST produce one fixed
+exact `RevisionIdentity` before the typed operation begins. State-version tokens
+retain their exact meanings and are not names or prefixes.
 
 Every `<instance>` operand accepts only exact `InstanceName`. Comparison
 uses the preserved UTF-8 bytes with no trimming, normalization, case folding,
@@ -375,6 +397,9 @@ NOT be inferred from an internal application API.
 
 - [Command details](../../spec/interfaces/commands.md)
 - [ID selector contract](../../spec/interfaces/id-selectors.md)
+- [PR-REQ-0376](../../spec/packages/local-names.md#pr-req-0376---revision-catalog-order-and-local-facts)
+- [PR-REQ-0373](../../spec/storage/store-opening.md#pr-req-0373---store-opening-and-supported-catalog-upgrades)
+- [PR-REQ-0371](../../spec/packages/local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution)
 - [Pack transport](../../spec/packages/distribution.md)
 - [error taxonomy](../../spec/interfaces/errors.md)
 

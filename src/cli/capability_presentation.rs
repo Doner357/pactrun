@@ -3,7 +3,7 @@ use super::*;
 use crate::domain::*;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Presented<T> {
     #[serde(flatten)]
@@ -11,15 +11,13 @@ pub(super) struct Presented<T> {
     pub(super) presentation: Vec<Group>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Group {
     revision: presentation::Revision,
     entries: Vec<Entry>,
-    #[serde(skip)]
-    revision_label: String,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Entry {
     target: catalog_presentation::Target,
@@ -27,8 +25,6 @@ struct Entry {
     summary: Option<String>,
     description: Option<String>,
     help: Option<String>,
-    #[serde(skip)]
-    label: String,
 }
 
 pub(super) enum Selection {
@@ -82,7 +78,6 @@ pub(super) fn project(row: &RevisionCatalogEntry, selections: &[&Selection]) -> 
                     summary: None,
                     description: None,
                     help: None,
-                    label: catalog::presentation_target(&value.target),
                 });
                 entries.len() - 1
             });
@@ -105,7 +100,6 @@ pub(super) fn project(row: &RevisionCatalogEntry, selections: &[&Selection]) -> 
         vec![Group {
             revision: (&row.identity).into(),
             entries,
-            revision_label: format_revision(&row.identity),
         }]
     }
 }
@@ -148,69 +142,6 @@ pub(super) fn load(
             project(row, &selections)
         })
         .collect())
-}
-
-pub(super) fn write(out: &mut dyn Write, groups: &[Group], compact: bool) -> Result<(), CliError> {
-    for group in groups {
-        if compact
-            && group
-                .entries
-                .iter()
-                .all(|e| e.display_name.is_none() && e.summary.is_none())
-        {
-            continue;
-        }
-        if groups.len() > 1 {
-            writeln!(out, "\nRevision: {}", group.revision_label).map_err(io_operation)?;
-        }
-        for entry in &group.entries {
-            if compact && entry.display_name.is_none() && entry.summary.is_none() {
-                continue;
-            }
-            if compact {
-                let brief = |value: &Option<String>| {
-                    value
-                        .as_ref()
-                        .map(|s| {
-                            let text: String = s.chars().take(160).collect();
-                            format!(
-                                "{}{}",
-                                catalog::safe(&text),
-                                if s.chars().count() > 160 { "..." } else { "" }
-                            )
-                        })
-                        .unwrap_or_default()
-                };
-                writeln!(
-                    out,
-                    "  {}: {} {}",
-                    entry.label,
-                    brief(&entry.display_name),
-                    brief(&entry.summary)
-                )
-                .map_err(io_operation)?;
-                continue;
-            }
-            writeln!(out, "  {}", entry.label).map_err(io_operation)?;
-            for (field, value) in [
-                ("Name", &entry.display_name),
-                ("Summary", &entry.summary),
-                ("Description", &entry.description),
-                ("Help", &entry.help),
-            ] {
-                if compact && matches!(field, "Description" | "Help") {
-                    continue;
-                }
-                if let Some(value) = value {
-                    writeln!(out, "    {field}:").map_err(io_operation)?;
-                    for line in value.lines() {
-                        writeln!(out, "      {}", catalog::safe(line)).map_err(io_operation)?;
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

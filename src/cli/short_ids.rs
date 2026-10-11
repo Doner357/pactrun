@@ -108,7 +108,7 @@ pub(super) fn valid_hex(text: &str, max: usize) -> bool {
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub(super) enum SelectorKind {
@@ -133,7 +133,7 @@ impl fmt::Display for SelectorKind {
         })
     }
 }
-#[derive(Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Candidates {
     selector_kind: SelectorKind,
@@ -203,6 +203,14 @@ impl<'a> Resolver<'a> {
         Ok(self.application.as_ref().expect("opened read-only"))
     }
     pub(super) fn revision(&mut self, reference: &mut RevisionReference) -> Result<(), CliError> {
+        if let RevisionReference::Named(named) = reference {
+            *reference = RevisionReference::Exact(
+                self.app()?
+                    .resolve_named_revision(named)
+                    .map_err(app_error)?,
+            );
+            return Ok(());
+        }
         if let RevisionReference::Prefix { package, digest } = reference {
             let text = format!("exact:{package}/sha256:{digest}");
             let matches = self
@@ -245,18 +253,5 @@ pub(super) fn exact(reference: RevisionReference) -> crate::domain::RevisionIden
     match reference {
         RevisionReference::Exact(id) => id,
         _ => unreachable!("exact selector resolved before dispatch"),
-    }
-}
-
-pub(super) fn labels(
-    app: &PactrunApplication,
-    kind: Kind,
-    ids: Vec<String>,
-    full: bool,
-) -> Result<Vec<String>, CliError> {
-    if full {
-        Ok(ids)
-    } else {
-        app.identity_abbreviations(kind, &ids).map_err(app_error)
     }
 }

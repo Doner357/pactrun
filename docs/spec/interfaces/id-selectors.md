@@ -12,8 +12,10 @@ including mutation operands, parent IDs, and pagination cursors. Full IDs retain
 their existing semantics, including absent-object deletion and deleted cursors.
 State-version/CAS tokens and author-assigned names remain exact.
 
-Revision references retain `exact:<package>/sha256:<digest>`; either hexadecimal
-component may be abbreviated. Labels and aliases keep their explicit syntax.
+Revision references use `<package>:<revision>`; each component may be a user
+name or an eligible hexadecimal ID prefix. Full Revision digests omit `sha256:`
+in this reference syntax. The complete reference must resolve uniquely under
+[PR-REQ-0371](../packages/local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution).
 Migration paths accept `mp1-<8..63 hex digits>` as a fingerprint prefix; complete
 `mp1-` selectors retain their existing self-contained path semantics. Migration
 Input target digests retain `sha256:` and may be abbreviated within the Instance's
@@ -32,7 +34,8 @@ authorization checks still apply.
 
 JSON/JSONL errors retain their envelopes and add typed ambiguity candidates in
 the existing nullable result. Malformed selectors are usage errors; absent or
-ambiguous prefixes are operation errors. No persistence or identity format changes.
+ambiguous prefixes are operation errors. Resolution does not change identity or
+grant mutation authority.
 
 **Verification: PR-TEST-0586, PR-TEST-0587, PR-TEST-0588, PR-TEST-0589.**
 

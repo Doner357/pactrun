@@ -1,0 +1,2056 @@
+{
+  "description": "Manage installed Packs, long-lived Instances and Pack-defined operations.",
+  "global_options": [
+    {
+      "name": "--help",
+      "value": null,
+      "description": "Show help for this command or command group."
+    },
+    {
+      "name": "--format",
+      "value": "human|json|jsonl",
+      "description": "Select output format before the command; human is the default."
+    },
+    {
+      "name": "--version",
+      "value": null,
+      "description": "Show the product version (root command only)."
+    }
+  ],
+  "options": {
+    "--plan": {
+      "name": "--plan",
+      "value": null,
+      "description": "Preview without execution; Migration previews do not acquire operator files or observe services."
+    },
+    "--if-version": {
+      "name": "--if-version",
+      "value": "token",
+      "description": "Require the exact observed state token; stale state is refused."
+    },
+    "--to": {
+      "name": "--to",
+      "value": "revision-reference",
+      "description": "Choose the target Revision and an explicit declared migration route."
+    },
+    "--path": {
+      "name": "--path",
+      "value": "path-id",
+      "description": "Choose the target Revision and an explicit declared migration route."
+    },
+    "--input-file": {
+      "name": "--input-file",
+      "value": "id=path",
+      "description": "Supply a new Instance Input from the indicated file."
+    },
+    "--input-stdin": {
+      "name": "--input-stdin",
+      "value": "input-id",
+      "description": "Supply a new Instance Input from standard input."
+    },
+    "--metadata-conflict": {
+      "name": "--metadata-conflict",
+      "value": "overwrite|keep",
+      "description": "Explicitly choose overwrite or keep for imported metadata conflicts."
+    },
+    "--include-portable-metadata": {
+      "name": "--include-portable-metadata",
+      "value": null,
+      "description": "Include eligible portable metadata, not local notes or trust labels."
+    },
+    "--limit": {
+      "name": "--limit",
+      "value": "count",
+      "description": "Bound and continue a listing using its returned cursor."
+    },
+    "--after": {
+      "name": "--after",
+      "value": "cursor",
+      "description": "Bound and continue a listing using its returned cursor."
+    },
+    "--no-trunc": {
+      "name": "--no-trunc",
+      "value": null,
+      "description": "Show complete identifiers instead of shortened human display IDs."
+    },
+    "--retained": {
+      "name": "--retained",
+      "value": null,
+      "description": "Include or select retained bindings rather than only active bindings."
+    },
+    "--reveal-location": {
+      "name": "--reveal-location",
+      "value": null,
+      "description": "Explicitly request native location disclosure and access intent."
+    },
+    "--intent": {
+      "name": "--intent",
+      "value": "read|write",
+      "description": "Explicitly request native location disclosure and access intent."
+    },
+    "--authorize-secret-export": {
+      "name": "--authorize-secret-export",
+      "value": null,
+      "description": "Explicitly authorize protected export."
+    },
+    "--authorize-sensitive-export": {
+      "name": "--authorize-sensitive-export",
+      "value": null,
+      "description": "Explicitly authorize protected export."
+    },
+    "--authorize-declassification": {
+      "name": "--authorize-declassification",
+      "value": null,
+      "description": "Allow only declared Secret declassification on the selected path."
+    },
+    "--authorize-recovery-override": {
+      "name": "--authorize-recovery-override",
+      "value": null,
+      "description": "Bypass only the initial guard; does not repair or acknowledge recovery."
+    },
+    "--confirm-discard": {
+      "name": "--confirm-discard",
+      "value": null,
+      "description": "Explicitly authorize irreversible detached-allocation disposal."
+    },
+    "--attempt": {
+      "name": "--attempt",
+      "value": "run-id",
+      "description": "Identify the attempt and assert externally verified Cleanup."
+    },
+    "--assert-cleanup-complete": {
+      "name": "--assert-cleanup-complete",
+      "value": null,
+      "description": "Identify the attempt and assert externally verified Cleanup."
+    },
+    "--delete-artifacts": {
+      "name": "--delete-artifacts",
+      "value": null,
+      "description": "Include associated Artifacts when deleting eligible Run history."
+    },
+    "--value": {
+      "name": "--value",
+      "value": "text",
+      "description": "Supply metadata and an exact compare-and-set expectation."
+    },
+    "--expect": {
+      "name": "--expect",
+      "value": "previous-value",
+      "description": "Supply metadata and an exact compare-and-set expectation."
+    },
+    "--expect-absent": {
+      "name": "--expect-absent",
+      "value": null,
+      "description": "Supply metadata and an exact compare-and-set expectation."
+    },
+    "--param": {
+      "name": "--param",
+      "value": "id=value",
+      "description": "Supply declared typed parameters from one chosen source."
+    },
+    "--param-file": {
+      "name": "--param-file",
+      "value": "id=path",
+      "description": "Supply declared typed parameters from one chosen source."
+    },
+    "--param-stdin": {
+      "name": "--param-stdin",
+      "value": "id",
+      "description": "Supply declared typed parameters from one chosen source."
+    },
+    "--startup-timeout-ms": {
+      "name": "--startup-timeout-ms",
+      "value": "milliseconds",
+      "description": "Set invocation deadlines; omitted values are unlimited."
+    },
+    "--execution-timeout-ms": {
+      "name": "--execution-timeout-ms",
+      "value": "milliseconds",
+      "description": "Set invocation deadlines; omitted values are unlimited."
+    },
+    "--action-timeout-ms": {
+      "name": "--action-timeout-ms",
+      "value": "milliseconds",
+      "description": "Bound Action execution (unlimited when omitted); other operations use --execution-timeout-ms."
+    },
+    "--termination-grace-ms": {
+      "name": "--termination-grace-ms",
+      "value": "milliseconds",
+      "description": "Set the termination grace period; the default is 5000ms."
+    },
+    "--package-name": {
+      "name": "--package-name",
+      "value": "name",
+      "description": "Assign a local Package name on installation; does not silently rename an existing object."
+    },
+    "--revision-name": {
+      "name": "--revision-name",
+      "value": "name",
+      "description": "Assign a local Revision name on installation; conflicts leave no partial installation."
+    },
+    "--revision": {
+      "name": "--revision",
+      "value": "revision-reference",
+      "description": "Select an installed Revision by a unique package:revision reference."
+    },
+    "--restore-from": {
+      "name": "--restore-from",
+      "value": "snapshot-id",
+      "description": "Create the Instance, then restore this Snapshot. Failure can leave a created Instance; inspect the result."
+    },
+    "--output": {
+      "name": "--output",
+      "value": "path",
+      "description": "Write to a new file; existing destinations are not replaced."
+    },
+    "--file": {
+      "name": "--file",
+      "value": "path",
+      "description": "Read Input bytes from this file."
+    },
+    "--stdin": {
+      "name": "--stdin",
+      "value": null,
+      "description": "Read Input bytes from standard input."
+    },
+    "--instance": {
+      "name": "--instance",
+      "value": "instance",
+      "description": "Filter by the selected live Instance."
+    },
+    "--instance-id": {
+      "name": "--instance-id",
+      "value": "instance-id",
+      "description": "Select retained history by exact Instance identity rather than its current name."
+    },
+    "--no-retain-hook-text": {
+      "name": "--no-retain-hook-text",
+      "value": null,
+      "description": "Do not retain Hook free text; live output remains enabled."
+    },
+    "--cancel-on-output-close": {
+      "name": "--cancel-on-output-close",
+      "value": null,
+      "description": "For JSONL execution only, request cancellation when the receiver closes stdout."
+    },
+    "--view": {
+      "name": "--view",
+      "value": "current|source|target",
+      "description": "Select the declared current, source or target binding view."
+    },
+    "--role": {
+      "name": "--role",
+      "value": "active|retained",
+      "description": "Select active or retained bindings."
+    },
+    "--copy-to": {
+      "name": "--copy-to",
+      "value": "path",
+      "description": "Copy the granted Input bytes into a new file."
+    },
+    "migration-input-file": {
+      "name": "--input-file",
+      "value": "target-digest/input-id=path",
+      "description": "Supply a declared Input for a specific target Revision on the selected path."
+    },
+    "hook-json-file": {
+      "name": "--file",
+      "value": "UTF8-JSON-file",
+      "description": "Read the structured helper submission from a UTF-8 JSON file."
+    },
+    "hook-output-file": {
+      "name": "--file",
+      "value": "path",
+      "description": "Copy file bytes into the declared output slot."
+    },
+    "input-output": {
+      "name": "--output",
+      "value": "path|-",
+      "description": "Write binding bytes to a new file, or use - for raw standard output."
+    },
+    "bundle-output": {
+      "name": "--output",
+      "value": "base-path",
+      "description": "Publish a new bundle, appending the command's .pack or .snapshot suffix."
+    }
+  },
+  "commands": [
+    {
+      "path": [
+        "pack"
+      ],
+      "description": "Install Packs or generate a Package ID.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "pack",
+        "generate-id"
+      ],
+      "description": "Generate a new Package ID without opening managed storage.",
+      "forms": [
+        {
+          "usage": "pactrun pack generate-id",
+          "description": "Generate a new Package ID without opening managed storage."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "pack",
+        "install"
+      ],
+      "description": "Validate and install immutable Pack content; does not start a service.",
+      "forms": [
+        {
+          "usage": "pactrun pack install <directory-or-pack-file> [--package-name <name>] [--revision-name <name>] [--metadata-conflict overwrite|keep]",
+          "description": "Validate and install immutable Pack content; does not start a service."
+        }
+      ],
+      "options": [
+        "--package-name",
+        "--revision-name",
+        "--metadata-conflict"
+      ],
+      "notes": [],
+      "examples": [
+        "pactrun pack install ./example.pack --package-name app --revision-name initial"
+      ]
+    },
+    {
+      "path": [
+        "package"
+      ],
+      "description": "Manage local Package names.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "package",
+        "rename"
+      ],
+      "description": "Set or change a local Package name without changing identity.",
+      "forms": [
+        {
+          "usage": "pactrun package rename <package> <name>",
+          "description": "Set or change a local Package name without changing identity."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "package",
+        "unname"
+      ],
+      "description": "Remove a local name; does not delete the Package or its Revisions.",
+      "forms": [
+        {
+          "usage": "pactrun package unname <package>",
+          "description": "Remove a local name; does not delete the Package or its Revisions."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision"
+      ],
+      "description": "Inspect, name, export or delete installed Revisions.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "list"
+      ],
+      "description": "List Revisions newest-installed first; copy the returned cursor to continue.",
+      "forms": [
+        {
+          "usage": "pactrun revision list [--limit <1..500>] [--after <cursor>] [--no-trunc]",
+          "description": "List Revisions newest-installed first; copy the returned cursor to continue."
+        }
+      ],
+      "options": [
+        "--limit",
+        "--after",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": [
+        "pactrun revision list --limit 10"
+      ]
+    },
+    {
+      "path": [
+        "revision",
+        "show"
+      ],
+      "description": "Inspect an installed Revision and its public declarations.",
+      "forms": [
+        {
+          "usage": "pactrun revision show <revision-reference>",
+          "description": "Inspect an installed Revision and its public declarations."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "metadata"
+      ],
+      "description": "Inspect Revision descriptions and provenance.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "metadata",
+        "show"
+      ],
+      "description": "Inspect presentation and local metadata for a Revision.",
+      "forms": [
+        {
+          "usage": "pactrun revision metadata show <revision-reference>",
+          "description": "Inspect presentation and local metadata for a Revision."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "rename"
+      ],
+      "description": "Set or change a local Revision name within its Package.",
+      "forms": [
+        {
+          "usage": "pactrun revision rename <package>:<revision> <name>",
+          "description": "Set or change a local Revision name within its Package."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "unname"
+      ],
+      "description": "Remove a local name; does not delete the Revision or rebind Instances.",
+      "forms": [
+        {
+          "usage": "pactrun revision unname <package>:<revision>",
+          "description": "Remove a local name; does not delete the Revision or rebind Instances."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "export"
+      ],
+      "description": "Export an installed Revision as a portable .pack archive.",
+      "forms": [
+        {
+          "usage": "pactrun revision export <revision-reference> --output <base-path> [--include-portable-metadata]",
+          "description": "Export an installed Revision as a portable .pack archive."
+        }
+      ],
+      "options": [
+        "bundle-output",
+        "--include-portable-metadata"
+      ],
+      "notes": [
+        "Always appends .pack: rv -> rv.pack; rv.pack -> rv.pack.pack.",
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "note"
+      ],
+      "description": "Manage a local Revision note.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "note",
+        "show"
+      ],
+      "description": "Read a Revision local note.",
+      "forms": [
+        {
+          "usage": "pactrun revision note show <revision-reference>",
+          "description": "Read a Revision local note."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "note",
+        "set"
+      ],
+      "description": "Set a local note with an explicit expected previous value.",
+      "forms": [
+        {
+          "usage": "pactrun revision note set <revision-reference> --value <text> (--expect-absent | --expect <text>)",
+          "description": "Set a local note with an explicit expected previous value."
+        }
+      ],
+      "options": [
+        "--value",
+        "--expect-absent",
+        "--expect"
+      ],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "note",
+        "clear"
+      ],
+      "description": "Clear a local note with an explicit expected previous value.",
+      "forms": [
+        {
+          "usage": "pactrun revision note clear <revision-reference> (--expect-absent | --expect <text>)",
+          "description": "Clear a local note with an explicit expected previous value."
+        }
+      ],
+      "options": [
+        "--expect-absent",
+        "--expect"
+      ],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "trust"
+      ],
+      "description": "Manage a local descriptive trust assessment.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "trust",
+        "show"
+      ],
+      "description": "Inspect the local trust label; it is not publisher authentication.",
+      "forms": [
+        {
+          "usage": "pactrun revision trust show <revision-reference>",
+          "description": "Inspect the local trust label; it is not publisher authentication."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "trust",
+        "set"
+      ],
+      "description": "Set a local trust label with an explicit expected previous value.",
+      "forms": [
+        {
+          "usage": "pactrun revision trust set <revision-reference> <trusted|distrusted> (--expect-absent | --expect <trusted|distrusted>)",
+          "description": "Set a local trust label with an explicit expected previous value."
+        }
+      ],
+      "options": [
+        "--expect-absent",
+        "--expect"
+      ],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "trust",
+        "clear"
+      ],
+      "description": "Clear a local trust label with an explicit expected previous value.",
+      "forms": [
+        {
+          "usage": "pactrun revision trust clear <revision-reference> (--expect-absent | --expect <trusted|distrusted>)",
+          "description": "Clear a local trust label with an explicit expected previous value."
+        }
+      ],
+      "options": [
+        "--expect-absent",
+        "--expect"
+      ],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "revision",
+        "delete"
+      ],
+      "description": "Delete an eligible unreferenced Revision.",
+      "forms": [
+        {
+          "usage": "pactrun revision delete <revision-reference>",
+          "description": "Delete an eligible unreferenced Revision."
+        }
+      ],
+      "options": [],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance"
+      ],
+      "description": "Create, inspect and manage Instances.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "create"
+      ],
+      "description": "Create a managed Instance from an installed Revision and optional initial Inputs.",
+      "forms": [
+        {
+          "usage": "pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]",
+          "description": "Create a managed Instance from an installed Revision and optional initial Inputs."
+        },
+        {
+          "usage": "pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]",
+          "description": "Create an Instance and execute the declared restore capability from a Snapshot."
+        }
+      ],
+      "options": [
+        "--revision",
+        "--input-file",
+        "--input-stdin",
+        "--restore-from",
+        "--param",
+        "--param-file",
+        "--param-stdin",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [
+        "Restore execution options require --restore-from and exclude --plan. Initial Input options cannot be combined with Restore.",
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": [
+        "pactrun instance create demo --revision app:initial"
+      ]
+    },
+    {
+      "path": [
+        "instance",
+        "list"
+      ],
+      "description": "List currently managed Instances.",
+      "forms": [
+        {
+          "usage": "pactrun instance list",
+          "description": "List currently managed Instances."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "show"
+      ],
+      "description": "Inspect current Revision, readiness, bindings and recovery guard.",
+      "forms": [
+        {
+          "usage": "pactrun instance show <instance>",
+          "description": "Inspect current Revision, readiness, bindings and recovery guard."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "migration-paths"
+      ],
+      "description": "List declared migration routes without acquiring files or observing services.",
+      "forms": [
+        {
+          "usage": "pactrun instance migration-paths <instance> --to <reference> [--limit <1..100>] [--after <path-id>] [--no-trunc]",
+          "description": "List declared migration routes without acquiring files or observing services."
+        }
+      ],
+      "options": [
+        "--to",
+        "--limit",
+        "--after",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references.",
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "migrate"
+      ],
+      "description": "Migrate along the selected declared path; --plan only previews the operation.",
+      "forms": [
+        {
+          "usage": "pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]",
+          "description": "Migrate along the selected declared path; --plan only previews the operation."
+        }
+      ],
+      "options": [
+        "--to",
+        "--plan",
+        "--path",
+        "migration-input-file",
+        "--authorize-declassification",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [
+        "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters.",
+        "Input files are target-qualified and acquired before execution. --plan does not acquire files or observe live service requirements."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "delete"
+      ],
+      "description": "Run declared Cleanup and reclaim owned service storage; irreversible.",
+      "forms": [
+        {
+          "usage": "pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]",
+          "description": "Run declared Cleanup and reclaim owned service storage; irreversible."
+        }
+      ],
+      "options": [
+        "--plan",
+        "--if-version",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes.",
+        "Cleanup accepts no author parameters. Abandon does not run Cleanup."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "abandon"
+      ],
+      "description": "End management and retain remaining service data; does not stop the service.",
+      "forms": [
+        {
+          "usage": "pactrun instance abandon <instance> [--plan] [--if-version <token>]",
+          "description": "End management and retain remaining service data; does not stop the service."
+        }
+      ],
+      "options": [
+        "--plan",
+        "--if-version",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes.",
+        "Cleanup accepts no author parameters. Abandon does not run Cleanup."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "history"
+      ],
+      "description": "Inspect retained Instance identities.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "history",
+        "list"
+      ],
+      "description": "List live and retired Instance identities.",
+      "forms": [
+        {
+          "usage": "pactrun instance history list [--limit <1..500>] [--after <instance-id>] [--no-trunc]",
+          "description": "List live and retired Instance identities."
+        }
+      ],
+      "options": [
+        "--limit",
+        "--after",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "history",
+        "show"
+      ],
+      "description": "Inspect historical Instance facts without rebinding its former name.",
+      "forms": [
+        {
+          "usage": "pactrun instance history show <instance-id>",
+          "description": "Inspect historical Instance facts without rebinding its former name."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "deletion"
+      ],
+      "description": "Inspect deletion attempts and confirm externally completed Cleanup.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "deletion",
+        "list"
+      ],
+      "description": "List retained deletion attempts and retirement facts.",
+      "forms": [
+        {
+          "usage": "pactrun instance deletion list [--limit <1..500>] [--after <instance-id>] [--no-trunc]",
+          "description": "List retained deletion attempts and retirement facts."
+        }
+      ],
+      "options": [
+        "--limit",
+        "--after",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "deletion",
+        "show"
+      ],
+      "description": "Inspect the retained deletion attempt and remaining obligations by Instance ID.",
+      "forms": [
+        {
+          "usage": "pactrun instance deletion show <instance-id>",
+          "description": "Inspect the retained deletion attempt and remaining obligations by Instance ID."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "deletion",
+        "confirm-complete"
+      ],
+      "description": "Assert externally verified Cleanup completion for the exact attempt.",
+      "forms": [
+        {
+          "usage": "pactrun instance deletion confirm-complete <instance-id> --attempt <run-id> --if-version <token> --assert-cleanup-complete",
+          "description": "Assert externally verified Cleanup completion for the exact attempt."
+        }
+      ],
+      "options": [
+        "--attempt",
+        "--if-version",
+        "--assert-cleanup-complete"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "instance",
+        "resolve-manual-recovery"
+      ],
+      "description": "Acknowledge externally verified recovery; does not itself repair the service.",
+      "forms": [
+        {
+          "usage": "pactrun instance resolve-manual-recovery <instance> [--if-version <token>]",
+          "description": "Acknowledge externally verified recovery; does not itself repair the service."
+        }
+      ],
+      "options": [
+        "--if-version"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "input"
+      ],
+      "description": "Manage Instance Inputs and Secrets.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "input",
+        "list"
+      ],
+      "description": "List active and retained Input bindings without exporting their values.",
+      "forms": [
+        {
+          "usage": "pactrun input list <instance>",
+          "description": "List active and retained Input bindings without exporting their values."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "input",
+        "set"
+      ],
+      "description": "Acquire and bind supplied bytes; this does not deploy or restart a service.",
+      "forms": [
+        {
+          "usage": "pactrun input set <instance> <input-id> (--file <path> | --stdin) [--if-version <token>]",
+          "description": "Acquire and bind supplied bytes; this does not deploy or restart a service."
+        }
+      ],
+      "options": [
+        "--file",
+        "--stdin",
+        "--if-version"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes."
+      ],
+      "examples": [
+        "pactrun input set demo config --file ./config.json"
+      ]
+    },
+    {
+      "path": [
+        "input",
+        "export"
+      ],
+      "description": "Export a binding to a new file or stdout; Secret export requires authorization.",
+      "forms": [
+        {
+          "usage": "pactrun input export <instance> <input-id> --output <path|-> [--authorize-secret-export]",
+          "description": "Export a binding to a new file or stdout; Secret export requires authorization."
+        }
+      ],
+      "options": [
+        "input-output",
+        "--authorize-secret-export"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "input",
+        "delete"
+      ],
+      "description": "Remove the selected Input binding; does not delete service-owned data.",
+      "forms": [
+        {
+          "usage": "pactrun input delete <instance> <input-id> [--if-version <token>]",
+          "description": "Remove the selected Input binding; does not delete service-owned data."
+        }
+      ],
+      "options": [
+        "--if-version"
+      ],
+      "notes": [
+        "State-version tokens require their complete values, not ID prefixes."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "action"
+      ],
+      "description": "Inspect Pack-defined Actions and parameters.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "action",
+        "list"
+      ],
+      "description": "List the Actions declared by the active Revision.",
+      "forms": [
+        {
+          "usage": "pactrun action list <instance>",
+          "description": "List the Actions declared by the active Revision."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "action",
+        "show"
+      ],
+      "description": "Inspect an Action declaration, parameters and execution requirements.",
+      "forms": [
+        {
+          "usage": "pactrun action show <instance> <action>",
+          "description": "Inspect an Action declaration, parameters and execution requirements."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "invoke"
+      ],
+      "description": "Execute a declared Action, or preview it with --plan.",
+      "forms": [
+        {
+          "usage": "pactrun invoke <instance> <action> [options]",
+          "description": "Execute a declared Action, or preview it with --plan."
+        }
+      ],
+      "options": [
+        "--param",
+        "--param-file",
+        "--param-stdin",
+        "--plan",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--action-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [],
+      "examples": [
+        "pactrun action show demo inspect",
+        "pactrun invoke demo inspect --plan"
+      ]
+    },
+    {
+      "path": [
+        "run"
+      ],
+      "description": "Inspect and manage retained Run history.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "list"
+      ],
+      "description": "List Run history for all Instances or a selected exact Instance.",
+      "forms": [
+        {
+          "usage": "pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]",
+          "description": "List Run history for all Instances or a selected exact Instance."
+        }
+      ],
+      "options": [
+        "--instance-id",
+        "--limit",
+        "--after",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "show"
+      ],
+      "description": "Inspect a Run outcome, failure, progress and current recovery guard.",
+      "forms": [
+        {
+          "usage": "pactrun run show <run-id>",
+          "description": "Inspect a Run outcome, failure, progress and current recovery guard."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "reconcile"
+      ],
+      "description": "Terminalize confirmed lost owners without replaying Hooks.",
+      "forms": [
+        {
+          "usage": "pactrun run reconcile",
+          "description": "Terminalize confirmed lost owners without replaying Hooks."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "artifact"
+      ],
+      "description": "Export or delete retained Run Artifacts.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "artifact",
+        "export"
+      ],
+      "description": "Export a retained Run Artifact with explicit sensitive-export authorization.",
+      "forms": [
+        {
+          "usage": "pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export",
+          "description": "Export a retained Run Artifact with explicit sensitive-export authorization."
+        }
+      ],
+      "options": [
+        "--output",
+        "--authorize-sensitive-export"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "artifact",
+        "delete"
+      ],
+      "description": "Delete the selected retained Run Artifact.",
+      "forms": [
+        {
+          "usage": "pactrun run artifact delete <run-id> <output-id>",
+          "description": "Delete the selected retained Run Artifact."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "run",
+        "delete"
+      ],
+      "description": "Delete eligible Run history; associated artifacts need explicit deletion intent.",
+      "forms": [
+        {
+          "usage": "pactrun run delete <run-id> [--delete-artifacts]",
+          "description": "Delete eligible Run history; associated artifacts need explicit deletion intent."
+        }
+      ],
+      "options": [
+        "--delete-artifacts"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot"
+      ],
+      "description": "Capture, restore and manage Snapshots.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "list"
+      ],
+      "description": "List Snapshots, optionally filtered by Instance.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot list [--instance <instance>] [--no-trunc]",
+          "description": "List Snapshots, optionally filtered by Instance."
+        }
+      ],
+      "options": [
+        "--instance",
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "show"
+      ],
+      "description": "Inspect Snapshot identity and recorded metadata.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot show <snapshot-id>",
+          "description": "Inspect Snapshot identity and recorded metadata."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "capture"
+      ],
+      "description": "Execute the Pack-defined capture capability to create a Snapshot.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot capture <instance> [execution-options]",
+          "description": "Execute the Pack-defined capture capability to create a Snapshot."
+        }
+      ],
+      "options": [
+        "--param",
+        "--param-file",
+        "--param-stdin",
+        "--plan",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "restore"
+      ],
+      "description": "Execute the Pack-defined restore capability against a selected Snapshot.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot restore <instance> <snapshot-id> [execution-options]",
+          "description": "Execute the Pack-defined restore capability against a selected Snapshot."
+        }
+      ],
+      "options": [
+        "--param",
+        "--param-file",
+        "--param-stdin",
+        "--plan",
+        "--authorize-recovery-override",
+        "--startup-timeout-ms",
+        "--execution-timeout-ms",
+        "--termination-grace-ms",
+        "--no-retain-hook-text",
+        "--cancel-on-output-close"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "verify"
+      ],
+      "description": "Check the selected Snapshot against its integrity contract.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot verify <snapshot-id>",
+          "description": "Check the selected Snapshot against its integrity contract."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "import"
+      ],
+      "description": "Validate and import a Snapshot bundle; does not restore a service.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot import <bundle-path>",
+          "description": "Validate and import a Snapshot bundle; does not restore a service."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "export"
+      ],
+      "description": "Export a Snapshot bundle with explicit sensitive-export authorization.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export",
+          "description": "Export a Snapshot bundle with explicit sensitive-export authorization."
+        }
+      ],
+      "options": [
+        "bundle-output",
+        "--authorize-sensitive-export"
+      ],
+      "notes": [
+        "Always appends .snapshot: backup -> backup.snapshot; backup.snapshot -> backup.snapshot.snapshot."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "snapshot",
+        "delete"
+      ],
+      "description": "Delete an eligible Snapshot.",
+      "forms": [
+        {
+          "usage": "pactrun snapshot delete <snapshot-id>",
+          "description": "Delete an eligible Snapshot."
+        }
+      ],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage"
+      ],
+      "description": "Inspect service storage and detached allocations.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage",
+        "list"
+      ],
+      "description": "List declared service storage bindings; include retained bindings with --retained.",
+      "forms": [
+        {
+          "usage": "pactrun service-storage list <instance> [--retained]",
+          "description": "List declared service storage bindings; include retained bindings with --retained."
+        }
+      ],
+      "options": [
+        "--retained"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage",
+        "detached"
+      ],
+      "description": "Inspect or explicitly discard detached allocations.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage",
+        "detached",
+        "list"
+      ],
+      "description": "List allocations retained after Instance management ended.",
+      "forms": [
+        {
+          "usage": "pactrun service-storage detached list [--no-trunc]",
+          "description": "List allocations retained after Instance management ended."
+        }
+      ],
+      "options": [
+        "--no-trunc"
+      ],
+      "notes": [
+        "Object IDs accept unique lowercase hexadecimal prefixes of at least eight digits. --no-trunc shows full identifiers; pagination cursors are not object references."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage",
+        "detached",
+        "show"
+      ],
+      "description": "Inspect a detached allocation; reveal native locations only when requested.",
+      "forms": [
+        {
+          "usage": "pactrun service-storage detached show <allocation-id> [--reveal-location]",
+          "description": "Inspect a detached allocation; reveal native locations only when requested."
+        }
+      ],
+      "options": [
+        "--reveal-location"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "service-storage",
+        "detached",
+        "discard"
+      ],
+      "description": "Irreversibly reclaim the selected detached allocation with explicit consent.",
+      "forms": [
+        {
+          "usage": "pactrun service-storage detached discard <allocation-id> --confirm-discard",
+          "description": "Irreversibly reclaim the selected detached allocation with explicit consent."
+        }
+      ],
+      "options": [
+        "--confirm-discard"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "resource"
+      ],
+      "description": "Inspect and locate declared service resources.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "resource",
+        "list"
+      ],
+      "description": "List declared service resource associations.",
+      "forms": [
+        {
+          "usage": "pactrun resource list <instance> [--retained]",
+          "description": "List declared service resource associations."
+        }
+      ],
+      "options": [
+        "--retained"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "resource",
+        "show"
+      ],
+      "description": "Inspect a resource association without observing the live service.",
+      "forms": [
+        {
+          "usage": "pactrun resource show <instance> <resource-id> [--retained]",
+          "description": "Inspect a resource association without observing the live service."
+        }
+      ],
+      "options": [
+        "--retained"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "resource",
+        "observe"
+      ],
+      "description": "Observe the selected live resource without changing the service.",
+      "forms": [
+        {
+          "usage": "pactrun resource observe <instance> <resource-id> [--retained]",
+          "description": "Observe the selected live resource without changing the service."
+        }
+      ],
+      "options": [
+        "--retained"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "resource",
+        "locate"
+      ],
+      "description": "Request an explicitly read- or write-intended native resource location.",
+      "forms": [
+        {
+          "usage": "pactrun resource locate <instance> <resource-id> --intent <read|write> [--retained]",
+          "description": "Request an explicitly read- or write-intended native resource location."
+        }
+      ],
+      "options": [
+        "--intent",
+        "--retained"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "storage"
+      ],
+      "description": "Inspect and collect unreferenced stored content.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "storage",
+        "gc"
+      ],
+      "description": "Collect eligible unreferenced managed content; --plan only previews collection.",
+      "forms": [
+        {
+          "usage": "pactrun storage gc [--plan]",
+          "description": "Collect eligible unreferenced managed content; --plan only previews collection."
+        }
+      ],
+      "options": [
+        "--plan"
+      ],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook"
+      ],
+      "description": "Access helpers for an active Shell Loader Session.",
+      "forms": [],
+      "options": [],
+      "notes": [
+        "Help does not require a Session. Executing helpers requires an active Shell Loader Session."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "session"
+      ],
+      "description": "Inspect the active Shell Loader Session.",
+      "forms": [
+        {
+          "usage": "pactrun hook session [--output <path>]",
+          "description": "Inspect the active Shell Loader Session."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "parameter"
+      ],
+      "description": "Read a declared typed parameter as a JSON value.",
+      "forms": [
+        {
+          "usage": "pactrun hook parameter <id> [--output <path>]",
+          "description": "Read a declared typed parameter as a JSON value."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "workspace"
+      ],
+      "description": "Read the granted scratch Workspace location.",
+      "forms": [
+        {
+          "usage": "pactrun hook workspace [--output <path>]",
+          "description": "Read the granted scratch Workspace location."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "input"
+      ],
+      "description": "Read a granted Input location or copy its bytes.",
+      "forms": [
+        {
+          "usage": "pactrun hook input <id> [--view current|source|target] [--role active|retained] [--copy-to <path>] [--output <path>]",
+          "description": "Read a granted Input location or copy its bytes."
+        }
+      ],
+      "options": [
+        "--view",
+        "--role",
+        "--copy-to",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "resource"
+      ],
+      "description": "Read a granted service resource location.",
+      "forms": [
+        {
+          "usage": "pactrun hook resource <handle> [--output <path>]",
+          "description": "Read a granted service resource location."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "output"
+      ],
+      "description": "Read an output slot location or supply bytes from a file.",
+      "forms": [
+        {
+          "usage": "pactrun hook output <id> [--file <path>] [--output <path>]",
+          "description": "Read an output slot location or supply bytes from a file."
+        }
+      ],
+      "options": [
+        "hook-output-file",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "output-register"
+      ],
+      "description": "Register a declared output slot; registration is not publication.",
+      "forms": [
+        {
+          "usage": "pactrun hook output-register <id> [--output <path>]",
+          "description": "Register a declared output slot; registration is not publication."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "candidate"
+      ],
+      "description": "Read the private Snapshot capture candidate location.",
+      "forms": [
+        {
+          "usage": "pactrun hook candidate [--output <path>]",
+          "description": "Read the private Snapshot capture candidate location."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "snapshot-content"
+      ],
+      "description": "Inspect granted Snapshot content.",
+      "forms": [
+        {
+          "usage": "pactrun hook snapshot-content [--output <path>]",
+          "description": "Inspect granted Snapshot content."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "diagnostic"
+      ],
+      "description": "Submit Hook diagnostic text with explicit provenance.",
+      "forms": [
+        {
+          "usage": "pactrun hook diagnostic --file <UTF8-JSON-file> [--output <path>]",
+          "description": "Submit Hook diagnostic text with explicit provenance."
+        }
+      ],
+      "options": [
+        "hook-json-file",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "protocol-error"
+      ],
+      "description": "Submit a Hook protocol-error explanation.",
+      "forms": [
+        {
+          "usage": "pactrun hook protocol-error --file <UTF8-JSON-file> [--output <path>]",
+          "description": "Submit a Hook protocol-error explanation."
+        }
+      ],
+      "options": [
+        "hook-json-file",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "risk"
+      ],
+      "description": "Manage recovery risk through the active Hook Session.",
+      "forms": [],
+      "options": [],
+      "notes": [],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "risk",
+        "enter"
+      ],
+      "description": "Request entry into recovery risk and wait for acknowledgment.",
+      "forms": [
+        {
+          "usage": "pactrun hook risk enter [--output <path>]",
+          "description": "Request entry into recovery risk and wait for acknowledgment."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "risk",
+        "resolve"
+      ],
+      "description": "Request recovery-risk resolution and wait for acknowledgment.",
+      "forms": [
+        {
+          "usage": "pactrun hook risk resolve [--output <path>]",
+          "description": "Request recovery-risk resolution and wait for acknowledgment."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "capture-register"
+      ],
+      "description": "Register the capture candidate; registration is not durable success.",
+      "forms": [
+        {
+          "usage": "pactrun hook capture-register --file <UTF8-JSON-file> [--output <path>]",
+          "description": "Register the capture candidate; registration is not durable success."
+        }
+      ],
+      "options": [
+        "hook-json-file",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "completion"
+      ],
+      "description": "Submit structured Hook completion; a receipt is not durable Run success.",
+      "forms": [
+        {
+          "usage": "pactrun hook completion --file <UTF8-JSON-file> [--output <path>]",
+          "description": "Submit structured Hook completion; a receipt is not durable Run success."
+        }
+      ],
+      "options": [
+        "hook-json-file",
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    },
+    {
+      "path": [
+        "hook",
+        "target-ready"
+      ],
+      "description": "Submit the prepared Migration target for validation.",
+      "forms": [
+        {
+          "usage": "pactrun hook target-ready [--output <path>]",
+          "description": "Submit the prepared Migration target for validation."
+        }
+      ],
+      "options": [
+        "--output"
+      ],
+      "notes": [
+        "Execution requires an active Shell Loader Session. Helper payloads use the helper interface, not the global --format renderer.",
+        "Result files must be new. --output cannot be combined with byte-copy options; registration and receipts are not durable Run success."
+      ],
+      "examples": []
+    }
+  ]
+}

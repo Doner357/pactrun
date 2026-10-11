@@ -165,7 +165,7 @@ def smoke(program, work, part):
         (work / 'store' / name).mkdir(parents=True)
     pack = work / 'pack'
     pack.mkdir()
-    (pack / 'pactrun.yaml').write_text('''source_format: 1.0-alpha.1
+    (pack / 'pactrun.yaml').write_text('''source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000001236
 revision:
   inputs: [{id: secret, protection: secret}]
@@ -184,7 +184,8 @@ runtime_content:
   files: [{id: script, source: inspect.sh, path: inspect.sh, executable: false}]
 ''')
     (pack / 'inspect.sh').write_text('"$PACTRUN_EXECUTABLE" hook session >/dev/null || exit 1\nprintf "debian12-hook-ok\\n"\n')
-    revision = cli('pack', 'install', pack).splitlines()[0]
+    installed = json.loads(cli('--format', 'json', 'pack', 'install', pack))['result']['revision']
+    revision = installed['package_id'] + ':' + installed['content_digest'].removeprefix('sha256:')
     cli('instance', 'create', 'debian-ci', '--revision', revision)
     cli('input', 'set', 'debian-ci', 'secret', '--stdin', stdin=b'ci-only-secret-value')
     denied = work / 'denied-secret'

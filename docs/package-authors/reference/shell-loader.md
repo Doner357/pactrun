@@ -16,7 +16,7 @@ The built-in Loader MUST own one persistent canonical Hook connection and Sessio
 lifecycle. It MUST validate the admitted protocol version, receive Session start,
 and send readiness before running a script. Scripts MUST NOT need setup imports,
 handshake or completion boilerplate. Repeated helpers MUST use separate private
-IPC, not reconnect the Core endpoint or consume terminal streams.
+IPC, not reconnect the canonical Hook Protocol endpoint or consume terminal streams.
 
 The host interpreter is not bundled. Sh receives the absolute script path and
 ordered args; Bash receives `--noprofile --norc --`, script and args. PowerShell
@@ -59,6 +59,11 @@ execution diagnostics policy.
 display. Interactive presentation waits until the terminal is returned. Hook
 authors remain responsible for keeping sensitive values out of diagnostics.
 
+Built-in helper errors report a safe command, stage and reason through
+Pactrun-owned Run diagnostics.
+A handled helper failure remains diagnostic evidence when the script later
+succeeds. It is not a Hook-authored diagnostic or a new completion-failure rule.
+
 Read results support `--output FILE`, creating a new file instead of overwriting
 an existing file. JSON files are UTF-8 without an added BOM. Text-file output
 contains the exact text without an added newline; terminal results append a
@@ -99,5 +104,6 @@ termination and durable outcome arbitration.
 
 - [Shell helper reference](../../spec/interfaces/shell-loader.md)
 - [execution diagnostics policy](../../spec/operations/diagnostics.md)
+- [Pactrun-owned Run diagnostics](../../spec/operations/diagnostics.md#pr-req-0378---pactrun-owned-execution-diagnostics)
 
 </details>

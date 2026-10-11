@@ -1,4 +1,50 @@
 // Included in cli::tests to reuse the real Hook worker and isolated stores.
+// Test-ID: PR-TEST-0694
+// Verifies: PR-REQ-0366, PR-REQ-0367
+#[test]
+fn machine_completion_events_preserve_status_independently_of_retention() {
+    let (temp, root, expected, sensitive) = prepared_cli_hook_instance_with_terminal("output");
+    let marker = temp.path().join("completion-status");
+    let (code, value, _) = json_invoke(&root, machine_args(&marker, &expected, &sensitive));
+    assert_eq!(code, 0);
+    let event = value["delivery"]["events"].as_array().unwrap().iter().find(|e| e["type"] == "diagnostic" && e["kind"] == "completion").unwrap();
+    assert_eq!(event["completion_status"], "success");
+    assert_eq!(value["result"]["run"]["state"]["hook_completion_status"], "success");
+    assert!(value["result"]["diagnostics"]["events"].as_array().unwrap().is_empty());
+}
+// Test-ID: PR-TEST-0685
+// Verifies: PR-REQ-0366, PR-REQ-0367, PR-REQ-0377, PR-REQ-0286
+#[test]
+fn core_storage_retry_is_delivered_without_changing_the_durable_outcome() {
+    for format in ["human", "json", "jsonl"] {
+        let (_temp, root, expected, sensitive) = prepared_cli_hook_instance();
+        let faults = crate::application::fail_next_finalization_advances_for_test(1);
+        let marker = root.parent().unwrap().join("core-retry");
+        let mut args: Vec<OsString> = ["--format", format].map(Into::into).to_vec();
+        args.extend(successful_invoke_args(&marker, &expected, &sensitive));
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        assert_eq!(run(args, Some(root.as_os_str().into()), &mut io::empty(), &mut out, &mut err), 0);
+        assert_eq!(faults.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let listed = json_ok(&root, &["run", "list"]);
+        let id = listed["items"][0]["run_id"].as_str().unwrap();
+        assert_eq!(listed["items"][0]["state"]["outcome"], "succeeded");
+        if format == "human" {
+            let text = String::from_utf8(err).unwrap();
+            assert!(text.contains("retrying storage") && text.contains(id), "{text}");
+        } else {
+            let records: Vec<serde_json::Value> = if format == "json" {
+                serde_json::from_slice::<serde_json::Value>(&out).unwrap()["delivery"]["events"].as_array().unwrap().clone()
+            } else {
+                out.split(|b| *b == b'\n').filter(|line| !line.is_empty()).map(|line| serde_json::from_slice(line).unwrap()).collect()
+            };
+            let event = records.iter().find(|e| e["type"] == "core_progress" && e["phase"] == "retrying_storage").expect("typed Core retry event");
+            assert_eq!(event["run_id"], id);
+            assert!(records.iter().position(|e| e["type"] == "run_accepted").unwrap() < records.iter().position(|e| e == event).unwrap());
+        }
+    }
+}
+
 fn described_action() -> (TempDir, PathBuf, PathBuf, String) {
     let (temp, root, source) = cli_action_roots();
     let path = source.join("pactrun.yaml");
@@ -12,6 +58,58 @@ fn described_action() -> (TempDir, PathBuf, PathBuf, String) {
     (temp, root, source, revision)
 }
 
+// Test-ID: PR-TEST-0686
+// Verifies: PR-REQ-0365, PR-REQ-0359, PR-REQ-0043, PR-REQ-0377
+#[test]
+fn missing_input_cause_survives_reopening_and_later_binding_changes() {
+    let (temp, root, source) = cli_action_roots();
+    let path = source.join("pactrun.yaml");
+    fs::write(&path, fs::read_to_string(&path).unwrap().replace("inputs: []", "inputs: [{ id: config, required: true, protection: secret }, { id: spare, required: false, protection: secret }]")).unwrap();
+    let revision = json_install(&root, &source);
+    let instance = json_ok(&root, &["instance", "create", "missing", "--revision", &revision]);
+    let plan = json_ok(&root, &["invoke", "missing", "inspect", "--param", "value=x", "--plan"]);
+    assert_eq!(plan["missing_input_ids"], serde_json::json!(["config"]));
+    let (code, failed, _) = json_invoke(&root, ["invoke", "missing", "inspect", "--param", "value=x"].map(Into::into).to_vec());
+    assert_eq!(code, 1);
+    let failed_run = &failed["result"]["run"];
+    let id = failed_run["run_id"].as_str().unwrap();
+    assert_eq!(failed["result"]["run_id"], id, "the original partial-result identity is preserved");
+    let expected = serde_json::json!({"kind":"missing_required_inputs", "input_ids":["config"]});
+    assert_eq!(failed_run["state"]["primary_failure"]["cause"], expected);
+    for format in ["human", "jsonl"] {
+        let mut out = Vec::new(); let mut err = Vec::new();
+        let args = ["--format", format, "invoke", "missing", "inspect", "--param", "value=x"].map(Into::into).to_vec();
+        assert_eq!(run(args, Some(root.as_os_str().into()), &mut io::empty(), &mut out, &mut err), 1);
+        if format == "human" {
+            let text = format!("{}{}", String::from_utf8_lossy(&out), String::from_utf8_lossy(&err));
+            assert!(text.contains("Missing required Inputs: config"), "{text}");
+            assert!(text.contains("pactrun input set missing config --file <path>"), "{text}");
+            assert!(!text.contains("pactrun input set missing spare"), "{text}");
+        } else {
+            let lines: Vec<serde_json::Value> = out.split(|b| *b == b'\n').filter(|l| !l.is_empty()).map(|l| serde_json::from_slice(l).unwrap()).collect();
+            for line in &lines { schema_tests::assert_event(line); }
+            assert_eq!(lines.last().unwrap()["response"]["result"]["run"]["state"]["primary_failure"]["cause"], expected);
+        }
+    }
+    let secret = temp.path().join("synthetic-secret");
+    fs::write(&secret, b"NEVER_DISCLOSE_INPUT_VALUE_0686").unwrap();
+    let set = json_ok(&root, &["input", "set", "missing", "config", "--file", secret.to_str().unwrap()]);
+    assert_eq!(set["instance_id"], instance["instance_id"]);
+    assert_eq!(set["input_id"], "config");
+    let queried = json_ok(&root, &["run", "show", id]);
+    assert_eq!(queried["run"]["state"]["primary_failure"]["cause"], expected);
+    assert_eq!(queried["run"]["state"], failed_run["state"]);
+    assert!(!queried.to_string().contains("NEVER_DISCLOSE_INPUT_VALUE_0686"));
+    let current = json_ok(&root, &["instance", "show", "missing"]);
+    assert_eq!(current["required_inputs_satisfied"], true);
+    let (code, _, _) = json_invoke(&root, ["input", "delete", "missing", "config"].map(Into::into).to_vec());
+    assert_eq!(code, 1, "required active Input deletion remains forbidden");
+    json_ok(&root, &["input", "set", "missing", "spare", "--file", secret.to_str().unwrap()]);
+    let deleted = json_ok(&root, &["input", "delete", "missing", "spare"]);
+    assert_eq!(deleted["instance_id"], instance["instance_id"]);
+    assert_eq!(deleted["input_id"], "spare");
+}
+
 // Test-ID: PR-TEST-0578
 // Verifies: PR-REQ-0364
 #[test]
@@ -23,8 +121,8 @@ fn human_queries_are_concise_and_keep_actionable_parameter_information() {
         let text = String::from_utf8(out).unwrap();
         assert!(text.contains("inspect") && text.contains("Inspect the service"));
         assert_eq!(text.contains("Read its status."), detail);
-        assert_eq!(text.contains("default: normal-default") || text.contains("default: \"normal-default\""), detail);
-        assert_eq!(text.contains("default: [redacted]"), detail);
+        assert_eq!(text.contains("Default: normal-default") || text.contains("Default: \"normal-default\""), detail);
+        assert_eq!(text.contains("Default: [redacted]"), detail);
         for forbidden in ["not verified", "not an execution", "not authentication", "hook_args_count", "protocol_version", "private-default-sentinel", "Absent"] { assert!(!text.contains(forbidden), "{text}"); }
     }
 }
@@ -83,7 +181,7 @@ fn assert_machine_bytes(events: &[serde_json::Value]) {
         schema_tests::assert_event(event);
         assert_eq!(event["sequence"], (n + 1).to_string());
         assert_eq!(event["format"], "pactrun.cli");
-        assert_eq!(event["format_version"], "1.0-alpha.1");
+        assert_eq!(event["format_version"], presentation::FORMAT_VERSION);
         if event["type"] != "output" { continue; }
         assert_eq!(event["encoding"], "base64");
         let bytes = base64::engine::general_purpose::STANDARD.decode(event["data"].as_str().unwrap()).unwrap();

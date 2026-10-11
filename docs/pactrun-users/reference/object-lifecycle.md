@@ -26,7 +26,8 @@ unresolved or ambiguous human Revision references remain errors. Snapshot deleti
 MUST reject accepted Restore and recovery references. Revision deletion MUST
 reject active Instances, durable pins and unresolved obligations; historical Run
 identity and Snapshot provenance MUST NOT retain installation. Installation-local
-metadata, aliases, notes and trust are removed; Package identity remains.
+metadata, Revision names, installation time, notes and trust are removed;
+Package identity and its local name remain.
 
 A Run MUST be terminal and free of execution, recovery and retirement obligations
 before removal. Guards, pins, transition state, deletion obligations, finalization

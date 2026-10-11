@@ -190,6 +190,10 @@ pub(super) fn advance(
             Ok(true)
         }
         DeletionWork::NoCleanup | DeletionWork::FinalizationOnly { .. } => {
+            state
+                .cancellation
+                .delivery
+                .progress(state.run, super::delivery::CorePhase::FinalizingExecution);
             p.prepare_deletion_finalization(state.run, &state.owner)?;
             if finalize_storage(p, state.run, &state.owner, &succeeded())? {
                 guard.complete();
@@ -292,6 +296,7 @@ fn finalize_storage(
             let failure = RunFinish {
                 outcome: RunOutcome::Failed,
                 primary_failure: Some(RunPrimaryFailure {
+                    cause: None,
                     failure: RunFailureRecord {
                         error: PactrunErrorRef::new("service_storage", "allocation_unavailable")
                             .expect("registered error"),
@@ -400,6 +405,10 @@ pub(super) fn finalize(
         ));
     }
     if !state.housekeeping_attempted {
+        state.cancellation.delivery.progress(
+            state.facts.run,
+            super::delivery::CorePhase::FinalizingExecution,
+        );
         state.housekeeping_attempted = true;
         state.housekeeping_failed = state
             .facts

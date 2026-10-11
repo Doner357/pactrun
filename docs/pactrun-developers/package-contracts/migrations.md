@@ -4,13 +4,9 @@ title: Migrations (moved)
 
 # Migrations has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Migration Definition](../../spec/migrations/definition.md).
 
-Read [the current document](../../spec/migrations/definition.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="edge-declaration" />
 [Edge declaration](../../spec/migrations/definition.md#edge-declaration)

@@ -308,6 +308,7 @@ pub(super) fn advance(
                 state.failure = Some(RunFinish {
                     outcome: RunOutcome::Failed,
                     primary_failure: Some(RunPrimaryFailure {
+                        cause: None,
                         failure: RunFailureRecord {
                             error: PactrunErrorRef::new(
                                 "service_storage",
@@ -474,6 +475,7 @@ pub(super) fn advance(
             state.failure = Some(RunFinish {
                 outcome: RunOutcome::Failed,
                 primary_failure: Some(RunPrimaryFailure {
+                    cause: None,
                     failure: RunFailureRecord {
                         error: PactrunErrorRef::new("execution", "migration_publication_rejected")
                             .expect("registered error"),
@@ -603,6 +605,7 @@ fn migration_publication_failure() -> RunFinish {
     RunFinish {
         outcome: RunOutcome::Failed,
         primary_failure: Some(RunPrimaryFailure {
+            cause: None,
             failure: safe_execution_failure(
                 "migration_publication_rejected",
                 "Migration staged publication failed",

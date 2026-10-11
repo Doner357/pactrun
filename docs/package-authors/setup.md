@@ -5,8 +5,8 @@ title: Prepare an authoring workspace
 # Prepare an authoring workspace
 
 Install the public Preview through the Scoop or Homebrew instructions in
-[shared installation](../guides/installation.md). The current published version
-is `1.0.0-alpha.2`, not a formal stable release. The executable and managed storage
+[shared installation](../guides/installation.md), which identifies the supported
+release and platform prerequisites. The executable and managed storage
 are separate; do not use a real service store for experiments.
 Run `pactrun --version` and `pactrun --help` to verify the selected executable.
 If those commands are unavailable or select the wrong installation, complete
@@ -33,7 +33,7 @@ PowerShell:
         throw 'pactrun-demo already exists. Choose a new tutorial directory.'
     }
     New-Item -ItemType Directory pactrun-demo | Out-Null
-    New-Item -ItemType Directory pactrun-demo/pack, pactrun-demo/store/database, pactrun-demo/store/runtime-content, pactrun-demo/store/staging | Out-Null
+    New-Item -ItemType Directory pactrun-demo/pack | Out-Null
     Set-Location -LiteralPath pactrun-demo
     $env:PACTRUN_STORAGE_ROOT = Join-Path (Get-Location) 'store'
 }
@@ -43,13 +43,13 @@ POSIX shell:
 
 ```sh
 mkdir pactrun-demo &&
-mkdir -p pactrun-demo/pack pactrun-demo/store/database pactrun-demo/store/runtime-content pactrun-demo/store/staging &&
+mkdir pactrun-demo/pack &&
 cd pactrun-demo &&
 export PACTRUN_STORAGE_ROOT="$PWD/store"
 ```
 
-The empty `database`, `runtime-content`, and `staging` directories are required
-by this candidate. The environment selection affects later commands in this
+Pactrun prepares the selected Store during the first write operation; no internal
+directory setup is required. The environment selection affects later commands in this
 terminal. Restore its previous value or close the terminal after the exercise.
 
 ## Continue

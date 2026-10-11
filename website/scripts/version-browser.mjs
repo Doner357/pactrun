@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
@@ -12,7 +12,7 @@ const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 const url = route => base.replace(/\/$/, '') + '/' + route;
-const release = '1.0.0-alpha.4';
+const release = JSON.parse(await readFile(new URL('../versions.json', import.meta.url), 'utf8'))[0];
 const checks = [];
 const picker = () => page.locator('select[aria-label="Documentation version"]:visible');
 const ready = () => page.waitForFunction(() => /matching documents/.test(document.querySelector('[role="status"]')?.textContent ?? ''));

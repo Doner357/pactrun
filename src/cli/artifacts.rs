@@ -66,8 +66,7 @@ mod tests;
 pub(super) fn execute(
     command: ArtifactCommand,
     root: &Path,
-    stdout: &mut dyn Write,
-    format: presentation::Format,
+    format: reply::OutputContext,
 ) -> Result<(), CliError> {
     if matches!(
         command,
@@ -112,7 +111,7 @@ pub(super) fn execute(
                     result.message = message.into();
                     result
                 })?;
-            presentation::render(
+            presentation::emit_result(
                 format,
                 "run artifact export",
                 &presentation::ArtifactResult {
@@ -120,8 +119,6 @@ pub(super) fn execute(
                     output_id: output.as_str().into(),
                     outcome: "exported",
                 },
-                stdout,
-                |_, out| writeln!(out, "Artifact exported").map_err(io_operation),
             )
         }
         ArtifactCommand::Delete { run, output } => {
@@ -137,26 +134,13 @@ pub(super) fn execute(
                             "Artifact deletion failed; check that storage is writable",
                         ),
                     })?;
-            presentation::render(
+            presentation::emit_result(
                 format,
                 "run artifact delete",
                 &presentation::ArtifactResult {
                     run_id: run.to_string(),
                     output_id: output.as_str().into(),
                     outcome: if deleted { "deleted" } else { "already_absent" },
-                },
-                stdout,
-                |value, out| {
-                    writeln!(
-                        out,
-                        "Artifact {}",
-                        if value.outcome == "deleted" {
-                            "deleted"
-                        } else {
-                            "already absent"
-                        }
-                    )
-                    .map_err(io_operation)
                 },
             )
         }

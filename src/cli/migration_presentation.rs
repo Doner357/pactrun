@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::*;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Paths {
     candidates: Vec<Candidate>,
@@ -10,21 +10,24 @@ pub(super) struct Paths {
     next_after: Option<String>,
     evaluation: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Candidate {
     path_id: String,
+    unique_prefix_length: usize,
     revisions: Vec<presentation::Revision>,
     edge_count: usize,
 }
-impl From<&MigrationPathPage> for Paths {
-    fn from(p: &MigrationPathPage) -> Self {
+impl Paths {
+    pub(super) fn new(p: &MigrationPathPage, widths: &[usize]) -> Self {
         Self {
             candidates: p
                 .candidates
                 .iter()
-                .map(|c| Candidate {
+                .zip(widths)
+                .map(|(c, width)| Candidate {
                     path_id: c.id.to_string(),
+                    unique_prefix_length: *width,
                     revisions: c.revisions.iter().map(Into::into).collect(),
                     edge_count: c.revisions.len() - 1,
                 })
@@ -39,7 +42,7 @@ impl From<&MigrationPathPage> for Paths {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Plan {
     path_id: String,
@@ -51,7 +54,7 @@ pub(super) struct Plan {
     termination_grace_ms: Option<String>,
     edges: Vec<Edge>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Edge {
     source: presentation::Revision,
@@ -65,7 +68,7 @@ struct Edge {
     hook_present: bool,
     predicted_required_inputs_satisfied: bool,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct InputReference {
     role: &'static str,
@@ -82,14 +85,14 @@ impl From<&InputBindingRefV1> for InputReference {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Transition {
     kind: &'static str,
     source: InputReference,
     target_input_id: Option<String>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Service {
     transform: bool,
@@ -100,13 +103,13 @@ struct Service {
     created_resources: Vec<CreatedResource>,
     requirements: Vec<Requirement>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct CreatedResource {
     resource_id: String,
     presence: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Requirement {
     view: &'static str,
@@ -114,7 +117,7 @@ struct Requirement {
     scope: Scope,
     presence: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum Scope {
@@ -250,7 +253,7 @@ impl Plan {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Completed {
     pub(super) inspection: execution_presentation::Inspection,

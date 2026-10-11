@@ -8,7 +8,7 @@ Product versions identify the executable. Format versions identify the contracts
 used to read and write data or exchange messages. Updating one does not
 automatically change the others.
 
-The current eight format/protocol domains each support `1.0-alpha.1`. Formal
+Current readers and writers are listed in [format domains](./format-domains.md). Formal
 same-Major compatibility applies after formal release; prereleases do not
 acquire that guarantee merely by sharing a Major number.
 
@@ -29,6 +29,9 @@ format Minors evolve independently. Ordering and shared Major do not prove suppo
 
 Pactrun product versions MUST follow Semantic Versioning and use the product
 Major as the formal external-compatibility boundary.
+Alpha products MAY replace prerelease interfaces rather than retain every earlier
+alpha contract. Affected format versions and supported readers MUST be explicit;
+this does not authorize silent data deletion, identity changes or service actions.
 Within one formal Major, newer software MUST continue to install and use Packs valid
 under earlier published external contracts of that Major, with their existing
 meaning and applicable platform/execution prerequisites preserved. Minor and
@@ -125,6 +128,8 @@ state. Disposal remains a separate explicit operation.
 
 **Verification: PR-TEST-0637, PR-TEST-0638 (origin-independent reuse and refusal of unsupported contracts without changing existing objects).**
 
+**Verification: PR-TEST-0695 (offline native-acceptance runner contract checks).**
+
 ### PR-REQ-0333 - Prerelease promotion and release selection {#pr-req-0333---development-and-formal-release-baseline-separation}
 
 The eight current writer/default format contracts MUST use `1.0-alpha.1`.
@@ -148,3 +153,5 @@ Changing saved eligibility alone MUST NOT replace the executable. Switching an
 executable and validating its data compatibility remain separate responsibilities.
 
 **Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637, PR-TEST-0640, PR-TEST-0641.**
+
+**Verification: PR-TEST-0695 (offline native-acceptance runner contract checks).**

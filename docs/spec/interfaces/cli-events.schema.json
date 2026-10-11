@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Pactrun CLI Events V1",
+  "title": "Pactrun CLI Events 1.0-alpha.3",
   "type": "object",
   "required": [
     "format",
@@ -36,7 +36,7 @@
       ]
     },
     "format_version": {
-      "const": "1.0-alpha.1"
+      "const": "1.0-alpha.3"
     }
   },
   "oneOf": [

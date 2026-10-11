@@ -66,7 +66,8 @@ test('installation promises an executable procedure and separates data-location 
   assert.ok(install.includes('data-location.md'));
   assert.ok(install.includes('authoring workspace'));
   assert.ok(docs.get('guides/data-location.md').includes('XDG_DATA_HOME'));
-  assert.ok(docs.get('guides/use-pack.md').includes('pactrun instance create demo --revision <reference>'));
+  assert.ok(docs.get('guides/use-pack.md').includes('--package-name app --revision-name initial'));
+  assert.ok(docs.get('guides/use-pack.md').includes('pactrun instance create demo --revision app:initial'));
 });
 
 test('the empty tutorial and later task prerequisites cannot be confused with a live service fixture', () => {

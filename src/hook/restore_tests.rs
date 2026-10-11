@@ -1171,7 +1171,7 @@ fn capacity_round_trip(mib: u64) {
     assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
 
     let bundle = f.storage.parent().unwrap().join("capacity.zip");
-    f.application.export_snapshot_file(snapshot, &bundle, true, &mut std::io::sink()).unwrap();
+    f.application.export_snapshot_file(snapshot, &bundle, true).unwrap();
     assert!(fs::metadata(&bundle).unwrap().len() > 2 * expected);
     if mib > 16 * 1024 {
         assert!(fs::metadata(&bundle).unwrap().len() > 32 * 1024_u64.pow(3) + 128 * 1024 * 1024);
@@ -1350,6 +1350,15 @@ fn restore_hook_worker() {
             )
         })
         .collect::<BTreeMap<_, _>>();
+    if parameters.is_empty() {
+        // Minimal Restore used to prove CLI delivery failure does not cancel it.
+        assert_eq!(session["operation"]["kind"], "snapshot_restore");
+        stream.write_all(PREAMBLE).unwrap();
+        write_frame(&mut stream, &json!({"type":"session_ready","protocol_version":"1.0-alpha.1","session_id":session["session_id"]}));
+        write_frame(&mut stream, &json!({"type":"complete","operation":"snapshot_restore","status":"success"}));
+        assert_eq!(read_frame(&mut stream).unwrap()["type"], "completion_accepted");
+        return;
+    }
     let mode = parameters["mode"];
     let marker = PathBuf::from(parameters["marker"]);
     fs::OpenOptions::new()

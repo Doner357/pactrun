@@ -15,9 +15,10 @@ title: Specification Reference Index
 - [Pack Authoring Model](./packages/authoring.md)
 - [Pack Source Format](./packages/source-format.md)
 - [Package and Revision Identity](./packages/identity.md)
+- [Local Names and References](./packages/local-names.md)
 - [Revision Format and Identity Encoding](./packages/revision-format.md)
 - [Runtime Content](./packages/runtime-content.md)
-- [Labels, Presentation, and Provenance](./packages/metadata.md)
+- [Descriptions and Provenance](./packages/metadata.md)
 - [Pack Distribution Format](./packages/distribution.md)
 - [Identity and Metadata During Import](./packages/import-identity.md)
 
@@ -80,6 +81,7 @@ title: Specification Reference Index
 
 - [Product and Format Compatibility](./storage/compatibility.md)
 - [Format Domains and Support](./storage/format-domains.md)
+- [Store Preparation and Upgrades](./storage/store-opening.md)
 - [Immutable Runtime Blob Storage](./storage/runtime-content.md)
 - [Revision Persistence and Publication](./storage/revision-records.md)
 - [Persistence Schema](./persistence/persistence-baseline.md)

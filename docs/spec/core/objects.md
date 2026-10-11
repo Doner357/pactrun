@@ -24,7 +24,7 @@ the same installed Revision, while retaining separate identities and Input
 Bindings. Installing another Revision does not itself change their active
 Revision.
 
-A version label is a reference to a Revision, not its identity. An Instance name
+A local Package or Revision name is a reference, not its identity. An Instance name
 is a human reference, not the identity used to associate its Run and Snapshot
 history. The [identity contract](../packages/identity.md) defines
 the exact representations and equality rules.
@@ -40,25 +40,21 @@ compilation or mutation. An ambiguous Revision reference MUST fail with an
 actionable `resolution.ambiguous_reference` error. Pactrun MUST NOT silently
 select the newest or most recently installed candidate.
 
-Reference-label resolution MUST compare the exact label and deduplicate by
-exact Revision target before deciding ambiguity. Multiple provenance sources
-for one target remain one candidate. Deterministic candidate presentation MUST
-use the [canonical typed Revision ordering](../packages/metadata.md#pr-req-0250---reference-label-binding-lookup-and-ordering).
-It MUST NOT depend on installation, insertion, timestamp, locale, or database
-query order.
+Package and Revision names and ID prefixes MUST resolve under
+[PR-REQ-0371](../packages/local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution).
+The complete reference is evaluated before deduplicating exact Revision
+identities and deciding ambiguity. Candidate presentation, when provided, MUST
+order by Package ID then Revision digest, independently of installation time,
+insertion order, locale, or database query order.
 
 **Verification: PR-TEST-0062, PR-TEST-0066, PR-TEST-0532, PR-TEST-0586, PR-TEST-0587, PR-TEST-0588.**
 
-### PR-REQ-0089 - Revision labels remain references
+### PR-REQ-0089 - Local names remain references {#pr-req-0089---revision-labels-remain-references}
 
-User-visible version strings and labels MUST be presented as human references,
-not immutable Revision identity. When more than one claim exists, inspection
-MUST be able to show every association and its typed source tuple, including
-unattributed bindings.
-
-Inspection MAY offer non-authoritative normalized or fuzzy discovery. Exact
-resolution, equality, and ambiguity MUST remain based on the preserved exact
-label.
+Inspection MUST distinguish local names from complete immutable identities.
+Names use exact spelling and the ambiguity rules in PR-REQ-0371.
+Descriptive provenance remains a separate collection
+whose distinct claims retain their typed source fields.
 
 **Verification: PR-TEST-0532.**
 
@@ -88,7 +84,7 @@ Physical publication and witness acquisition are deduplicated by `blob_digest`,
 not by the author-declared `ContentId`. Different semantic entries with
 identical bytes share one physical blob and one current same-store witness.
 
-Source-projected metadata MUST use the exact reference-label, presentation, and
+Source-projected metadata MUST use the exact presentation and
 provenance shapes in the [Pack source schema](../packages/source-format.md#pr-req-0258---packsourceyamlv1-schema-numbers-and-package-lineage).
 Its target is the Revision identity derived by the
 [Candidate projection](../packages/source-format.md#pr-req-0260---revisioncandidate-projection-and-metadata-boundary).
@@ -99,7 +95,7 @@ Metadata application MUST preserve these conflict and retry rules:
 
 - An identical set tuple is idempotent; distinct legal set claims coexist.
 - An absent current value may initialize; current-equals-desired is idempotent.
-- A current-state, alias, or typed compare-and-set (CAS) conflict rolls back the
+- A current-state, local-name, or typed compare-and-set (CAS) conflict rolls back the
   entire installation transaction.
 
 Reinstallation MUST NOT gain implicit last-write-wins authority. An exact

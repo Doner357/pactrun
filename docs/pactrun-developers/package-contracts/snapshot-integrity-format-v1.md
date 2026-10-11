@@ -4,19 +4,15 @@ title: Snapshot Integrity Format V1 (moved)
 
 # Snapshot Integrity Format V1 has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Snapshot Integrity Format](../../spec/snapshots/integrity.md).
 
-Read [the current document](../../spec/snapshots/integrity.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="format-lifecycle" />
 [Format lifecycle](../../spec/snapshots/integrity.md#format-lifecycle)
 
 <a id="pr-req-0195---candidate-and-frozen-integrity-contract" />
-[PR-REQ-0195 - Candidate and Frozen integrity contract](../../spec/snapshots/integrity.md#pr-req-0195---candidate-and-frozen-integrity-contract)
+[PR-REQ-0195 - Integrity format stability](../../spec/snapshots/integrity.md#pr-req-0195---candidate-and-frozen-integrity-contract)
 
 <a id="authoritative-object-and-digest-input" />
 [Authoritative object and digest input](../../spec/snapshots/integrity.md#authoritative-object-and-digest-input)
@@ -49,7 +45,7 @@ anchors only and adds no product rules.
 [Semantic normalization and input validity](../../spec/snapshots/integrity.md#semantic-normalization-and-input-validity)
 
 <a id="pr-req-0201---v1-lexical-and-collection-profile" />
-[PR-REQ-0201 - V1 lexical and collection profile](../../spec/snapshots/integrity.md#pr-req-0201---v1-lexical-and-collection-profile)
+[PR-REQ-0201 - Lexical and collection profile](../../spec/snapshots/integrity.md#pr-req-0201---v1-lexical-and-collection-profile)
 
 <a id="canonical-bytes-and-digest" />
 [Canonical bytes and digest](../../spec/snapshots/integrity.md#canonical-bytes-and-digest)

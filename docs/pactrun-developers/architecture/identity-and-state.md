@@ -4,16 +4,12 @@ title: Identity and State (moved)
 
 # Identity and State has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Package and Revision Identity](../../spec/packages/identity.md).
 
-Read [the current document](../../spec/packages/identity.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="revision-identity" />
-[Revision identity](../../spec/packages/identity.md)
+[Package and Revision Identity](../../spec/packages/identity.md)
 
 <a id="pr-req-0011---stable-package-lineage" />
 [PR-REQ-0011 - Stable Package lineage](../../spec/packages/identity.md#pr-req-0011---stable-package-lineage)
@@ -34,13 +30,13 @@ anchors only and adds no product rules.
 [PR-REQ-0016 - Semantic normalization](../../spec/packages/identity.md#pr-req-0016---semantic-normalization)
 
 <a id="pr-req-0017---revisioncoreformatv1-hash-contract" />
-[PR-REQ-0017 - RevisionCoreFormatV1 hash contract](../../spec/packages/identity.md#pr-req-0017---revisioncoreformatv1-hash-contract)
+[PR-REQ-0017 - Revision identity framing](../../spec/packages/identity.md#pr-req-0017---revisioncoreformatv1-hash-contract)
 
 <a id="pr-req-0018---stable-published-identity" />
 [PR-REQ-0018 - Stable published identity](../../spec/packages/identity.md#pr-req-0018---stable-published-identity)
 
 <a id="production-identity-and-revision-core-foundation" />
-[Production identity and Revision Core foundation](../../spec/packages/identity.md)
+[Package and Revision Identity](../../spec/packages/identity.md)
 
 <a id="pr-req-0225---production-opaque-identity-primitives" />
 [PR-REQ-0225 - Production opaque identity primitives](../../spec/packages/identity.md#pr-req-0225---production-opaque-identity-primitives)
@@ -73,10 +69,10 @@ anchors only and adds no product rules.
 [PR-REQ-0234 - Immutable and recoverable Revision records](../../spec/storage/revision-records.md#pr-req-0234---immutable-and-recoverable-revision-records)
 
 <a id="references-and-non-identity-metadata" />
-[References and non-identity metadata](../../spec/packages/metadata.md)
+[Descriptions and Provenance](../../spec/packages/metadata.md)
 
 <a id="pr-req-0019---human-label-ambiguity" />
-[PR-REQ-0019 - Human label ambiguity](../../spec/packages/metadata.md#pr-req-0019---human-label-ambiguity)
+[PR-REQ-0019 - Local reference ambiguity](../../spec/packages/metadata.md#pr-req-0019---human-label-ambiguity)
 
 <a id="pr-req-0020---metadata-observations" />
 [PR-REQ-0020 - Metadata observations](../../spec/packages/metadata.md#pr-req-0020---metadata-observations)
@@ -88,7 +84,7 @@ anchors only and adds no product rules.
 [PR-REQ-0022 - Repeat Revision import](../../spec/packages/metadata.md#pr-req-0022---repeat-revision-import)
 
 <a id="instance-identity-and-state-publication" />
-[Instance identity and state publication](../../spec/instances/identity-state.md)
+[Instance Identity and State](../../spec/instances/identity-state.md)
 
 <a id="pr-req-0023---stable-instance-identity" />
 [PR-REQ-0023 - Stable Instance identity](../../spec/instances/identity-state.md#pr-req-0023---stable-instance-identity)
@@ -106,7 +102,7 @@ anchors only and adds no product rules.
 [PR-REQ-0027 - Non-versioned observations](../../spec/instances/identity-state.md#pr-req-0027---non-versioned-observations)
 
 <a id="managed-input-state" />
-[Managed Input state](../../spec/instances/bindings.md)
+[Input Bindings and Protection](../../spec/instances/bindings.md)
 
 <a id="pr-req-0028---stable-input-identity-and-opaque-bytes" />
 [PR-REQ-0028 - Stable Input identity and opaque bytes](../../spec/instances/bindings.md#pr-req-0028---stable-input-identity-and-opaque-bytes)
@@ -130,7 +126,7 @@ anchors only and adds no product rules.
 [PR-REQ-0034 - Secret protection](../../spec/instances/bindings.md#pr-req-0034---secret-protection)
 
 <a id="servicestorage-backed-semantic-closure" />
-[ServiceStorage-backed semantic closure](../../spec/instances/service-resources.md)
+[Service Resource Ownership and Identity](../../spec/instances/service-resources.md)
 
 <a id="pr-req-0235---persistent-instance-data-ownership" />
 [PR-REQ-0235 - Persistent Instance-data ownership](../../spec/instances/service-resources.md#pr-req-0235---persistent-instance-data-ownership)
@@ -145,19 +141,19 @@ anchors only and adds no product rules.
 [PR-REQ-0242 - Declaration, existence, and observation](../../spec/instances/service-resources.md#pr-req-0242---declaration-existence-and-observation)
 
 <a id="pr-req-0248---m1-d-metadata-boundary" />
-[PR-REQ-0248 - M1-D metadata boundary](../../spec/packages/metadata.md#pr-req-0248---m1-d-metadata-boundary)
+[PR-REQ-0248 - Descriptive metadata boundary](../../spec/packages/metadata.md#pr-req-0248---m1-d-metadata-boundary)
 
 <a id="pr-req-0272---m2-scope-and-anti-backdoor-boundary" />
-[PR-REQ-0272 - M2 scope and anti-backdoor boundary](../../spec/instances/service-resources.md#pr-req-0272---m2-scope-and-anti-backdoor-boundary)
+[PR-REQ-0272 - Authoring and managed-data boundaries](../../spec/instances/service-resources.md#pr-req-0272---m2-scope-and-anti-backdoor-boundary)
 
 <a id="pre-m1-d-non-identity-metadata-closure" />
-[Pre-M1-D non-identity metadata closure](../../spec/packages/metadata.md)
+[Descriptions and Provenance](../../spec/packages/metadata.md)
 
 <a id="pr-req-0249---typed-metadata-scope-and-authoritative-strings" />
 [PR-REQ-0249 - Typed metadata scope and authoritative strings](../../spec/packages/metadata.md#pr-req-0249---typed-metadata-scope-and-authoritative-strings)
 
 <a id="pr-req-0250---reference-label-binding-lookup-and-ordering" />
-[PR-REQ-0250 - Reference-label binding, lookup, and ordering](../../spec/packages/metadata.md#pr-req-0250---reference-label-binding-lookup-and-ordering)
+[PR-REQ-0250 - Metadata ordering](../../spec/packages/metadata.md#pr-req-0250---reference-label-binding-lookup-and-ordering)
 
 <a id="pr-req-0251---closed-current-presentation-model" />
 [PR-REQ-0251 - Closed current presentation model](../../spec/packages/metadata.md#pr-req-0251---closed-current-presentation-model)
@@ -166,4 +162,4 @@ anchors only and adds no product rules.
 [PR-REQ-0252 - Typed provenance claims](../../spec/packages/metadata.md#pr-req-0252---typed-provenance-claims)
 
 <a id="pr-req-0253---local-aliases-notes-and-trust" />
-[PR-REQ-0253 - Local aliases, notes, and trust](../../spec/packages/metadata.md#pr-req-0253---local-aliases-notes-and-trust)
+[PR-REQ-0253 - Local names, notes, and trust](../../spec/packages/metadata.md#pr-req-0253---local-aliases-notes-and-trust)

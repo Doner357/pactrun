@@ -14,6 +14,40 @@ assert.ok(snippet, 'The introductory setup must be executable from its published
 const output = path.join(root, 'target/tutorial-setup-tests');
 await mkdir(output, {recursive: true});
 
+const locations = await readFile(path.join(root, 'docs/guides/data-location.md'), 'utf8');
+const selection = locations.match(new RegExp('^```' + language + '\\r?\\n([\\s\\S]*?)^```', 'm'))?.[1];
+assert.ok(selection, 'Data-location selection must come from the documented shell block');
+for (const existing of ['none', 'directory', 'file']) {
+  test(`${language} Store selection preserves ${existing} without provisioning`, async () => {
+    const cwd = await mkdtemp(path.join(output, 'selection-'));
+    const destination = path.join(cwd, 'pactrun-data');
+    const sentinel = existing === 'directory' ? path.join(destination, 'sentinel') : destination;
+    if (existing === 'directory') await mkdir(destination);
+    if (existing !== 'none') await writeFile(sentinel, 'preserve me');
+    const env = {...process.env, PACTRUN_STORAGE_ROOT: 'previous-selection'};
+    if (windows) { delete env.PSModulePath; delete env.PSMODULEPATH; }
+    const script = windows
+      ? selection + '\n[Console]::WriteLine($env:PACTRUN_STORAGE_ROOT)'
+      : selection + '\nprintf "%s\\n" "$PACTRUN_STORAGE_ROOT"';
+    const result = spawnSync(windows ? 'powershell.exe' : 'sh',
+      windows ? ['-NoProfile', '-NonInteractive', '-Command', script] : ['-c', script],
+      {cwd, env, encoding: 'utf8', timeout: 15000});
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), destination);
+    if (existing === 'none') {
+      const {stat} = await import('node:fs/promises');
+      await assert.rejects(stat(destination), {code: 'ENOENT'});
+    } else {
+      assert.equal(await readFile(sentinel, 'utf8'), 'preserve me');
+      if (existing === 'directory') {
+        const {readdir} = await import('node:fs/promises');
+        assert.deepEqual(await readdir(destination), ['sentinel']);
+      }
+    }
+  });
+}
+
 for (const existing of ['none', 'directory', 'file']) {
   test(`${language} tutorial setup: ${existing === 'none' ? 'fresh directory' : 'refuse existing ' + existing}`, async () => {
     const cwd = await mkdtemp(path.join(output, 'setup-'));
@@ -53,8 +87,9 @@ printf '%s\\n' "$status" "$PWD" "$PACTRUN_STORAGE_ROOT"
     if (existing !== 'none') assert.equal(await readFile(sentinel, 'utf8'), 'preserve me');
     else {
       const {stat} = await import('node:fs/promises');
-      for (const child of ['pack', 'store/database', 'store/runtime-content', 'store/staging'])
-        assert.ok((await stat(path.join(destination, child))).isDirectory());
+      assert.ok((await stat(path.join(destination, 'pack'))).isDirectory());
+      await assert.rejects(stat(path.join(destination, 'store')), {code: 'ENOENT'},
+        'Tutorial setup selects a Store; Pactrun, not the shell snippet, provisions it');
     }
   });
 }

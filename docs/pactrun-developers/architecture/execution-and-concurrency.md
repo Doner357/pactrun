@@ -4,13 +4,9 @@ title: Execution and Concurrency (moved)
 
 # Execution and Concurrency has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Execution and Concurrency](../../spec/operations/execution.md).
 
-Read [the current document](../../spec/operations/execution.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="operation-classification" />
 [Operation classification](../../spec/operations/execution.md#operation-classification)
@@ -64,7 +60,7 @@ anchors only and adds no product rules.
 [PR-REQ-0279 - Admission refusal precedence](../../spec/operations/execution.md#pr-req-0279---admission-refusal-precedence)
 
 <a id="pr-req-0267---m2-instance-cas-and-mutation-guard" />
-[PR-REQ-0267 - M2 Instance CAS and mutation guard](../../spec/operations/execution.md#pr-req-0267---m2-instance-cas-and-mutation-guard)
+[PR-REQ-0267 - Instance CAS and mutation guard](../../spec/operations/execution.md#pr-req-0267---m2-instance-cas-and-mutation-guard)
 
 <a id="pr-req-0046---immutable-pactrun-owned-admitted-context" />
 [PR-REQ-0046 - Immutable Pactrun-owned admitted context](../../spec/operations/execution.md#pr-req-0046---immutable-pactrun-owned-admitted-context)
