@@ -85,4 +85,3 @@ short or named reference MUST resolve uniquely in that snapshot, otherwise the
 display uses complete IDs. `--no-trunc` displays the full identity reference.
 
 **Verification: PR-TEST-0678.**
-
