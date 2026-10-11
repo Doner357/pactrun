@@ -98,3 +98,12 @@ python -B -m unittest tools.test_native_package_acceptance
 The non-ignored `native_acceptance_runner_offline_regressions` Cargo test also
 runs these checks in the ordinary Rust test gate. The real-manager test remains
 opt-in and requires the artifact inputs and authorization above.
+
+For the alpha.4-to-alpha.5 Store transition, add `--store-upgrade` and
+`--versions 1.0.0-alpha.4 1.0.0-alpha.5`. This separate isolated scenario tests
+Persistence alpha.1-to-alpha.4 upgrade, unchanged Instance/Revision identities
+and runtime bytes, continued execution of the installed Hook, old-reader refusal
+without Store changes, and candidate reinstall after uninstall. It prepares the
+Pack with the baseline source format, then reinstalls the same Revision using
+the candidate source format. It does not require an old executable to read the
+upgraded Store or combine with public-source acquisition.

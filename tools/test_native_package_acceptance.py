@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -112,6 +113,49 @@ class NativePackageAcceptance(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Hook protocol'):
             self.tool.fixture_source_format([record],['baseline'])
 
+    def test_store_upgrade_is_explicit_and_only_accepts_the_implemented_transition(self):
+        records=[release('baseline'),release('candidate','1.0-alpha.2','1.0-alpha.3','1.0-alpha.4')]
+        self.assertEqual(self.tool.upgrade_fixture_source_format(records,['baseline','candidate']),'1.0-alpha.1')
+        with self.assertRaisesRegex(ValueError,'common Pack source'):
+            self.tool.fixture_source_format(records,['baseline','candidate'])
+        with self.assertRaisesRegex(ValueError,'Persistence'):
+            self.tool.upgrade_fixture_source_format(records,['candidate','baseline'])
+        with self.assertRaisesRegex(ValueError,'Persistence'):
+            self.tool.upgrade_fixture_source_format([release('baseline'),release('candidate')],['baseline','candidate'])
+
+    def test_upgrade_checks_reject_identity_changes_and_old_reader_success(self):
+        data=self.root/'data'
+        (data/'pactrun/database').mkdir(parents=True)
+        (data/'pack').mkdir()
+        with sqlite3.connect(data/'pactrun/database/pactrun.sqlite3') as db:
+            db.execute('CREATE TABLE pactrun_metadata (format_version TEXT)')
+            db.execute("INSERT INTO pactrun_metadata VALUES ('1.0-alpha.4')")
+        db.close()
+        before=[['instance'],['revision'],['old-header']]
+        after=[['instance'],['revision'],['new-header']]
+        records={'baseline':release('baseline'),'candidate':release('candidate','1.0-alpha.2','1.0-alpha.3','1.0-alpha.4')}
+        for defect in ['identity','content','old-reader-success','refusal-mutation']:
+            (data/'pack/pactrun.yaml').write_text("source_format: '1.0-alpha.1'\n")
+            changed=[['changed'],after[1],after[2]] if defect=='identity' else after
+            state=Mock(side_effect=[before,changed,changed])
+            rejected=False
+            def run(cmd,label,**kwargs):
+                nonlocal rejected
+                if label=='old-binary-refuses-upgraded-store':
+                    rejected=True
+                    return (0 if defect=='old-reader-success' else 1),json.dumps({'status':'failure','error':{'kind':'operation'}})
+                return 0,''
+            def dump(flavor='normal'):
+                return 'test' if flavor=='test' else ('changed' if rejected and defect=='refusal-mutation' else 'unchanged')
+            with self.subTest(defect=defect), self.runtime(DATA=data,RELEASES=records,VERSIONS=['baseline','candidate'],SOURCE_FORMAT='1.0-alpha.1'), \
+                 patch.object(self.tool,'immutable_state',state), \
+                 patch.object(self.tool,'runtime_bytes',return_value={'blob':'changed' if defect=='content' else 'hash'}), \
+                 patch.object(self.tool,'store_dump',side_effect=dump), \
+                 patch.object(self.tool,'run',side_effect=run), \
+                 patch.object(self.tool,'binary',return_value=self.root/'fake'), \
+                 self.assertRaises(AssertionError):
+                self.tool.upgraded_store_scenarios(before,{'blob':'hash'},'test')
+
     def test_observed_uses_separate_json_output(self):
         with patch.object(self.tool,'binary',return_value='pactrun'), \
              patch.object(self.tool,'run',return_value=(0,response('version',{'product_version':'1.0.0-alpha.1'}))) as run:
@@ -174,8 +218,10 @@ class NativePackageAcceptance(unittest.TestCase):
         with self.runtime(DATA=data,BARRIER=barrier,SOURCE_FORMAT='1.0-alpha.1'), \
              patch.object(self.tool,'run',side_effect=fake_run), \
              patch.object(self.tool,'binary',side_effect=lambda flavor='normal':self.root/flavor):
-            self.tool.prepare_data()
+            self.tool.prepare_data(['test'])
         self.assertEqual(created,['normal','test'])
+        self.assertFalse((data/'pactrun').exists(), 'current binaries must prepare their own complete Store')
+        self.assertTrue((data/'pactrun-test/database').is_dir())
 
     def test_incompatible_matrix_is_rejected_before_creating_root_or_server(self):
         records=[release('1.0.0-alpha.4'), release('1.0.0-alpha.4'),

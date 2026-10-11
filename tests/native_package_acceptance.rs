@@ -7,7 +7,12 @@ use std::{env, path::Path, process::Command};
 fn native_acceptance_runner_offline_regressions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
-        .args(["-B", "-m", "unittest", "tools.test_native_package_acceptance"])
+        .args([
+            "-B",
+            "-m",
+            "unittest",
+            "tools.test_native_package_acceptance",
+        ])
         .current_dir(root)
         .output()
         .expect("run offline native acceptance regressions");
