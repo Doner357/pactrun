@@ -128,6 +128,8 @@ state. Disposal remains a separate explicit operation.
 
 **Verification: PR-TEST-0637, PR-TEST-0638 (origin-independent reuse and refusal of unsupported contracts without changing existing objects).**
 
+**Verification: PR-TEST-0695 (offline native-acceptance runner contract checks).**
+
 ### PR-REQ-0333 - Prerelease promotion and release selection {#pr-req-0333---development-and-formal-release-baseline-separation}
 
 The eight current writer/default format contracts MUST use `1.0-alpha.1`.
@@ -151,3 +153,5 @@ Changing saved eligibility alone MUST NOT replace the executable. Switching an
 executable and validating its data compatibility remain separate responsibilities.
 
 **Verification: PR-TEST-0620, PR-TEST-0626, PR-TEST-0627, PR-TEST-0628, PR-TEST-0629, PR-TEST-0630, PR-TEST-0631, PR-TEST-0635, PR-TEST-0636, PR-TEST-0637, PR-TEST-0640, PR-TEST-0641.**
+
+**Verification: PR-TEST-0695 (offline native-acceptance runner contract checks).**
