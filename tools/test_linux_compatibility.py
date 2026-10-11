@@ -73,11 +73,14 @@ class LinuxCompatibility(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 linux.needed_glibc(text)
 
-    def test_formula_staging_changes_transport_only_not_dependencies_or_install(self):
+    def test_formula_staging_changes_only_transport_and_the_declared_single_executable_layout(self):
         template = (ROOT / 'Formula/pactrun-preview.rb').read_text()
         changed = linux.stage_formula(template, 'http://127.0.0.1:12345/candidate.tar.gz', '1.0.0-alpha.3', 'a' * 64)
         strip = lambda s: '\n'.join(line for line in s.splitlines() if not line.startswith(('  url ', '  version ', '  sha256 ')))
-        self.assertEqual(strip(template), strip(changed))
+        expected = template.replace("prefix.install 'bin', 'libexec', 'LICENSE'", "prefix.install 'bin', 'LICENSE'")
+        self.assertEqual(strip(expected), strip(changed))
+        self.assertIn("    prefix.install 'bin', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'", changed)
+        self.assertNotIn("'libexec'", changed)
         for url in ["https://example.invalid/x'", 'https://example.invalid/x\n']:
             with self.assertRaises(ValueError):
                 linux.stage_formula(template, url, '1.0.0', 'a' * 64)

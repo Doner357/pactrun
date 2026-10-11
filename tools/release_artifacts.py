@@ -83,7 +83,7 @@ def source(root: Path, output: Path):
             if not safe_name(member.name) or not member.isfile():
                 raise ValueError("release input must be a safe regular source file")
             files[member.name] = (archive.extractfile(member).read(), bool(member.mode & 0o111))
-    required = {"Cargo.toml", "Cargo.lock", "build.rs", "LICENSE", "src/main.rs", "src/bin/pactrun-launcher.rs"}
+    required = {"Cargo.toml", "Cargo.lock", "build.rs", "LICENSE", "src/main.rs", "src/cli/storage_config.rs"}
     if not required.issubset(files):
         raise ValueError("source snapshot lacks required committed build inputs")
     manifest = "".join(hashlib.sha256(data).hexdigest() + "  " + name + "\n" for name, (data, _) in sorted(files.items())).encode()
@@ -128,6 +128,14 @@ def archive_files(destination: Path, files: dict[str, Path], windows: bool):
                 with path.open("rb") as content:
                     archive.addfile(member, content)
 
+def payload_files(product: Path, legal: dict, flavor: str, windows: bool):
+    if flavor not in ('normal', 'test', 'standalone'):
+        raise ValueError('Unknown package flavor')
+    app = 'pactrun-test' if flavor == 'test' else 'pactrun'
+    name = ('' if flavor == 'standalone' else 'bin/') + app + ('.exe' if windows else '')
+    return {name: product, **legal}
+
+
 def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str):
     root, snapshot, output = root.resolve(), snapshot.resolve(), output.resolve()
     info_path = snapshot / "source.json"
@@ -155,14 +163,14 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     # No cross-environment execution claim: run this on the actual target host.
     with (output / "cargo-build.log").open("wb") as log:
         result = subprocess.run(["cargo", "build", "--offline", "--locked", "--release", "--target", target,
-                                 "--bin", "pactrun", "--bin", "pactrun-launcher"],
+                                 "--bin", "pactrun"],
                                 cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
     if result.returncode:
         raise RuntimeError("release build failed; inspect the local cargo-build.log")
     verify(root, snapshot / "source.sha256", provenance["source_manifest_sha256"])
     directory = output / "cargo-target" / target / "release"
     suffix = ".exe" if windows else ""
-    product, launcher = [directory / (name + suffix) for name in ("pactrun", "pactrun-launcher")]
+    product = directory / ('pactrun' + suffix)
     metadata_graph = json.loads(execute(["cargo", "metadata", "--offline", "--locked", "--format-version", "1", "--filter-platform", target], root))
     notices = output / "THIRD_PARTY_NOTICES.txt"
     notices.write_text(dependency_notices(metadata_graph), encoding="utf-8")
@@ -193,12 +201,11 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     for flavor in ("normal", "test"):
         app = "pactrun" if flavor == "normal" else "pactrun-test"
         path = assets / f"{app}-{version}-{platform}{extension}"
-        archive_files(path, {f"bin/{app}{suffix}": launcher,
-                             f"libexec/pactrun{suffix}": product, **legal}, windows)
+        archive_files(path, payload_files(product, legal, flavor, windows), windows)
         metadata["artifacts"].append(dict(platform=platform, flavor=flavor, url=url_base.rstrip('/') + '/' + path.name,
                                           sha256=sha(path), bytes=path.stat().st_size))
     standalone = assets / f"pactrun-{version}-{platform}-standalone{extension}"
-    archive_files(standalone, {"pactrun" + suffix: product, **legal}, windows)
+    archive_files(standalone, payload_files(product, legal, 'standalone', windows), windows)
     (output / "release-part.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     (output / "binary-probe.json").write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
     (output / "artifact-checksums.json").write_text(json.dumps({p.name: dict(sha256=sha(p), bytes=p.stat().st_size) for p in sorted(assets.iterdir())}, indent=2)+"\n", encoding="utf-8")

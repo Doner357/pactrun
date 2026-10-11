@@ -30,15 +30,15 @@ class ReleaseArtifacts(unittest.TestCase):
         self.git('config','user.name','Pactrun artifact fixture')
         self.git('config','user.email','test@example.invalid')
         self.git('config','core.autocrlf','false')
-        for name in ['Cargo.toml','Cargo.lock','build.rs','LICENSE','src/main.rs','src/bin/pactrun-launcher.rs','src/bin/pactrun-source.rs']:
+        for name in ['Cargo.toml','Cargo.lock','build.rs','LICENSE','src/main.rs','src/cli/storage_config.rs','src/bin/pactrun-source.rs']:
             path=source/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'public fixture\n')
         self.git('add','.')
         self.git('commit','-m','isolated source fixture')
         return source
     def test_archives_are_reproducible_and_contain_only_the_explicit_program_layout(self):
-        first=self.root/'program';second=self.root/'launcher'
-        first.write_bytes(b'program bytes\x00');second.write_bytes(b'launcher bytes')
-        files={'libexec/pactrun':first,'bin/pactrun':second}
+        first=self.root/'program'
+        first.write_bytes(b'program bytes\x00')
+        files={'bin/pactrun':first}
         for windows,extension in [(True,'.zip'),(False,'.tar.gz')]:
             a=self.root/('first'+extension);b=self.root/('second'+extension)
             release.archive_files(a,files,windows)
@@ -50,6 +50,18 @@ class ReleaseArtifacts(unittest.TestCase):
             else:
                 with tarfile.open(a) as archive:self.assertEqual(set(archive.getnames()),set(files))
             with self.assertRaises(FileExistsError):release.archive_files(a,files,windows)
+
+    def test_every_delivery_contains_one_identical_product_image_and_no_launcher(self):
+        product=self.root/'product';product.write_bytes(b'qualified product')
+        license=self.root/'LICENSE';license.write_text('license')
+        for windows in [False,True]:
+            for flavor in ['normal','test','standalone']:
+                with self.subTest(windows=windows,flavor=flavor):
+                    name=('' if flavor=='standalone' else 'bin/')+('pactrun-test' if flavor=='test' else 'pactrun')+('.exe' if windows else '')
+                    files=release.payload_files(product,{'LICENSE':license},flavor,windows)
+                    self.assertEqual(files,{name:product,'LICENSE':license})
+                    self.assertEqual(files[name].read_bytes(),b'qualified product')
+        with self.assertRaises(ValueError): release.payload_files(product,{},'unknown',False)
 
     def test_candidate_source_requires_main_ancestry_or_exact_release_head(self):
         root=self.source_fixture(); old=self.git('rev-parse','HEAD').decode().strip()

@@ -225,7 +225,7 @@ test('compatibility preserves supported meaning, data and independent release el
     'PR-REQ-0329', 'PR-REQ-0330', 'PR-REQ-0331', 'PR-REQ-0332', 'PR-REQ-0333']);
   assert.doesNotMatch(policy, /Verification: Pending automated coverage/);
   const tests = new Set(policy.split('### PR-REQ-0333')[1].match(/PR-TEST-\d+/g));
-  for (const id of ['0620','0626','0627','0628','0629','0630','0631','0635','0636','0637','0640','0641']) assert.ok(tests.has('PR-TEST-'+id));
+  for (const id of ['0620','0626','0628','0629','0630','0631','0635','0636','0637','0640','0641','0696','0697']) assert.ok(tests.has('PR-TEST-'+id));
   assert.match(text, /earlier published external contracts of that Major/);
   assert.match(text, /does not promise compatibility with a previous Major's external formats/);
   assert.match(text, /Data acceptance MUST depend on full conformance to supported contracts/);

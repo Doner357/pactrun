@@ -32,6 +32,10 @@ are replaced. The Loader does not pass Core transport discovery to the script.
 Discovery is not a durable identity, a permission to acquire another Session, or
 an OS sandbox. The trusted-Hook host access contract remains unchanged.
 
+Children inherit the selected operation Store through `PACTRUN_STORAGE_ROOT`,
+including when selection used an executable's platform default. A helper or
+nested CLI call MUST NOT silently switch to another entry's default Store.
+
 `pactrun hook` supplies these closed commands:
 
 | Command | Result or effect |

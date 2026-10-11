@@ -213,6 +213,15 @@ impl From<RuntimeContentStoreError> for PersistenceError {
 }
 
 impl PactrunPersistence {
+    /// Retain the validated caller spelling for child-process configuration.
+    /// This never retargets the database, staging ownership or runtime blobs.
+    pub(crate) fn configure_child_root(&mut self, selected: &Path) {
+        self.session
+            .as_mut()
+            .expect("child configuration requires a writable Store")
+            .configure_child_root(selected);
+    }
+
     /// Advisory read before staging, coordination, journal changes or publication.
     /// Admission must repeat the exact contract check inside its transaction.
     pub(crate) fn preflight_storage(root: &Path, collection: bool) -> Result<(), PersistenceError> {
