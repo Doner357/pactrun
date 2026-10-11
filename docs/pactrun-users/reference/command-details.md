@@ -203,6 +203,8 @@ schema migration or persistent side effects. There is no `--storage-root` option
 configuration. Selecting a path MUST NOT create a Store. The resolved Store root
 MUST be supplied explicitly to executed children without mutating global process
 environment, including when a Hook invokes a differently named Pactrun entry.
+Child configuration MUST retain the selected path's native spelling rather than
+substitute the storage adapter's canonical filesystem path.
 This process configuration is not an Input acquisition or authorization channel.
 
 Help queries use `pactrun [--format human|json|jsonl] <command-path> --help`,

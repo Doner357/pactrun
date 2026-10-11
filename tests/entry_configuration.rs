@@ -10,8 +10,8 @@ fn command(binary: &Path, base: &Path) -> Command {
     command
         .current_dir(base)
         .env_remove("PACTRUN_STORAGE_ROOT")
-        .env("LOCALAPPDATA", base.join("data"))
-        .env("XDG_DATA_HOME", base.join("data"))
+        .env("LOCALAPPDATA", base.join(".").join("data"))
+        .env("XDG_DATA_HOME", base.join(".").join("data"))
         .env("HOME", base.join("home"))
         .env("TEMP", base)
         .env("TMP", base);
@@ -90,18 +90,24 @@ fn single_executable_entries_isolate_defaults_and_forward_the_selected_store_to_
             "powershell_7",
             "pwsh.exe",
             "inspect.ps1",
-            "param([string]$program,[string]$instance)\n& $env:PACTRUN_EXECUTABLE hook session\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n& $program --format json instance show $instance\nexit $LASTEXITCODE\n",
+            "param([string]$program,[string]$instance,[string]$expected)\nif ($env:PACTRUN_STORAGE_ROOT -cne $expected) { exit 97 }\n& $env:PACTRUN_EXECUTABLE hook session\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n& $program --format json instance show $instance\nexit $LASTEXITCODE\n",
         )
     } else {
         (
             "sh",
             "sh",
             "inspect.sh",
-            "\"$PACTRUN_EXECUTABLE\" hook session || exit 1\n\"$1\" --format json instance show \"$2\"\n",
+            "test \"$PACTRUN_STORAGE_ROOT\" = \"$3\" || exit 97\n\"$PACTRUN_EXECUTABLE\" hook session || exit 1\n\"$1\" --format json instance show \"$2\"\n",
         )
     };
     fs::write(source.join(script), body).unwrap();
-    let args = serde_json::to_string(&[normal.to_str().unwrap(), "test-entry"]).unwrap();
+    let expected_root = base.join(".").join("data").join("pactrun-test");
+    let args = serde_json::to_string(&[
+        normal.to_str().unwrap(),
+        "test-entry",
+        expected_root.to_str().unwrap(),
+    ])
+    .unwrap();
     fs::write(source.join("pactrun.yaml"), format!("source_format: '1.0-alpha.2'\npackage_id: '00000000000000000000000000000696'\nrevision:\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: '1.0-alpha.1'\n        launch: {{kind: shell_loader, shell: {shell}, command: {executable}, script: script}}\n        args: {args}\n        io: {{terminal: output}}\nruntime_content:\n  files: [{{id: script, source: {script}, path: {script}, executable: false}}]\n")).unwrap();
     for (binary, name) in [(&normal, "normal-entry"), (&test, "test-entry")] {
         let result = success(

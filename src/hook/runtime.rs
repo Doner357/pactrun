@@ -190,7 +190,7 @@ pub(super) fn execute_materialized(
         materialized.program(),
         materialized.arguments(),
         materialized.execution_root(),
-        materialized.storage_root(),
+        materialized.configured_root(),
     ) {
         Ok(listener) => listener,
         Err(error) => {
@@ -368,7 +368,7 @@ pub(super) fn execute_snapshot_with_risk(
         materialized.program(),
         materialized.arguments(),
         materialized.execution_root(),
-        materialized.storage_root(),
+        materialized.configured_root(),
     ) {
         Ok(listener) => listener,
         Err(error) => {

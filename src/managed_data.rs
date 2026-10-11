@@ -27,6 +27,7 @@ static CLEANUP_FAILURES: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 pub(crate) struct StagingSession {
     root: PathBuf,
+    configured_root: PathBuf,
     session: PathBuf,
     lease: Option<File>,
 }
@@ -41,12 +42,12 @@ pub(crate) struct StagedFile {
 #[derive(Debug)]
 pub(crate) struct ExecutionDirectory {
     root: PathBuf,
-    storage_root: PathBuf,
+    configured_root: PathBuf,
 }
 
 impl ExecutionDirectory {
-    pub(crate) fn storage_root(&self) -> &Path {
-        &self.storage_root
+    pub(crate) fn configured_root(&self) -> &Path {
+        &self.configured_root
     }
 
     pub(crate) fn root(&self) -> &Path {
@@ -266,6 +267,7 @@ impl StagingSession {
             }
             return Ok(Self {
                 root,
+                configured_root: storage_root.to_path_buf(),
                 session,
                 lease: Some(lease),
             });
@@ -292,16 +294,17 @@ impl StagingSession {
             .map_err(|error| StagingError::io("create delivery directory", error))?;
         Ok(ExecutionDirectory {
             root,
-            storage_root: self
-                .root
-                .parent()
-                .expect("staging has a Store parent")
-                .to_path_buf(),
+            configured_root: self.configured_root.clone(),
         })
     }
 
     pub(crate) fn belongs_to_storage(&self, root: &Path) -> bool {
         self.root == root.join(STAGING_DIRECTORY)
+    }
+
+    /// Child configuration only; canonical storage ownership stays unchanged.
+    pub(crate) fn configure_child_root(&mut self, selected: &Path) {
+        self.configured_root = selected.to_path_buf();
     }
 
     pub(crate) fn create_execution_directory(
@@ -313,11 +316,7 @@ impl StagingSession {
             .map_err(|error| StagingError::io("create execution directory", error))?;
         Ok(ExecutionDirectory {
             root,
-            storage_root: self
-                .root
-                .parent()
-                .expect("staging has a Store parent")
-                .to_path_buf(),
+            configured_root: self.configured_root.clone(),
         })
     }
     pub(crate) fn create_migration_execution_directory(
@@ -330,11 +329,7 @@ impl StagingSession {
             .map_err(|error| StagingError::io("create Migration execution directory", error))?;
         Ok(ExecutionDirectory {
             root,
-            storage_root: self
-                .root
-                .parent()
-                .expect("staging has a Store parent")
-                .to_path_buf(),
+            configured_root: self.configured_root.clone(),
         })
     }
 

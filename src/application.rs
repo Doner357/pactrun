@@ -404,11 +404,12 @@ impl PactrunApplication {
             validate_supported_storage_root(&root.join(child))
                 .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
         }
-        let persistence = if collection {
+        let mut persistence = if collection {
             PactrunPersistence::open_for_collection(&root)?
         } else {
             PactrunPersistence::open(&root)?
         };
+        persistence.configure_child_root(requested);
         Ok(Self {
             persistence,
             storage_root: root,

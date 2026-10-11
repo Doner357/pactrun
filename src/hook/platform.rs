@@ -39,7 +39,7 @@ pub(super) struct ProtocolListener {
     inner: PlatformProtocolListener,
     startup: Option<std::sync::Arc<super::startup::Setup>>,
     core_endpoint: String,
-    storage_root: Option<std::path::PathBuf>,
+    configured_root: Option<std::path::PathBuf>,
     #[cfg(unix)]
     directory: Option<super::startup::PrivateDirectory>,
 }
@@ -78,7 +78,7 @@ impl ProtocolListener {
             inner,
             startup: None,
             core_endpoint: String::new(),
-            storage_root: None,
+            configured_root: None,
             directory: Some(owned),
         };
         listener.inner.set_nonblocking(true)?;
@@ -94,10 +94,10 @@ impl ProtocolListener {
         program: &Path,
         arguments: &[String],
         root: &Path,
-        storage_root: &Path,
+        configured_root: &Path,
     ) -> io::Result<Self> {
         let mut listener = Self::bind()?;
-        listener.storage_root = Some(storage_root.to_path_buf());
+        listener.configured_root = Some(configured_root.to_path_buf());
         if arguments
             .first()
             .is_some_and(|a| a == "--pactrun-internal-shell-loader")
@@ -124,7 +124,7 @@ impl ProtocolListener {
                 inner,
                 startup: None,
                 core_endpoint: String::new(),
-                storage_root: None,
+                configured_root: None,
             })
         }
     }
@@ -167,7 +167,7 @@ impl ProtocolListener {
                 OsStr::new(self.startup.as_ref().map_or("", |s| s.status.as_str())),
             ),
         ];
-        if let Some(root) = &self.storage_root {
+        if let Some(root) = &self.configured_root {
             values.push(("PACTRUN_STORAGE_ROOT", root.as_os_str()));
         }
         values
@@ -1086,7 +1086,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         inner,
         startup: None,
         core_endpoint: String::new(),
-        storage_root: None,
+        configured_root: None,
     })
 }
 
@@ -1118,7 +1118,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         inner,
         startup: None,
         core_endpoint: String::new(),
-        storage_root: None,
+        configured_root: None,
         directory: Some(directory),
     })
 }
