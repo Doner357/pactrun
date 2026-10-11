@@ -7,10 +7,15 @@ fn create_restore_fixture() -> (
 ) {
     use crate::domain::{InstanceId, SnapshotId, SnapshotIntegrityVersion};
     let (temp, root, source) = cli_roots();
-    fs::copy(env::current_exe().unwrap(), source.join("worker")).unwrap();
+    let worker = if cfg!(windows) {
+        "worker.exe"
+    } else {
+        "worker"
+    };
+    fs::copy(env::current_exe().unwrap(), source.join(worker)).unwrap();
     fs::write(
         source.join("pactrun.yaml"),
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000094
 revision:
   inputs: []
@@ -21,13 +26,13 @@ revision:
       hook:
         protocol_version: 1.0-alpha.1
         launch: { kind: direct, executable: worker }
-        args: []
+        args: ["--exact", "hook::tests::restore_runtime::restore_hook_worker", "--nocapture", "--test-threads=1"]
         io: { terminal: none }
   migrations: []
 runtime_content:
   files:
     - { id: worker, source: worker, path: bin/worker, executable: true }
-"#,
+"#.replace("source: worker, path: bin/worker", &format!("source: {worker}, path: bin/{worker}")),
     )
     .unwrap();
     let app = PactrunApplication::open(&root).unwrap();
@@ -62,22 +67,74 @@ runtime_content:
     (temp, root, revision, snapshot)
 }
 
-struct CreateRestoreInterpose<F: FnOnce()> {
-    action: Option<F>,
-    fail: bool,
-}
-impl<F: FnOnce()> Write for CreateRestoreInterpose<F> {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if let Some(action) = self.action.take() {
-            action();
+// Test-ID: PR-TEST-0676
+// Verifies: PR-REQ-0346, PR-REQ-0375
+#[test]
+fn create_restore_continues_after_human_output_closes_and_preserves_success() {
+    struct Closed;
+    impl Write for Closed {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::ErrorKind::BrokenPipe.into())
         }
-        if self.fail {
-            return Err(io::Error::from(io::ErrorKind::BrokenPipe));
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::ErrorKind::BrokenPipe.into())
         }
-        Ok(bytes.len())
     }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+    for close_stderr in [false, true] {
+        let (_temp, root, revision, snapshot) = create_restore_fixture();
+        let mut closed = Closed;
+        let mut captured = Vec::new();
+        let (stdout, stderr): (&mut dyn Write, &mut (dyn Write + Send)) = if close_stderr {
+            (&mut captured, &mut closed)
+        } else {
+            (&mut closed, &mut captured)
+        };
+        let args = [
+            "instance".to_owned(),
+            "create".into(),
+            "created".into(),
+            "--revision".into(),
+            format_revision(&revision),
+            "--restore-from".into(),
+            snapshot.to_string(),
+            "--startup-timeout-ms".into(),
+            "10000".into(),
+            "--execution-timeout-ms".into(),
+            "10000".into(),
+        ];
+        assert_eq!(
+            run(
+                args.into_iter().map(OsString::from).collect(),
+                Some(root.as_os_str().into()),
+                &mut io::empty(),
+                stdout,
+                stderr
+            ),
+            1
+        );
+        let app = PactrunApplication::open_read_only(&root).unwrap();
+        let instance = app
+            .resolve_instance_name(&InstanceName::parse("created").unwrap())
+            .unwrap()
+            .unwrap();
+        let runs = app.list_managed_runs(instance).unwrap();
+        assert_eq!(
+            runs.len(),
+            1,
+            "output failure must not skip or replay Restore"
+        );
+        assert!(
+            matches!(&runs[0].state, RunState::Finished(outcome) if outcome.outcome==RunOutcome::Succeeded),
+            "{:?}",
+            runs[0].state
+        );
+        assert_eq!(
+            app.load_instance(instance)
+                .unwrap()
+                .unwrap()
+                .active_revision,
+            revision
+        );
     }
 }
 
@@ -85,75 +142,77 @@ impl<F: FnOnce()> Write for CreateRestoreInterpose<F> {
 // Verifies: PR-REQ-0346
 #[test]
 fn create_restore_revalidates_after_create_and_never_resolves_a_replacement_name() {
-    for race in ["replace", "delete_snapshot", "cancel", "output_failure"] {
+    for race in ["replace", "delete_snapshot", "cancel"] {
         let (_temp, root, revision, snapshot) = create_restore_fixture();
         let app = PactrunApplication::open(&root).unwrap();
         let name = InstanceName::parse("created").unwrap();
         let cancellation = ActionCancellation::default();
-        let mut original = None;
-        let mut writer = CreateRestoreInterpose {
-            action: Some(|| {
-                original = app.resolve_instance_name(&name).unwrap();
-                assert!(original.is_some());
-                match race {
-                    "replace" => {
-                        let mut out = Vec::new();
-                        let mut err = Vec::new();
-                        assert_eq!(
-                            run(
-                                vec!["instance".into(), "abandon".into(), "created".into()],
-                                Some(root.as_os_str().to_owned()),
-                                &mut io::empty(),
-                                &mut out,
-                                &mut err
-                            ),
-                            0,
-                            "{err:?}"
-                        );
-                        let replacement = app
-                            .create_instance(name.clone(), revision.clone(), Vec::new())
-                            .unwrap();
-                        assert_ne!(Some(replacement.id), original);
-                    }
-                    "delete_snapshot" => {
-                        app.delete_object(&crate::domain::ObjectDeletion::Snapshot(snapshot))
-                            .unwrap();
-                    }
-                    "cancel" => cancellation.request(),
-                    "output_failure" => (),
-                    _ => unreachable!(),
+        let original = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let seen = original.clone();
+        let path = root.clone();
+        let target = revision.clone();
+        let selected = name.clone();
+        let cancel = cancellation.clone();
+        let _observer = snapshots::observe_creation(move |id| {
+            *seen.lock().unwrap() = Some(id);
+            let app = PactrunApplication::open(&path).unwrap();
+            match race {
+                "replace" => {
+                    let mut out = Vec::new();
+                    let mut err = Vec::new();
+                    assert_eq!(
+                        run(
+                            ["instance", "abandon", "created"]
+                                .map(OsString::from)
+                                .to_vec(),
+                            Some(path.as_os_str().into()),
+                            &mut io::empty(),
+                            &mut out,
+                            &mut err
+                        ),
+                        0,
+                        "{err:?}"
+                    );
+                    let replacement = app.create_instance(selected, target, vec![]).unwrap();
+                    assert_ne!(replacement.id, id);
                 }
-            }),
-            fail: race == "output_failure",
-        };
-        let mut stderr = Vec::new();
-        let result = snapshots::create_and_restore(
+                "delete_snapshot" => {
+                    app.delete_object(&crate::domain::ObjectDeletion::Snapshot(snapshot))
+                        .unwrap();
+                }
+                "cancel" => cancel.request(),
+                _ => unreachable!(),
+            }
+        });
+        let capture =
+            reply::Capture::new("instance create", false, reply::DisplayOptions::default());
+        let error = snapshots::create_and_restore(
             snapshots::CreateRestoreCommand {
                 name: name.clone(),
-                revision: RevisionReference::Exact(revision.clone()),
+                revision: RevisionReference::Exact(revision),
                 snapshot: snapshot.into(),
                 options: ExecutionOptions::default(),
             },
             &root,
             &mut io::empty(),
-            &mut writer,
-            &mut stderr,
+            &mut io::sink(),
             &cancellation,
-            presentation::Format::Human,
-        );
-        let error = result.unwrap_err();
+            reply::OutputContext(&capture),
+        )
+        .unwrap_err();
         assert!(!error.usage);
-        assert!(error.message.contains(&original.unwrap().to_string()));
-        assert!(
-            String::from_utf8(stderr)
-                .unwrap()
-                .contains("partial_completion:")
+        let original = original.lock().unwrap().unwrap();
+        let partial = serde_json::to_value(error.partial.as_ref().unwrap()).unwrap();
+        assert_eq!(
+            partial["created_instance"]["instance_id"],
+            original.to_string()
         );
+        assert!(partial["restore_run_id"].is_null());
         let current = app.resolve_instance_name(&name).unwrap().unwrap();
         if race == "replace" {
-            assert_ne!(Some(current), original);
+            assert_ne!(current, original);
         } else {
-            assert_eq!(Some(current), original);
+            assert_eq!(current, original);
         }
         assert!(app.list_managed_runs(current).unwrap().is_empty());
     }

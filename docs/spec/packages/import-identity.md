@@ -22,13 +22,13 @@ Being portable-capable alone does not require a field to be exported.
 
 ### PR-REQ-0254 - Non-identity metadata portability boundary
 
-Current presentation metadata, `ReferenceLabelBinding`, `SourceUriClaim`,
+Current presentation metadata, `SourceUriClaim`,
 `PublisherAttributionClaim`, and `AttributionClaim` MUST be semantically
 portable-capable: their Domain meaning is valid across Pactrun installations
 and MUST NOT contain a local database identity, install event, row identity,
 host path, or local trust conclusion.
 
-Local aliases, local current notes, local current trust assessments, local
+Local names, local current notes, local current trust assessments, local
 install timestamps, and source filesystem paths MUST be local-only.
 Portable-capable MUST NOT be equated with identity-bearing or automatically
 exported. Local persistence MUST NOT be treated as evidence that a kind is

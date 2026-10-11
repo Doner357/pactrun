@@ -28,6 +28,9 @@ impl Diagnostics {
     pub(crate) fn enable_live(&self) {
         self.live.store(true, Ordering::Release);
     }
+    pub(crate) fn disable_live(&self) {
+        self.live.store(false, Ordering::Release);
+    }
     pub(crate) fn retain(&self) -> bool {
         !self.disabled.load(Ordering::Acquire)
     }
@@ -84,6 +87,8 @@ impl Drop for Diagnostics {
 }
 #[derive(Debug, Default)]
 struct Shared {
+    core_delivery: Mutex<Option<super::delivery::Scope>>,
+    core: Mutex<Option<crate::domain::CoreDiagnosticWindow>>,
     window: Mutex<DiagnosticWindow>,
     close: AtomicBool,
     interactive: AtomicBool,
@@ -171,6 +176,19 @@ pub(super) struct DiagnosticScope {
     pub(super) delivery: Option<super::delivery::Scope>,
 }
 impl DiagnosticScope {
+    pub(super) fn core_sink(&self) -> CoreSink {
+        *self
+            .journal
+            .shared
+            .core_delivery
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = self.delivery.clone();
+        CoreSink {
+            journal: self.journal.clone(),
+            stage: self.stage.clone(),
+            delivery: self.delivery.clone(),
+        }
+    }
     pub(super) fn record(&self, text: HookText) {
         if let Some(delivery) = &self.delivery {
             delivery.diagnostic(&text);
@@ -204,6 +222,78 @@ impl DiagnosticScope {
         }
     }
 }
+#[derive(Clone)]
+pub(super) struct CoreSink {
+    journal: Arc<Journal>,
+    stage: String,
+    delivery: Option<super::delivery::Scope>,
+}
+impl CoreSink {
+    pub(super) fn start(&self) {
+        self.journal
+            .shared
+            .core
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_or_insert_with(Default::default);
+        self.journal
+            .shared
+            .terminal_generation
+            .fetch_add(1, Ordering::Release);
+        if self.journal.shared.failed.load(Ordering::Acquire) {
+            self.incomplete_for(crate::domain::CoreCollectionIssue::Storage);
+        }
+    }
+    pub(super) fn incomplete(&self) {
+        self.incomplete_for(crate::domain::CoreCollectionIssue::Transport);
+    }
+    pub(super) fn incomplete_for(&self, reason: crate::domain::CoreCollectionIssue) {
+        let first = {
+            let mut state = self
+                .journal
+                .shared
+                .core
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let window = state.get_or_insert_with(Default::default);
+            let first = !window.incomplete;
+            window.incomplete = true;
+            first
+        };
+        if first && let Some(delivery) = &self.delivery {
+            delivery.core_incomplete(reason);
+        }
+        self.journal
+            .shared
+            .terminal_generation
+            .fetch_add(1, Ordering::Release);
+    }
+    pub(super) fn record(&self, failure: crate::domain::HelperFailure) {
+        if let Some(delivery) = &self.delivery {
+            delivery.core_diagnostic(failure);
+        }
+        let event = crate::domain::CoreEvidence {
+            sequence: 0,
+            received_at_unix_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .ok()
+                .map(|v| v.as_millis().min(u64::MAX as u128) as u64),
+            stage: self.stage.clone(),
+            failure,
+        };
+        self.journal
+            .shared
+            .core
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_or_insert_with(Default::default)
+            .push(event);
+        self.journal
+            .shared
+            .terminal_generation
+            .fetch_add(1, Ordering::Release);
+    }
+}
 impl Drop for DiagnosticScope {
     fn drop(&mut self) {
         self.journal
@@ -231,7 +321,10 @@ fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                if !closing && saved_observed == Some(window.observed) {
+                if !closing
+                    && saved_observed == Some(window.observed)
+                    && current_terminal == terminal
+                {
                     last = Instant::now();
                     thread::sleep(Duration::from_millis(20));
                     continue;
@@ -251,6 +344,29 @@ fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
                     let _ = store.save_diagnostics(run, &window, retain, false, true);
                     return Err(error);
                 }
+                if let Some(core) = shared
+                    .core
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                {
+                    let deadline = Instant::now() + Duration::from_secs(1);
+                    let saved = loop {
+                        match store.save_core_diagnostics(run, &core, closing, false) {
+                            Err(error)
+                                if error.diagnostic_contention() && Instant::now() < deadline =>
+                            {
+                                thread::sleep(Duration::from_millis(20))
+                            }
+                            value => break value,
+                        }
+                    };
+                    if let Err(error) = saved {
+                        let _ = store.save_core_diagnostics(run, &core, false, true);
+                        let _ = store.save_diagnostics(run, &window, retain, false, true);
+                        return Err(error);
+                    }
+                }
                 saved_observed = Some(window.observed);
                 terminal = current_terminal;
                 last = Instant::now();
@@ -263,6 +379,14 @@ fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
     })();
     if result.is_err() {
         shared.failed.store(true, Ordering::Release);
+        if let Some(delivery) = shared
+            .core_delivery
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
+            delivery.core_incomplete(crate::domain::CoreCollectionIssue::Storage);
+        }
     }
 }
 fn present(run: RunId, shared: &Shared) {
@@ -274,12 +398,7 @@ fn present(run: RunId, shared: &Shared) {
             && !shared.interactive.load(Ordering::Acquire)
             && shared.failed.load(Ordering::Acquire)
         {
-            if writeln!(
-                output,
-                "Hook diagnostic persistence failed; evidence may be incomplete."
-            )
-            .is_err()
-            {
+            if writeln!(output, "Run diagnostic storage failed.").is_err() {
                 return;
             }
             warned = true;
@@ -315,10 +434,7 @@ fn present(run: RunId, shared: &Shared) {
         }
         if shared.close.load(Ordering::Acquire) && shared.writer_done.load(Ordering::Acquire) {
             if shared.failed.load(Ordering::Acquire) {
-                let _ = writeln!(
-                    output,
-                    "Hook diagnostic persistence failed; evidence may be incomplete."
-                );
+                let _ = writeln!(output, "Run diagnostic storage failed.");
             }
             return;
         }

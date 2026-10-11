@@ -4,13 +4,9 @@ title: Authoring Model (moved)
 
 # Authoring Model has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Pack Authoring Model](../../spec/packages/authoring.md).
 
-Read [the current document](../../spec/packages/authoring.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="low-floor-high-ceiling" />
 [Low floor, high ceiling](../../spec/packages/authoring.md#low-floor-high-ceiling)

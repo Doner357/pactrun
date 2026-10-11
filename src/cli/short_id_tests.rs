@@ -82,9 +82,10 @@ fn short_revision_selectors_preserve_machine_ids_and_exact_metadata_cas() {
     let short=format!("exact:{}/sha256:{}",&package[..8],&digest[7..16]);
     let shown=json_ok(&root,&["revision","show",&short]);
     assert_eq!(shown["revision"]["package_id"],package);assert_eq!(shown["revision"]["content_digest"],digest);
-    json_ok(&root,&["revision","alias","set","prod",&short,"--expect-absent"]);
-    assert_eq!(json_ok(&root,&["revision","alias","show","prod"])["target"],shown["revision"]);
-    json_ok(&root,&["revision","alias","clear","prod","--expect",&short]);
+    let named_short=format!("{}:{}",&package[..8],&digest[7..16]);
+    json_ok(&root,&["revision","rename",&named_short,"prod"]);
+    assert_eq!(json_ok(&root,&["revision","show",&format!("{package}:prod")])["revision"],shown["revision"]);
+    json_ok(&root,&["revision","unname",&named_short]);
     json_ok(&root,&["revision","note","set",&short,"--value","note","--expect-absent"]);
     let path=source.join("pactrun.yaml");
     fs::write(&path,fs::read_to_string(&path).unwrap().replace(package,"00000000000000000000000000000022")).unwrap();

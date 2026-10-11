@@ -11,6 +11,7 @@ pub(crate) enum DetachedAllocationState {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DetachedAllocationView {
+    pub(crate) unique_prefix_length: usize,
     pub(crate) allocation: super::ServiceAllocationId,
     pub(crate) instance: InstanceId,
     pub(crate) former_name: super::InstanceName,

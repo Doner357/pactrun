@@ -73,12 +73,20 @@ impl Scenario {
 
     pub(crate) fn install(&self) -> String {
         let installed = self.run([
+            OsStr::new("--format"),
+            OsStr::new("json"),
             OsStr::new("pack"),
             OsStr::new("install"),
             self.source.as_os_str(),
         ]);
         assert_success(&installed);
-        first_line(&installed.stdout).to_owned()
+        let value: serde_json::Value = serde_json::from_slice(&installed.stdout).unwrap();
+        let revision = &value["result"]["revision"];
+        format!(
+            "exact:{}/{}",
+            revision["package_id"].as_str().unwrap(),
+            revision["content_digest"].as_str().unwrap()
+        )
     }
 
     pub(crate) fn create_instance(&self, name: &str, revision: &str) -> Output {
@@ -454,7 +462,7 @@ pub(crate) fn assert_empty_json_result(output: &Output, field: &str) {
     assert_success(output);
     let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.1");
+    assert_eq!(response["format_version"], "1.0-alpha.3");
     assert_eq!(response["status"], "success");
     assert!(response["error"].is_null());
     assert!(
@@ -476,10 +484,6 @@ pub(crate) fn assert_exit(output: &Output, expected: i32) {
     );
 }
 
-pub(crate) fn first_line(bytes: &[u8]) -> &str {
-    std::str::from_utf8(bytes).unwrap().lines().next().unwrap()
-}
-
 pub(crate) fn run_count(output: &Output) -> usize {
     run_projections(output).len()
 }
@@ -488,7 +492,7 @@ pub(crate) fn run_id(output: &Output) -> String {
     std::str::from_utf8(&output.stderr)
         .unwrap()
         .lines()
-        .find_map(|line| line.strip_prefix("run: "))
+        .find_map(|line| line.strip_prefix("Run: "))
         .expect("invoke must report the accepted Run id")
         .to_owned()
 }
@@ -514,20 +518,17 @@ pub(crate) struct RunDetailsProjection {
 }
 
 pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
-    let fields = fields(
-        &output.stdout,
-        &["state_version", "required_inputs_satisfied"],
-    );
+    let fields = fields(&output.stdout, &["State version", "Required inputs"]);
     InstanceProjection {
-        state_version: required(&fields, "state_version").to_owned(),
-        ready: required(&fields, "required_inputs_satisfied") == "true",
+        state_version: required(&fields, "State version").to_owned(),
+        ready: required(&fields, "Required inputs") == "Satisfied",
     }
 }
 
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.1");
+    assert_eq!(response["format_version"], "1.0-alpha.3");
     assert_eq!(response["status"], "success");
     response["result"]["items"]
         .as_array()
@@ -551,13 +552,21 @@ pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProj
 
 pub(crate) fn run_projections(output: &Output) -> Vec<RunProjection> {
     let text = std::str::from_utf8(&output.stdout).unwrap();
-    assert!(text.starts_with("RUN ID  INSTANCE ID  OPERATION  PHASE  OUTCOME\n"));
+    if text == "No Runs.\n" {
+        return Vec::new();
+    }
+    let header: Vec<_> = text.lines().next().unwrap().split_whitespace().collect();
+    assert_eq!(header, ["RUN", "INSTANCE", "OPERATION", "OUTCOME"]);
     text.lines()
         .skip(1)
         .take_while(|line| !line.is_empty())
         .map(|line| {
-            let columns = line.split_whitespace().collect::<Vec<_>>();
-            assert_eq!(columns.len(), 5, "malformed Run table row: {line}");
+            let columns = line
+                .split("  ")
+                .filter(|s| !s.is_empty())
+                .map(str::trim)
+                .collect::<Vec<_>>();
+            assert_eq!(columns.len(), 4, "malformed Run table row: {line}");
             assert_eq!(
                 columns[0].len(),
                 32,
@@ -566,25 +575,31 @@ pub(crate) fn run_projections(output: &Output) -> Vec<RunProjection> {
             assert_eq!(columns[1].len(), 32);
             RunProjection {
                 id: columns[0].to_owned(),
-                action: columns[2].to_owned(),
-                outcome: columns[4].to_owned(),
+                action: columns[2]
+                    .strip_prefix("Action ")
+                    .unwrap_or(columns[2])
+                    .to_owned(),
+                outcome: columns[3].to_owned(),
             }
         })
         .collect()
 }
 
 pub(crate) fn run_details_projection(output: &Output) -> RunDetailsProjection {
-    let fields = fields(&output.stdout, &["action", "outcome"]);
+    let fields = fields(&output.stdout, &["Operation", "Outcome"]);
     RunDetailsProjection {
-        action: required(&fields, "action").to_owned(),
-        outcome: required(&fields, "outcome").to_owned(),
+        action: required(&fields, "Operation")
+            .strip_prefix("Action ")
+            .expect("Action Run")
+            .to_owned(),
+        outcome: required(&fields, "Outcome").to_owned(),
     }
 }
 
 fn fields<'a>(output: &'a [u8], selected: &[&str]) -> std::collections::BTreeMap<&'a str, &'a str> {
     let mut fields = std::collections::BTreeMap::new();
     for line in std::str::from_utf8(output).unwrap().lines() {
-        let Some((key, value)) = line.split_once(": ") else {
+        let Some((key, value)) = line.trim_start().split_once(": ") else {
             continue;
         };
         if !selected.contains(&key) {
@@ -606,7 +621,7 @@ fn required<'a>(fields: &'a std::collections::BTreeMap<&str, &str>, key: &str) -
 }
 
 pub(crate) fn basic_source() -> &'static str {
-    r#"source_format: 1.0-alpha.1
+    r#"source_format: 1.0-alpha.2
 package_id: {package_id}
 revision:
   inputs: []
@@ -642,10 +657,6 @@ revision:
 runtime_content:
   files:
     - { id: worker, source: {worker_name}, path: bin/{worker_name}, executable: true }
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#
 }
 
@@ -908,7 +919,7 @@ pub(crate) fn matrix_source() -> String {
         actions.push_str(&action(id, access, mode, terminal, parameters, outputs));
     }
     format!(
-        r#"source_format: 1.0-alpha.1
+        r#"source_format: 1.0-alpha.2
 package_id: {{package_id}}
 revision:
   inputs:
@@ -919,10 +930,6 @@ revision:
 runtime_content:
   files:
     - {{ id: worker, source: {{worker_name}}, path: bin/{{worker_name}}, executable: true }}
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: {{ kind: unattributed }}
 "#
     )
 }

@@ -6,8 +6,10 @@ title: Manage installed versions
 
 Scoop/Homebrew manage programs; Pactrun manages its data. Updating or removing a
 program package must not remove management roots, Instances, Inputs, Secrets,
-Snapshots or service resources. An executable that cannot read a store refuses
-it; reinstalling an older program is not a data rollback or conversion procedure.
+Snapshots or service resources. When next opened, a supported older Store is
+upgraded automatically before the requested operation. An unsupported or unsafe
+conversion is refused without resetting data. Reinstalling an older program is
+not a data rollback or conversion procedure.
 
 ## Ordinary Preview updates
 

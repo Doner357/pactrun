@@ -1,7 +1,6 @@
 //! Snapshot journeys use a fresh executable for every public product operation.
 use super::support::{
-    Scenario, assert_empty_json_result, assert_exit, assert_success, first_line,
-    instance_projection,
+    Scenario, assert_empty_json_result, assert_exit, assert_success, instance_projection,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -21,7 +20,7 @@ const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
 
 fn source(access: &str) -> String {
     let mut text = String::from(
-        "source_format: 1.0-alpha.1\npackage_id: {package_id}\nrevision:\n  inputs:\n    - { id: secret, required: true, protection: secret }\n    - { id: optional, required: false, protection: normal }\n  actions: []\n  snapshot:\n",
+        "source_format: 1.0-alpha.2\npackage_id: {package_id}\nrevision:\n  inputs:\n    - { id: secret, required: true, protection: secret }\n    - { id: optional, required: false, protection: normal }\n  actions: []\n  snapshot:\n",
     );
     for operation in ["capture", "restore"] {
         text.push_str(&format!("    {operation}:\n"));
@@ -54,18 +53,27 @@ fn initialize(s: &Scenario) -> String {
     revision
 }
 fn field(output: &Output, name: &str) -> String {
-    let prefix = format!("{name}: ");
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .find_map(|l| l.strip_prefix(&prefix))
-        .or_else(|| {
-            std::str::from_utf8(&output.stderr)
-                .ok()?
-                .lines()
-                .find_map(|l| l.strip_prefix(&prefix))
-        })
-        .unwrap_or_else(|| panic!("missing {name}: {output:?}"))
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let result = &response["result"];
+    let value = match name {
+        "snapshot" => result
+            .get("capture_result")
+            .unwrap_or(&result["snapshot_id"]),
+        "run" => &result["run"]["run_id"],
+        "operation" => &result["run"]["operation"]["kind"],
+        "source_snapshot" => &result["run"]["operation"]["snapshot_id"],
+        "phase" | "outcome" => &result["run"]["state"][name],
+        _ => &result[name],
+    };
+    value
+        .as_str()
+        .unwrap_or_else(|| panic!("missing {name}: {response}"))
         .to_owned()
+}
+fn json_run(s: &Scenario, args: &[&str]) -> Output {
+    let mut command = vec!["--format", "json"];
+    command.extend_from_slice(args);
+    s.run(command)
 }
 fn safe(output: &Output) {
     let text = format!(
@@ -92,7 +100,7 @@ fn safe(output: &Output) {
     }
 }
 fn capture(s: &Scenario) -> String {
-    let output = s.run(["snapshot", "capture", "service"]);
+    let output = json_run(s, &["snapshot", "capture", "service"]);
     assert_success(&output);
     safe(&output);
     field(&output, "snapshot")
@@ -168,8 +176,12 @@ fn create_and_restore_matches_two_operations_and_preserves_partial_completion() 
     ]);
     assert_exit(&failed, 1);
     safe(&failed);
-    assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
-    assert!(String::from_utf8_lossy(&failed.stderr).contains("restore_run:"));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("Partial result"));
+    assert!(
+        String::from_utf8_lossy(&failed.stderr).contains("Restore Run ID"),
+        "{}",
+        String::from_utf8_lossy(&failed.stderr)
+    );
     assert_success(&s.run(["instance", "show", "partial"]));
     assert_eq!(
         run_count(&s.run(["run", "list", "partial", "--no-trunc"])),
@@ -293,7 +305,7 @@ fn create_restore_missing_capability_and_timeout_keep_the_documented_boundaries(
     ]);
     assert_exit(&failed, 1);
     safe(&failed);
-    assert!(String::from_utf8_lossy(&failed.stderr).contains("partial_completion:"));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("Partial result"));
     assert_success(&s.run(["instance", "show", "timed-out"]));
     assert_eq!(
         run_count(&s.run(["run", "list", "timed-out", "--no-trunc"])),
@@ -339,9 +351,9 @@ fn snapshot_deletion_and_gc_preserve_restored_input_value_until_its_owner_retire
     for name in ["restored", "service"] {
         assert_success(&s.run(["instance", "abandon", name]));
     }
-    let collected = s.run(["storage", "gc"]);
+    let collected = json_run(&s, &["storage", "gc"]);
     assert_success(&collected);
-    assert!(String::from_utf8_lossy(&collected.stdout).contains("removed=1"));
+    assert_eq!(field(&collected, "removed"), "1");
 }
 fn run_count(output: &Output) -> usize {
     assert_success(output);
@@ -413,12 +425,12 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
     assert_exit(&refused, 1);
     assert_eq!(manifest(&bundle), canonical);
     let b = Scenario::new(0x71, &source("mutate"));
-    let imported = b.run(["snapshot", "import", bundle.to_str().unwrap()]);
+    let imported = json_run(&b, &["snapshot", "import", bundle.to_str().unwrap()]);
     assert_success(&imported);
     safe(&imported);
     assert_eq!(field(&imported, "snapshot"), id);
     assert_eq!(field(&imported, "relational_verification"), "not_evaluated");
-    let verified = b.run(["snapshot", "verify", &id]);
+    let verified = json_run(&b, &["snapshot", "verify", &id]);
     assert_success(&verified);
     assert_eq!(field(&verified, "relational_verification"), "not_evaluated");
     let show = b.run(["--format", "json", "snapshot", "show", &id]);
@@ -431,17 +443,29 @@ fn public_v2_journey_preserves_identity_and_restores_real_service_content_across
     );
     assert_eq!(show["result"]["target_eligibility"], "target_not_specified");
     assert_success(&b.run(["snapshot", "import", bundle.to_str().unwrap()]));
-    let installed = b.run(["pack", "install", a.source.to_str().unwrap()]);
+    let installed = json_run(&b, &["pack", "install", a.source.to_str().unwrap()]);
     assert_success(&installed);
-    assert_eq!(first_line(&installed.stdout), revision);
+    let installed: Value = serde_json::from_slice(&installed.stdout).unwrap();
+    assert_eq!(
+        format!(
+            "exact:{}/{}",
+            installed["result"]["revision"]["package_id"]
+                .as_str()
+                .unwrap(),
+            installed["result"]["revision"]["content_digest"]
+                .as_str()
+                .unwrap()
+        ),
+        revision
+    );
     assert_success(&b.create_instance("service", &revision));
     bind(&b, b"pre-restore-target");
     let before = instance_projection(&b.run(["instance", "show", "service"]));
-    let restored = b.run(["snapshot", "restore", "service", &id]);
+    let restored = json_run(&b, &["snapshot", "restore", "service", &id]);
     assert_success(&restored);
     safe(&restored);
     let run = field(&restored, "run");
-    let details = b.run(["run", "show", &run]);
+    let details = json_run(&b, &["run", "show", &run]);
     assert_success(&details);
     safe(&details);
     assert_eq!(field(&details, "operation"), "snapshot_restore");
@@ -581,14 +605,17 @@ fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only(
         );
         bind(&s, b"");
         let before = fs::read_dir(s.storage.join("staging")).unwrap().count();
-        let plan = s.run([
-            "snapshot",
-            "capture",
-            "service",
-            "--plan",
-            "--execution-timeout-ms",
-            "0",
-        ]);
+        let plan = json_run(
+            &s,
+            &[
+                "snapshot",
+                "capture",
+                "service",
+                "--plan",
+                "--execution-timeout-ms",
+                "0",
+            ],
+        );
         assert_success(&plan);
         safe(&plan);
         assert_eq!(field(&plan, "access"), access);
@@ -636,19 +663,26 @@ fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only(
         assert_exit(&output, 1);
         safe(&output);
         let assignment = format!("secret_text={PRIVATE}");
-        let output = s.run([
-            "snapshot",
-            "capture",
-            "service",
-            "--plan",
-            "--param",
-            &assignment,
-        ]);
+        let output = json_run(
+            &s,
+            &[
+                "snapshot",
+                "capture",
+                "service",
+                "--plan",
+                "--param",
+                &assignment,
+            ],
+        );
         assert_success(&output);
         safe(&output);
+        let plan: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert!(
-            String::from_utf8_lossy(&output.stdout)
-                .contains("parameter: secret_text\teffective_redaction: true")
+            plan["result"]["parameters"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["parameter_id"] == "secret_text" && p["effective_redaction"] == true)
         );
         assert_eq!(
             run_count(&s.run(["run", "list", "service", "--no-trunc"])),
@@ -659,7 +693,10 @@ fn snapshot_plans_access_readiness_parameters_and_parser_are_safe_and_read_only(
         let secret = s.path("secret-parameter");
         fs::write(&secret, PRIVATE).unwrap();
         let binding = format!("secret_text={}", secret.display());
-        let output = s.run(["snapshot", "capture", "service", "--param-file", &binding]);
+        let output = json_run(
+            &s,
+            &["snapshot", "capture", "service", "--param-file", &binding],
+        );
         assert_success(&output);
         safe(&output);
         let id = field(&output, "snapshot");
@@ -685,23 +722,26 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     let id = capture(&s);
     for mode in ["failure", "protocol", "no_ready"] {
         let mode = format!("mode={mode}");
-        let result = s.run([
-            "snapshot",
-            "capture",
-            "service",
-            "--param",
-            &mode,
-            "--startup-timeout-ms",
-            "200",
-            "--execution-timeout-ms",
-            "1000",
-            "--termination-grace-ms",
-            "0",
-        ]);
+        let result = json_run(
+            &s,
+            &[
+                "snapshot",
+                "capture",
+                "service",
+                "--param",
+                &mode,
+                "--startup-timeout-ms",
+                "200",
+                "--execution-timeout-ms",
+                "1000",
+                "--termination-grace-ms",
+                "0",
+            ],
+        );
         assert_exit(&result, 1);
         safe(&result);
         let run = field(&result, "run");
-        let show = s.run(["run", "show", &run]);
+        let show = json_run(&s, &["run", "show", &run]);
         assert_success(&show);
         safe(&show);
         assert_eq!(field(&show, "operation"), "snapshot_capture");
@@ -719,19 +759,23 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     let refused = s.run(["snapshot", "restore", "service", &id]);
     assert_exit(&refused, 1);
     safe(&refused);
-    let restored = s.run([
-        "snapshot",
-        "restore",
-        "service",
-        &id,
-        "--authorize-recovery-override",
-    ]);
+    let restored = json_run(
+        &s,
+        &[
+            "snapshot",
+            "restore",
+            "service",
+            &id,
+            "--authorize-recovery-override",
+        ],
+    );
     assert_success(&restored);
     safe(&restored);
     let run = field(&restored, "run");
-    let inspected = s.run(["run", "show", &run]);
+    let inspected = json_run(&s, &["run", "show", &run]);
     assert_success(&inspected);
-    assert_eq!(field(&inspected, "current_recovery_guard"), "none");
+    let inspected: Value = serde_json::from_slice(&inspected.stdout).unwrap();
+    assert!(inspected["result"]["current_recovery_guard"].is_null());
     let actor = s.spawn(["snapshot", "capture", "service", "--param", "mode=hold"]);
     s.wait_for_marker("ready:hold");
     let live = s.run(["run", "list", "service", "--no-trunc"]);
@@ -740,14 +784,15 @@ fn snapshot_failures_recovery_timeouts_and_mixed_run_inspection_cross_real_proce
     assert!(
         String::from_utf8_lossy(&live.stdout)
             .lines()
-            .any(|line| line.ends_with("  running  -"))
+            .any(|line| line.ends_with("  running"))
     );
     assert_empty_json_result(&s.run(["--format", "json", "run", "reconcile"]), "run_ids");
     let _ = actor.terminate();
-    let reconciled = s.run(["run", "reconcile"]);
+    let reconciled = json_run(&s, &["run", "reconcile"]);
     assert_success(&reconciled);
-    let run = first_line(&reconciled.stdout);
-    let show = s.run(["run", "show", run]);
+    let reconciled: Value = serde_json::from_slice(&reconciled.stdout).unwrap();
+    let run = reconciled["result"]["run_ids"][0].as_str().unwrap();
+    let show = json_run(&s, &["run", "show", run]);
     assert_success(&show);
     assert_eq!(field(&show, "outcome"), "interrupted");
     assert_empty_json_result(&s.run(["--format", "json", "run", "reconcile"]), "run_ids");
@@ -813,6 +858,8 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
     bind(&s, SECRET);
     let plan = s.run_with_stdin(
         [
+            "--format",
+            "json",
             "snapshot",
             "capture",
             "service",
@@ -823,9 +870,13 @@ fn public_snapshot_closure_distinguishes_readiness_compatibility_capacity_and_so
         b"success".to_vec(),
     );
     assert_success(&plan);
+    let plan: Value = serde_json::from_slice(&plan.stdout).unwrap();
     assert!(
-        String::from_utf8_lossy(&plan.stdout)
-            .contains("parameter: mode\teffective_redaction: true")
+        plan["result"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["parameter_id"] == "mode" && p["effective_redaction"] == true)
     );
     let base = s.path("base.zip");
     let id = baseline_bundle(&base, &revision);

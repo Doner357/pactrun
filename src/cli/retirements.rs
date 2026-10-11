@@ -128,6 +128,9 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     };
     while let Some(arg) = parser.next().map_err(lex_error)? {
         match arg {
+            Arg::Long("no-retain-hook-text") if !options.no_retain_hook_text => {
+                options.no_retain_hook_text = true
+            }
             Arg::Long("cancel-on-output-close") if !options.cancel_on_output_close => {
                 options.cancel_on_output_close = true
             }
@@ -223,10 +226,9 @@ pub(super) fn parse_detached(parser: &mut Parser) -> Result<RetirementCommand, C
 pub(super) fn execute(
     command: RetirementCommand,
     root: &Path,
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
+    _stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
-    format: presentation::Format,
+    format: reply::OutputContext,
 ) -> Result<(), CliError> {
     let readonly = matches!(
         command,
@@ -273,7 +275,7 @@ pub(super) fn execute(
             } else {
                 "instance delete"
             };
-            if format == presentation::Format::Json
+            if format.requires_noninteractive()
                 && !options.plan
                 && let DeletionWork::Cleanup(cleanup) = &plan.work
             {
@@ -291,7 +293,7 @@ pub(super) fn execute(
                 } else {
                     Vec::new()
                 };
-                if format == presentation::Format::Json {
+                {
                     let result = RetirementPlan {
                         instance_id: plan.instance.to_string(),
                         expected_state_version: plan.expected.to_string(),
@@ -304,43 +306,20 @@ pub(super) fn execute(
                         },
                         admission: "not_attempted",
                     };
-                    return presentation::render(
+                    return presentation::emit_result(
                         format,
                         command_name,
                         &capability_presentation::Presented {
                             value: result,
                             presentation: author,
                         },
-                        stdout,
-                        |_, _| unreachable!(),
                     );
                 }
-                let work = match plan.work {
-                    DeletionWork::Abandon => "abandon_without_hook",
-                    DeletionWork::NoCleanup => "no_cleanup_declared",
-                    DeletionWork::FinalizationOnly { .. } => "finalization_only",
-                    DeletionWork::Cleanup(_) => "cleanup_then_finalize",
-                };
-                writeln!(stdout, "Mode: preview\ninstance_id: {}\nexpected_state_version: {}\nrevision: {}\nwork: {work}", plan.instance, plan.expected, format_revision(&plan.revision)).map_err(io_operation)?;
-                return capability_presentation::write(stdout, &author, false);
             }
             if cancellation.is_requested() {
                 return Err(CliError::operation(
                     "retirement cancelled before Run acceptance",
                 ));
-            }
-            if mode == DeletionMode::AbandonManagement {
-                if format == presentation::Format::Human {
-                    writeln!(stderr, "Abandon will end management and preserve remaining service data. Stop external service processes separately.").map_err(io_operation)?;
-                }
-            } else {
-                if format == presentation::Format::Human {
-                    writeln!(
-                        stderr,
-                        "Deletion will permanently remove this Instance's owned storage."
-                    )
-                    .map_err(io_operation)?;
-                }
             }
             let acceptance = app.accept_deletion_plan(
                 plan,
@@ -359,25 +338,23 @@ pub(super) fn execute(
                     // The registry retains this exact candidate and its live
                     // owner. Resolve acceptance through that continuation;
                     // diagnostics must not drop ownership or create a new Run.
-                    let _ = writeln!(
-                        stderr,
-                        "Run {run}: acceptance uncertain; retaining owner and inspecting the exact candidate"
-                    );
+                    cancellation.delivery.acceptance_pending(run);
                     run
                 }
                 Err(error) => return Err(safe_error(error)),
             };
             loop {
                 if let Err(error) = app.execute_ready_deletion(run) {
-                    retry_or_fail(error, run, stderr)?;
+                    retry_or_fail(error, run, cancellation)?;
                 }
                 match app.advance_owner_continuation(run) {
                     Ok(true) => break,
                     Ok(false) => {}
-                    Err(error) => retry_or_fail(error, run, stderr)?,
+                    Err(error) => retry_or_fail(error, run, cancellation)?,
                 }
                 thread::sleep(Duration::from_millis(100));
             }
+            cancellation.diagnostics.finish();
             let inspection = app
                 .managed_run_inspection(run)
                 .map_err(|error| safe_error(error).with_run_context(run))?
@@ -387,86 +364,28 @@ pub(super) fn execute(
                     )
                     .with_run_context(run)
                 })?;
-            if format == presentation::Format::Json {
+            {
                 let result = execution_presentation::Inspection::from(&inspection);
                 if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
                 {
-                    return presentation::render(
-                        format,
-                        command_name,
-                        &result,
-                        stdout,
-                        |_, _| unreachable!(),
-                    );
+                    return presentation::emit_result(format, command_name, &result);
                 }
-                let mut error = CliError::operation(
-                    "retirement Run did not succeed; inspect the typed outcome before retrying",
-                );
+                let mut error =
+                    CliError::operation("Instance retirement did not complete successfully");
                 error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
-                return Err(error);
-            }
-            if !matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
-            {
-                snapshots::write_run(stderr, &inspection)?;
-            }
-            match inspection.run.state {
-                RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
-                    writeln!(stdout, "retired_instance: {}\nrun: {run}", intent.instance)
-                        .map_err(io_operation)
-                }
-                RunState::Finished(outcome) => Err(CliError::operation(format!(
-                    "Run {run} finished with {}; inspect instance deletion show {} before retrying",
-                    format_outcome(outcome.outcome),
-                    intent.instance
-                ))),
-                RunState::Running(_) => Err(CliError::operation(
-                    "retirement Run has not durably finished",
-                )),
+                Err(error)
             }
         }
         RetirementCommand::Show(id) => {
             let id = id.full();
             let entry = app.inspect_retirement(id).map_err(safe_error)?;
-            if format == presentation::Format::Json {
-                return presentation::render(
+            {
+                presentation::emit_result(
                     format,
                     "instance deletion show",
                     &RetirementInspection::from(&entry),
-                    stdout,
-                    |_, _| unreachable!(),
-                );
-            }
-            let runs = entry.runs;
-            let live = entry.live;
-            writeln!(stdout, "instance_id: {id}\nmanaged: {}", live.is_some())
-                .map_err(io_operation)?;
-            if let Some(live) = live {
-                writeln!(stdout, "state_version: {}", live.state_version).map_err(io_operation)?;
-            }
-            if let Some(obligation) = entry.obligation {
-                let phase = match obligation.phase {
-                    DeletionPhase::LaunchAuthorized => "launch_authorized",
-                    DeletionPhase::ResultUnresolved => "cleanup_unresolved",
-                    DeletionPhase::FinalizationAuthorized => "finalization_authorized",
-                };
-                writeln!(
-                    stdout,
-                    "attempt: {}\nobligation: {phase}",
-                    obligation.attempt
                 )
-                .map_err(io_operation)?;
-            } else {
-                writeln!(stdout, "obligation: none").map_err(io_operation)?;
             }
-            for run in runs {
-                if matches!(
-                    run.operation,
-                    crate::domain::ManagedRunIdentity::Deletion { .. }
-                ) {
-                    snapshots::write_summary(stdout, &run)?;
-                }
-            }
-            Ok(())
         }
         RetirementCommand::Confirm(confirmation) => {
             let confirmation = CleanupConfirmation {
@@ -477,50 +396,25 @@ pub(super) fn execute(
             let version = app
                 .confirm_cleanup_completion(confirmation)
                 .map_err(safe_error)?;
-            if format == presentation::Format::Json {
-                return presentation::render(
+            {
+                presentation::emit_result(
                     format,
                     "instance deletion confirm-complete",
                     &Confirmation {
                         state_version: version.to_string(),
                         authority: "operator_confirmed",
                     },
-                    stdout,
-                    |_, _| unreachable!(),
-                );
+                )
             }
-            writeln!(stdout, "state_version: {version}\nauthority: operator_confirmed\nOnly finalization is authorized; the original Run outcome and trust guard are unchanged.").map_err(io_operation)
         }
-        RetirementCommand::DetachedList { no_trunc } => {
+        RetirementCommand::DetachedList { no_trunc: _ } => {
             let allocations = app.list_detached_allocations().map_err(safe_error)?;
-            if format == presentation::Format::Json {
+            {
                 let result = DetachedList {
                     items: allocations.iter().map(Detached::from).collect(),
                 };
-                return presentation::render(
-                    format,
-                    "service-storage detached list",
-                    &result,
-                    stdout,
-                    |_, _| unreachable!(),
-                );
+                presentation::emit_result(format, "service-storage detached list", &result)
             }
-            if allocations.is_empty() {
-                writeln!(stdout, "No detached allocations.").map_err(io_operation)?;
-            }
-            let ids = short_ids::labels(
-                &app,
-                crate::domain::CatalogIdentityKind::Allocation,
-                allocations
-                    .iter()
-                    .map(|a| a.allocation.to_string())
-                    .collect(),
-                no_trunc,
-            )?;
-            for (allocation, id) in allocations.into_iter().zip(ids) {
-                write_detached(stdout, &allocation, &id)?;
-            }
-            Ok(())
         }
         RetirementCommand::DetachedShow { id, reveal } => {
             let id = id.full();
@@ -528,7 +422,7 @@ pub(super) fn execute(
                 .detached_allocation(id)
                 .map_err(safe_error)?
                 .ok_or_else(|| CliError::operation("detached AllocationId not found"))?;
-            if format == presentation::Format::Json {
+            {
                 let result = DetachedInspection {
                     allocation: (&allocation).into(),
                     locations: if reveal {
@@ -549,42 +443,16 @@ pub(super) fn execute(
                         None
                     },
                 };
-                return presentation::render(
-                    format,
-                    "service-storage detached show",
-                    &result,
-                    stdout,
-                    |_, _| unreachable!(),
-                );
+                presentation::emit_result(format, "service-storage detached show", &result)
             }
-            write_detached(stdout, &allocation, &id.to_string())?;
-            if reveal {
-                let locations = app.detached_handoff(id).map_err(safe_error)?;
-                if locations.len() > 1 {
-                    writeln!(stderr,"Partial retirement left data in multiple locations. Review all listed locations before recovery or disposal.").map_err(io_operation)?;
-                }
-                for location in locations {
-                    writeln!(
-                        stdout,
-                        "native_location: {}\noriginal_relative_location: {:?}",
-                        location.path.display(),
-                        location.original_relative_path
-                    )
-                    .map_err(io_operation)?;
-                }
-            }
-            Ok(())
         }
         RetirementCommand::Discard(id) => {
             let id = id.full();
-            if format == presentation::Format::Human {
-                writeln!(stderr, "Discard will permanently delete this allocation. Stop any service using it first.").map_err(io_operation)?;
-            }
             let changed = app
                 .discard_detached_allocation(id, true)
                 .map_err(safe_error)?;
-            if format == presentation::Format::Json {
-                return presentation::render(
+            {
+                presentation::emit_result(
                     format,
                     "service-storage detached discard",
                     &Discard {
@@ -592,33 +460,13 @@ pub(super) fn execute(
                         state: "discarded",
                         new_completion: changed,
                     },
-                    stdout,
-                    |_, _| unreachable!(),
-                );
+                )
             }
-            writeln!(
-                stdout,
-                "allocation: {id}\nstate: discarded\nnew_completion: {changed}"
-            )
-            .map_err(io_operation)
         }
     }
 }
 
-fn write_detached(
-    out: &mut dyn Write,
-    allocation: &DetachedAllocationView,
-    id: &str,
-) -> Result<(), CliError> {
-    let state = match allocation.state {
-        DetachedAllocationState::Preserved => "preserved",
-        DetachedAllocationState::DiscardPending => "discard_pending",
-        DetachedAllocationState::Discarded => "discarded",
-    };
-    writeln!(out, "allocation: {id}\nformer_instance: {}\nstate: {state}\norigin_revision: {}\norigin_storage: {}", allocation.instance, format_revision(&allocation.origin_revision), allocation.origin_storage.as_str()).map_err(io_operation)
-}
-
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct RetirementPlan {
     instance_id: String,
@@ -627,13 +475,13 @@ pub(super) struct RetirementPlan {
     work: &'static str,
     admission: &'static str,
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Obligation {
     attempt_run_id: String,
     phase: &'static str,
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct RetirementInspection {
     instance_id: String,
@@ -660,15 +508,16 @@ impl From<&crate::domain::RetirementCatalogEntry> for RetirementInspection {
         }
     }
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Confirmation {
     state_version: String,
     authority: &'static str,
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Detached {
+    unique_prefix_length: usize,
     allocation_id: String,
     former_instance_id: String,
     state: &'static str,
@@ -678,6 +527,7 @@ struct Detached {
 impl From<&DetachedAllocationView> for Detached {
     fn from(a: &DetachedAllocationView) -> Self {
         Self {
+            unique_prefix_length: a.unique_prefix_length,
             allocation_id: a.allocation.to_string(),
             former_instance_id: a.instance.to_string(),
             state: match a.state {
@@ -690,24 +540,29 @@ impl From<&DetachedAllocationView> for Detached {
         }
     }
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct DetachedList {
     items: Vec<Detached>,
 }
-#[derive(serde::Serialize)]
+impl DetachedList {
+    pub(super) fn empty() -> Self {
+        Self { items: Vec::new() }
+    }
+}
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Location {
     native_location: presentation::NativePath,
     original_relative_location: presentation::NativePath,
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct DetachedInspection {
     allocation: Detached,
     locations: Option<Vec<Location>>,
 }
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Discard {
     allocation_id: String,
@@ -718,7 +573,7 @@ pub(super) struct Discard {
 fn retry_or_fail(
     error: ApplicationError,
     run: RunId,
-    stderr: &mut dyn Write,
+    cancellation: &ActionCancellation,
 ) -> Result<(), CliError> {
     if matches!(
         error,
@@ -728,10 +583,9 @@ fn retry_or_fail(
                 | crate::persistence::PersistenceError::DatabaseLockPoisoned
         )
     ) {
-        let _ = writeln!(
-            stderr,
-            "Run {run}: saving execution state; retrying storage access"
-        );
+        cancellation
+            .delivery
+            .progress(run, crate::hook::delivery::CorePhase::RetryingStorage);
         thread::sleep(Duration::from_secs(1));
         Ok(())
     } else {

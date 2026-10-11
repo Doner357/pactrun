@@ -31,6 +31,12 @@ termination means that the supervised Hook execution has ended and required
 process-tree termination has been observed. A path on which no Hook process was
 started does not require a Hook-termination event.
 
+Direct-child exit, accepted Hook completion, and stdout/stderr EOF are not
+substitutes for observed process-group or Job termination. The owner retains
+execution resources and cancellation supervision while descendants remain.
+
+**Verification: PR-TEST-0684.**
+
 Execution termination is distinct from durable Run terminal publication: the
 transaction that publishes the Finished Run outcome and its associated
 authoritative records. “After terminal execution” MUST NOT be interpreted as

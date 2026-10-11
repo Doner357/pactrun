@@ -17,7 +17,7 @@ It MUST reject zero-edge, repeated-node, or cross-lineage requests. Without a
 selected path it MUST select the unique simple path and reject no-path requests.
 When multiple paths exist, it MUST display candidates and decline execution
 until the operator selects a path ID; it MUST NOT rank by readiness, length,
-labels, installation order, or content to choose on the operator's behalf.
+local names, installation order, or content to choose on the operator's behalf.
 The resolver MUST expand a selected ID to the full ordered exact Revision
 sequence before compilation. Each consecutive pair needs a declared edge.
 No missing Revision may be fetched and no intermediate or edge invented.

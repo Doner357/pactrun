@@ -37,7 +37,7 @@ fn instance_revision(scenario: &Scenario, instance: &str) -> String {
     String::from_utf8(shown.stdout)
         .unwrap()
         .lines()
-        .find_map(|line| line.strip_prefix("revision: "))
+        .find_map(|line| line.trim_start().strip_prefix("Revision: "))
         .expect("instance show must render active revision")
         .to_owned()
 }
@@ -77,7 +77,15 @@ fn action_inspection_and_plan_keep_parameterized_execution_read_only() {
     let planned = scenario.run_with_stdin(planned, b"stdin-value\n".to_vec());
     assert_success(&planned);
     let text = String::from_utf8_lossy(&planned.stdout);
-    assert!(text.contains("action: parameters"));
+    assert!(text.contains("parameters"));
+    assert!(!text.contains("secret-param-canary"));
+    let mut machine_args = vec![OsString::from("--format"), OsString::from("json")];
+    machine_args.extend(parameter_arguments(&file));
+    machine_args.push(OsString::from("--plan"));
+    let machine = scenario.run_with_stdin(machine_args, b"stdin-value\n".to_vec());
+    assert_success(&machine);
+    let machine: serde_json::Value = serde_json::from_slice(&machine.stdout).unwrap();
+    assert_eq!(machine["result"]["action_id"], "parameters");
     assert!(text.contains("Mode: preview"));
     let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
@@ -93,10 +101,10 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     let shown = scenario.run(["action", "show", "node", "parameters"]);
     assert_success(&shown);
     let shown = String::from_utf8_lossy(&shown.stdout);
-    assert!(shown.contains("action: parameters"));
-    assert!(shown.contains("parameter: ordinary\ttype: string"));
-    assert!(shown.contains("parameter: enabled\ttype: boolean"));
-    assert!(shown.contains("parameter: count\ttype: integer"));
+    assert!(shown.contains("Action: parameters"));
+    assert!(shown.contains("ordinary (string)"));
+    assert!(shown.contains("enabled (boolean)"));
+    assert!(shown.contains("count (integer)"));
     let machine = scenario.run(["--format", "json", "action", "show", "node", "parameters"]);
     assert_success(&machine);
     let machine: serde_json::Value = serde_json::from_slice(&machine.stdout).unwrap();
@@ -111,7 +119,7 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     let before = scenario.run(["run", "show", &orphan]);
     assert_success(&before);
     assert!(
-        String::from_utf8_lossy(&before.stdout).contains("phase: running"),
+        String::from_utf8_lossy(&before.stdout).contains("Phase: running"),
         "crash fixture did not leave an orphan: {}",
         String::from_utf8_lossy(&before.stdout)
     );
@@ -121,15 +129,16 @@ fn action_inspection_and_plan_render_identity_types_and_launcher_without_reconci
     let planned = scenario.run(["invoke", "node", "fast_observe", "--plan"]);
     assert_success(&planned);
     let planned = String::from_utf8_lossy(&planned.stdout);
-    assert!(planned.contains("action: fast_observe"));
-    assert!(planned.contains("instance_id: "));
-    assert!(planned.contains("revision: "));
-    assert!(planned.contains("launch: direct\truntime_path: "));
+    assert!(planned.contains("fast_observe"));
+    assert!(planned.contains("Instance ID: "));
+    assert!(planned.contains("Revision"));
+    assert!(planned.contains("Kind: direct"));
+    assert!(planned.contains("Runtime Path:"));
     assert!(planned.contains("Mode: preview"));
     let running = scenario.run(["run", "show", &orphan]);
     assert_success(&running);
     assert!(
-        String::from_utf8_lossy(&running.stdout).contains("phase: running"),
+        String::from_utf8_lossy(&running.stdout).contains("Phase: running"),
         "read-only inspection changed the orphan: {}",
         String::from_utf8_lossy(&running.stdout)
     );
@@ -303,10 +312,10 @@ fn successful_observe_and_mutate_each_create_one_durable_terminal_run() {
         let shown = scenario.run(["run", "show", &id]);
         assert_success(&shown);
         let shown = String::from_utf8_lossy(&shown.stdout);
-        assert!(shown.contains(&format!("action: {action}")));
-        assert!(shown.contains("phase: finished"));
-        assert!(shown.contains("outcome: succeeded"));
-        assert!(shown.contains("hook_completion_status: success"));
+        assert!(shown.contains(&format!("Operation: Action {action}")));
+        assert!(shown.contains("Phase: finished"));
+        assert!(shown.contains("Outcome: succeeded"));
+        assert!(shown.contains("Hook completion: success"));
     }
     assert_eq!(scenario.hook_launches(), 2);
 }
@@ -321,14 +330,14 @@ fn action_output_publication_is_subset_authorized_and_all_or_nothing() {
     let output_id = run_id(&output);
     let shown = scenario.run(["run", "show", &output_id]);
     assert_success(&shown);
-    assert!(String::from_utf8_lossy(&shown.stdout).contains("artifact: report\tbytes: 13"));
+    assert!(String::from_utf8_lossy(&shown.stdout).contains("Artifact: report (13 bytes)"));
 
     let unsubmitted = scenario.invoke("node", "output_unsubmitted");
     assert_success(&unsubmitted);
     let unsubmitted_id = run_id(&unsubmitted);
     let shown = scenario.run(["run", "show", &unsubmitted_id]);
     assert_success(&shown);
-    assert!(!String::from_utf8_lossy(&shown.stdout).contains("artifact: report"));
+    assert!(!String::from_utf8_lossy(&shown.stdout).contains("Artifact: report"));
 
     for action in ["output_missing", "invalid_output"] {
         let invoked = scenario.invoke("node", action);
@@ -336,7 +345,7 @@ fn action_output_publication_is_subset_authorized_and_all_or_nothing() {
         let id = run_id(&invoked);
         let shown = scenario.run(["run", "show", &id]);
         assert_success(&shown);
-        assert!(!String::from_utf8_lossy(&shown.stdout).contains("artifact: report"));
+        assert!(!String::from_utf8_lossy(&shown.stdout).contains("Artifact: report"));
     }
 }
 
@@ -349,30 +358,30 @@ fn multiple_output_authorities_publish_only_the_submitted_complete_eligible_grou
     assert_success(&empty);
     let empty = scenario.run(["run", "show", &run_id(&empty)]);
     assert_success(&empty);
-    assert!(!String::from_utf8_lossy(&empty.stdout).contains("artifact: "));
+    assert!(!String::from_utf8_lossy(&empty.stdout).contains("Artifact: "));
 
     let subset = scenario.invoke("node", "outputs_subset");
     assert_success(&subset);
     let subset = scenario.run(["run", "show", &run_id(&subset)]);
     assert_success(&subset);
     let subset = String::from_utf8_lossy(&subset.stdout);
-    assert!(subset.contains("artifact: report\tbytes: 13"));
-    assert!(!subset.contains("artifact: summary"));
+    assert!(subset.contains("Artifact: report (13 bytes)"));
+    assert!(!subset.contains("Artifact: summary"));
 
     let multiple = scenario.invoke("node", "outputs_multiple");
     assert_success(&multiple);
     let multiple = scenario.run(["run", "show", &run_id(&multiple)]);
     assert_success(&multiple);
     let multiple = String::from_utf8_lossy(&multiple.stdout);
-    assert!(multiple.contains("artifact: report\tbytes: 13"));
-    assert!(multiple.contains("artifact: summary\tbytes: 14"));
+    assert!(multiple.contains("Artifact: report (13 bytes)"));
+    assert!(multiple.contains("Artifact: summary (14 bytes)"));
 
     for action in ["outputs_group_missing", "invalid_output"] {
         let invoked = scenario.invoke("node", action);
         assert_exit(&invoked, 1);
         let shown = scenario.run(["run", "show", &run_id(&invoked)]);
         assert_success(&shown);
-        assert!(!String::from_utf8_lossy(&shown.stdout).contains("artifact: "));
+        assert!(!String::from_utf8_lossy(&shown.stdout).contains("Artifact: "));
     }
 
     let failure = scenario.invoke("node", "outputs_failure");
@@ -380,10 +389,10 @@ fn multiple_output_authorities_publish_only_the_submitted_complete_eligible_grou
     let failure = scenario.run(["run", "show", &run_id(&failure)]);
     assert_success(&failure);
     let failure = String::from_utf8_lossy(&failure.stdout);
-    assert!(failure.contains("outcome: failed"));
-    assert!(failure.contains("hook_completion_status: failure"));
-    assert!(failure.contains("artifact: report\tbytes: 13"));
-    assert!(failure.contains("artifact: summary\tbytes: 14"));
+    assert!(failure.contains("Outcome: failed"));
+    assert!(failure.contains("Hook completion: failure"));
+    assert!(failure.contains("Artifact: report (13 bytes)"));
+    assert!(failure.contains("Artifact: summary (14 bytes)"));
 }
 
 // Test-ID: PR-TEST-0152
@@ -411,7 +420,7 @@ fn hook_transport_failures_and_timeouts_finish_non_success_runs() {
         let id = run_id(&invoked);
         let shown = scenario.run(["run", "show", &id]);
         assert_success(&shown);
-        assert!(!String::from_utf8_lossy(&shown.stdout).contains("outcome: succeeded"));
+        assert!(!String::from_utf8_lossy(&shown.stdout).contains("Outcome: succeeded"));
     }
 }
 
@@ -444,15 +453,15 @@ fn representative_failure_classes_expose_finished_terminal_phase_without_protoco
         let shown = scenario.run(["run", "show", &run_id(&invoked)]);
         assert_success(&shown);
         let shown = String::from_utf8_lossy(&shown.stdout);
-        assert!(shown.contains("phase: finished"), "{action}: {shown}");
+        assert!(shown.contains("Phase: finished"), "{action}: {shown}");
         assert!(
-            shown.contains(&format!("outcome: {outcome}")),
+            shown.contains(&format!("Outcome: {outcome}")),
             "{action}: {shown}"
         );
         if action == "declared_failure" {
-            assert!(shown.contains("hook_completion_status: failure"), "{shown}");
+            assert!(shown.contains("Hook completion: failure"), "{shown}");
         } else if outcome == "failed" {
-            assert!(shown.contains("primary_failure: "), "{action}: {shown}");
+            assert!(shown.contains("Primary Failure"), "{action}: {shown}");
         }
     }
 }
@@ -476,8 +485,8 @@ fn accepted_late_completion_keeps_timeout_outcome_but_publishes_eligible_artifac
     let shown = scenario.run(["run", "show", &id]);
     assert_success(&shown);
     let text = String::from_utf8_lossy(&shown.stdout);
-    assert!(text.contains("outcome: timed_out"));
-    assert!(text.contains("artifact: report\tbytes: 13"));
+    assert!(text.contains("Outcome: timed_out"));
+    assert!(text.contains("Artifact: report (13 bytes)"));
 }
 
 // Test-ID: PR-TEST-0171
@@ -499,10 +508,10 @@ fn rejected_completion_control_after_timeout_publishes_no_artifact() {
     let shown = scenario.run(["run", "show", &run_id(&invoked)]);
     assert_success(&shown);
     let shown = String::from_utf8_lossy(&shown.stdout);
-    assert!(shown.contains("phase: finished"));
-    assert!(shown.contains("outcome: timed_out"));
-    assert!(!shown.contains("hook_completion_status:"));
-    assert!(!shown.contains("artifact: "));
+    assert!(shown.contains("Phase: finished"));
+    assert!(shown.contains("Outcome: timed_out"));
+    assert!(!shown.contains("Hook completion:"));
+    assert!(!shown.contains("Artifact: "));
 }
 
 // Test-ID: PR-TEST-0154
@@ -533,17 +542,20 @@ fn parameter_projection_is_redacted_but_hook_explanations_have_explicit_provenan
     // A deliberately misbehaving Hook echoes a protected value. Validation
     // is not universal taint tracking; ordinary parameter projections stay redacted.
     let live = String::from_utf8_lossy(&invoked.stderr);
-    assert!(live.contains(canary) && live.contains("hook event:"));
-    for line in live
-        .lines()
-        .filter(|line| !line.starts_with("hook message:"))
-    {
+    assert!(live.contains(canary) && live.contains("Hook "));
+    for line in live.lines().filter(|line| !line.starts_with("Hook ")) {
         assert!(!line.contains(canary));
     }
     let shown = scenario.run(["run", "show", &run_id(&invoked)]);
     assert_success(&shown);
     let text = String::from_utf8_lossy(&shown.stdout);
-    assert!(text.contains("hook_completion_text: withheld"));
+    let structured = scenario.run(["--format", "json", "run", "show", &run_id(&invoked)]);
+    assert_success(&structured);
+    let structured: serde_json::Value = serde_json::from_slice(&structured.stdout).unwrap();
+    assert_eq!(
+        structured["result"]["run"]["state"]["legacy_hook_completion_text"],
+        "withheld"
+    );
     assert!(text.contains(canary));
     assert!(text.contains("sensitive Hook free text"));
     let unretained = scenario.run([
@@ -560,7 +572,17 @@ fn parameter_projection_is_redacted_but_hook_explanations_have_explicit_provenan
     assert_success(&private);
     let private = String::from_utf8_lossy(&private.stdout);
     assert!(!private.contains(canary));
-    assert!(private.contains("retention disabled"));
+    assert!(private.contains("Hook diagnostic text: not retained"));
+    let stored = scenario.run(["--format", "json", "run", "show", &run_id(&unretained)]);
+    assert_success(&stored);
+    let stored: serde_json::Value = serde_json::from_slice(&stored.stdout).unwrap();
+    assert_eq!(stored["result"]["diagnostics"]["retain_text"], false);
+    assert!(
+        stored["result"]["diagnostics"]["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     let original = scenario.run(["run", "show", &run_id(&invoked)]);
     assert!(String::from_utf8_lossy(&original.stdout).contains(canary));
 }
@@ -626,7 +648,13 @@ fn secret_inputs_and_protected_sources_remain_redacted_from_all_action_and_run_p
         assert!(!listed.contains(canary), "run list leaked {canary}");
         assert!(!shown.contains(canary), "run show leaked {canary}");
     }
-    assert!(shown.contains("hook_completion_text: withheld"));
+    let structured = scenario.run(["--format", "json", "run", "show", &run_id(&invoked)]);
+    assert_success(&structured);
+    let structured: serde_json::Value = serde_json::from_slice(&structured.stdout).unwrap();
+    assert_eq!(
+        structured["result"]["run"]["state"]["legacy_hook_completion_text"],
+        "withheld"
+    );
     assert!(shown.contains("protected context verified"));
 }
 
@@ -671,8 +699,8 @@ fn recovery_risk_blocks_ordinary_invocation_until_explicit_resolution() {
     let opened_id = run_id(&opened);
     let shown = scenario.run(["run", "show", &opened_id]);
     assert_success(&shown);
-    assert!(String::from_utf8_lossy(&shown.stdout).contains("current_recovery_guard: "));
-    assert!(!String::from_utf8_lossy(&shown.stdout).contains("current_recovery_guard: none"));
+    assert!(String::from_utf8_lossy(&shown.stdout).contains("Current Recovery Guard"));
+    assert!(!String::from_utf8_lossy(&shown.stdout).contains("Current recovery guard: None"));
     let before = scenario.hook_launches();
     let refused = scenario.invoke("node", "fast_observe");
     assert_exit(&refused, 1);
@@ -703,8 +731,8 @@ fn recovery_risk_blocks_ordinary_invocation_until_explicit_resolution() {
     let invalid_success = scenario.run(["run", "show", &invalid_success_id]);
     assert_success(&invalid_success);
     let invalid_success = String::from_utf8_lossy(&invalid_success.stdout);
-    assert!(!invalid_success.contains("outcome: succeeded"));
-    assert!(invalid_success.contains("terminal_risk: open"));
+    assert!(!invalid_success.contains("Outcome: succeeded"));
+    assert!(invalid_success.contains("Recovery risk: open"));
     let runs = scenario.run(["run", "list", "node", "--no-trunc"]);
     assert_success(&runs);
     assert!(run_projections(&runs).iter().any(|run| run.id == opened_id));
@@ -789,8 +817,11 @@ fn mutation_conflict_is_exact_instance_scoped_and_cannot_be_bypassed_by_recovery
         let shown = scenario.run(["run", "show", &failed.id]);
         assert_success(&shown);
         let shown = String::from_utf8_lossy(&shown.stdout);
-        assert!(shown.contains("outcome: failed"));
-        assert!(shown.contains("primary_failure: admission:mutation_conflict\tstep: admission"));
+        assert!(shown.contains("Outcome: failed"));
+        assert!(shown.contains("Primary Failure"));
+        assert!(shown.contains("Owner: admission"));
+        assert!(shown.contains("Code: mutation_conflict"));
+        assert!(shown.contains("Step: admission"));
         assert_eq!(scenario.hook_launches(), launches);
     }
     let observe = scenario.invoke("node", "fast_observe");
@@ -825,7 +856,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
     assert_success(&overridden);
     let guarded = scenario.run(["run", "show", &run_id(&opened)]);
     assert_success(&guarded);
-    assert!(!String::from_utf8_lossy(&guarded.stdout).contains("current_recovery_guard: none"));
+    assert!(!String::from_utf8_lossy(&guarded.stdout).contains("Current recovery guard: None"));
     set_config(&scenario, b"state-version-after-guard");
 
     let before_stale_resolution = scenario.run(["run", "list", "node", "--no-trunc"]);
@@ -867,7 +898,7 @@ fn recovery_override_leaves_guard_intact_and_manual_resolution_requires_a_fresh_
     assert!(run_count(&after_resolutions) > run_count(&initial_runs));
     let cleared = scenario.run(["run", "show", &run_id(&opened)]);
     assert_success(&cleared);
-    assert!(String::from_utf8_lossy(&cleared.stdout).contains("current_recovery_guard: none"));
+    assert!(String::from_utf8_lossy(&cleared.stdout).contains("Current recovery guard: None"));
 }
 
 fn marker_run_id(scenario: &Scenario) -> String {
@@ -890,7 +921,7 @@ fn reconciliation_only_terminalizes_confirmed_orphans_and_preserves_risk_consequ
     assert_success(&reconcile);
     let shown = live.run(["run", "show", &live_run]);
     assert_success(&shown);
-    assert!(String::from_utf8_lossy(&shown.stdout).contains("phase: running"));
+    assert!(String::from_utf8_lossy(&shown.stdout).contains("Phase: running"));
     live.release_hook();
     assert_success(&live_owner.wait());
 
@@ -901,13 +932,13 @@ fn reconciliation_only_terminalizes_confirmed_orphans_and_preserves_risk_consequ
     let _ = clear_owner.terminate();
     let before = clear.run(["run", "show", &clear_run]);
     assert_success(&before);
-    assert!(String::from_utf8_lossy(&before.stdout).contains("phase: running"));
+    assert!(String::from_utf8_lossy(&before.stdout).contains("Phase: running"));
     assert_success(&clear.run(["run", "reconcile"]));
     let after = clear.run(["run", "show", &clear_run]);
     assert_success(&after);
     let after = String::from_utf8_lossy(&after.stdout);
-    assert!(after.contains("outcome: interrupted"));
-    assert!(after.contains("current_recovery_guard: none"));
+    assert!(after.contains("Outcome: interrupted"));
+    assert!(after.contains("Current recovery guard: None"));
 
     let risky = ready_matrix_scenario(0x15b);
     let risky_owner = risky.spawn(["invoke", "node", "hold_risk"]);
@@ -916,14 +947,14 @@ fn reconciliation_only_terminalizes_confirmed_orphans_and_preserves_risk_consequ
     let _ = risky_owner.terminate();
     let before = risky.run(["run", "show", &risky_run]);
     assert_success(&before);
-    assert!(String::from_utf8_lossy(&before.stdout).contains("phase: running"));
+    assert!(String::from_utf8_lossy(&before.stdout).contains("Phase: running"));
     assert_success(&risky.run(["run", "reconcile"]));
     let after = risky.run(["run", "show", &risky_run]);
     assert_success(&after);
     let after = String::from_utf8_lossy(&after.stdout);
-    assert!(after.contains("outcome: interrupted"));
-    assert!(after.contains("terminal_risk: open"));
-    assert!(!after.contains("current_recovery_guard: none"));
+    assert!(after.contains("Outcome: interrupted"));
+    assert!(after.contains("Recovery risk: open"));
+    assert!(!after.contains("Current recovery guard: None"));
 }
 
 // Test-ID: PR-TEST-0174
@@ -940,8 +971,8 @@ fn repeated_reconcile_is_idempotent_and_does_not_launch_hooks() {
     let terminal = scenario.run(["run", "show", &run]);
     assert_success(&terminal);
     let terminal = String::from_utf8(terminal.stdout).unwrap();
-    assert!(terminal.contains("phase: finished"));
-    assert!(terminal.contains("outcome: interrupted"));
+    assert!(terminal.contains("Phase: finished"));
+    assert!(terminal.contains("Outcome: interrupted"));
     assert_success(&scenario.run(["run", "reconcile"]));
     let repeated = scenario.run(["run", "show", &run]);
     assert_success(&repeated);

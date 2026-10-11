@@ -44,9 +44,15 @@ fn artifact_cli_process_rejects_implicit_disclosure_before_storage_open() {
     assert_eq!(invalid.status.code(), Some(2));
     assert!(!root.exists());
     assert!(!destination.exists());
-    let help = call(&["--help"]);
+    let help = call(&["run", "artifact", "export", "--help"]);
     assert!(help.status.success());
     let help = String::from_utf8(help.stdout).unwrap();
     assert!(help.contains("pactrun run artifact export"));
-    assert!(help.contains("pactrun run artifact delete"));
+    let help = call(&["run", "artifact", "delete", "--help"]);
+    assert!(help.status.success());
+    assert!(
+        String::from_utf8(help.stdout)
+            .unwrap()
+            .contains("pactrun run artifact delete")
+    );
 }

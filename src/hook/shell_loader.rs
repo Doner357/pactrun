@@ -86,7 +86,7 @@ fn write_limited_frame(stream: &mut impl Write, value: &Value, limit: usize) -> 
     stream.flush()
 }
 
-fn connect(endpoint: &str) -> io::Result<ProtocolStream> {
+pub(super) fn connect(endpoint: &str) -> io::Result<ProtocolStream> {
     #[cfg(unix)]
     {
         std::os::unix::net::UnixStream::connect(endpoint)
@@ -237,6 +237,13 @@ impl State {
         if self.target_received || self.pending.is_some() {
             return reply.send(json!({"ok":false})).map_err(|_| failure());
         }
+        let rejection = match &request {
+            Request::Parameter { .. } => crate::domain::HelperReason::ParameterUnavailable,
+            Request::Diagnostic { .. }
+            | Request::ProtocolError { .. }
+            | Request::Completion { .. } => crate::domain::HelperReason::InvalidMessage,
+            _ => crate::domain::HelperReason::InvalidRequest,
+        };
         let result = match request {
             Request::Session => Some(self.session.clone()),
             Request::Workspace => self.session["workspace"].get("root_path").cloned(),
@@ -362,7 +369,7 @@ impl State {
         reply
             .send(match result {
                 Some(value) => json!({"ok":true,"value":value}),
-                None => json!({"ok":false}),
+                None => json!({"ok":false,"reason":rejection}),
             })
             .map_err(|_| failure())
     }

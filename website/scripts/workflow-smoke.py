@@ -19,8 +19,6 @@ binary = Path(args.binary).resolve(strict=True)
 workspace = Path(args.workspace).resolve()
 workspace.mkdir(parents=True, exist_ok=True)
 work = Path(tempfile.mkdtemp(prefix='workflow-', dir=workspace))
-for child in ('database', 'runtime-content', 'staging'):
-    (work / 'store' / child).mkdir(parents=True)
 env = dict(os.environ, PACTRUN_STORAGE_ROOT=str(work / 'store'))
 steps = []
 operator_steps = []
@@ -58,10 +56,7 @@ def prepare(name, manifest, package, stem=None, script=None, install=True):
         (directory / (stem + ('.ps1' if os.name == 'nt' else '.sh'))).write_text(script, encoding='utf-8')
     if not install:
         return directory
-    installed = run('pack', 'install', str(directory)).stdout
-    match = re.search(r'exact:[0-9a-f]{32}/sha256:[0-9a-f]{64}', installed)
-    assert match, installed
-    return match.group()
+    return reference(run('--format', 'json', 'pack', 'install', str(directory)).stdout)
 
 
 def section(file, heading):
@@ -74,9 +69,8 @@ def section_block(file, heading, language):
     return re.search(r'^\x60{3}' + language + r'\n(.*?)^\x60{3}', section(file, heading), re.M | re.S).group(1)
 
 def reference(output):
-    value = re.search(r'^exact:[0-9a-f]{32}/sha256:[0-9a-f]{64}$', output, re.M)
-    assert value, output
-    return value.group()
+    revision = json.loads(output)['result']['revision']
+    return revision['package_id'] + ':' + revision['content_digest'].removeprefix('sha256:')
 
 def documented(file, heading, values, reference_key=None, expect_refusal=False):
     results = []
@@ -89,12 +83,15 @@ def documented(file, heading, values, reference_key=None, expect_refusal=False):
             assert not re.search(r'<[^>]+>', line), line
             arguments = shlex.split(line)[1:]
             refused = expect_refusal and arguments[:2] in (['snapshot', 'restore'], ['instance', 'migrate'])
-            result = run(*arguments, expected=1 if refused else 0)
+            # Select JSON for operation receipts consumed by later tutorial steps.
+            structured = arguments[:2] in (['pack', 'install'], ['snapshot', 'import']) or (
+                arguments[:2] == ['snapshot', 'capture'] and '--plan' not in arguments)
+            result = run(*(['--format', 'json'] if structured else []), *arguments, expected=1 if refused else 0)
             steps[-1]['tutorial_section'] = heading
             if arguments[:2] == ['pack', 'install'] and reference_key:
                 values[reference_key] = reference(result.stdout)
             if arguments[:2] == ['snapshot', 'capture'] and '--plan' not in arguments:
-                values['snapshot-id'] = re.search(r'^snapshot: ([0-9a-f]+)', result.stdout, re.M).group(1)
+                values['snapshot-id'] = json.loads(result.stdout)['result']['capture_result']
             results.append((arguments, result))
     assert results, heading
     return results
@@ -143,7 +140,7 @@ assert snapshot_id not in before[-1][1].stdout
 guard = operator_example(files[0], 'Prepare a fresh destination store', refusal=True)
 assert 'already exists' in guard.stdout + guard.stderr
 fresh = documented(files[0], 'Import and restore in the destination', values)
-assert 'already_present' not in fresh[0][1].stdout
+assert json.loads(fresh[0][1].stdout)['result']['outcome'] == 'published'
 assert snapshot_id in fresh[1][1].stdout
 assert 'Verified snapshot bytes' in fresh[-1][1].stdout
 fresh_import_output = fresh[0][1].stdout
@@ -170,7 +167,7 @@ config = work / 'config.txt'
 config.write_bytes(b'documented-config\n')
 run('instance', 'create', 'migration-demo', '--revision', source_ref, '--input-file', 'config=' + str(config))
 target_heading = 'Windows target variant' if os.name == 'nt' else 'Declare the target'
-target_yaml = section_block(files[1], target_heading, 'yaml').replace('SOURCE_DIGEST', source_ref.split('/')[1])
+target_yaml = section_block(files[1], target_heading, 'yaml').replace('SOURCE_DIGEST', 'sha256:' + source_ref.split(':', 1)[1])
 target_script = section_block(files[1], target_heading, lang)
 target_ref = prepare('migration-target', target_yaml, lineage, 'migrate', target_script)
 paths = run('--format', 'json', 'instance', 'migration-paths', 'migration-demo', '--to', target_ref)
@@ -193,8 +190,8 @@ run('instance', 'migrate', 'migration-demo', '--to', target_ref, '--path', path_
 run('instance', 'migrate', 'migration-demo', '--to', target_ref, '--path', path_id, '--plan')
 migrated = run('instance', 'migrate', 'migration-demo', '--to', target_ref, '--path', path_id)
 assert 'Migration hook completed' in migrated.stdout
-shown = run('instance', 'show', 'migration-demo')
-assert target_ref in shown.stdout
+shown = json.loads(run('--format', 'json', 'instance', 'show', 'migration-demo').stdout)['result']['active_revision']
+assert shown['package_id'] + ':' + shown['content_digest'].removeprefix('sha256:') == target_ref
 run('input', 'export', 'migration-demo', 'settings', '--output', str(work / 'settings-copy.txt'))
 assert (work / 'settings-copy.txt').read_bytes() == config.read_bytes()
 # Run the exact comparison snippet, then prove it detects a mismatch and a read error.
@@ -216,7 +213,7 @@ new_id = package_id()
 assert new_id != lineage
 unrelated_yaml = re.sub(r'package_id: "[0-9a-f]+"', 'package_id: "' + new_id + '"', section_block(files[1], 'Prepare an unrelated Package', 'yaml'))
 (unrelated / 'pactrun.yaml').write_text(unrelated_yaml, encoding='utf-8')
-unrelated_ref = reference(run('pack', 'install', './migration-unrelated').stdout)
+unrelated_ref = reference(run('--format', 'json', 'pack', 'install', './migration-unrelated').stdout)
 refusal = documented(files[1], 'Check the cross-Package refusal', {'unrelated-reference': unrelated_ref}, expect_refusal=True)[0][1]
 assert 'one Package lineage' in refusal.stderr
 documented(files[1], 'Retire the test Instance', {})
@@ -228,10 +225,10 @@ invoke_ref = prepare('invoke-demo', manifest, package_id(), 'inspect', blocks(fi
 run('instance', 'create', 'demo', '--revision', invoke_ref)
 message = work / 'message.txt'
 message.write_text('protected-example-marker', encoding='utf-8')
-plan = run('invoke', 'demo', 'inspect', '--param', 'message=hello', '--plan')
-assert 'startup_timeout_ms: unlimited' in plan.stdout
-assert 'action_timeout_ms: unlimited' in plan.stdout
-assert 'termination_grace_ms: 5000' in plan.stdout
+plan = json.loads(run('--format', 'json', 'invoke', 'demo', 'inspect', '--param', 'message=hello', '--plan').stdout)['result']
+assert plan['startup_timeout_ms'] is None
+assert plan['execution_timeout_ms'] is None
+assert plan['termination_grace_ms'] == '5000'
 protected = run('invoke', 'demo', 'inspect', '--param-file', 'message=' + str(message), '--plan')
 assert 'protected-example-marker' not in protected.stdout + protected.stderr
 run('invoke', 'demo', 'inspect', '--param-file', 'message=' + str(message), '--action-timeout-ms', '10000')
@@ -255,14 +252,15 @@ for omit in (False, True):
     options = ['--no-retain-hook-text'] if omit else []
     result = run('invoke', 'diagnostic-demo', 'inspect', '--action-timeout-ms', '10000', *options)
     assert 'F_CORRECTION_DIAGNOSTIC' in result.stderr
-    run_id = re.search(r'^run: ([0-9a-f]+)', result.stderr, re.M).group(1)
+    run_id = re.search(r'^Run: ([0-9a-f]+)', result.stderr, re.M).group(1)
     history = run('run', 'show', run_id)
     assert ('F_CORRECTION_DIAGNOSTIC' in history.stdout) == (not omit)
 run('revision', 'export', diagnostic_ref, '--output', str(work / 'canonical-check'))
 with zipfile.ZipFile(work / 'canonical-check.pack') as archive:
     canonical = json.loads(archive.read('revision-core.json'))
     expected = re.search(r'protocol_version: "([^"]+)"', diagnostic_manifest).group(1)
-    assert canonical['format_version'] == expected
+    revision_format = (root / 'docs/spec/packages/revision-format.md').read_text(encoding='utf-8')
+    assert canonical['format_version'] == re.search(r'format_version: "([^"]+)"', revision_format).group(1)
     assert canonical['actions'][0]['hook']['protocol_version'] == expected
 bad = work / 'numeric-version'
 bad.mkdir()

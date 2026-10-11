@@ -34,6 +34,43 @@ test('product requirements have unique definitions only under Spec', () => {
   assert.ok(assertSpecOnlyDefinitions(docs).size > 0);
 });
 
+test('requirement links in compatibility indexes use current owner titles', () => {
+  const titles = new Map(docs.filter(([name]) => name.startsWith('spec/')).flatMap(([, body]) =>
+    [...body.matchAll(/^### (PR-REQ-\d+) - (.+)$/gm)].map(([, id, title]) =>
+      [id, title.replace(/\s*\{#[^}]+\}\s*$/, '')])));
+  for (const [name, body] of docs.filter(([name]) => name.startsWith('pactrun-developers/'))) {
+    if (/^## Section links/m.test(body)) assert.match(body, /^## Section links \{#previous-section-links\}$/m, name);
+    if (/^## Requirement links/m.test(body)) assert.match(body, /^## Requirement links \{#previous-requirement-links\}$/m, name);
+    for (const [, label, targetId] of body.matchAll(/\[(PR-REQ-\d+ - [^\]]+)\]\([^)]*#pr-req-(\d+)[^)]*\)/g)) {
+      const id = 'PR-REQ-' + targetId;
+      assert.equal(label, id + ' - ' + titles.get(id), name);
+    }
+  }
+});
+
+test('source documentation keeps Hook and source format domains independent', () => {
+  const get = name => docs.find(([file]) => file === name)[1];
+  const hook = get('spec/interfaces/hook-protocol.md').match(/supported value is `([^`]+)`/)[1];
+  const source = get('spec/packages/source-format.md');
+  const selected = source.match(/Hook `protocol_version`[^]*?current supported value is `"([^"]+)"`/)[1];
+  assert.equal(selected, hook);
+  assert.doesNotMatch(source, /A reference-label semantic key|metadata plan contains reference-label/);
+  assert.doesNotMatch(get('spec/packages/authoring.md'), /ReferenceLabelMetadata|Reference-label projection/);
+  assert.doesNotMatch(get('spec/packages/distribution.md'), /label-source|portable\s+labels|Label\/provenance/);
+});
+
+test('current reference and Store-opening prose does not retain replaced rules', () => {
+  for (const [name, body] of docs) {
+    if (name.startsWith('pactrun-developers/')) continue;
+    const prose = body.replace(/```[^]*?```/g, '').replace(/\{#[^}]+\}/g, '');
+    assert.doesNotMatch(prose, /references retain their exact\/label\/alias grammar/i, name);
+    assert.doesNotMatch(prose, /Read-only opening cannot initialize or upgrade storage/i, name);
+    if (name.startsWith('pactrun-users/concepts/')) {
+      assert.doesNotMatch(prose, /Labels and aliases are useful\s+lookup names/i, name);
+    }
+  }
+});
+
 test('outside and duplicate definitions fail; reference links are allowed', () => {
   assert.throws(() => assertSpecOnlyDefinitions([['development/a.md', '### PR-REQ-9999 - Example']]));
   assert.throws(() => assertSpecOnlyDefinitions([['spec/a.md', '### PR-REQ-9999 - Example'], ['spec/b.md', '### PR-REQ-9999 - Duplicate']]));
@@ -171,8 +208,11 @@ test('service contracts preserve source consumption, authority and persistence b
   assert.match(get('instances/resource-commands.md'), /Registered|registered/);
   const current = await readFile(path.join(root, 'src/persistence/sqlite_revision_store.rs'), 'utf8');
   assert.doesNotMatch(current, /SCHEMA_LADDER|SCHEMA_V9_VERSION|legacy_v4/);
-  assert.match(current, /pub\(crate\) const SCHEMA_VERSION: i64 = 0;/);
+  const marker = current.match(/pub\(crate\) const SCHEMA_VERSION: i64 = (\d+);/)?.[1];
+  assert.ok(marker, 'The writer must declare its private schema marker');
   const persistence = get('persistence/persistence-baseline.md').replace(/\s+/g, ' ');
+  assert.ok(persistence.includes('private bootstrap marker ' + marker), 'Spec and writer markers must agree');
+  assert.ok(persistence.includes('CHECK(admitted_schema_version = ' + marker + ')'), 'Writer admission must use the same marker');
   assert.match(persistence, /Unsupported stores are not upgraded/);
   assert.match(persistence, /reopening MUST preserve exact Snapshot identities/);
   assert.match(persistence, /schemas are unsupported and no storage upgrade command remains/);

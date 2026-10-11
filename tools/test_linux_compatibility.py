@@ -19,8 +19,9 @@ class LinuxCompatibility(unittest.TestCase):
     def test_shared_smoke_uses_supplied_binary_without_package_manager_or_rebuild(self):
         parent = ROOT / 'target/linux-ci-unit'
         parent.mkdir(parents=True, exist_ok=True)
-        part = dict(product_version='1.0.0-alpha.3', source_commit='a'*40,
+        part = dict(product_version='1.0.0-alpha.5', source_commit='a'*40,
                     source_manifest_sha256='b'*64, supported_formats={}, default_formats={})
+        package_id, digest = '0'*28 + '1236', 'c'*64
         with tempfile.TemporaryDirectory(dir=parent) as directory:
             root = Path(directory)
             binary = root/'candidate'
@@ -31,13 +32,21 @@ class LinuxCompatibility(unittest.TestCase):
                 if command == ['--format','json','--version']: out = json.dumps({'result':part})
                 elif command == ['--format','json','--help']: out = json.dumps({'result':{'usage':'help\n'}})
                 elif command == ['--help']: out = 'help\n'
-                elif command[:2] == ['pack','install']: out = 'exact:fixture\n'
+                elif command[:4] == ['--format','json','pack','install']:
+                    out = json.dumps({'result': {'revision': {
+                        'package_id': package_id, 'content_digest': 'sha256:' + digest}}})
+                elif command[:2] == ['pack','install']:
+                    self.fail('Revision identity must come from JSON, not human installation text')
+                elif command[:2] == ['instance','create']:
+                    self.assertEqual(command, ['instance','create','debian-ci','--revision',
+                                               package_id + ':' + digest])
                 elif command[:1] == ['invoke']: out = 'debian12-hook-ok\n'
                 elif command[:4] == ['--format','json','instance','delete']: out = json.dumps({'result':{'run':{'state':{'outcome':'succeeded'}}}})
                 return subprocess.CompletedProcess(args, kwargs.get('code',0), out.encode(), b'')
             with patch.object(linux,'run',side_effect=respond):
                 result = linux.smoke(binary,root/'work',part)
             self.assertTrue(any(x['exit_code']==1 for x in result))
+            self.assertTrue(any(x['command'][:4] == ['--format','json','pack','install'] for x in result))
 
     @unittest.skipIf(os.name == 'nt', 'POSIX Homebrew entrypoint semantics')
     def test_homebrew_entrypoint_is_not_dereferenced_into_repository_prefix(self):

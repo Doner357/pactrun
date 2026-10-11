@@ -393,6 +393,33 @@ mod implementation {
             })
         }
 
+        /// Read available bytes on an overlapped pipe with a single reader.
+        pub fn try_read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            let mut available = 0_u32;
+            // The handle is owned and overlapped; output points to a live DWORD.
+            if unsafe {
+                windows_sys::Win32::System::Pipes::PeekNamedPipe(
+                    self.handle.as_raw_handle().cast(),
+                    ptr::null_mut(),
+                    0,
+                    ptr::null_mut(),
+                    &mut available,
+                    ptr::null_mut(),
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            if available == 0 {
+                return Err(io::ErrorKind::WouldBlock.into());
+            }
+            let count = buffer.len().min(available as usize);
+            io::Read::read(self, &mut buffer[..count])
+        }
+
         fn overlapped_io(
             &self,
             operation: impl FnOnce(HANDLE, *mut OVERLAPPED) -> BOOL,

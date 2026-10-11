@@ -4,13 +4,9 @@ title: Actions, Plans, and Runs (moved)
 
 # Actions, Plans, and Runs has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Actions, Plans, and Runs](../../spec/operations/actions-plans-runs.md).
 
-Read [the current document](../../spec/operations/actions-plans-runs.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="actions" />
 [Actions](../../spec/operations/actions-plans-runs.md#actions)
@@ -31,7 +27,7 @@ anchors only and adds no product rules.
 [PR-REQ-0097 - User-visible Run detail](../../spec/operations/actions-plans-runs.md#pr-req-0097---user-visible-run-detail)
 
 <a id="pr-req-0285---structural-only-human-run-inspection" />
-[PR-REQ-0285 - Structural-only human Run inspection](../../spec/operations/actions-plans-runs.md#pr-req-0285---structural-only-human-run-inspection)
+[PR-REQ-0285 - Typed Run inspection and attributed Hook explanations](../../spec/operations/actions-plans-runs.md#pr-req-0285---structural-only-human-run-inspection)
 
 <a id="pr-req-0288---invocation-parameter-sources-and-policy-values" />
 [PR-REQ-0288 - Invocation parameter sources and policy values](../../spec/operations/actions-plans-runs.md#pr-req-0288---invocation-parameter-sources-and-policy-values)

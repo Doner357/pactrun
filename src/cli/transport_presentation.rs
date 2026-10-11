@@ -2,7 +2,7 @@
 use super::*;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct PackExport {
     pub(super) revision: presentation::Revision,
@@ -10,21 +10,24 @@ pub(super) struct PackExport {
     pub(super) portable_metadata_included: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct PackInstall {
     revision: presentation::Revision,
+    reference: String,
+    local: catalog_presentation::LocalRevision,
+    newly_installed: bool,
     migrations: Vec<Relation>,
     kept_metadata: Vec<KeptMetadata>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Relation {
     source_digest: String,
     state: &'static str,
     explanation: Option<String>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct KeptMetadata {
     target: catalog_presentation::Target,
@@ -34,6 +37,9 @@ impl From<&crate::application::InstallPackResult> for PackInstall {
     fn from(value: &crate::application::InstallPackResult) -> Self {
         Self {
             revision: (&value.revision).into(),
+            reference: value.reference.clone(),
+            local: (&value.local).into(),
+            newly_installed: value.newly_installed,
             migrations: value
                 .migrations
                 .iter()
@@ -69,9 +75,10 @@ impl From<&crate::application::InstallPackResult> for PackInstall {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Snapshot {
+    pub(super) unique_prefix_length: usize,
     snapshot_id: String,
     integrity_format: String,
     producer_revision: presentation::Revision,
@@ -83,7 +90,7 @@ pub(super) struct Snapshot {
     restore_capacity: &'static str,
     target_eligibility: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Timestamp {
     unix_seconds: String,
@@ -93,6 +100,7 @@ impl From<&crate::persistence::SnapshotInspection> for Snapshot {
     fn from(v: &crate::persistence::SnapshotInspection) -> Self {
         Self {
             snapshot_id: v.id.to_string(),
+            unique_prefix_length: 32,
             integrity_format: v.version.as_str().into(),
             producer_revision: (&v.producer).into(),
             origin_instance_id: v.origin.to_string(),
@@ -112,12 +120,12 @@ impl From<&crate::persistence::SnapshotInspection> for Snapshot {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Snapshots {
     pub(super) items: Vec<Snapshot>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotVerified {
     pub(super) snapshot_id: String,
@@ -126,21 +134,21 @@ pub(super) struct SnapshotVerified {
     pub(super) content_verification: &'static str,
     pub(super) relational_verification: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotImported {
     pub(super) snapshot_id: String,
     pub(super) outcome: &'static str,
     pub(super) relational_verification: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotExported {
     pub(super) snapshot_id: String,
     pub(super) outcome: &'static str,
     pub(super) output: presentation::NativePath,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct CreatedRestore {
     pub(super) created_instance: presentation::Instance,
@@ -148,7 +156,7 @@ pub(super) struct CreatedRestore {
     pub(super) restore: Option<execution_presentation::Inspection>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotPlan {
     operation: execution_presentation::Operation,
@@ -168,7 +176,7 @@ pub(super) struct SnapshotPlan {
     preview: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SnapshotPlanEligibility {

@@ -122,6 +122,7 @@ mod tests {
             "launch_failed"
         );
         let mut view = DiagnosticInspection {
+            core: None,
             retain_text: false,
             started: true,
             closed: false,
@@ -153,7 +154,7 @@ mod tests {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Failure {
     reference: presentation::ErrorReference,
@@ -162,6 +163,15 @@ pub(super) struct Failure {
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<&'static str>,
     step: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cause: Option<FailureCause>,
+}
+
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum FailureCause {
+    MissingRequiredInputs { input_ids: Vec<String> },
 }
 
 impl Failure {
@@ -184,18 +194,19 @@ impl Failure {
                 }
             }),
             step: step.map(format_failed_step),
+            cause: None,
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Artifact {
     output_id: String,
     byte_length: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "phase", rename_all = "snake_case")]
 pub(super) enum State {
@@ -228,10 +239,17 @@ impl From<&RunState> for State {
                 recovery_risk: format_risk(v.terminal_risk),
                 outcome: format_outcome(v.outcome),
                 finished_at_unix_ms: v.finished_at_unix_ms.to_string(),
-                primary_failure: v
-                    .primary_failure
-                    .as_ref()
-                    .map(|f| Box::new(Failure::new(&f.failure, Some(f.step)))),
+                primary_failure: v.primary_failure.as_ref().map(|f| {
+                    let mut failure = Failure::new(&f.failure, Some(f.step));
+                    failure.cause = f.cause.as_ref().map(|cause| match cause {
+                        crate::domain::RunFailureCause::MissingRequiredInputs(ids) => {
+                            FailureCause::MissingRequiredInputs {
+                                input_ids: ids.iter().map(|id| id.as_str().to_owned()).collect(),
+                            }
+                        }
+                    });
+                    Box::new(failure)
+                }),
                 secondary_failures: v
                     .secondary_failures
                     .iter()
@@ -255,7 +273,7 @@ impl From<&RunState> for State {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum Operation {
@@ -300,9 +318,11 @@ impl From<&ManagedRunIdentity> for Operation {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Run {
+    pub(super) run_prefix_length: usize,
+    pub(super) instance_prefix_length: usize,
     run_id: String,
     instance_id: String,
     revision: presentation::Revision,
@@ -316,6 +336,8 @@ impl From<&crate::domain::ManagedRunView> for Run {
     fn from(run: &crate::domain::ManagedRunView) -> Self {
         Self {
             run_id: run.id.to_string(),
+            run_prefix_length: 32,
+            instance_prefix_length: 32,
             instance_id: run.instance.to_string(),
             revision: run.operation.revision().into(),
             accepted_state_version: run.accepted_state_version.to_string(),
@@ -326,7 +348,7 @@ impl From<&crate::domain::ManagedRunView> for Run {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct HookEvent {
     source: &'static str,
@@ -342,9 +364,10 @@ struct HookEvent {
     truncated_prefix_bytes: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Diagnostics {
+    pactrun: Option<CoreDiagnostics>,
     retain_text: bool,
     started: bool,
     collection_closed: bool,
@@ -356,6 +379,24 @@ struct Diagnostics {
 impl From<&crate::domain::DiagnosticInspection> for Diagnostics {
     fn from(view: &crate::domain::DiagnosticInspection) -> Self {
         Self {
+            pactrun: view.core.as_ref().map(|v| CoreDiagnostics {
+                started: v.started,
+                observed: v.observed.to_string(),
+                collection_closed: v.collection_closed,
+                persistence_failed: v.persistence_failed,
+                events: v
+                    .events
+                    .iter()
+                    .map(|e| CoreEvent {
+                        source: "pactrun",
+                        sequence: e.sequence.to_string(),
+                        received_at_unix_ms: e.received_at_unix_ms.map(|v| v.to_string()),
+                        stage: e.stage.clone(),
+                        failure: e.failure,
+                        message: e.failure.to_string(),
+                    })
+                    .collect(),
+            }),
             retain_text: view.retain_text,
             started: view.started,
             collection_closed: view.closed,
@@ -393,7 +434,26 @@ impl From<&crate::domain::DiagnosticInspection> for Diagnostics {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct CoreEvent {
+    source: &'static str,
+    sequence: String,
+    received_at_unix_ms: Option<String>,
+    stage: String,
+    failure: crate::domain::HelperFailure,
+    message: String,
+}
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct CoreDiagnostics {
+    started: bool,
+    observed: String,
+    collection_closed: bool,
+    persistence_failed: bool,
+    events: Vec<CoreEvent>,
+}
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct MigrationProgress {
     committed_edges: usize,
@@ -401,7 +461,7 @@ struct MigrationProgress {
     boundary_state_version: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Inspection {
     run: Run,
@@ -409,6 +469,15 @@ pub(super) struct Inspection {
     capture_result: Option<String>,
     migration_progress: Option<MigrationProgress>,
     diagnostics: Option<Diagnostics>,
+}
+
+/// Adds the historical inspection without removing the established partial Run ID.
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct RefusedExecution {
+    pub(super) run_id: String,
+    #[serde(flatten)]
+    pub(super) inspection: Inspection,
 }
 
 impl From<&crate::domain::ManagedRunInspectionData> for Inspection {
@@ -427,13 +496,13 @@ impl From<&crate::domain::ManagedRunInspectionData> for Inspection {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Reconciled {
     pub(super) run_ids: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Action {
     action_id: String,
@@ -449,7 +518,7 @@ pub(super) struct Action {
     hook: Option<definitions::Hook>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum Launch {
@@ -468,7 +537,7 @@ pub(super) enum Launch {
     },
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Parameter {
     parameter_id: String,
@@ -547,7 +616,7 @@ impl From<&ActionV1> for Action {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Actions {
     pub(super) items: Vec<Action>,
@@ -612,14 +681,14 @@ impl From<&HookLaunchV1> for Launch {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct PlanParameter {
     pub(super) parameter_id: String,
     pub(super) effective_redaction: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum CompiledLaunch {
@@ -672,7 +741,7 @@ impl From<&CompiledHookLaunch> for CompiledLaunch {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Plan {
     action_id: String,
@@ -681,6 +750,7 @@ pub(super) struct Plan {
     expected_state_version: String,
     access: &'static str,
     required_inputs_satisfied: bool,
+    missing_input_ids: Vec<String>,
     terminal: &'static str,
     protocol_version: String,
     parameters: Vec<PlanParameter>,
@@ -710,6 +780,11 @@ impl Plan {
             expected_state_version: plan.expected_state_version().to_string(),
             access: access_name(plan.access()),
             required_inputs_satisfied: plan.required_inputs_satisfied(),
+            missing_input_ids: plan
+                .missing_input_ids()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
             terminal: terminal_name(plan.terminal()),
             protocol_version: plan.protocol_version().to_string(),
             parameters: plan

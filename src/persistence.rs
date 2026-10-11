@@ -6,13 +6,18 @@
 mod baseline_schema_tests;
 mod chunked_blob;
 mod immutable_data;
+mod local_catalog;
 #[cfg(test)]
 mod object_lifecycle_tests;
 mod pack_publication;
 mod runtime_content_store;
 #[cfg(test)]
 mod schema_constraint_tests;
+mod schema_upgrade;
+mod store_bootstrap;
+pub(crate) use store_bootstrap::prepare_new_store;
 mod sqlite_catalog;
+mod sqlite_core_diagnostics;
 mod sqlite_deletions;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;

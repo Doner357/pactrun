@@ -10,13 +10,15 @@ Revision publication joins durable blob availability with an atomic database rec
 
 Pactrun MUST use the independently versioned
 [Persistence baseline](../persistence/persistence-baseline.md) in a
-caller-provisioned, dedicated local storage root. The database and runtime
-content child directories MUST already exist. On Windows the supported profile
+caller-selected, dedicated local storage root. Before opening the database,
+the Store preparation layer MUST establish the required directory tree as
+defined by [PR-REQ-0374](./store-opening.md#pr-req-0374---automatic-preparation-of-new-stores).
+On Windows the supported profile
 is local fixed NTFS; on Linux it is limited to the ext4, XFS, Btrfs, and ZFS
-profiles supported by the blob store. Pactrun MUST NOT claim to create those persistent
-directories durably.
+profiles supported by the blob store. Preparation MUST complete required
+directory durability barriers before publishing the new Store.
 
-The SQLite database MUST use application ID `0x50414354`, private user version `0`, WAL
+The SQLite database MUST use application ID `0x50414354`, private user version `3`, WAL
 journal mode, `synchronous=FULL`, foreign-key enforcement, and a five-second
 busy timeout. In WAL mode, the main database and a live WAL MAY together carry
 committed database state. The SHM WAL index is reconstructible coordination and

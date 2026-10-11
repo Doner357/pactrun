@@ -70,7 +70,7 @@ Generate a Package ID and use it in both manifests. Put this source manifest in
 `migration-source/pactrun.yaml`:
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000068"
 revision:
   inputs:
@@ -81,25 +81,24 @@ runtime_content: {}
 Create `config.txt` with known test text. Install and configure the source Instance:
 
 ```text
-pactrun pack install ./migration-source
+pactrun pack install ./migration-source --package-name migration-example --revision-name source
 ```
 
-Copy the full output line beginning with `exact:` as `<source-reference>`,
-including the Package ID and `sha256:` digest. Replace the angle-bracket
-placeholder below; do not type the brackets or copy a whole table row.
+Use the local reference `migration-example:source` for this installed Revision.
 
 ```text
-pactrun instance create migration-demo --revision <source-reference> --input-file config=./config.txt
+pactrun instance create migration-demo --revision migration-example:source --input-file config=./config.txt
 ```
 
 ### Declare the target
 
 Put the following in `migration-target/pactrun.yaml`. Replace `SOURCE_DIGEST`
-with the complete `sha256:…` component of the installed source reference; do not
-include `exact:` or the Package ID. Keep the same Package ID as the source.
+with `result.revision.content_digest` from
+`pactrun --format json revision show migration-example:source`. Copy the complete
+`sha256:…` value, not a local name or Package ID. Keep the same Package ID as the source.
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000068"
 revision:
   inputs:
@@ -135,7 +134,7 @@ ID as the source, and replace `SOURCE_DIGEST` with its complete `sha256:…`
 component. Do not generate another Package ID for this target.
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000068"
 revision:
   inputs:
@@ -173,18 +172,18 @@ if you change the manifest.
 Install the target:
 
 ```text
-pactrun pack install ./migration-target
+pactrun pack install ./migration-target --package-name migration-example --revision-name target
 ```
 
-Save the full line beginning with `exact:` as `<target-reference>`. Keep the
-source and target references separate. Discover the path:
+Use `migration-example:target` as `<target-reference>` below. Keep source and
+target references separate. Discover the path:
 
 ```text
 pactrun instance migration-paths migration-demo --to <target-reference> --no-trunc
 ```
 
-Copy the complete value after `path_id:`, including its `mp1-` prefix, as
-`<path-id>`. Do not copy the `route:` line or its labels.
+Copy the complete value after `Path ID:`, including its `mp1-` prefix, as
+`<path-id>`. The `--no-trunc` option above displays the complete path selector.
 
 ```text
 pactrun instance migrate migration-demo --to <target-reference> --path <path-id> --plan
@@ -252,19 +251,21 @@ Save this as UTF-8 `migration-unrelated/pactrun.yaml`, replacing the example ID
 with the new generated value:
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000069"
 revision: {}
 runtime_content: {}
 ```
 
-Install it and save the full `exact:` output as `<unrelated-reference>`:
+Install it with a separate local name:
 
 ```text
-pactrun pack install ./migration-unrelated
+pactrun pack install ./migration-unrelated --package-name unrelated --revision-name initial
 ```
 
 ### Check the cross-Package refusal
+
+Use `unrelated:initial` as `<unrelated-reference>`:
 
 ```text
 pactrun instance migrate migration-demo --to <unrelated-reference> --plan

@@ -4,28 +4,24 @@ title: Revision Core Format V1 (moved)
 
 # Revision Core Format V1 has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Revision Format and Identity Encoding](../../spec/packages/revision-format.md).
 
-Read [the current document](../../spec/packages/revision-format.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="format-lifecycle" />
 [Format lifecycle](../../spec/packages/revision-format.md#format-lifecycle)
 
 <a id="pr-req-0182---candidate-and-frozen-identity" />
-[PR-REQ-0182 - Candidate and Frozen identity](../../spec/packages/revision-format.md#pr-req-0182---candidate-and-frozen-identity)
+[PR-REQ-0182 - Published identity stability](../../spec/packages/revision-format.md#pr-req-0182---candidate-and-frozen-identity)
 
 <a id="pr-req-0183---one-revision-core-v1-contract" />
-[PR-REQ-0183 - One Revision Core V1 contract](../../spec/packages/revision-format.md#pr-req-0183---one-revision-core-v1-contract)
+[PR-REQ-0183 - Revision format ownership](../../spec/packages/revision-format.md#pr-req-0183---one-revision-core-v1-contract)
 
 <a id="closed-semantic-schema" />
 [Closed semantic schema](../../spec/packages/revision-format.md#closed-semantic-schema)
 
 <a id="pr-req-0184---revisioncorev1-schema" />
-[PR-REQ-0184 - RevisionCoreV1 schema](../../spec/packages/revision-format.md#pr-req-0184---revisioncorev1-schema)
+[PR-REQ-0184 - Revision Core schema](../../spec/packages/revision-format.md#pr-req-0184---revisioncorev1-schema)
 
 <a id="pr-req-0185---portable-identifiers-and-runtime-paths" />
 [PR-REQ-0185 - Portable identifiers and runtime paths](../../spec/packages/revision-format.md#pr-req-0185---portable-identifiers-and-runtime-paths)
@@ -70,4 +66,4 @@ anchors only and adds no product rules.
 [PR-REQ-0193 - JCS, framing, digest, and conformance](../../spec/packages/revision-format.md#pr-req-0193---jcs-framing-digest-and-conformance)
 
 <a id="golden-vector-coverage-boundary" />
-[Golden-vector coverage boundary](../../spec/packages/revision-format.md#golden-vector-coverage-boundary)
+[Codec verification](../../spec/packages/revision-format.md#golden-vector-coverage-boundary)

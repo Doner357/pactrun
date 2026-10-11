@@ -37,12 +37,22 @@ fn install(root: &Path, source: &Path, edges: &[(&str, bool)]) -> String {
             "    - source_revision_digest: {}\n      transitions: []\n      requires_source: {}\n      requires_target: []\n      produces_target: []\n",
             revision.rsplit('/').next().unwrap(), if *required { "[{role: active, input_id: config}]" } else { "[]" })).collect::<String>())
     };
-    fs::write(source.join("pactrun.yaml"), format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - id: config\n      protection: secret\n  actions: []\n{edges}runtime_content:\n  files: []\n")).unwrap();
-    successful(root, &["pack", "install", source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned()
+    fs::write(source.join("pactrun.yaml"), format!("source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - id: config\n      protection: secret\n  actions: []\n{edges}runtime_content:\n  files: []\n")).unwrap();
+    installed_reference(root, source)
+}
+fn installed_reference(root: &Path, source: &Path) -> String {
+    let value = json_result(root, &["pack", "install", source.to_str().unwrap()]);
+    format!(
+        "exact:{}/{}",
+        value["revision"]["package_id"].as_str().unwrap(),
+        value["revision"]["content_digest"].as_str().unwrap()
+    )
+}
+fn json_result(root: &Path, args: &[&str]) -> serde_json::Value {
+    let mut command = vec!["--format", "json"];
+    command.extend_from_slice(args);
+    let response: serde_json::Value = serde_json::from_str(&successful(root, &command)).unwrap();
+    response["result"].clone()
 }
 fn setup(direct_requires_input: bool) -> Fixture {
     let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/migration-path-cli");
@@ -197,7 +207,13 @@ fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_out
             args.extend(["--format", "json"]);
         }
         args.extend(["instance", "migrate", "demo", "--to", &target]);
-        let output = successful(&f.root, &args);
+        let output = command(&f.root, &args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let output = String::from_utf8(if json { output.stdout } else { output.stderr }).unwrap();
         if json {
             let value: serde_json::Value = serde_json::from_str(&output).unwrap();
             assert_eq!(
@@ -210,8 +226,8 @@ fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_out
             );
             assert!(value["result"]["current_instance"]["recovery_guard"].is_null());
         } else {
-            assert!(output.contains("outcome: succeeded"));
-            assert!(output.contains("required_inputs_satisfied: false"));
+            assert!(output.contains("Outcome: succeeded"));
+            assert!(output.contains("Required inputs: Missing"));
         }
         let after: serde_json::Value = serde_json::from_str(&successful(
             &f.root,
@@ -454,7 +470,7 @@ fn acquisition_distinguishes_open_permissions_and_staging_read_failure() {
 
 fn ids(text: &str) -> Vec<String> {
     text.lines()
-        .filter_map(|line| line.strip_prefix("path_id: ").map(str::to_owned))
+        .filter_map(|line| line.strip_prefix("Path ID: ").map(str::to_owned))
         .collect()
 }
 
@@ -497,7 +513,8 @@ fn operator_plan_never_opens_files_and_conflicts_are_checked_before_acquisition(
             "--plan",
         ],
     );
-    assert!(plan.contains("input file: config"));
+    assert!(plan.contains("Operator Inputs"));
+    assert!(plan.contains("- config"));
     assert!(!plan.contains("not-present"));
     assert_no_execution(&f.root, &before);
     let conflict = format!(
@@ -555,7 +572,7 @@ fn native_operator_file_paths_and_empty_values_survive_a_chained_migration() {
             f.b.rsplit('/').next().unwrap(),
             file.display()
         );
-        let result = successful(
+        let result = json_result(
             &f.root,
             &[
                 "instance",
@@ -569,8 +586,11 @@ fn native_operator_file_paths_and_empty_values_survive_a_chained_migration() {
                 &input,
             ],
         );
-        assert!(result.contains("required_inputs_satisfied: true"));
-        assert!(!result.contains("operator secret value"));
+        assert_eq!(
+            result["current_instance"]["required_inputs_satisfied"],
+            true
+        );
+        assert!(!result.to_string().contains("operator secret value"));
         let exported = command(
             &f.root,
             &[
@@ -679,11 +699,15 @@ fn real_cli_refuses_unsupported_storage_without_mutating_inputs_or_path_ids() {
         &f.root,
         &["instance", "migration-paths", "demo", "--to", &f.c],
     ));
-    {
+    let supported_marker = {
         // Test-only unsupported marker; preserve all objects and schema bytes.
         let db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
+        let marker: i64 = db
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
         db.pragma_update(None, "user_version", 8).unwrap();
-    }
+        marker
+    };
     let database_before = fs::read(f.root.join("database/pactrun.sqlite3")).unwrap();
     let rejected = command(
         &f.root,
@@ -713,7 +737,8 @@ fn real_cli_refuses_unsupported_storage_without_mutating_inputs_or_path_ids() {
     // This is not an upgrade mechanism and is never exposed by the product.
     {
         let db = rusqlite::Connection::open(f.root.join("database/pactrun.sqlite3")).unwrap();
-        db.pragma_update(None, "user_version", 0).unwrap();
+        db.pragma_update(None, "user_version", supported_marker)
+            .unwrap();
     }
     assert_eq!(
         paths,
@@ -757,7 +782,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 0);
+    assert_eq!(version, 3);
 }
 
 // Test-ID: PR-TEST-0290
@@ -782,16 +807,33 @@ fn real_cli_lists_and_selects_direct_or_chained_paths_without_any_run() {
         );
         assert!(plan.contains("Mode: preview"));
         assert!(plan.contains(path));
-        edge_counts.push(plan.lines().filter(|l| l.starts_with("edge ")).count());
+        edge_counts.push(
+            json_result(
+                &f.root,
+                &[
+                    "instance", "migrate", "demo", "--to", &f.c, "--path", path, "--plan",
+                ],
+            )["edges"]
+                .as_array()
+                .unwrap()
+                .len(),
+        );
     }
     edge_counts.sort();
     assert_eq!(edge_counts, vec![1, 2]);
     let ambiguous = command(
         &f.root,
-        &["instance", "migrate", "demo", "--to", &f.c, "--plan"],
+        &[
+            "--format", "json", "instance", "migrate", "demo", "--to", &f.c, "--plan",
+        ],
     );
     assert_eq!(ambiguous.status.code(), Some(1));
-    assert_eq!(ids(&String::from_utf8(ambiguous.stdout).unwrap()), choices);
+    let ambiguous: serde_json::Value = serde_json::from_slice(&ambiguous.stdout).unwrap();
+    let candidates = ambiguous["result"]["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), choices.len());
+    for (candidate, choice) in candidates.iter().zip(&choices) {
+        assert!(candidate["path_id"].as_str().unwrap().starts_with(choice));
+    }
     let first = successful(
         &f.root,
         &[
@@ -804,7 +846,7 @@ fn real_cli_lists_and_selects_direct_or_chained_paths_without_any_run() {
             "1",
         ],
     );
-    assert!(first.contains("more_paths: true"));
+    assert!(first.contains("More results available."));
     let first_id = ids(&first).remove(0);
     let last = successful(
         &f.root,
@@ -820,14 +862,14 @@ fn real_cli_lists_and_selects_direct_or_chained_paths_without_any_run() {
             "1",
         ],
     );
-    assert!(last.contains("more_paths: false"));
+    assert!(!last.contains("More results available."));
     assert_ne!(ids(&last)[0], first_id);
     assert!(
         successful(
             &f.root,
             &["instance", "migrate", "demo", "--to", &f.b, "--plan"]
         )
-        .contains("edge 1:")
+        .contains("Edges")
     );
     assert_no_execution(&f.root, &before);
 }
@@ -976,34 +1018,41 @@ fn real_cli_executes_selected_direct_and_chained_paths_and_shows_durable_runs() 
         let selected = ids(&listing)
             .into_iter()
             .find(|id| {
-                successful(
+                json_result(
                     &f.root,
                     &[
                         "instance", "migrate", "demo", "--to", &f.c, "--path", id, "--plan",
                     ],
-                )
-                .lines()
-                .filter(|l| l.starts_with("edge "))
-                .count()
+                )["edges"]
+                    .as_array()
+                    .unwrap()
+                    .len()
                     == edge_count
             })
             .unwrap();
-        let result = successful(
+        let result = json_result(
             &f.root,
             &[
                 "instance", "migrate", "demo", "--to", &f.c, "--path", &selected,
             ],
         );
-        assert!(result.contains("outcome: succeeded"));
-        let run = result
-            .lines()
-            .find_map(|line| line.strip_prefix("run: "))
-            .unwrap();
-        let inspection = successful(&f.root, &["run", "show", run]);
-        assert!(inspection.contains("operation: migration"));
-        assert!(inspection.contains(&format!("committed_edges: {edge_count}")));
-        assert!(inspection.contains(&format!("last_committed_revision: {}", f.c)));
-        assert!(successful(&f.root, &["instance", "show", "demo"]).contains(&f.c));
+        assert_eq!(result["inspection"]["run"]["state"]["outcome"], "succeeded");
+        let run = result["inspection"]["run"]["run_id"].as_str().unwrap();
+        let inspection = json_result(&f.root, &["run", "show", run]);
+        assert_eq!(inspection["run"]["operation"]["kind"], "migration");
+        assert_eq!(
+            inspection["migration_progress"]["committed_edges"],
+            edge_count
+        );
+        let target_digest = f.c.rsplit('/').next().unwrap();
+        assert_eq!(
+            inspection["migration_progress"]["boundary_revision"]["content_digest"],
+            target_digest
+        );
+        assert_eq!(
+            json_result(&f.root, &["instance", "show", "demo"])["active_revision"]["content_digest"],
+            target_digest
+        );
         assert!(successful(&f.root, &["run", "list", "demo"]).contains("Migration"));
         let db = rusqlite::Connection::open_with_flags(
             f.root.join("database/pactrun.sqlite3"),
@@ -1033,7 +1082,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
     let f = setup(false);
     let before = successful(&f.root, &["instance", "show", "demo"]);
     fs::write(f.source.join("tool"), b"must never be launched").unwrap();
-    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs: []\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: []\n        io: {{ terminal: none }}\nruntime_content:\n  files:\n    - {{ id: tool, source: tool, path: bin/tool, executable: true }}\n",f.c.rsplit('/').next().unwrap())).unwrap();
+    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs: []\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions: []\n      requires_source: []\n      requires_target: []\n      produces_target: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: []\n        io: {{ terminal: none }}\nruntime_content:\n  files:\n    - {{ id: tool, source: tool, path: bin/tool, executable: true }}\n",f.c.rsplit('/').next().unwrap())).unwrap();
     let manifest = fs::read_to_string(f.source.join("pactrun.yaml")).unwrap();
     fs::write(
         f.source.join("pactrun.yaml"),
@@ -1043,11 +1092,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
         ),
     )
     .unwrap();
-    let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let target = installed_reference(&f.root, &f.source);
     let listed = successful(
         &f.root,
         &["instance", "migration-paths", "demo", "--to", &target],
@@ -1085,17 +1130,13 @@ fn real_cli_requires_declassification_authorization_and_releases_only_the_target
             data.to_str().unwrap(),
         ],
     );
-    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - {{ id: released, required: true }}\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions:\n        - {{ kind: declassify, source: {{ role: active, input_id: config }}, target_input_id: released }}\n      requires_source: [{{role: active, input_id: config}}]\n      requires_target: []\n      produces_target: []\nruntime_content:\n  files: []\n",f.a.rsplit('/').next().unwrap())).unwrap();
-    let target = successful(&f.root, &["pack", "install", f.source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    fs::write(f.source.join("pactrun.yaml"),format!("source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000077\nrevision:\n  inputs:\n    - {{ id: released, required: true }}\n  actions: []\n  migrations:\n    - source_revision_digest: {}\n      transitions:\n        - {{ kind: declassify, source: {{ role: active, input_id: config }}, target_input_id: released }}\n      requires_source: [{{role: active, input_id: config}}]\n      requires_target: []\n      produces_target: []\nruntime_content:\n  files: []\n",f.a.rsplit('/').next().unwrap())).unwrap();
+    let target = installed_reference(&f.root, &f.source);
     let before = successful(&f.root, &["instance", "show", "demo"]);
     let refused = command(&f.root, &["instance", "migrate", "demo", "--to", &target]);
     assert_eq!(refused.status.code(), Some(1));
     assert_no_execution(&f.root, &before);
-    let result = successful(
+    let result = json_result(
         &f.root,
         &[
             "instance",
@@ -1106,8 +1147,8 @@ fn real_cli_requires_declassification_authorization_and_releases_only_the_target
             "--authorize-declassification",
         ],
     );
-    assert!(result.contains("outcome: succeeded"));
-    assert!(!result.contains("authorized release bytes"));
+    assert_eq!(result["inspection"]["run"]["state"]["outcome"], "succeeded");
+    assert!(!result.to_string().contains("authorized release bytes"));
     let export = f.source.join("released-output");
     successful(
         &f.root,

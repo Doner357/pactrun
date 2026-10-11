@@ -29,7 +29,7 @@ PowerShell:
         throw 'pactrun-demo already exists. Choose a new tutorial directory.'
     }
     New-Item -ItemType Directory pactrun-demo | Out-Null
-    New-Item -ItemType Directory pactrun-demo/pack, pactrun-demo/store/database, pactrun-demo/store/runtime-content, pactrun-demo/store/staging | Out-Null
+    New-Item -ItemType Directory pactrun-demo/pack | Out-Null
     Set-Location -LiteralPath pactrun-demo
     $env:PACTRUN_STORAGE_ROOT = Join-Path (Get-Location) 'store'
 }
@@ -39,7 +39,7 @@ POSIX shell:
 
 ```sh
 mkdir pactrun-demo &&
-mkdir -p pactrun-demo/pack pactrun-demo/store/database pactrun-demo/store/runtime-content pactrun-demo/store/staging &&
+mkdir pactrun-demo/pack &&
 cd pactrun-demo &&
 export PACTRUN_STORAGE_ROOT="$PWD/store"
 ```
@@ -48,9 +48,9 @@ If setup reports an error, stop before running the next step. Both variants
 refuse an existing `pactrun-demo` directory and select the storage root only
 after directory creation succeeds. Use a new directory to repeat the tutorial.
 
-The candidate requires the empty storage directories shown above. Create them
-only in this new tutorial root; do not modify an existing store to bypass a
-compatibility refusal. Pactrun creates its database during the first write.
+Pactrun prepares the Store automatically when you install the Pack. There is no
+initialization command or internal directory setup. Listing an unused Store
+returns an empty result without creating it.
 
 The environment variable affects subsequent commands in this terminal. Restore
 its previous value when finished, or close this dedicated terminal.
@@ -62,7 +62,7 @@ Run `pactrun pack generate-id` and copy the complete identifier. Create
 example package ID with the identifier you generated.
 
 ```yaml
-source_format: "1.0-alpha.1"
+source_format: "1.0-alpha.2"
 package_id: "00000000000000000000000000000065"
 revision: {}
 runtime_content: {}
@@ -74,15 +74,12 @@ empty defaults. This Pack has no Snapshot or Cleanup capability.
 ## 3. Install and create an Instance
 
 ```text
-pactrun pack install ./pack
+pactrun pack install ./pack --package-name demo --revision-name initial
 ```
 
-### Copy a Revision reference
-
-Copy the complete line beginning with `exact:` from the **pack install output**.
-Keep the Package ID, slash, `sha256:` prefix and complete digest together. Its
-shape is `exact:<package-id>/sha256:<digest>`; the angle-bracket parts here are
-placeholders, not values to type.
+You chose the local Package name `demo` and Revision name `initial`. Together,
+`demo:initial` identifies this Revision in your Store. Names are optional; IDs
+remain usable and do not change when you rename an object.
 
 You can inspect installed Revisions with:
 
@@ -90,12 +87,8 @@ You can inspect installed Revisions with:
 pactrun revision list --no-trunc
 ```
 
-That list displays the Package ID and digest in separate columns. A row is not
-a ready-to-paste reference; use the full install-output line saved above.
-In the following command, replace `<reference>`, including the angle brackets:
-
 ```text
-pactrun instance create demo --revision <reference>
+pactrun instance create demo --revision demo:initial
 pactrun instance show demo
 pactrun input list demo
 pactrun action list demo

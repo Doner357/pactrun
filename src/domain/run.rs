@@ -244,6 +244,14 @@ pub(crate) struct RunFailureRecord {
 pub(crate) struct RunPrimaryFailure {
     pub(crate) failure: RunFailureRecord,
     pub(crate) step: RunFailedStep,
+    pub(crate) cause: Option<RunFailureCause>,
+}
+
+/// Core-owned, disclosure-safe facts captured at failure time, never reconstructed
+/// from a diagnostic message or the Instance's later state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum RunFailureCause {
+    MissingRequiredInputs(Vec<super::InputIdentity>),
 }
 
 /// The Hook-owned completion result. `message: Some(String::new())` is a
@@ -482,6 +490,7 @@ pub(crate) enum AdmissionRefusal {
     RecoveryGuardActive,
     DeletionObligation(InstanceId),
     PlanInvalidated(String),
+    MissingRequiredInputs(Vec<super::InputIdentity>),
     MutationConflict(RunId),
 }
 
@@ -489,7 +498,9 @@ impl AdmissionRefusal {
     pub(crate) fn error_ref(&self) -> PactrunErrorRef {
         let code = match self {
             Self::RecoveryGuardActive => "recovery_guard_active",
-            Self::PlanInvalidated(_) | Self::DeletionObligation(_) => "plan_invalidated",
+            Self::PlanInvalidated(_)
+            | Self::MissingRequiredInputs(_)
+            | Self::DeletionObligation(_) => "plan_invalidated",
             Self::MutationConflict(_) => "mutation_conflict",
         };
         PactrunErrorRef::new(ADMISSION_ERROR_OWNER, code)
@@ -503,6 +514,13 @@ impl AdmissionRefusal {
                     .to_owned()
             }
             Self::PlanInvalidated(reason) => format!("the Plan is invalidated: {reason}"),
+            Self::MissingRequiredInputs(ids) => format!(
+                "the Plan is invalidated: required Inputs are not bound: {}",
+                ids.iter()
+                    .map(|id| id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Self::DeletionObligation(_) => DELETION_OBLIGATION_MESSAGE.to_owned(),
             Self::MutationConflict(_) => {
                 "another Mutate execution is admitted on this Instance".to_owned()
@@ -512,6 +530,12 @@ impl AdmissionRefusal {
 
     pub(crate) fn primary_failure(&self) -> RunPrimaryFailure {
         RunPrimaryFailure {
+            cause: match self {
+                Self::MissingRequiredInputs(ids) => {
+                    Some(RunFailureCause::MissingRequiredInputs(ids.clone()))
+                }
+                _ => None,
+            },
             failure: RunFailureRecord {
                 error: self.error_ref(),
                 message: self.message(),

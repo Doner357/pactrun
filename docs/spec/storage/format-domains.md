@@ -28,8 +28,13 @@ suffixes do not select a format. Reader selection uses the explicit version stri
 
 Each domain owns its implemented readers and writers. A matching Major or an
 ordered newer identifier MUST NOT be interpreted as automatic support. Format
-Minor does not imply minimum product Minor. The supported values are independently
-`1.0-alpha.1`. Changes follow the owning contract rather than synchronizing
+Minor does not imply minimum product Minor. Pack source and Pack distribution
+write `1.0-alpha.2`; the CLI machine interface writes `1.0-alpha.3`. Persistence
+writes `1.0-alpha.4` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2` and
+`1.0-alpha.3` Store schemas
+through its supported upgrade path.
+Revision, Hook, Snapshot integrity and Snapshot bundle remain `1.0-alpha.1`.
+Changes follow the owning contract rather than synchronizing
 unrelated domains. Unsupported formats are refused in their necessary scope.
 
 **Verification: PR-TEST-0183, PR-TEST-0338, PR-TEST-0369, PR-TEST-0385, PR-TEST-0538,
@@ -38,7 +43,9 @@ PR-TEST-0557, PR-TEST-0618, PR-TEST-0619, PR-TEST-0625.**
 ### PR-REQ-0078 - Storage compatibility and admission {#pr-req-0078---persistence-migrations}
 
 Pactrun supports the complete [persistence schema](../persistence/persistence-baseline.md).
-Unsupported schemas have no implicit or explicit upgrade chain. Refusal MUST
+Supported Store opening upgrades follow
+[PR-REQ-0373](./store-opening.md#pr-req-0373---store-opening-and-supported-catalog-upgrades).
+Other unsupported schemas have no implicit or explicit upgrade chain. Refusal MUST
 NOT clear real data, rewrite identities, infer Run outcomes, or touch
 service-owned resources. Pack-defined Revision Migration is independent of
 storage-format compatibility.
@@ -60,14 +67,18 @@ An existing WAL can contain committed data and MUST NOT be discarded as a
 admission MUST repeat qualification after acquiring the serialized transaction;
 preflight is advisory only. Fresh bootstrap publishes the complete schema and
 admission atomically. Interrupted bootstrap cannot expose a partially admitted
-schema. Read-only opening cannot initialize or upgrade storage. Merely reopening
+schema. A read-only command leaves a missing Store absent. Opening a supported
+earlier Store first performs the maintenance required by PR-REQ-0373, then opens
+the operation's read snapshot. Merely reopening
 or updating the product MUST preserve existing identities, bytes, bindings,
 non-terminal Runs and unresolved recovery obligations without reconciliation.
 
 Any future internal migration requires an explicit supported contract and must
 preserve those same obligations. No other storage conversion is defined.
 
-**Verification: PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
+**Verification: PR-TEST-0692, PR-TEST-0202, PR-TEST-0621, PR-TEST-0622, PR-TEST-0623, PR-TEST-0624, PR-TEST-0639, PR-TEST-0344.**
+
+**Verification: PR-TEST-0687.**
 
 ### PR-REQ-0079 - Revision Core format ownership
 

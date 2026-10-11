@@ -76,11 +76,12 @@ try {
   const schemaUrl = await article().getByRole('link', {name: 'response schema', exact: true}).getAttribute('href');
   const response = await page.request.get(new URL(schemaUrl, page.url()).href);
   assert.ok(response.ok());
-  assert.equal((await response.json()).properties.format.const, 'pactrun.cli');
+  const responseSchema = await response.json();
+  assert.equal(responseSchema.properties.format.const, 'pactrun.cli');
   await article().getByRole('link', {name: 'JSON/JSONL reference', exact: true}).click();
   await article().getByRole('heading', {name: 'JSON and JSONL reference', exact: true}).waitFor();
   assert.ok((await article().innerText()).includes('format_version'));
-  assert.ok((await article().innerText()).includes('1.0-alpha.1'));
+  assert.ok((await article().innerText()).includes(responseSchema.properties.format_version.const));
   checks.push('user vocabulary, machine-output meanings and schema stay in Users');
   await scopedSearch('Users', 'snapshot integrity');
 

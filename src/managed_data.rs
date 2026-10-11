@@ -805,7 +805,7 @@ mod tests {
         fs::create_dir(&source).unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000031
 revision:
   inputs:

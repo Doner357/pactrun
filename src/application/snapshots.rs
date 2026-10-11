@@ -8,7 +8,7 @@ use crate::{
     },
     snapshot_bundle::{self, ValidatedSnapshotBundle},
 };
-use std::{io::Write, path::Path};
+use std::path::Path;
 
 impl PactrunApplication {
     /// Structural, read-only preflight; no pin or launch eligibility is promised.
@@ -137,7 +137,6 @@ impl PactrunApplication {
         id: SnapshotId,
         destination: &Path,
         authorize_sensitive: bool,
-        warnings: &mut dyn Write,
     ) -> Result<(), ApplicationError> {
         if !authorize_sensitive {
             return Err(PersistenceError::UnauthorizedSnapshotExport.into());
@@ -147,12 +146,6 @@ impl PactrunApplication {
                 "Snapshot bundle stdout is not supported".to_owned(),
             ));
         }
-        warnings
-            .write_all(b"Warning: Snapshot bundle is unencrypted and may contain sensitive data.\n")
-            .map_err(|source| ApplicationError::Io {
-                operation: "write sensitive Snapshot export warning",
-                source,
-            })?;
         let stage = self.persistence.export_snapshot_stage(id, true)?;
         crate::output_publication::publish_reported(&stage, destination).map_err(|failure| {
             ApplicationError::Publication {

@@ -267,7 +267,7 @@ fn snapshot_cli_keeps_its_owner_when_admission_retries_and_diagnostic_output_bre
         format!("sensitive_value={}", sensitive.display()).into(),
     ];
     let reads = super::super::capture::test_clock(None);
-    crate::application::fail_next_finalization_advances_for_test(3);
+    let faults = crate::application::fail_next_finalization_advances_for_test(3);
     let mut output = Vec::new();
     assert_eq!(
         crate::cli::run(
@@ -277,8 +277,9 @@ fn snapshot_cli_keeps_its_owner_when_admission_retries_and_diagnostic_output_bre
             &mut output,
             &mut Broken
         ),
-        0
+          1
     );
+    assert_eq!(faults.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert_eq!(super::super::capture::test_clock(None), reads + 1);
     let runs = persistence(&f.storage)
         .list_managed_runs(f.instance.id)
@@ -287,10 +288,8 @@ fn snapshot_cli_keeps_its_owner_when_admission_retries_and_diagnostic_output_bre
     assert!(
         matches!(&runs[0].state,RunState::Finished(outcome) if outcome.outcome==RunOutcome::Succeeded)
     );
-    assert_eq!(
-        String::from_utf8(output).unwrap().trim(),
-        format!("snapshot: {}", result_id(&f, runs[0].id))
-    );
+    let snapshot = result_id(&f, runs[0].id);
+    assert_eq!(persistence(&f.storage).list_snapshots(None).unwrap()[0].id, snapshot);
 }
 
 // Test-ID: PR-TEST-0275

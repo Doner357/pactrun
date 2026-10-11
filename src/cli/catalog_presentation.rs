@@ -3,16 +3,17 @@ use super::*;
 use crate::domain::*;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Page<T: Serialize> {
     pub(super) items: Vec<T>,
     pub(super) next: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct History {
+    unique_prefix_length: usize,
     instance_id: String,
     recorded_name: String,
     current_name: Option<String>,
@@ -20,7 +21,7 @@ pub(super) struct History {
     deletion_phase: Option<&'static str>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Retirement {
     #[serde(flatten)]
@@ -32,6 +33,7 @@ impl From<&InstanceHistoryEntry> for History {
     fn from(row: &InstanceHistoryEntry) -> Self {
         Self {
             instance_id: row.id.to_string(),
+            unique_prefix_length: row.unique_prefix_length,
             recorded_name: row.recorded_name.as_str().into(),
             current_name: row.current_name.as_ref().map(|v| v.as_str().into()),
             retired: row.retired,
@@ -44,16 +46,10 @@ impl From<&InstanceHistoryEntry> for History {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum Metadata {
-    ReferenceLabel {
-        label: String,
-        publisher: Option<String>,
-        namespace: Option<String>,
-        source_uri: Option<String>,
-    },
     Presentation {
         target: Target,
         field: &'static str,
@@ -71,9 +67,6 @@ pub(super) enum Metadata {
         text: String,
         source_uri: Option<String>,
     },
-    LocalAlias {
-        alias: String,
-    },
     LocalNote {
         note: String,
     },
@@ -82,7 +75,7 @@ pub(super) enum Metadata {
     },
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum Target {
@@ -156,15 +149,12 @@ pub(super) fn trust(value: TrustAssessment) -> &'static str {
     }
 }
 
-impl From<&RevisionMetadataItem> for Metadata {
-    fn from(item: &RevisionMetadataItem) -> Self {
-        match item {
-            RevisionMetadataItem::ReferenceLabel(b) => Self::ReferenceLabel {
-                label: b.label.as_str().into(),
-                publisher: b.source.publisher_name().map(|s| s.as_str().into()),
-                namespace: b.source.publisher_namespace().map(|s| s.as_str().into()),
-                source_uri: b.source.source_uri().map(|s| s.as_str().into()),
-            },
+impl Metadata {
+    fn from_current(item: &RevisionMetadataItem) -> Option<Self> {
+        Some(match item {
+            RevisionMetadataItem::ReferenceLabel(_) | RevisionMetadataItem::LocalAlias { .. } => {
+                return None;
+            }
             RevisionMetadataItem::Presentation(p) => Self::Presentation {
                 target: (&p.target).into(),
                 field: match p.field {
@@ -193,30 +183,58 @@ impl From<&RevisionMetadataItem> for Metadata {
                     source_uri: source_uri.as_ref().map(|s| s.as_str().into()),
                 },
             },
-            RevisionMetadataItem::LocalAlias { alias, .. } => Self::LocalAlias {
-                alias: alias.as_str().into(),
-            },
             RevisionMetadataItem::LocalNote { note, .. } => Self::LocalNote {
                 note: note.as_str().into(),
             },
             RevisionMetadataItem::LocalTrust { trust: value, .. } => Self::LocalTrust {
                 assessment: trust(*value),
             },
-        }
+        })
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct RevisionEntry {
     revision: presentation::Revision,
+    reference: String,
+    local: LocalRevision,
     core_version: String,
     metadata: Vec<Metadata>,
     declarations: Option<Declarations>,
     metadata_scope: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct LocalRevision {
+    package_name: Option<String>,
+    revision_name: Option<String>,
+    installed_at_unix_ms: Option<String>,
+}
+impl From<&LocalRevisionFacts> for LocalRevision {
+    fn from(value: &LocalRevisionFacts) -> Self {
+        Self {
+            package_name: value.package_name.as_ref().map(|n| n.as_str().into()),
+            revision_name: value.revision_name.as_ref().map(|n| n.as_str().into()),
+            installed_at_unix_ms: value.installed_at_unix_ms.map(|t| t.to_string()),
+        }
+    }
+}
+pub(super) fn installation_time(value: Option<i64>) -> String {
+    match value {
+        None => "Unknown".into(),
+        Some(ms) => time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000)
+            .ok()
+            .and_then(|t| {
+                t.format(&time::format_description::well_known::Rfc3339)
+                    .ok()
+            })
+            .unwrap_or_else(|| format!("{ms} ms since Unix epoch")),
+    }
+}
+
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Declarations {
     actions: Vec<execution_presentation::Action>,
@@ -229,7 +247,7 @@ struct Declarations {
     capabilities: definitions::Capabilities,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct InputDeclaration {
     input_id: String,
@@ -241,9 +259,16 @@ impl RevisionEntry {
     pub(super) fn new(row: &RevisionCatalogEntry, declarations: bool) -> Self {
         Self {
             revision: (&row.identity).into(),
+            reference: row.reference.clone(),
+            local: (&row.local).into(),
             metadata_scope: "current",
             core_version: row.core.version().to_string(),
-            metadata: row.metadata.items.iter().map(Into::into).collect(),
+            metadata: row
+                .metadata
+                .items
+                .iter()
+                .filter_map(Metadata::from_current)
+                .collect(),
             declarations: declarations.then(|| Declarations {
                 actions: row
                     .core
@@ -275,14 +300,7 @@ impl RevisionEntry {
     }
 }
 
-#[derive(Serialize)]
-#[cfg_attr(test, derive(schemars::JsonSchema))]
-pub(super) struct Alias {
-    pub(super) alias: String,
-    pub(super) target: Option<presentation::Revision>,
-}
-
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Local {
     pub(super) revision: presentation::Revision,
@@ -312,23 +330,15 @@ impl Local {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "field", rename_all = "snake_case")]
 pub(super) enum MutationValue {
-    Alias {
-        alias: String,
-        target: Option<presentation::Revision>,
-    },
-    Note {
-        value: Option<String>,
-    },
-    Trust {
-        value: Option<&'static str>,
-    },
+    Note { value: Option<String> },
+    Trust { value: Option<&'static str> },
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Mutation {
     pub(super) revision: presentation::Revision,
@@ -339,15 +349,6 @@ pub(super) struct Mutation {
 impl Mutation {
     pub(super) fn new(revision: &RevisionIdentity, operation: &RevisionMetadataMutation) -> Self {
         let desired = match operation {
-            RevisionMetadataMutation::CompareAndSetLocalAlias { alias, desired, .. } => {
-                MutationValue::Alias {
-                    alias: alias.as_str().into(),
-                    target: match desired {
-                        CurrentState::Absent => None,
-                        CurrentState::Present(v) => Some(v.into()),
-                    },
-                }
-            }
             RevisionMetadataMutation::CompareAndSetLocalNote { desired, .. } => {
                 MutationValue::Note {
                     value: match desired {

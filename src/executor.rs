@@ -22,6 +22,11 @@ pub(crate) fn fail_next_admission_for_test() {
     FAIL_NEXT_ADMISSION_FOR_TEST.with(|failed| failed.set(true));
 }
 
+#[cfg(test)]
+pub(crate) fn take_admission_fault_for_test() -> bool {
+    FAIL_NEXT_ADMISSION_FOR_TEST.with(|failed| failed.replace(false))
+}
+
 use crate::{
     domain::{
         ActionExecutionPlan, ActionRunIdentity, AdmissionFacts, AdmissionRefusal,

@@ -43,6 +43,9 @@ pub(crate) struct MigrationRelationView {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct InstallPackResult {
     pub(crate) revision: RevisionIdentity,
+    pub(crate) local: crate::domain::LocalRevisionFacts,
+    pub(crate) reference: String,
+    pub(crate) newly_installed: bool,
     pub(crate) migrations: Vec<MigrationRelationView>,
     pub(crate) kept_metadata: Vec<(
         crate::domain::PresentationTargetV1,
@@ -87,6 +90,7 @@ pub(super) fn install_pack_source(
         candidate,
         explicit_local_metadata,
         crate::domain::PackMetadataConflict::Reject,
+        &crate::domain::InstallNames::default(),
         &crate::hook::ActionCancellation::default(),
     )
 }
@@ -96,6 +100,7 @@ pub(super) fn install_prepared(
     candidate: crate::revision_installation::PreparedRevision,
     local: &RevisionMetadataMutationBatch,
     policy: crate::domain::PackMetadataConflict,
+    names: &crate::domain::InstallNames,
     cancellation: &crate::hook::ActionCancellation,
 ) -> Result<InstallPackResult, ApplicationError> {
     let crate::revision_installation::PreparedRevision {
@@ -140,17 +145,21 @@ pub(super) fn install_prepared(
         }
         publications.push(witness);
     }
-    let (revision, kept_metadata) = persistence.persist_pack_revision(
+    let migrations = inspect_migrations(persistence, &identity, &content)?;
+    let (receipt, kept_metadata) = persistence.persist_pack_revision(
         identity.package_id,
         &content,
         &publications,
         Some(&batch),
         Some(policy),
+        names,
         cancellation,
     )?;
-    let migrations = inspect_migrations(persistence, &revision, &content)?;
     Ok(InstallPackResult {
-        revision,
+        revision: receipt.identity,
+        local: receipt.local,
+        reference: receipt.reference,
+        newly_installed: receipt.newly_installed,
         migrations,
         kept_metadata,
     })
@@ -405,7 +414,7 @@ mod tests {
     #[test]
     fn versioned_source_acquisition_and_publication_do_not_erase_core_identity() {
         let (_temporary, storage, source) = roots();
-        let yaml=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
+        let yaml=b"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision:\n  service_storages: [{id: state}]\n  service_resources: [{id: config, storage_id: state, locator: Config.json, kind: file}]\nruntime_content: {}\n";
         fs::write(source.join("pactrun.yaml"), yaml).unwrap();
         let p = PactrunPersistence::open(&storage).unwrap();
         let candidate = crate::authoring::parse_pack_source_yaml(yaml).unwrap();
@@ -446,12 +455,12 @@ mod tests {
         // Only the exact baseline is supported; numeric and foreign contracts refuse.
         for token in ["2.0", "'2'", "4"] {
             let invalid = String::from_utf8(yaml.to_vec()).unwrap().replace(
-                "source_format: 1.0-alpha.1",
+                "source_format: 1.0-alpha.2",
                 &format!("source_format: {token}"),
             );
             assert!(crate::authoring::parse_pack_source_yaml(invalid.as_bytes()).is_err());
         }
-        let legacy=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
+        let legacy=b"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000065\nrevision: {}\nruntime_content: {}\n";
         assert_eq!(
             crate::authoring::parse_pack_source_yaml(legacy)
                 .unwrap()
@@ -469,7 +478,7 @@ mod tests {
         fs::write(source.join("same.bin"), b"same bytes").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000011
 revision:
   inputs: []
@@ -483,10 +492,6 @@ runtime_content:
     - id: beta
       source: same.bin
       path: lib/beta.bin
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#,
         )
         .unwrap();
@@ -509,7 +514,7 @@ portable_metadata:
                 .unwrap()
                 .items
                 .iter()
-                .any(|item| matches!(item, RevisionMetadataItem::ReferenceLabel(_)))
+                .all(|item| !matches!(item, RevisionMetadataItem::ReferenceLabel(_)))
         );
     }
 
@@ -522,7 +527,7 @@ portable_metadata:
         fs::write(source.join("two.bin"), b"two").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000012
 revision:
   inputs: []
@@ -546,7 +551,7 @@ runtime_content:
 
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000012
 revision:
   inputs: []
@@ -628,7 +633,7 @@ runtime_content:
         let (_relation_temporary, relation_storage, relation_source) = roots();
         fs::write(
             relation_source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000013
 revision:
   inputs: []
@@ -653,7 +658,7 @@ runtime_content:
             fs::write(
                 relation_source.join("pactrun.yaml"),
                 format!(
-                    r#"source_format: 1.0-alpha.1
+                    r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000013
 revision:
   inputs: []

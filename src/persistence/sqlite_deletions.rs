@@ -1028,6 +1028,11 @@ fn detached_from(
         _ => return Err(corrupt()),
     };
     Ok(Some(DetachedAllocationView {
+        unique_prefix_length: super::sqlite_catalog::unique_prefix_length(
+            db,
+            crate::domain::CatalogIdentityKind::Allocation,
+            &id.to_string(),
+        )?,
         allocation: id,
         instance,
         former_name: InstanceName::parse(String::from_utf8(name).map_err(|_| corrupt())?)

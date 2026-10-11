@@ -26,6 +26,6 @@ export function classify(name, source) {
 }
 
 export function contextNotice(state, role) {
-  if (state === 'superseded') return 'Superseded compatibility page. Follow its current-owner links; it defines no independent product rules.';
+  if (state === 'superseded') return 'This page has moved. Follow the links below to the current specification.';
   return null;
 }

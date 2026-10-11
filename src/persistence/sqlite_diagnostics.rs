@@ -141,8 +141,9 @@ pub(super) fn load_diagnostics_from(
     database: &rusqlite::Connection,
     run: RunId,
 ) -> Result<Option<DiagnosticInspection>, PersistenceError> {
-    let mut value = database.query_row("SELECT retain_text,started,closed,observed,failed FROM run_diagnostic_collections WHERE run_id=?1", [run.as_bytes().as_slice()], |row| Ok(DiagnosticInspection { retain_text:row.get(0)?,started:row.get(1)?,closed:row.get(2)?,observed:row.get::<_,i64>(3)? as u64,failed:row.get(4)?,events:Vec::new() })).optional().map_err(|e| PersistenceError::sqlite("read diagnostic collection",e))?;
+    let mut value = database.query_row("SELECT retain_text,started,closed,observed,failed FROM run_diagnostic_collections WHERE run_id=?1", [run.as_bytes().as_slice()], |row| Ok(DiagnosticInspection { core:None,retain_text:row.get(0)?,started:row.get(1)?,closed:row.get(2)?,observed:row.get::<_,i64>(3)? as u64,failed:row.get(4)?,events:Vec::new() })).optional().map_err(|e| PersistenceError::sqlite("read diagnostic collection",e))?;
     if let Some(value) = &mut value {
+        value.core = super::sqlite_core_diagnostics::load(database, run)?;
         let mut stmt = database.prepare("SELECT sequence,received_at_unix_ms,stage,kind,severity,code,message,truncated,truncated_prefix_bytes,completion_status FROM run_diagnostic_events WHERE run_id=?1 ORDER BY sequence").map_err(|e| PersistenceError::sqlite("prepare diagnostic inspection",e))?;
         let rows = stmt
             .query_map([run.as_bytes().as_slice()], |row| {

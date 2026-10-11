@@ -54,7 +54,7 @@ Other service-owned resource types are outside this resource model.
 
 ## Presentation and provenance
 
-Presentation, reference labels, and typed provenance claims can be attached
+Presentation and typed provenance claims can be attached
 without changing Revision identity. Presentation is current metadata over the
 closed target and field sets in PR-REQ-0251; provenance is the value-keyed
 typed claim set in PR-REQ-0252. Authoring and persistence MUST NOT infer a

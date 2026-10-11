@@ -103,6 +103,13 @@ workflow.
 
 **Verification: PR-TEST-0090.**
 
+When required Inputs are absent, Admission MUST retain their exact declared IDs
+as a typed failure cause in the same transaction as the refused Run. This is
+historical evidence: later binding changes MUST NOT rewrite it. Neither Input
+values nor arbitrary error text are part of that safe cause.
+
+**Verification: PR-TEST-0686.**
+
 ### PR-REQ-0044 - Accepted execution continuity
 
 An accepted Run MUST NOT invalidate itself when its own committed Migration edge
@@ -294,6 +301,8 @@ termination caused by Pactrun policy.
 PR-TEST-0132, PR-TEST-0152, PR-TEST-0153, PR-TEST-0170, PR-TEST-0171,
 PR-TEST-0176, PR-TEST-0177.**
 
+**Verification: PR-TEST-0684.**
+
 ### PR-REQ-0286 - Foreground cancellation and execution ownership
 
 The CLI `invoke` command MUST install one invocation-scoped cancellation
@@ -346,3 +355,5 @@ or being saturated.
 PR-TEST-0124, PR-TEST-0125, PR-TEST-0126, PR-TEST-0127, PR-TEST-0128,
 PR-TEST-0129, PR-TEST-0130, PR-TEST-0131, PR-TEST-0132, PR-TEST-0133,
 PR-TEST-0160, PR-TEST-0163, PR-TEST-0176, PR-TEST-0177.**
+
+**Verification: PR-TEST-0684, PR-TEST-0685.**
