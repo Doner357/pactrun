@@ -121,7 +121,7 @@ def build(work, candidate_version):
     release.build(source, snapshot, output, 'linux-x86_64', url)
     binaries = output / 'cargo-target/x86_64-unknown-linux-gnu/release'
     info.update({'rustc': compiler, 'glibc_ceiling': '2.36', 'binaries': {
-        name: audit_elf(binaries / name) for name in ['pactrun', 'pactrun-launcher']}})
+        name: audit_elf(binaries / name) for name in ['pactrun']}})
     (work / 'linux-abi.json').write_text(json.dumps(info, indent=2) + '\n')
 
 
@@ -215,12 +215,12 @@ def direct(artifacts, work):
         archive = artifacts / f'output/assets/{stem}-{part["product_version"]}-linux-x86_64{suffix}.tar.gz'
         install = work / flavor
         unpack(archive, install)
-        payload = install / ('pactrun' if flavor == 'standalone' else 'libexec/pactrun')
+        payload = install / ('pactrun' if flavor == 'standalone' else 'bin/' + stem)
         if release.sha(payload) != audit['binaries']['pactrun']['sha256']:
             raise ValueError('Archive payload is not the ABI-audited executable')
-        entry = payload if flavor == 'standalone' else install / 'bin' / stem
-        if flavor != 'standalone' and release.sha(entry) != audit['binaries']['pactrun-launcher']['sha256']:
-            raise ValueError('Archive launcher is not the ABI-audited executable')
+        entry = payload
+        if (install / 'libexec').exists():
+            raise ValueError('Current archives must not contain a second executable layer')
         cases[flavor] = smoke(entry, work / (flavor + '-data'), part)
     # A real regression control: the immutable published alpha.3 archive must
     # still fail for the original reason, not for unrelated permissions or setup.
@@ -244,6 +244,12 @@ def stage_formula(template, url, version, digest):
         template, count = re.subn(r"(?m)^  " + field + r" '[^']*'$", f"  {field} '{value}'", template)
         if count != 1:
             raise ValueError('Expected one checked-in formula field: ' + field)
+    legacy = "    prefix.install 'bin', 'libexec', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'"
+    current = "    prefix.install 'bin', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'"
+    if template.count(legacy) == 1:
+        template = template.replace(legacy, current)
+    elif template.count(current) != 1:
+        raise ValueError('Expected the qualified native archive install layout')
     return template
 
 
@@ -284,17 +290,17 @@ def brew(artifacts, work, manager):
         after = run([manager, 'list', '--formula', '--versions'], env=env).stdout.decode()
         (work / 'dependencies-after.txt').write_text(after)
         prefix = Path(run([manager, '--prefix', 'pactrun-ci/acceptance/pactrun-preview'], env=env).stdout.decode().strip())
-        if release.sha(prefix / 'libexec/pactrun') != audit['binaries']['pactrun']['sha256']:
+        if release.sha(prefix / 'bin/pactrun') != audit['binaries']['pactrun']['sha256']:
             raise ValueError('Homebrew installed a different executable')
-        if release.sha(prefix / 'bin/pactrun') != audit['binaries']['pactrun-launcher']['sha256']:
-            raise ValueError('Homebrew installed a different launcher')
+        if (prefix / 'libexec').exists():
+            raise ValueError('Homebrew installed an unexpected executable layer')
         cases = smoke(prefix / 'bin/pactrun', work / 'managed-test', part)
         run([manager, 'test', 'pactrun-ci/acceptance/pactrun-preview'], env=env)
         run([manager, 'uninstall', 'pactrun-ci/acceptance/pactrun-preview'], env=env)
         if environment()['system_libc'] != host['system_libc']:
             raise ValueError('System libc changed during Homebrew validation')
         host.update({'candidate': part['source_commit'], 'cases': cases, 'dependencies_before': before,
-                     'dependencies_after': after, 'no_dependency_bypass': True, 'same_payload_and_launcher': True})
+                     'dependencies_after': after, 'no_dependency_bypass': True, 'same_single_executable': True})
         (work / 'result.json').write_text(json.dumps(host, indent=2) + '\n')
     finally:
         server.shutdown()

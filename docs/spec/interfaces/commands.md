@@ -194,15 +194,28 @@ DeleteInput(instance, input_id, expected_version)
 ExportInput(instance, input_id, destination, secret_authorization?)
 ```
 
-The standalone executable MUST obtain a non-empty absolute caller-provisioned
-storage root from `PACTRUN_STORAGE_ROOT` and use its fixed `database/`,
-`runtime-content/`, and `staging/` children. A missing or invalid value MUST
-fail before data acquisition, schema migration, or persistent side effects.
-The standalone executable has no `--storage-root` option or platform default. `pack generate-id`,
-help queries, and root `--version` do not need the variable; the variable is
-process configuration and is not an Input acquisition channel. Native package
-launchers supply a platform-selected root when this variable is absent; they
-do not replace an explicitly supplied value, including an invalid one.
+All delivery forms use the same executable and Store-selection rules. An explicit
+`PACTRUN_STORAGE_ROOT` MUST take precedence, including an invalid or empty value.
+Without it, the OS-reported executable stem `pactrun` selects the normal data root and
+`pactrun-test` selects the test data root. An unrecognized executable stem MUST
+require an explicit root rather than guess the normal entry. A command alias or
+caller-supplied argv[0] MUST NOT replace that OS-reported selection.
+
+The Windows data base is `LOCALAPPDATA`. The Linux data base is `XDG_DATA_HOME`
+when present, otherwise `HOME/.local/share`. The selected base MUST be absolute;
+an invalid supplied base MUST NOT fall back to another location. The executable
+appends `pactrun` or `pactrun-test` to the base. Store validation, preparation and
+the fixed `database/`, `runtime-content/`, and `staging/` children remain owned by
+the storage layer. Invalid configuration MUST fail before data acquisition,
+schema migration or persistent side effects. There is no `--storage-root` option.
+
+`pack generate-id`, help queries and root `--version` do not need storage
+configuration. Selecting a path MUST NOT create a Store. The resolved Store root
+MUST be supplied explicitly to executed children without mutating global process
+environment, including when a Hook invokes a differently named Pactrun entry.
+This process configuration is not an Input acquisition or authorization channel.
+
+**Verification: PR-TEST-0626, PR-TEST-0696.**
 
 Help queries use `pactrun [--format human|json|jsonl] <command-path> --help`,
 where the path contains only command words and may be empty for root help.

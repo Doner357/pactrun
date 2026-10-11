@@ -156,7 +156,18 @@ fn validate(releases: &[Release]) -> Result<BTreeMap<ProductVersion, &Release>, 
 fn ruby(text: &str) -> String {
     format!("'{}'", text.replace('\\', "\\\\").replace('\'', "\\'"))
 }
+// These published archives retain their two-image install layout unchanged.
+fn native_directories(release: &Release) -> &'static str {
+    match release.product_version.as_str() {
+        "1.0.0-alpha.1" | "1.0.0-alpha.2" | "1.0.0-alpha.3" | "1.0.0-alpha.4" | "1.0.0-alpha.5" => {
+            "'bin', 'libexec'"
+        }
+        _ => "'bin'",
+    }
+}
+
 fn definitions(release: &Release) -> BTreeMap<String, String> {
+    let native_dirs = native_directories(release);
     let mut normalized = release.clone();
     normalized
         .artifacts
@@ -203,7 +214,7 @@ fn definitions(release: &Release) -> BTreeMap<String, String> {
         } else {
             // Official Homebrew Formula DSL; only immutable program files are installed.
             files.insert(format!("Formula/{app}.rb"),format!(
-                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    prefix.install 'bin', 'libexec'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",ruby(&artifact.url),ruby(&release.product_version),ruby(&artifact.sha256)));
+                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    prefix.install {native_dirs}\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",ruby(&artifact.url),ruby(&release.product_version),ruby(&artifact.sha256)));
         }
     }
     files
@@ -269,6 +280,7 @@ fn package_base(major: u64, test: bool) -> String {
 }
 
 fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<String, String> {
+    let native_dirs = native_directories(release);
     let app = if test { "pactrun-test" } else { "pactrun" };
     let flavor = if test { "test" } else { "normal" };
     let mut files = BTreeMap::new();
@@ -297,7 +309,7 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             );
         } else {
             files.insert(format!("Formula/{package}.rb"), format!(
-                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install 'bin', 'libexec', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
+                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install {native_dirs}, 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
                 ruby(&artifact.url), ruby(&release.product_version), ruby(&artifact.sha256)));
         }
     }
@@ -585,6 +597,41 @@ pub(crate) fn publish_local(input: &Path, repo: &Path, default_ref: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Test-ID: PR-TEST-0697
+    // Verifies: PR-REQ-0333
+    #[test]
+    fn single_image_catalog_keeps_published_legacy_exact_installers_unchanged() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let records = load(&root.join("releases/catalog.json")).unwrap();
+        for old in records
+            .iter()
+            .filter(|r| native_directories(r).contains("libexec"))
+        {
+            let exact = old.product_version.replace(['.', '+'], "-");
+            for test in [false, true] {
+                let package = format!(
+                    "{}-exact-{exact}",
+                    if test { "pactrun-test" } else { "pactrun" }
+                );
+                for (file, expected) in catalog_definition(old, &package, test) {
+                    assert_eq!(
+                        fs::read_to_string(root.join(file))
+                            .unwrap()
+                            .replace("\r\n", "\n"),
+                        expected
+                    );
+                }
+            }
+        }
+        let current = release("1.0.0-alpha.6");
+        let definitions = catalog_definition(&current, "pactrun-preview", false);
+        let formula = &definitions["Formula/pactrun-preview.rb"];
+        assert!(formula.contains(
+            "prefix.install 'bin', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'"
+        ));
+        assert!(!formula.contains("libexec"));
+    }
+
     // Test-ID: PR-TEST-0640
     // Verifies: PR-REQ-0333
     #[test]

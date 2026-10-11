@@ -16,18 +16,18 @@ from the executable installation. ServiceStorage allocations have their own
 lifecycle; deleting or moving a store directory is not a supported way to retire
 an Instance or dispose of service data.
 
-`PACTRUN_STORAGE_ROOT` explicitly selects a store. An approved package launcher
-chooses a default only when this variable is absent:
+`PACTRUN_STORAGE_ROOT` explicitly selects a store. Pactrun chooses a default only
+when this variable is absent, using the actual executable's name:
 
 | Entry point | Windows default | Linux default |
 | --- | --- | --- |
-| Normal package `pactrun` | `%LOCALAPPDATA%\pactrun` | `$XDG_DATA_HOME/pactrun`, or `$HOME/.local/share/pactrun` when XDG_DATA_HOME is absent |
-| Test package `pactrun-test` | `%LOCALAPPDATA%\pactrun-test` | `$XDG_DATA_HOME/pactrun-test`, or `$HOME/.local/share/pactrun-test` |
-| Standalone executable | Explicit `PACTRUN_STORAGE_ROOT` for managed operations | Explicit `PACTRUN_STORAGE_ROOT` for managed operations |
+| `pactrun` (package or standalone) | `%LOCALAPPDATA%\pactrun` | `$XDG_DATA_HOME/pactrun`, or `$HOME/.local/share/pactrun` when XDG_DATA_HOME is absent |
+| `pactrun-test` | `%LOCALAPPDATA%\pactrun-test` | `$XDG_DATA_HOME/pactrun-test`, or `$HOME/.local/share/pactrun-test` |
+| Renamed executable with another stem | Explicit `PACTRUN_STORAGE_ROOT` | Explicit `PACTRUN_STORAGE_ROOT` |
 
 Platform data bases must be absolute paths. An explicitly empty override is an
 invalid selection, not a request to fall back to the default. Normal and test
-launchers can be pointed at the same store by an explicit override; their names
+entries can be pointed at the same store by an explicit override; their names
 alone do not protect valuable data after you override the location.
 
 Pactrun prepares a missing Store automatically when an operation needs to write
@@ -37,7 +37,7 @@ An existing but incomplete or unsupported Store is not treated as a new one.
 
 ## Choose a different data location
 
-The package launcher's default is sufficient for ordinary use. To select another
+The executable's default is sufficient for ordinary use. To select another
 Store, choose a new `pactrun-data` path in the current directory. For real use, choose a
 persistent location covered by your backup policy; do not put service data in a
 disposable tutorial directory.
@@ -68,9 +68,9 @@ performing a write and confirm that the objects are the ones you expect.
 
 Changing the selection neither copies data nor moves an Instance. Restore the
 previous environment value, or close the dedicated terminal, when finished.
-If no override is set, the outer shell may show no variable even though a package
-launcher supplies its default to the child process. Use the table above and the
-launcher delivered with your package to identify that location.
+If no override is set, the outer shell may show no variable even though the
+executable selects its default internally. Use the table above to identify that
+location. Executed Hooks receive the selected root explicitly.
 
 ## If a store is refused
 

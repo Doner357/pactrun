@@ -41,9 +41,14 @@ pub(crate) struct StagedFile {
 #[derive(Debug)]
 pub(crate) struct ExecutionDirectory {
     root: PathBuf,
+    storage_root: PathBuf,
 }
 
 impl ExecutionDirectory {
+    pub(crate) fn storage_root(&self) -> &Path {
+        &self.storage_root
+    }
+
     pub(crate) fn root(&self) -> &Path {
         &self.root
     }
@@ -285,7 +290,14 @@ impl StagingSession {
         let root = self.session.join("delivery");
         create_private_directory(&root)
             .map_err(|error| StagingError::io("create delivery directory", error))?;
-        Ok(ExecutionDirectory { root })
+        Ok(ExecutionDirectory {
+            root,
+            storage_root: self
+                .root
+                .parent()
+                .expect("staging has a Store parent")
+                .to_path_buf(),
+        })
     }
 
     pub(crate) fn belongs_to_storage(&self, root: &Path) -> bool {
@@ -299,7 +311,14 @@ impl StagingSession {
         let root = self.session.join(format!("execution-{run}"));
         create_private_directory(&root)
             .map_err(|error| StagingError::io("create execution directory", error))?;
-        Ok(ExecutionDirectory { root })
+        Ok(ExecutionDirectory {
+            root,
+            storage_root: self
+                .root
+                .parent()
+                .expect("staging has a Store parent")
+                .to_path_buf(),
+        })
     }
     pub(crate) fn create_migration_execution_directory(
         &self,
@@ -309,7 +328,14 @@ impl StagingSession {
         let root = self.session.join(format!("execution-{run}-edge-{edge}"));
         create_private_directory(&root)
             .map_err(|error| StagingError::io("create Migration execution directory", error))?;
-        Ok(ExecutionDirectory { root })
+        Ok(ExecutionDirectory {
+            root,
+            storage_root: self
+                .root
+                .parent()
+                .expect("staging has a Store parent")
+                .to_path_buf(),
+        })
     }
 
     pub(crate) fn stage_managed_input(

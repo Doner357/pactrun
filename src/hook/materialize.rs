@@ -498,6 +498,10 @@ impl MaterializedAction {
         self.directory.root()
     }
 
+    pub(super) fn storage_root(&self) -> &Path {
+        self.directory.storage_root()
+    }
+
     pub(super) fn output_handle_set(&self) -> BTreeSet<String> {
         self.outputs
             .iter()

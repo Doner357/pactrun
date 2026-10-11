@@ -150,10 +150,10 @@ pub struct HookProcess {
 }
 
 impl HookProcess {
-    pub fn spawn_captured<S: AsRef<OsStr>, const N: usize>(
+    pub fn spawn_captured<S: AsRef<OsStr>>(
         program: &Path,
         arguments: &[S],
-        discovery: [(&str, &str); N],
+        discovery: &[(&str, &OsStr)],
         stdout: &File,
         stderr: &File,
     ) -> io::Result<Self> {
@@ -166,13 +166,13 @@ impl HookProcess {
             Some((stdout, stderr)),
         )
     }
-    /// Inherits the parent environment with the two protocol discovery values
-    /// replaced. The admitted pathname is passed unchanged as lpApplicationName.
-    pub fn spawn<S: AsRef<OsStr>, const N: usize>(
+    /// Inherits the parent environment with the supplied child values replaced.
+    /// The admitted pathname is passed unchanged as lpApplicationName.
+    pub fn spawn<S: AsRef<OsStr>>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); N],
+        discovery: &[(&str, &OsStr)],
     ) -> io::Result<Self> {
         Self::spawn_inner(program, arguments, terminal, discovery, None)
     }
@@ -180,30 +180,30 @@ impl HookProcess {
     /// Test-only environment extension for host-native integration fixtures.
     /// It uses the same process-creation and Job Object path as `spawn`.
     #[doc(hidden)]
-    pub fn spawn_with_extra_environment<S: AsRef<OsStr>, const N: usize>(
+    pub fn spawn_with_extra_environment<S: AsRef<OsStr>>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); N],
+        discovery: &[(&str, &OsStr)],
         extra: (&str, &OsStr),
     ) -> io::Result<Self> {
         Self::spawn_inner(program, arguments, terminal, discovery, Some(extra))
     }
 
-    fn spawn_inner<S: AsRef<OsStr>, const N: usize>(
+    fn spawn_inner<S: AsRef<OsStr>>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); N],
+        discovery: &[(&str, &OsStr)],
         extra: Option<(&str, &OsStr)>,
     ) -> io::Result<Self> {
         Self::spawn_inner_captured(program, arguments, terminal, discovery, extra, None)
     }
-    fn spawn_inner_captured<S: AsRef<OsStr>, const N: usize>(
+    fn spawn_inner_captured<S: AsRef<OsStr>>(
         program: &Path,
         arguments: &[S],
         terminal: HookTerminal,
-        discovery: [(&str, &str); N],
+        discovery: &[(&str, &OsStr)],
         extra: Option<(&str, &OsStr)>,
         capture: Option<(&File, &File)>,
     ) -> io::Result<Self> {
@@ -212,7 +212,7 @@ impl HookProcess {
             program,
             arguments,
             terminal,
-            &discovery,
+            discovery,
             program.as_os_str(),
             extra,
             capture,
@@ -319,7 +319,7 @@ fn create_native_process<S: AsRef<OsStr>>(
     program: &Path,
     arguments: &[S],
     terminal: HookTerminal,
-    discovery: &[(&str, &str)],
+    discovery: &[(&str, &OsStr)],
     argv0: &OsStr,
     extra: Option<(&str, &OsStr)>,
 ) -> io::Result<CreatedProcess> {
@@ -329,7 +329,7 @@ fn create_native_process_captured<S: AsRef<OsStr>>(
     program: &Path,
     arguments: &[S],
     terminal: HookTerminal,
-    discovery: &[(&str, &str)],
+    discovery: &[(&str, &OsStr)],
     argv0: &OsStr,
     extra: Option<(&str, &OsStr)>,
     capture: Option<(&File, &File)>,
@@ -636,7 +636,7 @@ fn compare_keys(left: &[u16], right: &[u16]) -> Ordering {
 
 fn environment_block(
     parent: impl IntoIterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
-    discovery: &[(&str, &str)],
+    discovery: &[(&str, &OsStr)],
     extra: Option<(&str, &OsStr)>,
 ) -> io::Result<Vec<u16>> {
     let mut entries = parent
@@ -646,7 +646,7 @@ fn environment_block(
     for (key, value) in discovery {
         let key = checked_wide(OsStr::new(key))?;
         entries.retain(|(existing, _)| compare_keys(existing, &key) != Ordering::Equal);
-        entries.push((key, checked_wide(OsStr::new(value))?));
+        entries.push((key, checked_wide(value)?));
     }
     if let Some((key, value)) = extra {
         let key = checked_wide(OsStr::new(key))?;
@@ -663,4 +663,35 @@ fn environment_block(
     }
     block.push(0);
     Ok(block)
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+
+    // Supporting coverage for PR-TEST-0696: native values must not be UTF-8-coerced.
+    #[test]
+    fn selected_store_replaces_case_variants_without_losing_native_code_units() {
+        let units = [b'C' as u16, b':' as u16, b'\\' as u16, 0xd800];
+        let root = OsString::from_wide(&units);
+        let block = environment_block(
+            [
+                (
+                    OsString::from("pactrun_storage_root"),
+                    OsString::from("ambient"),
+                ),
+                (OsString::from("A"), OsString::from("preserved")),
+            ],
+            &[("PACTRUN_STORAGE_ROOT", root.as_os_str())],
+            None,
+        )
+        .unwrap();
+        let mut expected: Vec<u16> = "A=preserved\0PACTRUN_STORAGE_ROOT="
+            .encode_utf16()
+            .collect();
+        expected.extend(units);
+        expected.extend([0, 0]);
+        assert_eq!(block, expected);
+    }
 }
