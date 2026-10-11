@@ -81,3 +81,20 @@ The default mode tests isolated source-selection fixtures. Public acquisition
 uses the runner's explicit `--public-source` and `--public-version` options;
 it is not implied by a default fixture pass. See [delivery tools](../tools/README.md)
 for the candidate build and publication boundary.
+
+The runner selects a fixture Pack source format from the selected releases'
+advertised common support. Its unchanged-Store-header and baseline-reinstall
+checks require identical Persistence defaults; incompatible matrices are rejected
+before creating the rehearsal directory or starting a package manager.
+Installation identities come from CLI JSON, using that envelope's machine format
+to construct the exact Revision reference.
+
+Run the offline runner regressions without installing packages or changing PATH:
+
+```text
+python -B -m unittest tools.test_native_package_acceptance
+```
+
+The non-ignored `native_acceptance_runner_offline_regressions` Cargo test also
+runs these checks in the ordinary Rust test gate. The real-manager test remains
+opt-in and requires the artifact inputs and authorization above.
