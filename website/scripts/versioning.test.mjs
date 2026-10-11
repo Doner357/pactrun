@@ -40,11 +40,13 @@ test('released and development documents have disjoint routes and scoped search'
 });
 
 test('release CLI help comes from its snapshot, with release provenance', async () => {
-  const catalog = await editionCatalog(site, versions.find(item => item.id === '1.0.0-alpha.4'));
-  assert.equal(catalog.help.version, '1.0.0-alpha.4');
-  assert.equal(catalog.help.release_tag, 'v1.0.0-alpha.4');
-  assert.match(catalog.help.source_commit, /^[a-f0-9]{40}$/);
-  assert.ok(catalog.help.text.startsWith('Pactrun 1.0.0-alpha.4\nUsage:'));
+  for (const version of versions.filter(item => item.id !== 'current')) {
+    const catalog = await editionCatalog(site, version);
+    assert.equal(catalog.help.version, version.id);
+    assert.equal(catalog.help.release_tag, 'v' + version.id);
+    assert.match(catalog.help.source_commit, /^[a-f0-9]{40}$/);
+    assert.ok(catalog.help.text.startsWith('Pactrun ' + version.id + '\nUsage:'));
+  }
 });
 
 test('text editions preserve body/schema fidelity and identify the product version', async () => {

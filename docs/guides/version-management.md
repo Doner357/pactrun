@@ -45,24 +45,25 @@ manager's hold/pin state. To resume updates, use `scoop unhold pactrun-preview` 
 
 ## Install an exact published version
 
-Exact entries do not move when a new Preview is published. For alpha.4:
+Exact entries do not move when a new Preview is published. For alpha.5:
 
 ```powershell
 scoop uninstall pactrun-preview
-scoop install pactrun/pactrun-exact-1-0-0-alpha-4
+scoop install pactrun/pactrun-exact-1-0-0-alpha-5
 pactrun --version
 ```
 
 ```sh
 brew uninstall doner357/pactrun/pactrun-preview
-brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-4
+brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-5
 pactrun --version
 ```
 
-The alpha.1, alpha.2 and alpha.3 exact entries remain available as
+The alpha.1, alpha.2, alpha.3 and alpha.4 exact entries remain available as
 `pactrun-exact-1-0-0-alpha-1`, `pactrun-exact-1-0-0-alpha-2` and
-`pactrun-exact-1-0-0-alpha-3`; publishing alpha.4 does not rewrite their assets.
-The older Linux builds retain their glibc 2.39 requirement; selecting an older
+`pactrun-exact-1-0-0-alpha-3` and `pactrun-exact-1-0-0-alpha-4`; publishing alpha.5
+does not rewrite their assets. The alpha.1 through alpha.3 Linux builds retain
+their glibc 2.39 requirement; selecting one of those older
 exact version is not a workaround for Debian 12 compatibility.
 
 Before switching, record the installed package/version, confirm no Pactrun operation
@@ -71,6 +72,17 @@ stop a service or force an unlock merely to make a package update proceed. An
 ordinary native update cannot select an older version; the commands above are an
 explicit switch. If the old executable cannot read current data, stop rather than
 trying to remove or relabel that data.
+
+## Updating to alpha.5
+
+Opening an alpha.4 Store with alpha.5 upgrades its management schema to
+Persistence `1.0-alpha.4`, preserving existing Revision and Instance identities.
+Installing the executable alone does not upgrade the Store. An older executable
+cannot reopen the upgraded Store; reinstalling it is not a data rollback.
+
+Old Revision aliases convert to local names only without information loss.
+Multiple aliases on one Revision or names outside the supported grammar block
+the upgrade and must be corrected with the older version first.
 
 ## Stable and Preview switching
 
