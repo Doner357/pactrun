@@ -20,7 +20,7 @@ fn source(parent: &Path, version: u8) -> PathBuf {
     fs::create_dir_all(&root).unwrap();
     fs::write(root.join("data.bin"), b"exact runtime bytes\0\xff").unwrap();
     fs::write(root.join("empty.bin"), b"").unwrap();
-    fs::write(root.join("pactrun.yaml"),"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content:\n  files:\n    - {id: alpha, source: data.bin, path: lib/alpha.bin, executable: true}\n    - {id: beta, source: data.bin, path: lib/beta.bin}\n    - {id: empty, source: empty.bin, path: empty.bin}\nportable_metadata:\n  reference_labels: [{label: stable, source: {kind: unattributed}}]\n  presentation: [{target: {kind: revision}, field: display_name, value: Published}]\n  provenance: [{kind: source_uri, source_uri: 'https://example.test/source'}]\n").unwrap();
+    fs::write(root.join("pactrun.yaml"),"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content:\n  files:\n    - {id: alpha, source: data.bin, path: lib/alpha.bin, executable: true}\n    - {id: beta, source: data.bin, path: lib/beta.bin}\n    - {id: empty, source: empty.bin, path: empty.bin}\nportable_metadata:\n  presentation: [{target: {kind: revision}, field: summary, value: Published}]\n  provenance: [{kind: source_uri, source_uri: 'https://example.test/source'}]\n").unwrap();
     if version == 3 {
         let manifest = fs::read_to_string(root.join("pactrun.yaml")).unwrap();
         fs::write(root.join("pactrun.yaml"),manifest.replace("revision: {}","revision:\n  actions:\n    - id: run\n      access: observe\n      parameters: []\n      outputs: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {kind: shell_loader, shell: sh, command: sh, script: alpha}\n        args: []\n        io: {terminal: none}")).unwrap();
@@ -282,11 +282,11 @@ fn portable_metadata_is_opt_in_and_conflicts_are_transactional() {
     install(&other, &full);
     let p = PactrunPersistence::open(&b).unwrap();
     let before = p.load_revision_metadata(&installed.revision).unwrap();
-    assert_eq!(before.items.len(), 3);
+    assert_eq!(before.items.len(), 2);
     let batch = RevisionMetadataMutationBatch::new([
         RevisionMetadataMutation::CompareAndSetPresentation {
             target: PresentationTargetV1::Revision,
-            field: PresentationField::DisplayName,
+            field: PresentationField::Summary,
             expected: CurrentState::Present(PresentationValue::parse("Published").unwrap()),
             desired: CurrentState::Present(PresentationValue::parse("Local").unwrap()),
         },
@@ -334,7 +334,7 @@ fn portable_metadata_is_opt_in_and_conflicts_are_transactional() {
         )
         .unwrap();
     let after = p.load_revision_metadata(&installed.revision).unwrap();
-    assert_eq!(after.items.len(), 4);
+    assert_eq!(after.items.len(), 3);
     assert!(after.items.iter().any(
         |i| matches!(i,RevisionMetadataItem::Presentation(p) if p.value.as_str()=="Published")
     ));
@@ -376,7 +376,7 @@ fn malformed_pack_never_bypasses_validation_on_repeat_install() {
         .unwrap();
     let unpacked = temp.path().join("unpacked");
     unpack(&distribution, &unpacked);
-    fs::write(unpacked.join("pactrun.yaml"), b"source_format: 1.0-alpha.1").unwrap();
+    fs::write(unpacked.join("pactrun.yaml"), b"source_format: 1.0-alpha.2").unwrap();
     assert!(
         app.install_pack(
             &unpacked,
@@ -646,6 +646,7 @@ fn concurrent_metadata_import_and_precommit_cancellation_preserve_atomicity() {
             &publications,
             Some(&RevisionMetadataMutationBatch::new([]).unwrap()),
             Some(PackMetadataConflict::Reject),
+            &InstallNames::default(),
             &CancelBeforeCommit
         )
         .is_err()
@@ -665,31 +666,10 @@ fn concurrent_metadata_import_and_precommit_cancellation_preserve_atomicity() {
 // Verifies: PR-REQ-0084, PR-REQ-0354, PR-REQ-0356
 #[test]
 fn pack_metadata_dto_roundtrips_every_portable_variant() {
-    let label = ReferenceLabel::parse("release").unwrap();
     let name = PublisherName::parse("publisher").unwrap();
     let namespace = PublisherNamespace::parse("scope").unwrap();
     let uri = SourceUri::parse("https://example.test/source").unwrap();
     let mut metadata = PortableMetadataTemplate::default();
-    for source in [
-        ReferenceLabelSource::Unattributed,
-        ReferenceLabelSource::SourceUri(uri.clone()),
-        ReferenceLabelSource::Publisher {
-            name: name.clone(),
-            namespace: None,
-        },
-        ReferenceLabelSource::Publisher {
-            name: name.clone(),
-            namespace: Some(namespace.clone()),
-        },
-        ReferenceLabelSource::PublisherSourceUri {
-            name: name.clone(),
-            namespace: Some(namespace.clone()),
-            source_uri: uri.clone(),
-        },
-    ] {
-        metadata.reference_labels.push((label.clone(), source));
-    }
-    metadata.reference_labels.sort();
     let action = ActionIdentity::parse("run").unwrap();
     let parameter = ParameterIdentity::parse("option").unwrap();
     let targets = [
@@ -713,6 +693,9 @@ fn pack_metadata_dto_roundtrips_every_portable_variant() {
     ];
     for target in targets {
         for field in PresentationField::ALL {
+            if target == PresentationTargetV1::Revision && field == PresentationField::DisplayName {
+                continue;
+            }
             metadata.presentation.push(PortablePresentationTemplate {
                 target: target.clone(),
                 field,
@@ -802,7 +785,7 @@ fn pack_process_loss_preserves_atomic_revision_and_metadata_publication() {
         let stored = p.load_revision(&id).unwrap();
         assert_eq!(stored.is_some(), point == "after_revision_commit");
         if stored.is_some() {
-            assert_eq!(p.load_revision_metadata(&id).unwrap().items.len(), 3);
+            assert_eq!(p.load_revision_metadata(&id).unwrap().items.len(), 2);
         }
         drop(p);
         assert!(
@@ -813,7 +796,7 @@ fn pack_process_loss_preserves_atomic_revision_and_metadata_publication() {
                 .success()
         );
         let p = PactrunPersistence::open(&target).unwrap();
-        assert_eq!(p.load_revision_metadata(&id).unwrap().items.len(), 3);
+        assert_eq!(p.load_revision_metadata(&id).unwrap().items.len(), 2);
     }
 }
 
@@ -977,7 +960,10 @@ fn pack_cli_output_failure_reports_publication_truth() {
         ),
         1
     );
-    assert!(!failed.exists());
+    assert!(
+        failed.exists(),
+        "warning delivery failure must not cancel publication"
+    );
 }
 
 // Supporting coverage for PR-TEST-0542: real ZIP64 entry count, not a mocked size.
@@ -1006,7 +992,7 @@ fn pack_streaming_zip_descriptors_preserve_separate_compressed_lengths() {
     let temp = roots();
     let root = store(temp.path(), "store");
     let session = StagingSession::prepare(&root).unwrap();
-    let yaml=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n";
+    let yaml=b"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n";
     for method in [
         zip::CompressionMethod::Stored,
         zip::CompressionMethod::Deflated,
@@ -1043,7 +1029,7 @@ fn pack_manifest_sizes_and_implicit_directory_aliases_are_preflighted() {
     let root = store(temp.path(), "store");
     let session = StagingSession::prepare(&root).unwrap();
     let path = temp.path().join("hostile.pack");
-    let manifest=b"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n".to_vec();
+    let manifest=b"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000011\nrevision: {}\nruntime_content: {}\n".to_vec();
     zip_files(
         &path,
         &[("pactrun.yaml".into(), manifest.clone())],

@@ -4,16 +4,13 @@ title: Resource model specification moved
 
 # Resource model specification moved
 
-This is an informative compatibility entry, not a second specification.
-The complete resource-model specification now lives in
+The resource-model specification is in
 [Packages, Revisions, and Instances](../../spec/core/objects.md).
-All existing requirement IDs, verification declarations, and product semantics
-were preserved. Other Developer specifications remain in place during edition 1.
 
 For a plain-language explanation, read
 [the concept guide](../../pactrun-users/concepts/packages-revisions-and-instances.md).
 
-## Previous requirement links
+## Requirement links {#previous-requirement-links}
 
 <a id="pr-req-0086---exact-resolution-before-operation" />
 [PR-REQ-0086 - Exact resolution before operation](../../spec/core/objects.md#pr-req-0086---exact-resolution-before-operation)
@@ -25,7 +22,7 @@ For a plain-language explanation, read
 [PR-REQ-0088 - Historical identity after name reuse](../../spec/core/objects.md#pr-req-0088---historical-identity-after-name-reuse)
 
 <a id="pr-req-0089---revision-labels-remain-references" />
-[PR-REQ-0089 - Revision labels remain references](../../spec/core/objects.md#pr-req-0089---revision-labels-remain-references)
+[PR-REQ-0089 - Local names remain references](../../spec/core/objects.md#pr-req-0089---revision-labels-remain-references)
 
 <a id="pr-req-0261---revision-installation-publication" />
 [PR-REQ-0261 - Revision installation publication](../../spec/core/objects.md#pr-req-0261---revision-installation-publication)

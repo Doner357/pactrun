@@ -95,7 +95,7 @@ mod tests {
             .unwrap();
         fs::write(
             temporary.path().join(MANIFEST_NAME),
-            b"source_format: 1.0-alpha.1\n",
+            b"source_format: 1.0-alpha.2\n",
         )
         .unwrap();
         fs::create_dir(temporary.path().join("content")).unwrap();
@@ -116,7 +116,7 @@ mod tests {
             .unwrap()
             .read_to_string(&mut manifest)
             .unwrap();
-        assert_eq!(manifest, "source_format: 1.0-alpha.1\n");
+        assert_eq!(manifest, "source_format: 1.0-alpha.2\n");
         let source = SourceRelativePathV1::parse("content/Payload.bin").unwrap();
         let mut bytes = Vec::new();
         root.open_runtime_source(&source)

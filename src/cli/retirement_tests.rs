@@ -279,7 +279,7 @@ fn deletion_cli_plans_without_runs_then_removes_storage_and_preserves_exact_hist
     );
     assert_ne!(code, 0);
     assert!(path.join("secret").exists());
-    let (code, out, err) = invoke(
+    let (code, _, err) = invoke(
         &root,
         &[
             "instance",
@@ -290,7 +290,7 @@ fn deletion_cli_plans_without_runs_then_removes_storage_and_preserves_exact_hist
         ],
     );
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains(&instance.id.to_string()));
+    assert!(err.contains(&instance.id.to_string()));
     assert!(!path.exists());
     let p = PactrunPersistence::open(&root).unwrap();
     assert!(p.load_instance_by_id(instance.id).unwrap().is_none());
@@ -308,7 +308,7 @@ fn deletion_cli_plans_without_runs_then_removes_storage_and_preserves_exact_hist
         &["instance", "deletion", "show", &instance.id.to_string()],
     );
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("managed: false"));
+    assert!(out.contains("Managed: No"));
     assert!(out.contains("instance_delete"));
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     assert!(p.load_instance_by_id(replacement.id).unwrap().is_some());
@@ -322,7 +322,7 @@ fn abandon_handoff_and_discard_cli_preserve_bytes_until_exact_confirmation() {
     let (_temp, root, instance, allocation, path) = fixture();
     let (code, _, err) = invoke(&root, &["instance", "abandon", "retire"]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("preserve remaining service data"));
+    assert!(err.contains("preserves remaining service data"));
     assert!(err.contains("Stop external service processes separately"));
     assert_eq!(
         fs::read(path.join("secret")).unwrap(),
@@ -356,7 +356,7 @@ fn abandon_handoff_and_discard_cli_preserve_bytes_until_exact_confirmation() {
         ],
     );
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("native_location:"));
+    assert!(out.contains("Native Location"));
     assert!(out.contains(&format!("alloc-{allocation}")));
     let args = [
         "service-storage",
@@ -367,13 +367,13 @@ fn abandon_handoff_and_discard_cli_preserve_bytes_until_exact_confirmation() {
     ];
     let (code, out, err) = invoke(&root, &args);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("new_completion: true"));
+    assert!(out.contains("New Completion: Yes"));
     assert!(!path.exists());
     fs::create_dir(&path).unwrap();
     fs::write(path.join("replacement"), b"must not be removed").unwrap();
     let (code, out, err) = invoke(&root, &args);
     assert_eq!(code, 0, "{err}");
-    assert!(out.contains("new_completion: false"));
+    assert!(out.contains("New Completion: No"));
     assert_eq!(
         fs::read(path.join("replacement")).unwrap(),
         b"must not be removed"

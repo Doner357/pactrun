@@ -293,9 +293,8 @@ fn migration_error(error: MigrationError) -> CliError {
 pub(super) fn execute(
     command: MigrationCommand,
     root: &Path,
-    output: &mut dyn Write,
     cancellation: &ActionCancellation,
-    format: presentation::Format,
+    format: reply::OutputContext,
 ) -> Result<(), CliError> {
     if cancellation.is_requested() {
         return Err(CliError::operation(
@@ -307,7 +306,7 @@ pub(super) fn execute(
         MigrationCommand::List { name, target, .. }
         | MigrationCommand::Plan { name, target, .. } => (name, target),
     };
-    // Resolve labels exactly using the same semantics as other human commands.
+    // All renderers share the same resolved identity and compilation snapshot.
     let target = resolve_revision(&app, target.clone())?;
     let bound = match &command {
         MigrationCommand::List {
@@ -328,12 +327,7 @@ pub(super) fn execute(
         .observe_migration_compilation(instance)
         .map_err(|e| CliError::operation(e.to_string()))?;
     match command {
-        MigrationCommand::List {
-            after,
-            limit,
-            no_trunc,
-            ..
-        } => {
+        MigrationCommand::List { after, limit, .. } => {
             let after = after.map(Selector::full);
             let page = list_migration_paths(
                 &observation.revisions,
@@ -343,21 +337,34 @@ pub(super) fn execute(
                 limit,
             )
             .map_err(migration_error)?;
-            if format == presentation::Format::Json {
-                return presentation::render(
+            let ids: Vec<_> = page.candidates.iter().map(|c| c.id.to_string()).collect();
+            let mut widths = vec![12; ids.len()];
+            if !ids.is_empty() {
+                visit_paths(&observation, &target, cancellation, |candidate| {
+                    let other = candidate.id.to_string();
+                    for (id, width) in ids.iter().zip(&mut widths) {
+                        if *id != other {
+                            let shared = id[4..68]
+                                .bytes()
+                                .zip(other[4..68].bytes())
+                                .take_while(|(a, b)| a == b)
+                                .count();
+                            *width = (*width).max((shared + 1).min(64));
+                        }
+                    }
+                    true
+                })?;
+            }
+            {
+                presentation::emit_result(
                     format,
                     "instance migration-paths",
                     &capability_presentation::Presented {
-                        value: migration_presentation::Paths::from(&page),
+                        value: migration_presentation::Paths::new(&page, &widths),
                         presentation: path_presentation(&app, &page)?,
                     },
-                    output,
-                    |_, _| unreachable!(),
-                );
+                )
             }
-            let labels = path_labels(&observation, &target, &page, no_trunc, cancellation)?;
-            write_page(output, &page, &labels)?;
-            capability_presentation::write(output, &path_presentation(&app, &page)?, true)
         }
         MigrationCommand::Plan {
             no_retain_hook_text: _,
@@ -407,17 +414,16 @@ pub(super) fn execute(
                             MIGRATION_PATH_PAGE_DEFAULT,
                         )
                         .map_err(migration_error)?;
-                        if format == presentation::Format::Json {
+                        {
                             let mut error = migration_error(MigrationError::AmbiguousPath);
                             error.partial = Some(presentation::PartialResult::MigrationPaths(
-                                Box::new((&page).into()),
+                                Box::new(migration_presentation::Paths::new(
+                                    &page,
+                                    &vec![64; page.candidates.len()],
+                                )),
                             ));
                             return Err(error);
                         }
-                        let labels =
-                            path_labels(&observation, &target, &page, false, cancellation)?;
-                        write_page(output, &page, &labels)?;
-                        return Err(migration_error(MigrationError::AmbiguousPath));
                     }
                     Err(error) => return Err(migration_error(error)),
                 },
@@ -440,7 +446,7 @@ pub(super) fn execute(
             )
             .map_err(app_error)?;
             if !plan_only {
-                if format == presentation::Format::Json {
+                if format.requires_noninteractive() {
                     for edge in plan.edges() {
                         if let Some(hook) = &edge.bindings.declaration().hook {
                             require_json_terminal_free(hook.io.terminal)?;
@@ -479,26 +485,22 @@ pub(super) fn execute(
                     })) => run,
                     Err(error) => return Err(app_error(error)),
                 };
-                let mut warned = false;
                 loop {
                     match writer.advance_owner_continuation(run) {
                         Ok(true) => break,
                         Ok(false) => {}
                         Err(_) => {
-                            if !warned && format == presentation::Format::Human {
-                                let _ = writeln!(
-                                    output,
-                                    "Run {run}: owner retained while waiting for durable Migration state"
-                                );
-                                warned = true;
-                            }
+                            cancellation
+                                .delivery
+                                .progress(run, crate::hook::delivery::CorePhase::RetryingStorage);
                             thread::sleep(Duration::from_secs(1));
                         }
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
+                cancellation.diagnostics.finish();
                 let inspection=writer.managed_run_inspection(run).map_err(|error|app_error(error).with_run_context(run))?.ok_or_else(||CliError::operation("Migration acceptance was proven absent; no replacement Run was created").with_run_context(run))?;
-                if format == presentation::Format::Json {
+                {
                     let result = execution_presentation::Inspection::from(&inspection);
                     if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
                     {
@@ -509,15 +511,13 @@ pub(super) fn execute(
                                 CliError::operation("Instance disappeared after Migration")
                                     .with_run_context(run)
                             })?;
-                        return presentation::render(
+                        return presentation::emit_result(
                             format,
                             "instance migrate",
                             &migration_presentation::Completed {
                                 inspection: result,
                                 current_instance: (&current).into(),
                             },
-                            output,
-                            |_, _| unreachable!(),
                         );
                     }
                     let mut error = CliError::operation(
@@ -526,33 +526,6 @@ pub(super) fn execute(
                     error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                     return Err(error);
                 }
-                if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
-                {
-                    writeln!(output, "run: {run}\noutcome: succeeded").map_err(io_operation)?;
-                } else {
-                    snapshots::write_run(output, &inspection)?;
-                }
-                return match &inspection.run.state {
-                    RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded => {
-                        let current = writer
-                            .load_instance(instance)
-                            .map_err(app_error)?
-                            .ok_or_else(|| CliError::operation("Instance disappeared"))?;
-                        writeln!(
-                            output,
-                            "required_inputs_satisfied: {}",
-                            current.required_inputs_satisfied
-                        )
-                        .map_err(io_operation)
-                    }
-                    RunState::Finished(outcome) => Err(CliError::operation(format!(
-                        "Migration Run {run} finished as {}; last committed boundary retained",
-                        format_outcome(outcome.outcome)
-                    ))),
-                    RunState::Running(_) => Err(CliError::operation(
-                        "Migration has not reached a durable terminal state",
-                    )),
-                };
             }
             let requested: Vec<_> = plan
                 .edges()
@@ -567,256 +540,18 @@ pub(super) fn execute(
                 })
                 .collect();
             let author = capability_presentation::load(&app, &requested)?;
-            if format == presentation::Format::Json {
-                return presentation::render(
+            {
+                presentation::emit_result(
                     format,
                     "instance migrate",
                     &capability_presentation::Presented {
                         value: migration_presentation::Plan::new(&id, &plan, &policy),
                         presentation: author,
                     },
-                    output,
-                    |_, _| unreachable!(),
-                );
-            }
-            writeln!(
-                output,
-                "Migration preview\npath_id: {id}\nexpected_state_version: {}",
-                plan.expected_state_version()
-            )
-            .map_err(io_operation)?;
-            capability_presentation::write(output, &author, false)?;
-            if !plan.operator_inputs().is_empty() {
-                writeln!(output, "operator_input_acquisition: not_performed")
-                    .map_err(io_operation)?;
-            }
-            let timeout = |duration: Option<Duration>| {
-                duration
-                    .map(|d| d.as_millis().to_string())
-                    .unwrap_or_else(|| "unlimited".to_owned())
-            };
-            writeln!(
-                output,
-                "startup_timeout_ms: {}\nexecution_timeout_ms: {}\ntermination_grace_ms: {}",
-                timeout(policy.startup_timeout),
-                timeout(policy.action_timeout),
-                timeout(policy.termination_grace)
-            )
-            .map_err(io_operation)?;
-            for (index, edge) in plan.edges().iter().enumerate() {
-                let bindings = &edge.bindings;
-                writeln!(
-                    output,
-                    "edge {}: {} -> {}",
-                    index + 1,
-                    format_revision(bindings.source()),
-                    format_revision(bindings.target())
                 )
-                .map_err(io_operation)?;
-                if let Some(service) = &edge.service {
-                    writeln!(output, "  service_transform: {}", service.transform)
-                        .map_err(io_operation)?;
-                    writeln!(output, "  live_service_observation: not_performed")
-                        .map_err(io_operation)?;
-                    if !service.consumed_storages.is_empty()
-                        || !service.consumed_resources.is_empty()
-                    {
-                        writeln!(
-                            output,
-                            "  Binding consumption does not delete service bytes."
-                        )
-                        .map_err(io_operation)?;
-                    }
-                    for id in &service.created_storages {
-                        writeln!(output, "  create_storage: {}", id.as_str())
-                            .map_err(io_operation)?;
-                    }
-                    for id in &service.consumed_storages {
-                        writeln!(output, "  consume_source_storage_binding: {}", id.as_str())
-                            .map_err(io_operation)?;
-                    }
-                    for id in &service.consumed_resources {
-                        writeln!(output, "  consume_source_resource_binding: {}", id.as_str())
-                            .map_err(io_operation)?;
-                    }
-                    for (presence, resource) in &service.create_presence {
-                        writeln!(
-                            output,
-                            "  create_resource: {} presence={}",
-                            resource.declaration.id.as_str(),
-                            match presence {
-                                ServiceCreatePresence::Any => "any",
-                                ServiceCreatePresence::Present => "present",
-                                ServiceCreatePresence::Absent => "absent",
-                            }
-                        )
-                        .map_err(io_operation)?;
-                    }
-                    for (requirement, _) in &service.requires {
-                        writeln!(
-                            output,
-                            "  service_requires: {}/{} {}: required {}",
-                            match requirement.reference.view {
-                                ServiceView::Current => "current",
-                                ServiceView::Source => "source",
-                                ServiceView::Target => "target",
-                            },
-                            match requirement.reference.role {
-                                ServiceRole::Active => "active",
-                                ServiceRole::Retained => "retained",
-                            },
-                            match &requirement.reference.scope {
-                                ServiceScope::Resource(id) => format!("resource {}", id.as_str()),
-                                ServiceScope::Storage(id) => format!("storage {}", id.as_str()),
-                            },
-                            match requirement.presence {
-                                ServicePresenceRequirement::Present => "present",
-                                ServicePresenceRequirement::Absent => "absent",
-                            }
-                        )
-                        .map_err(io_operation)?;
-                    }
-                }
-                for input in plan
-                    .operator_inputs()
-                    .iter()
-                    .filter(|i| i.revision == bindings.target().content_digest)
-                {
-                    writeln!(output, "  input file: {}", input.input.as_str())
-                        .map_err(io_operation)?;
-                }
-                for source in &bindings.declaration().requires_source {
-                    writeln!(
-                        output,
-                        "  requires_source: {}/{}",
-                        match source.role {
-                            InputBindingRoleV1::Active => "active",
-                            InputBindingRoleV1::Retained => "retained",
-                        },
-                        source.input_id.as_str()
-                    )
-                    .map_err(io_operation)?;
-                }
-                for input in &bindings.declaration().requires_target {
-                    writeln!(output, "  requires_target: {}", input.as_str())
-                        .map_err(io_operation)?;
-                }
-                for transition in &bindings.declaration().transitions {
-                    let kind = match transition {
-                        MigrationTransitionV1::Carry { .. } => "carry",
-                        MigrationTransitionV1::Declassify { .. } => "declassify",
-                        MigrationTransitionV1::Keep { .. } => "keep",
-                        MigrationTransitionV1::Discard { .. } => "discard",
-                    };
-                    writeln!(
-                        output,
-                        "  transition: {kind} {}/{} -> {}",
-                        match transition.source().role {
-                            InputBindingRoleV1::Active => "active",
-                            InputBindingRoleV1::Retained => "retained",
-                        },
-                        transition.source().input_id.as_str(),
-                        transition
-                            .target()
-                            .map(InputIdentity::as_str)
-                            .unwrap_or("none")
-                    )
-                    .map_err(io_operation)?;
-                }
-                for input in &bindings.declaration().produces_target {
-                    writeln!(output, "  mandatory_hook_output: {}", input.as_str())
-                        .map_err(io_operation)?;
-                }
-                writeln!(
-                    output,
-                    "  hook: {}\n  predicted_required_inputs_satisfied: {}",
-                    if edge.launch.is_some() { "yes" } else { "none" },
-                    bindings.required_inputs_satisfied()
-                )
-                .map_err(io_operation)?;
             }
-            writeln!(output, "Mode: preview").map_err(io_operation)
         }
     }
-}
-
-fn path_labels(
-    observation: &MigrationCompilationObservation,
-    target: &RevisionIdentity,
-    page: &MigrationPathPage,
-    full: bool,
-    cancellation: &ActionCancellation,
-) -> Result<Vec<String>, CliError> {
-    let ids: Vec<_> = page.candidates.iter().map(|c| c.id.to_string()).collect();
-    if full {
-        return Ok(ids);
-    }
-    let mut sizes = vec![16usize; ids.len()];
-    visit_paths(observation, target, cancellation, |candidate| {
-        let other = candidate.id.to_string();
-        for (id, size) in ids.iter().zip(&mut sizes) {
-            if id != &other {
-                *size = (*size).max(
-                    id.bytes()
-                        .zip(other.bytes())
-                        .take_while(|(a, b)| a == b)
-                        .count()
-                        + 1,
-                );
-            }
-        }
-        true
-    })?;
-    Ok(ids
-        .into_iter()
-        .zip(sizes)
-        .map(|(id, n)| {
-            if n >= 68 || n >= id.len() {
-                id
-            } else {
-                id[..n].into()
-            }
-        })
-        .collect())
-}
-
-fn write_page(
-    output: &mut dyn Write,
-    page: &MigrationPathPage,
-    labels: &[String],
-) -> Result<(), CliError> {
-    writeln!(output, "Migration paths").map_err(io_operation)?;
-    for (candidate, label) in page.candidates.iter().zip(labels) {
-        writeln!(
-            output,
-            "path_id: {}\n  route: {}\n  edge_count: {}",
-            label,
-            candidate
-                .revisions
-                .iter()
-                .map(format_revision)
-                .collect::<Vec<_>>()
-                .join(" -> "),
-            candidate.revisions.len() - 1
-        )
-        .map_err(io_operation)?;
-    }
-    writeln!(
-        output,
-        "shown: {}\nmore_paths: {}",
-        page.candidates.len(),
-        page.has_more
-    )
-    .map_err(io_operation)?;
-    if page.has_more {
-        writeln!(
-            output,
-            "next_after: {}",
-            page.candidates.last().expect("nonempty limited page").id
-        )
-        .map_err(io_operation)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

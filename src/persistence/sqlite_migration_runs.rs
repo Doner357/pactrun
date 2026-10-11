@@ -452,6 +452,7 @@ fn invalidated(step: RunFailedStep) -> RunFinish {
     RunFinish {
         outcome: RunOutcome::Failed,
         primary_failure: Some(RunPrimaryFailure {
+            cause: None,
             failure: RunFailureRecord {
                 error: PactrunErrorRef::new("execution", "migration_publication_rejected")
                     .expect("registered Migration error"),

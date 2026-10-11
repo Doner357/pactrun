@@ -4,13 +4,9 @@ title: M4 Runtime Capabilities (moved)
 
 # M4 Runtime Capabilities has moved
 
-**Status: Informative compatibility entry; no independent specification.**
+Read [Snapshot Limits and Capabilities](../../spec/snapshots/limits.md).
 
-Read [the current document](../../spec/snapshots/limits.md). That owner defines current rules and support; earlier contract status or delivery
-evidence does not establish current availability. This page preserves old link
-anchors only and adds no product rules.
-
-## Previous section links
+## Section links {#previous-section-links}
 
 <a id="pr-req-0293---separate-inclusive-capability-profiles" />
 [PR-REQ-0293 - Separate inclusive capability profiles](../../spec/snapshots/limits.md#pr-req-0293---separate-inclusive-capability-profiles)

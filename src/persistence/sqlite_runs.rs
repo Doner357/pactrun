@@ -189,7 +189,7 @@ impl PactrunPersistence {
         let mut finish = finish.clone();
         if conflict {
             finish.outcome = RunOutcome::Failed;
-            finish.primary_failure=Some(RunPrimaryFailure {failure:crate::domain::RunFailureRecord {error:crate::domain::PactrunErrorRef::new("execution","managed_output_publication_failed").expect("registered error"),message:"Restore publication conflicted with a changed Instance or recovery consequence".to_owned()},step:RunFailedStep::SnapshotPlan(crate::domain::SnapshotPlanStep::PublishManagedResult)});
+            finish.primary_failure=Some(RunPrimaryFailure { cause: None,failure:crate::domain::RunFailureRecord {error:crate::domain::PactrunErrorRef::new("execution","managed_output_publication_failed").expect("registered error"),message:"Restore publication conflicted with a changed Instance or recovery consequence".to_owned()},step:RunFailedStep::SnapshotPlan(crate::domain::SnapshotPlanStep::PublishManagedResult)});
         }
         let next = if conflict {
             None
@@ -404,6 +404,8 @@ impl PactrunPersistence {
                 run,
                 source: PersistenceError::sqlite("initialize diagnostic policy", error),
             })?;
+        transaction.execute("INSERT INTO run_core_diagnostic_collections(run_id,observed,closed,failed) VALUES (?1,0,0,0)", [run.as_bytes().as_slice()])
+            .map_err(|error| AcceptanceError::NotCommitted { run, source: PersistenceError::sqlite("initialize Core diagnostic collection", error) })?;
         insert_managed_invocation(&transaction, run, operation)
             .map_err(|source| AcceptanceError::NotCommitted { run, source })?;
         transaction
@@ -1445,14 +1447,11 @@ fn admission_decision(
             && declaration.required
             && binding_payload(transaction, header.instance, &declaration.id)?.is_none()
         {
-            unbound.push(declaration.id.as_str().to_owned());
+            unbound.push(declaration.id.clone());
         }
     }
     if !unbound.is_empty() {
-        return Ok(Err(AdmissionRefusal::PlanInvalidated(format!(
-            "required Inputs are not bound: {}",
-            unbound.join(", ")
-        ))));
+        return Ok(Err(AdmissionRefusal::MissingRequiredInputs(unbound)));
     }
     if matches!(invocation, ManagedRunIdentity::Capture { .. })
         && let Some(reason) =
@@ -2222,6 +2221,21 @@ fn finish_run_authorized(
                 ],
             )
             .map_err(|error| PersistenceError::sqlite("insert Run primary failure", error))?;
+        if let Some(crate::domain::RunFailureCause::MissingRequiredInputs(ids)) = &primary.cause {
+            if ids.is_empty()
+                || primary.failure.error.owner() != "admission"
+                || primary.failure.error.code() != "plan_invalidated"
+                || primary.step != RunFailedStep::Admission
+            {
+                return Err(PersistenceError::CorruptRun(
+                    "invalid missing-Input cause".into(),
+                ));
+            }
+            for (ordinal, id) in ids.iter().enumerate() {
+                transaction.execute("INSERT INTO run_missing_input_causes(run_id,ordinal,input_id) VALUES (?1,?2,?3)", params![run.as_bytes().as_slice(), ordinal as i64, id.as_str().as_bytes()])
+                    .map_err(|error| PersistenceError::sqlite("insert Run missing-Input cause", error))?;
+            }
+        }
     }
     for (ordinal, secondary) in finish.secondary_failures.iter().enumerate() {
         transaction
@@ -2991,6 +3005,41 @@ fn validate_pin_instances(
     Ok(())
 }
 
+fn load_missing_input_cause(
+    database: &Connection,
+    run: RunId,
+    owner: &[u8],
+    code: &[u8],
+    step: i64,
+) -> Result<Option<crate::domain::RunFailureCause>, PersistenceError> {
+    let mut statement = database.prepare("SELECT ordinal,input_id FROM run_missing_input_causes WHERE run_id=?1 ORDER BY ordinal")
+        .map_err(|e| PersistenceError::sqlite("load missing-Input cause", e))?;
+    let rows = statement
+        .query_map([run.as_bytes().as_slice()], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?))
+        })
+        .map_err(|e| PersistenceError::sqlite("query missing-Input cause", e))?;
+    let mut ids = Vec::new();
+    for row in rows {
+        let (ordinal, bytes) =
+            row.map_err(|e| PersistenceError::sqlite("read missing-Input cause", e))?;
+        if ordinal != ids.len() as i64
+            || owner != b"admission"
+            || code != b"plan_invalidated"
+            || step != RunFailedStep::Admission.rank()
+        {
+            return Err(PersistenceError::CorruptRun(
+                "invalid missing-Input cause attribution".into(),
+            ));
+        }
+        ids.push(
+            InputIdentity::parse(utf8_message(bytes)?)
+                .map_err(|e| PersistenceError::CorruptRun(e.to_string()))?,
+        );
+    }
+    Ok((!ids.is_empty()).then_some(crate::domain::RunFailureCause::MissingRequiredInputs(ids)))
+}
+
 fn load_outcome_view(
     database: &Connection,
     run: RunId,
@@ -3015,6 +3064,7 @@ fn load_outcome_view(
         .map_err(|error| PersistenceError::sqlite("load Run primary failure", error))?
         .map(|(owner, code, step, message)| {
             Ok::<_, PersistenceError>(RunPrimaryFailure {
+                cause: load_missing_input_cause(database, run, &owner, &code, step)?,
                 failure: RunFailureRecord {
                     error: error_ref(owner, code)?,
                     message: utf8_message(message)?,
@@ -4114,6 +4164,7 @@ mod tests {
         let admission_failure = RunFinish {
             outcome: RunOutcome::Failed,
             primary_failure: Some(RunPrimaryFailure {
+                cause: None,
                 failure: RunFailureRecord {
                     error: error("admission", "plan_invalidated"),
                     message: "stale InstanceStateVersion".to_owned(),
@@ -4266,7 +4317,7 @@ mod tests {
                 .map(|(table, _)| table.clone())
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
-            31 // Existing Run relations plus V11 collection and event evidence.
+            34 // Run relations, separate Hook/Core evidence and safe missing-Input causes.
         );
         assert!(
             columns

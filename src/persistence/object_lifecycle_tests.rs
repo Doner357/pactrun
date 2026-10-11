@@ -384,8 +384,23 @@ fn revision_cli_resolves_exact_intent_and_removes_installation_metadata() {
         .unwrap(),
     )
     .unwrap();
-    assert_eq!(cli(&root, &["revision", "delete", "label:release"]).0, 1);
-    assert_eq!(cli(&root, &["revision", "delete", "alias:chosen"]).0, 0);
+    let prefix = first.package_id.to_string()[..8].to_owned();
+    p.rename_package(
+        second.package_id,
+        Some(&LocalName::parse(prefix.clone()).unwrap()),
+    )
+    .unwrap();
+    for rev in [&first, &second] {
+        p.rename_revision(rev, Some(&LocalName::parse("release").unwrap()))
+            .unwrap();
+    }
+    assert_eq!(
+        cli(&root, &["revision", "delete", &format!("{prefix}:release")]).0,
+        1
+    );
+    p.rename_package(first.package_id, Some(&LocalName::parse("chosen").unwrap()))
+        .unwrap();
+    assert_eq!(cli(&root, &["revision", "delete", "chosen:release"]).0, 0);
     assert!(p.lookup_local_alias(&alias).unwrap().is_none());
     assert_eq!(p.lookup_reference_label(&label).unwrap(), vec![second]);
     assert_eq!(
@@ -400,7 +415,7 @@ fn revision_cli_resolves_exact_intent_and_removes_installation_metadata() {
         .0,
         0
     );
-    assert_eq!(cli(&root, &["revision", "delete", "alias:chosen"]).0, 1);
+    assert_eq!(cli(&root, &["revision", "delete", "chosen:release"]).0, 1);
     let absent = root.join("absent");
     for args in [
         vec!["storage", "gc", "--plan", "--plan"],
@@ -810,7 +825,7 @@ fn collection_reclaims_only_verified_unreferenced_content_and_preview_is_read_on
         0
     );
     assert_eq!(preview.0, 0, "{}", preview.2);
-    assert!(preview.1.contains("candidates=1"));
+    assert!(preview.1.contains("Candidates: 1"));
     assert_eq!(cli(&root, &["storage", "gc", "--dry-run"]).0, 2);
     assert!(PactrunPersistence::open_for_collection(&root).is_err());
     drop(p);

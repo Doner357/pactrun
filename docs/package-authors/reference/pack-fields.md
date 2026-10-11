@@ -18,7 +18,7 @@ rules are in [declaration types and identity](./revision-format.md).
 
 | Field | Type / accepted value | Required or default | Meaning |
 | --- | --- | --- | --- |
-| `source_format` | String `"1.0-alpha.1"` | Required | Selects the supported source format; numeric development versions are refused. |
+| `source_format` | String `"1.0-alpha.2"` | Required | Selects the supported source format; numeric versions are refused. |
 | `package_id` | 32 lowercase hexadecimal characters | Required | Stable lineage ID. Generate once with `pactrun pack generate-id`; keep it across Revisions of this Pack. |
 | `revision` | Object | Required; `{}` is valid | Operational declarations below. Do not add `revision.format_version`; installation supplies it. |
 | `runtime_content` | Object | Required; `{}` is valid | Files Pactrun acquires into the installed Revision. |
@@ -206,8 +206,8 @@ sizes or descriptor counts.
 
 ## Portable metadata
 
-`portable_metadata.reference_labels`, `.presentation`, and `.provenance` are
-optional sequences, empty when omitted. Labels and descriptions do not change
+`portable_metadata.presentation` and `.provenance` are optional sequences, empty
+when omitted. Descriptions do not change
 Revision identity, authenticate publishers, or grant permissions.
 
 Presentation entries have `target`, `field`, and `value`. `field` is one of
@@ -218,15 +218,15 @@ string. Targets name an existing Revision capability, never an arbitrary object.
 portable_metadata:
   presentation:
     - target: {kind: revision}
-      field: display_name
+      field: summary
       value: Example service
 ```
 
 The [complete metadata shapes](./source-format.md#pr-req-0258---packsourceyamlv1-schema-numbers-and-package-lineage)
-list every target, attribution alternative, and required field. Local aliases,
+list every target, attribution alternative, and required field. Local names,
 notes, trust decisions, and installed filesystem paths are not portable source fields.
 
-Metadata text such as labels, publisher names/namespaces, attribution text, and
+Metadata text such as publisher names/namespaces, attribution text, and
 presentation values is nonempty Unicode text preserved exactly: no trimming,
 case folding, or Unicode normalization. These are not semantic IDs, so spaces
 and non-ASCII characters are allowed. `SourceUri` instead requires an absolute
@@ -236,11 +236,6 @@ A URI here is a provenance claim, not a download instruction.
 
 | Metadata collection / discriminator | Required fields | Optional fields / meaning |
 | --- | --- | --- |
-| `reference_labels[]` | `label`, `source` | `source` must be one alternative below; omission does not mean unattributed. |
-| `source.kind: unattributed` | No additional fields | No attribution claim. |
-| `source.kind: source_uri` | `source_uri` | Exact claimed URI. |
-| `source.kind: publisher` | `publisher_name` | Optional `publisher_namespace`. |
-| `source.kind: publisher_source_uri` | `publisher_name`, `source_uri` | Optional `publisher_namespace`. |
 | `provenance[].kind: source_uri` | `source_uri` | URI claim attached to the installed Revision. |
 | `provenance[].kind: publisher_attribution` | `publisher_name` | Optional `publisher_namespace`, `source_uri`. |
 | `provenance[].kind: attribution` | `attribution_text` | Optional `source_uri`. |
@@ -250,10 +245,10 @@ Presentation targets use `kind: revision`, `input` with `input_id`, `action` wit
 with `action_id` and `output_id`, `snapshot_capture`, `snapshot_capture_parameter`
 with `parameter_id`, `snapshot_restore`, `snapshot_restore_parameter` with
 `parameter_id`, `migration` with `source_revision_digest`, or `cleanup`.
-No target names an arbitrary Package, Instance, Storage, or resource. All four
-presentation fields are available for each supported target kind. A label that
-resolves to multiple distinct Revisions is ambiguous; it does not silently choose
-the newest one.
+No target names an arbitrary Package, Instance, Storage, or resource. The Revision
+target accepts `summary`, `description`, and `help`, not `display_name`.
+Other supported targets accept all four fields. Package and Revision names are
+chosen by the local user, not supplied by a Pack.
 
 ## Common refusals
 

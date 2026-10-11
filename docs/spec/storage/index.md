@@ -8,6 +8,7 @@ Determine supported versions and the persistence rules for immutable content, Re
 
 - [Product and Format Compatibility](./compatibility.md)
 - [Format Domains and Support](./format-domains.md)
+- [Store Preparation and Upgrades](./store-opening.md)
 - [Immutable Runtime Blob Storage](./runtime-content.md)
 - [Revision Persistence and Publication](./revision-records.md)
 - [Persistence Schema](../persistence/persistence-baseline.md)

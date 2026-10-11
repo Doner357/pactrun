@@ -91,7 +91,6 @@ test('author field guide exposes choices, omissions and meanings for common decl
   for (const word of ['required', 'protection', 'parameters', 'sensitive', 'default', 'protocol_version', 'launch', 'io.terminal', 'portable_metadata']) assert.ok(guide.includes('`' + word) || guide.includes('.' + word), word);
   for (const value of ['none', 'output', 'interactive', 'integer', 'float', 'boolean', 'string', 'normal', 'secret', 'direct', 'interpreter', 'shell_loader', 'powershell_7', 'windows_powershell_5_1']) assert.ok(guide.includes('`' + value + '`'), value);
   for (const value of ['read_exposure', 'user_mutation', 'service_access', 'service_requires', 'source_revision_digest', 'storage_transitions', 'resource_transitions', 'reuse', 'reattach', 'transform', 'declassify']) assert.ok(service.includes(value), value);
-  assert.match(guide, /String `"1\.0-alpha\.1"`/);
   const sourceMarker = bodies.get('spec/packages/source-format.md').match(/source_format: "([^"]+)"/)[1];
   const hookMarker = bodies.get('spec/interfaces/hook-protocol.md').match(/the supported value is `([^`]+)`/)[1];
   assert.ok(guide.split('| `source_format` |')[1].split('\n')[0].includes('"' + sourceMarker + '"'));

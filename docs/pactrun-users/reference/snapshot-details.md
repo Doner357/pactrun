@@ -133,6 +133,11 @@ The operations are not one transaction: process loss between them can leave an
 Instance without a Restore Run. There is no automatic deletion, resume,
 compensation, installation, import, Migration or compatibility relaxation.
 
+Output delivery failure alone MUST NOT skip Restore after Instance creation.
+Explicit cancellation and Restore admission failures retain their own rules.
+A completed Restore with failed delivery remains a successful operation even
+when the CLI returns a nonzero delivery status.
+
 <details>
 <summary>Maintainer sources (optional)</summary>
 

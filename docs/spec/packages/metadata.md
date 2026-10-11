@@ -1,32 +1,25 @@
 ---
-title: Labels, Presentation, and Provenance
+title: Descriptions and Provenance
 ---
 
-# Labels, Presentation, and Provenance
+# Descriptions and Provenance
 
-Metadata describes an exact Revision without changing its identity. Labels and provenance are typed sets; presentation, aliases, notes, and trust use explicit current-value mutation rules.
+Authors describe capabilities and explain their use. Users name Packages and Revisions locally. Descriptions and provenance do not change immutable Revision identity.
 
-### PR-REQ-0019 - Human label ambiguity
+### PR-REQ-0019 - Local reference ambiguity {#pr-req-0019---human-label-ambiguity}
 
-Human labels and display versions MUST be associations rather than Revision
-identity. Multiple labels MAY refer to one Revision, and one label MAY refer to
-multiple exact Revisions. Authoritative label equality and lookup MUST preserve
-and compare the exact valid Unicode scalar-value sequence without normalization,
-case folding, trimming, or locale-sensitive comparison.
-
-Resolution MUST first deduplicate bindings by exact `RevisionIdentity`. Zero
-distinct targets is unresolved, one is resolved, and more than one is
-ambiguous. Ambiguity MUST fail with `resolution.ambiguous_reference` and MUST
-NOT implicitly choose the latest, the most recently installed target, the
-binding with the most source claims, or an older or newer association.
-Deterministic results MUST use the typed ordering defined by PR-REQ-0250 rather
-than insertion or query-plan order.
+Human names are local references, not Package or Revision identity. Names and ID
+prefixes follow [PR-REQ-0371](./local-names.md#pr-req-0371---local-names-and-two-part-identity-resolution).
+Resolution deduplicates complete Revision identities. Zero matches is unresolved,
+one is resolved, and multiple matches fail with `resolution.ambiguous_reference`.
+No format may choose the latest installation, prefer a name over an ID, normalize
+spelling, or treat publisher attribution as ownership of a local name.
 
 **Verification: PR-TEST-0532.**
 
 ### PR-REQ-0020 - Metadata observations
 
-Reference labels, presentation, provenance, publisher attribution, and local
+Presentation, provenance, publisher attribution, and local
 management metadata MUST remain separate from the immutable Revision body.
 Presentation MUST be keyed current metadata as defined by PR-REQ-0251. A
 different value for the same typed target and presentation field replaces the
@@ -56,12 +49,12 @@ obligation.
 
 Revision export and import MUST preserve every portable non-identity
 association or observation that the relevant Export Bundle Format defines as
-part of the portable bundle. Reference-label bindings, presentation metadata,
+part of the portable bundle. Presentation metadata,
 source-URI claims, publisher-attribution claims, and attribution claims are
 semantically portable-capable because their Domain meaning does not depend on
 one Pactrun installation. These fields MUST remain non-identity metadata.
 
-Local install timestamps, source filesystem paths, local aliases, local notes,
+Local install timestamps, source filesystem paths, local names, local notes,
 and local trust decisions are local-only and MUST be excluded by default.
 Portable-capable does not require an Export Bundle Format to carry a
 metadata kind and does not define serialization, carriage, import conflict, or
@@ -79,11 +72,10 @@ typed source component; it MUST NOT use a storage row identifier, timestamp, or
 serialization artifact. New distinct set-like claims MAY be attached, while
 current metadata may change only through its explicit replacement semantics.
 
-Revision import MUST NOT be rejected solely because a human-readable label
-becomes ambiguous. If the Revision or bundle is otherwise valid, import MUST
-preserve both label associations and MAY emit a warning. Later human reference
-resolution MUST report ambiguity and MUST NOT use last-write-wins or implicit
-latest selection. The [Pack distribution contract](./distribution.md) defines
+Import MUST NOT infer a local name from author descriptions or publisher claims.
+Explicitly requested local names follow the atomic conflict rules in PR-REQ-0372.
+Repeat installation without requested names preserves existing user names and
+installation time. The [Pack distribution contract](./distribution.md) defines
 the bundle representation and import application policy.
 
 **Verification: PR-TEST-0538, PR-TEST-0539, PR-TEST-0540.**
@@ -91,8 +83,8 @@ the bundle representation and import application policy.
 ### PR-REQ-0248 - Descriptive metadata boundary {#pr-req-0248---m1-d-metadata-boundary}
 
 Non-identity metadata persistence MUST be limited to the closed typed
-descriptive values in PR-REQ-0249 through PR-REQ-0253: reference-label
-bindings, current presentation, typed provenance claims, local aliases, one
+descriptive values in PR-REQ-0249 through PR-REQ-0253: current presentation,
+typed provenance claims, one
 local current note, and one local current trust assessment. It MUST NOT accept
 generic metadata, arbitrary keys, JSON/EAV payloads, or opaque serialized
 objects, and MUST NOT become a backdoor persistence mechanism for
@@ -113,11 +105,12 @@ metadata name.
 ### PR-REQ-0249 - Typed metadata scope and authoritative strings
 
 Metadata MUST be Revision-scoped, descriptive, and non-identity-bearing.
-Its closed types are `ReferenceLabelBinding`, current presentation metadata,
-the three provenance claim types in PR-REQ-0252, local Revision aliases, one
+Its closed types are current presentation metadata,
+the three provenance claim types in PR-REQ-0252, one
 optional local current note, and one optional local current trust assessment.
-Metadata MUST NOT attach metadata to a Package, Instance, generic entity path, or an
-as-yet-undefined local installation record.
+Descriptive metadata MUST NOT attach to a generic entity path or stand in for
+managed state. Package/Revision names and installation time belong to the separate
+local catalog defined by PR-REQ-0371/0372.
 
 Except where a closed type says otherwise, a textual metadata value MUST be a
 non-empty valid Unicode scalar-value sequence. Pactrun MUST preserve its exact
@@ -145,25 +138,17 @@ SQLite NULL ordering, or locale collation.
 
 **Verification: PR-TEST-0058, PR-TEST-0066.**
 
-### PR-REQ-0250 - Reference-label binding, lookup, and ordering
+### PR-REQ-0250 - Metadata ordering {#pr-req-0250---reference-label-binding-lookup-and-ordering}
 
-A `ReferenceLabelBinding` MUST be the complete tuple of a non-empty exact
-`ReferenceLabel`, one exact `RevisionIdentity`, and one typed source. The source
-union and stable rank are `Unattributed < SourceUri < Publisher <
-PublisherSourceUri`. A publisher contains a non-empty exact publisher name and
-an optional non-empty exact namespace; source-bearing variants contain an exact
-`SourceUri`. The complete tuple determines equality. Adding an identical tuple
-or removing an absent identical tuple MUST be idempotent; removing one tuple
-MUST NOT remove another source or target binding. A label has no independent
-managed object or lifetime apart from its bindings.
+Current descriptive metadata MUST enumerate deterministically by exact Revision
+identity, kind, and each kind's typed key. Presentation precedes provenance,
+followed by local notes and local trust. Presentation uses the target and field
+ranks in PR-REQ-0251; provenance uses PR-REQ-0252. Optional values order Absent
+before Present and strings use their exact UTF-8 byte order.
 
-Authoritative lookup by label MUST collect distinct exact Revision targets.
-Multiple source tuples for the same target MUST NOT make that target ambiguous;
-multiple distinct Revision targets MUST. Lookup results and enumeration MUST
-order by label UTF-8 bytes, `PackageId` canonical bytes,
-`RevisionContentDigest` canonical bytes, source-variant rank, and then the
-source fields in their declared tuple order. Optional source fields use the
-ordering in PR-REQ-0249.
+Search normalization and display layout MUST NOT change equality, replacement,
+claim identity, or the resolution of local names. Descriptions and publisher
+claims do not create lookup bindings. Local name lookup follows PR-REQ-0371.
 
 **Verification: PR-TEST-0058, PR-TEST-0062, PR-TEST-0066.**
 
@@ -177,9 +162,13 @@ Snapshot Restore Parameter, Migration edge, and Cleanup. Nested targets MUST
 use their typed parent and child semantic identities. A Migration edge MUST use
 the exact source Revision selector within the target Revision context.
 
+Revision explanations MUST use `summary`, `description`, or `help`; authors
+cannot assign a Revision display name. Other declared targets retain display
+names as explanations beside their immutable callable identifiers.
+
 The presentation fields and stable rank are `display_name < summary <
-description < help`. Every one of the four fields is valid for every target in
-the closed target union. Values MUST be non-empty exact strings under
+description < help`. The Revision target excludes `display_name`; every other
+target in the closed union supports all four fields. Values MUST be non-empty exact strings under
 PR-REQ-0249; clearing a field represents absence. No Hook internal, Migration
 transition row, runtime `ContentId`, JSON path, authoring-AST path, arbitrary
 field, or locale is a presentation target or key.
@@ -213,25 +202,20 @@ mutation order, preferred claim, authenticity conclusion, or audit history.
 
 **Verification: PR-TEST-0058, PR-TEST-0062, PR-TEST-0066.**
 
-### PR-REQ-0253 - Local aliases, notes, and trust
+### PR-REQ-0253 - Local names, notes, and trust {#pr-req-0253---local-aliases-notes-and-trust}
 
-A `LocalAlias` MUST be a non-empty exact string in a Revision-only namespace
-within one management environment. One alias may target at most one exact
-Revision, and one Revision may have multiple aliases. Setting the same target
-is idempotent; a different target is a conflict unless an explicit semantic CAS
-authorizes the replacement. Alias equality and conflict use the exact typed
-value, not normalized or fuzzy search output.
+Local names follow PR-REQ-0371/0372: one optional user name per Package and one
+per Revision. They are not author metadata or a second immutable identity.
 
 Each exact Revision MAY have one non-empty local current note and one local
 current trust assessment. Note absence is distinct from an empty string. Trust
 is exactly `Trusted | Distrusted`, with absence meaning `NoDecision`.
 `Distrusted` is descriptive local assessment only and MUST NOT independently
 deny installation or execution. Note and trust replacement and clearing use
-PR-REQ-0255. Pactrun MUST NOT create alias, note, or trust history, opaque IDs,
+PR-REQ-0255. Pactrun MUST NOT create name, note, or trust history, opaque IDs,
 purpose-scoped trust, policy enforcement, or a metadata version token.
 
-Local install time and source filesystem path are local-only. They MUST NOT
-be persisted as current Revision metadata: this metadata model does not define
-a `LocalInstall` identity, cardinality, or lifecycle.
+Installation time is local-only and is recorded under PR-REQ-0372, not portable
+descriptive metadata. A source filesystem path is not a Revision identity.
 
 **Verification: PR-TEST-0058, PR-TEST-0064, PR-TEST-0066, PR-TEST-0530, PR-TEST-0535.**

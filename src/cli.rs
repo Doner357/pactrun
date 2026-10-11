@@ -16,10 +16,6 @@ use std::{
 
 #[cfg(test)]
 use std::fs;
-#[cfg(unix)]
-use std::os::unix::ffi::OsStrExt;
-#[cfg(windows)]
-use std::os::windows::ffi::OsStrExt;
 
 use lexopt::{Arg, Parser};
 mod artifacts;
@@ -28,14 +24,17 @@ mod capability_presentation;
 mod catalog;
 mod catalog_presentation;
 mod definitions;
+mod empty_queries;
 mod execution_presentation;
 mod export_paths;
-#[cfg(test)]
-mod help_tests;
+mod help;
+mod human;
 mod lifecycle;
 mod migration_presentation;
 mod migrations;
+mod names;
 mod presentation;
+mod reply;
 mod retirements;
 #[cfg(test)]
 mod schema_tests;
@@ -49,9 +48,9 @@ use crate::{
     domain::{
         ActionExecutionPlan, ActionIdentity, ActionPlanStep, ActionRunBoundary, ActionV1,
         CompiledHookLaunch, HookLaunchV1, InputIdentity, InstanceName, InstanceStateVersion,
-        LocalAlias, ManagedInputProtection, ManagedInputRole, OperationAccessV1, PackageId,
-        ParameterIdentity, ParameterTypeV1, RawParameterInput, ReferenceLabel,
-        RevisionContentDigest, RevisionIdentity, RunId, RunOutcome, RunState,
+        ManagedInputProtection, ManagedInputRole, OperationAccessV1, PackageId, ParameterIdentity,
+        ParameterTypeV1, RawParameterInput, RevisionContentDigest, RevisionIdentity, RunId,
+        RunOutcome, RunState,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
     hook::{ActionCancellation, HookRuntimePolicy},
@@ -62,181 +61,6 @@ use crate::{
 use crate::domain::RevisionMetadataMutationBatch;
 
 const STORAGE_ROOT_ENV: &str = "PACTRUN_STORAGE_ROOT";
-const HELP: &str = concat!(
-    "Pactrun ",
-    env!("CARGO_PKG_VERSION"),
-    "\n\
-Usage:\n\
-  pactrun [--format human|json|jsonl] <command> [options]\n\
-  human: readable output (default). json: complete response. jsonl: live events.\n\
-\nPackages and Revisions:\n\
-  pactrun pack generate-id\n\
-    \tGenerate a new Package ID without opening managed storage.\n\
-  pactrun pack install <directory-or-pack-file> [--metadata-conflict overwrite|keep]\n\
-    \tValidate and install immutable Pack content; does not start a service.\n\
-  pactrun revision export <revision-reference> --output <base-path> [--include-portable-metadata]\n\
-    \tExport an installed Revision as a portable .pack archive.\n\
-    Always appends .pack: rv -> rv.pack; rv.pack -> rv.pack.pack.\n\
-  pactrun hook <command> [options] (Shell Loader helpers; see pactrun hook --help)\n\
-    \tAccess helpers for an active Shell Loader Session; see hook --help.\n\
-\nInstances:\n\
-  pactrun instance create <name> --revision <reference> [--input-file <id>=<path>]... [--input-stdin <id>]\n\
-    \tCreate a managed Instance from an installed Revision and optional initial Inputs.\n\
-  pactrun instance create <name> --revision <reference> --restore-from <snapshot-id> [restore-execution-options]\n\
-    \tCreate an Instance and execute the declared restore capability from a Snapshot.\n\
-  pactrun instance list\n\
-    \tList currently managed Instances.\n\
-  pactrun instance show <instance>\n\
-    \tInspect current Revision, readiness, bindings and recovery guard.\n\
-  pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]\n\
-    \tRun declared Cleanup and reclaim owned service storage; irreversible.\n\
-  pactrun instance abandon <instance> [--plan] [--if-version <token>]\n\
-    \tEnd management and retain remaining service data; does not stop the service.\n\
-  pactrun instance deletion show <instance-id>\n\
-    \tInspect the retained deletion attempt and remaining obligations by Instance ID.\n\
-  pactrun instance deletion confirm-complete <instance-id> --attempt <run-id> --if-version <token> --assert-cleanup-complete\n\
-    \tAssert externally verified Cleanup completion for the exact attempt.\n\
-  pactrun instance migration-paths <instance> --to <reference> [--limit <1..100>] [--after <path-id>] [--no-trunc]\n\
-    \tList declared migration routes without acquiring files or observing services.\n\
-  pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]\n\
-    \tMigrate along the selected declared path; --plan only previews the operation.\n\
-  pactrun instance resolve-manual-recovery <instance> [--if-version <token>]\n\
-    \tAcknowledge externally verified recovery; does not itself repair the service.\n\
-  pactrun input list <instance>\n\
-    \tList active and retained Input bindings without exporting their values.\n\
-\nService storage and resources:\n\
-  pactrun service-storage list <instance> [--retained]\n\
-    \tList declared service storage bindings; include retained bindings with --retained.\n\
-  pactrun service-storage detached list [--no-trunc]\n\
-    \tList allocations retained after Instance management ended.\n\
-  pactrun service-storage detached show <allocation-id> [--reveal-location]\n\
-    \tInspect a detached allocation; reveal native locations only when requested.\n\
-  pactrun service-storage detached discard <allocation-id> --confirm-discard\n\
-    \tIrreversibly reclaim the selected detached allocation with explicit consent.\n\
-  pactrun resource list <instance> [--retained]\n\
-    \tList declared service resource associations.\n\
-  pactrun resource show <instance> <resource-id> [--retained]\n\
-    \tInspect a resource association without observing the live service.\n\
-  pactrun resource observe <instance> <resource-id> [--retained]\n\
-    \tObserve the selected live resource without changing the service.\n\
-  pactrun resource locate <instance> <resource-id> --intent <read|write> [--retained]\n\
-    \tRequest an explicitly read- or write-intended native resource location.\n\
-  pactrun input set <instance> <input-id> (--file <path> | --stdin) [--if-version <token>]\n\
-    \tAcquire and bind supplied bytes; this does not deploy or restart a service.\n\
-  pactrun input export <instance> <input-id> --output <path|-> [--authorize-secret-export]\n\
-    \tExport a binding to a new file or stdout; Secret export requires authorization.\n\
-  pactrun input delete <instance> <input-id> [--if-version <token>]\n\
-    \tRemove the selected Input binding; does not delete service-owned data.\n\
-  pactrun action list <instance>\n\
-    \tList the Actions declared by the active Revision.\n\
-  pactrun action show <instance> <action>\n\
-    \tInspect an Action declaration, parameters and execution requirements.\n\
-  pactrun invoke <instance> <action> [options]\n\
-    \tExecute a declared Action, or preview it with --plan.\n\
-\nHistory and metadata:\n\
-  pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]\n\
-    \tList Run history for all Instances or a selected exact Instance.\n\
-  pactrun run show <run-id>\n\
-    \tInspect a Run outcome, failure, progress and current recovery guard.\n\
-  pactrun run reconcile\n\
-    \tTerminalize confirmed lost owners without replaying Hooks.\n\
-  pactrun run delete <run-id> [--delete-artifacts]\n\
-    \tDelete eligible Run history; associated artifacts need explicit deletion intent.\n\
-  pactrun revision list [--limit <1..500>] [--after <exact-reference>] [--no-trunc]\n\
-    \tList installed immutable Revisions.\n\
-  pactrun revision show <revision-reference>\n\
-    \tInspect an installed Revision and its public declarations.\n\
-  pactrun revision metadata show <revision-reference>\n\
-    \tInspect presentation and local metadata for a Revision.\n\
-  pactrun revision alias show <alias>\n\
-    \tResolve a local alias without changing it.\n\
-  pactrun revision alias set <alias> <exact-reference> (--expect-absent | --expect <exact-reference>)\n\
-    \tSet a local alias with an explicit expected previous value.\n\
-  pactrun revision alias clear <alias> --expect <exact-reference>\n\
-    \tClear a local alias only if its current target matches the expectation.\n\
-  pactrun revision note show <revision-reference>\n\
-    \tRead a Revision local note.\n\
-  pactrun revision note set <exact-reference> --value <text> (--expect-absent | --expect <text>)\n\
-    \tSet a local note with an explicit expected previous value.\n\
-  pactrun revision note clear <exact-reference> (--expect-absent | --expect <text>)\n\
-    \tClear a local note with an explicit expected previous value.\n\
-  pactrun revision trust show <revision-reference>\n\
-    \tInspect the local trust label; it is not publisher authentication.\n\
-  pactrun revision trust set <exact-reference> <trusted|distrusted> (--expect-absent | --expect <trusted|distrusted>)\n\
-    \tSet a local trust label with an explicit expected previous value.\n\
-  pactrun revision trust clear <exact-reference> (--expect-absent | --expect <trusted|distrusted>)\n\
-    \tClear a local trust label with an explicit expected previous value.\n\
-  pactrun instance history list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
-    \tList live and retired Instance identities.\n\
-  pactrun instance history show <instance-id>\n\
-    \tInspect historical Instance facts without rebinding its former name.\n\
-  pactrun instance deletion list [--limit <1..500>] [--after <instance-id>] [--no-trunc]\n\
-    \tList retained deletion attempts and retirement facts.\n\
-  pactrun revision delete <revision-reference>\n\
-    \tDelete an eligible unreferenced Revision.\n\
-  pactrun snapshot delete <snapshot-id>\n\
-    \tDelete an eligible Snapshot.\n\
-  pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export\n\
-    \tExport a retained Run Artifact with explicit sensitive-export authorization.\n\
-  pactrun run artifact delete <run-id> <output-id>\n\
-    \tDelete the selected retained Run Artifact.\n\
-  pactrun snapshot capture <instance> [execution-options]\n\
-    \tExecute the Pack-defined capture capability to create a Snapshot.\n\
-  pactrun snapshot restore <instance> <snapshot-id> [execution-options]\n\
-    \tExecute the Pack-defined restore capability against a selected Snapshot.\n\
-  pactrun snapshot list [--instance <instance>] [--no-trunc]\n\
-    \tList Snapshots, optionally filtered by Instance.\n\
-  pactrun snapshot show <snapshot-id>\n\
-    \tInspect Snapshot identity and recorded metadata.\n\
-  pactrun snapshot verify <snapshot-id>\n\
-    \tCheck the selected Snapshot against its integrity contract.\n\
-  pactrun snapshot import <bundle-path>\n\
-    \tValidate and import a Snapshot bundle; does not restore a service.\n\
-  pactrun snapshot export <snapshot-id> --output <base-path> --authorize-sensitive-export\n\
-    \tExport a Snapshot bundle with explicit sensitive-export authorization.\n\
-    Always appends .snapshot: backup -> backup.snapshot; backup.snapshot -> backup.snapshot.snapshot.\n\
-  pactrun storage gc [--plan]\n\
-    \tCollect eligible unreferenced managed content; --plan only previews collection.\n\
-\n\
-Common options (only where listed above):\n\
-  --plan: Preview without execution; Migration previews do not acquire operator files or observe services.\n\
-  --if-version: Require the exact observed state token; stale state is refused.\n\
-  --to / --path: Choose the target Revision and an explicit declared migration route.\n\
-  --input-file / --input-stdin: Supply operator Input bytes; migration files are target-qualified.\n\
-  --metadata-conflict: Explicitly choose overwrite or keep for imported metadata conflicts.\n\
-  --include-portable-metadata: Include eligible portable metadata, not local notes or trust labels.\n\
-  --limit / --after: Bound and continue a listing using its returned cursor.\n\
-  --no-trunc: Show complete identifiers instead of shortened human display IDs.\n\
-  --retained: Include or select retained bindings rather than only active bindings.\n\
-  --reveal-location / --intent: Explicitly request native location disclosure and access intent.\n\
-  --authorize-secret-export / --authorize-sensitive-export: Explicitly authorize protected export.\n\
-  --authorize-declassification: Allow only declared Secret declassification on the selected path.\n\
-  --authorize-recovery-override: Bypass only the initial guard; does not repair or acknowledge recovery.\n\
-  --confirm-discard: Explicitly authorize irreversible detached-allocation disposal.\n\
-  --attempt / --assert-cleanup-complete: Identify the attempt and assert externally verified Cleanup.\n\
-  --delete-artifacts: Include associated Artifacts when deleting eligible Run history.\n\
-  --value / --expect / --expect-absent: Supply metadata and an exact compare-and-set expectation.\n\
-  --param / --param-file / --param-stdin: Supply declared typed parameters from one chosen source.\n\
-  --startup-timeout-ms / --execution-timeout-ms: Set invocation deadlines; omitted values are unlimited.\n\
-  --action-timeout-ms: Bound Action execution (unlimited when omitted); other operations use --execution-timeout-ms.\n\
-  --termination-grace-ms: Set the termination grace period; the default is 5000ms.\n\
-\n\
-Hook execution options: --no-retain-hook-text omits saved Hook text; live output stays enabled.\n\
-JSONL execution: --cancel-on-output-close requests cancellation when the receiver closes stdout.\n\
-Snapshot execution options: --param, --param-file, --param-stdin, --plan, --authorize-recovery-override,\n\
-  --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
-Omitted Snapshot startup/execution timeouts are unlimited; termination grace defaults to 5000ms.\n\
-Create-and-restore accepts Snapshot execution options except --plan; initial Input options are mutually exclusive.\n\
-Snapshot import/export uses file paths.\n\
-Migration supports declared paths, Hook edges and explicit per-target Input files.\n\
-Retirement execution options: --authorize-recovery-override, --startup-timeout-ms, --execution-timeout-ms, --termination-grace-ms.\n\
-Abandon ends Pactrun management and preserves remaining service data.\n\
-\n\
-Revision references: label:<label>, alias:<alias>, or exact:<package-id>/sha256:<digest>.\n\
-Object IDs accept unique lowercase hex prefixes of at least 8 digits.\n\
-Human lists use unique short IDs; --no-trunc and machine formats show full IDs.\n\
-State-version tokens and authored names require their complete values.\n"
-);
 
 mod short_ids;
 use short_ids::Selector;
@@ -250,12 +74,14 @@ enum Command {
     Migration(migrations::MigrationCommand),
     Snapshot(snapshots::SnapshotCommand),
     CreateAndRestore(snapshots::CreateRestoreCommand),
-    Help,
+    Help(help::Request),
     Version,
     GeneratePackageId,
+    Name(names::NameCommand),
     Install {
         source_root: PathBuf,
         metadata_conflict: crate::domain::PackMetadataConflict,
+        names: crate::domain::InstallNames,
     },
     ExportRevision {
         revision: RevisionReference,
@@ -322,8 +148,7 @@ enum Command {
 
 #[derive(Clone)]
 enum RevisionReference {
-    Label(ReferenceLabel),
-    Alias(LocalAlias),
+    Named(crate::domain::LocalRevisionReference),
     Exact(RevisionIdentity),
     Prefix { package: String, digest: String },
 }
@@ -368,6 +193,7 @@ struct CliError {
 
 #[derive(Debug, Default)]
 struct ErrorDetails {
+    input_binding_advice: Option<reply::InputBindingAdvice>,
     diagnostic: Option<presentation::AcquisitionDiagnostic>,
     deletion_obligation: Option<presentation::DeletionObligationDiagnostic>,
     retirement_reason: Option<&'static str>,
@@ -435,7 +261,7 @@ pub(crate) fn run_from_env() -> i32 {
     {
         return crate::hook::shell_loader::run(&args[1..]);
     }
-    if args.first().is_some_and(|arg| arg == "hook") {
+    if args.first().is_some_and(|arg| arg == "hook") && !help::is_query(&args) {
         return crate::hook::shell_loader::helper(&args[1..]);
     }
     #[cfg(any(unix, windows))]
@@ -461,7 +287,7 @@ pub(crate) fn run_from_env() -> i32 {
     {
         return report_startup_failure(&args, &mut stdout, &mut stderr);
     }
-    if args.iter().any(argument_reads_stdin) {
+    let code = if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
         run_with_cancellation(
             args,
@@ -481,6 +307,11 @@ pub(crate) fn run_from_env() -> i32 {
             &mut stderr,
             &cancellation,
         )
+    };
+    if stderr.finish().is_err() && code == 0 {
+        1
+    } else {
+        code
     }
 }
 
@@ -711,8 +542,8 @@ fn run_with_cancellation(
         .diagnostics
         .disabled
         .store(disable_text, std::sync::atomic::Ordering::Release);
-    if format != presentation::Format::Human && executing {
-        return streaming::execute_machine(
+    if executing {
+        return streaming::execute_stream(
             command,
             storage_root,
             stdin,
@@ -756,8 +587,34 @@ fn run_selected(
     cancellation: &ActionCancellation,
     format: presentation::Format,
 ) -> i32 {
+    collect_reply(
+        command,
+        storage_root,
+        stdin,
+        stdout,
+        stderr,
+        cancellation,
+        !format.requires_noninteractive(),
+    )
+    .render(format, stdout, stderr)
+}
+
+fn collect_reply(
+    command: Command,
+    storage_root: Option<OsString>,
+    stdin: &mut dyn Read,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    cancellation: &ActionCancellation,
+    interactive: bool,
+) -> reply::Reply {
     let command_name = presentation::command_name(&command);
     let raw = matches!(&command,Command::ExportInput {output,..} if output=="-");
+    let capture = reply::Capture::new(
+        command_name,
+        interactive,
+        reply::DisplayOptions::for_command(&command),
+    );
     let result = execute(
         command,
         storage_root,
@@ -765,13 +622,10 @@ fn run_selected(
         stdout,
         stderr,
         cancellation,
-        format,
+        reply::OutputContext(&capture),
     );
     cancellation.diagnostics.finish();
-    match result {
-        Ok(()) => 0,
-        Err(error) => report_cli_failure(format, Some(command_name), raw, error, stdout, stderr),
-    }
+    capture.finish(result.err(), raw)
 }
 
 fn preflight_presentation(
@@ -854,6 +708,11 @@ fn report_cli_failure(
         }
     } else {
         let _ = writeln!(stderr, "error: {error}");
+        if format == presentation::Format::Human
+            && let Some(advice) = &error.details.input_binding_advice
+        {
+            let _ = human::input_binding_advice(advice, stderr);
+        }
         if let Some(presentation::PartialResult::Publication(publication)) = &error.partial {
             let _ = writeln!(
                 stderr,
@@ -866,12 +725,17 @@ fn report_cli_failure(
 }
 
 fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
+    if help::is_query(&args) {
+        let request = help::request(&args).ok_or_else(|| CliError::usage(
+            "unknown help path or extra operands; use command words followed by --help, without operation operands"))?;
+        return Ok(Command::Help(request));
+    }
     let mut parser = Parser::from_args(args);
     let first = match parser.next().map_err(lex_error)? {
-        None => return Ok(Command::Help),
+        None => return Ok(Command::Help(help::root())),
         Some(Arg::Long("help")) => {
             require_end(&mut parser)?;
-            return Ok(Command::Help);
+            return Ok(Command::Help(help::root()));
         }
         Some(Arg::Long("version")) => {
             require_end(&mut parser)?;
@@ -882,6 +746,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
     };
     match first.as_str() {
         "pack" => parse_pack(&mut parser),
+        "package" => names::parse_package(&mut parser),
         "revision" => catalog::parse_revision(&mut parser),
         "instance" => parse_instance(&mut parser),
         "input" => parse_input(&mut parser),
@@ -929,8 +794,17 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
                 ));
             }
             let mut policy = None;
+            let mut names = crate::domain::InstallNames::default();
             while let Some(arg) = parser.next().map_err(lex_error)? {
                 match arg {
+                    Arg::Long("package-name") if names.package.is_none() => {
+                        names.package =
+                            Some(names::parse_name(value_string(parser, "Package name")?)?);
+                    }
+                    Arg::Long("revision-name") if names.revision.is_none() => {
+                        names.revision =
+                            Some(names::parse_name(value_string(parser, "Revision name")?)?);
+                    }
                     Arg::Long("metadata-conflict") if policy.is_none() => {
                         policy = Some(
                             match value_string(parser, "metadata conflict policy")?.as_str() {
@@ -950,6 +824,7 @@ fn parse_pack(parser: &mut Parser) -> Result<Command, CliError> {
             Ok(Command::Install {
                 source_root,
                 metadata_conflict: policy.unwrap_or_default(),
+                names,
             })
         }
         other => Err(CliError::usage(format!("unknown pack command {other:?}"))),
@@ -1317,21 +1192,15 @@ fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
-    format: presentation::Format,
+    format: reply::OutputContext,
 ) -> Result<(), CliError> {
-    use presentation::{Format, render};
+    use presentation::emit_result;
     match command {
-        Command::Help => {
-            return render(
-                format,
-                "help",
-                &presentation::Help { usage: HELP },
-                stdout,
-                |value, out| out.write_all(value.usage.as_bytes()).map_err(io_operation),
-            );
+        Command::Help(request) => {
+            return emit_result(format, "help", &request.result());
         }
         Command::Version => {
-            return render(
+            return emit_result(
                 format,
                 "version",
                 &presentation::Version {
@@ -1349,23 +1218,17 @@ fn execute(
                         .map(|domain| (domain.name(), domain.current_text()))
                         .collect(),
                 },
-                stdout,
-                |value, out| {
-                    writeln!(out, "pactrun {}", value.product_version).map_err(io_operation)
-                },
             );
         }
         Command::GeneratePackageId => {
             let id = PackageId::generate()
                 .map_err(|error| CliError::operation(format!("CSPRNG failed: {error}")))?;
-            return render(
+            return emit_result(
                 format,
                 "pack generate-id",
                 &presentation::Package {
                     package_id: id.to_string(),
                 },
-                stdout,
-                |value, out| writeln!(out, "{}", value.package_id).map_err(io_operation),
             );
         }
         _ => {}
@@ -1379,7 +1242,13 @@ fn execute(
         ));
     }
     let storage_root = PathBuf::from(storage_root);
-    if format == Format::Json
+    if empty_queries::collect_missing(&command, &storage_root, format)? {
+        return Ok(());
+    }
+    if let Command::Name(command) = command {
+        return names::execute(command, &storage_root, format);
+    }
+    if format.requires_noninteractive()
         && let Command::Invoke {
             name,
             action,
@@ -1394,44 +1263,35 @@ fn execute(
         require_json_terminal_free(definition.hook.io.terminal)?;
     }
     if let Command::Lifecycle(command) = command {
-        return lifecycle::execute(command, &storage_root, stdout, format);
+        return lifecycle::execute(command, &storage_root, format);
     }
     if let Command::Artifact(command) = command {
-        return artifacts::execute(command, &storage_root, stdout, format);
+        return artifacts::execute(command, &storage_root, format);
     }
     if let Command::Retirement(command) = command {
-        return retirements::execute(command, &storage_root, stdout, stderr, cancellation, format);
+        return retirements::execute(command, &storage_root, stderr, cancellation, format);
     }
     if let Command::Migration(command) = command {
-        return migrations::execute(command, &storage_root, stdout, cancellation, format);
+        return migrations::execute(command, &storage_root, cancellation, format);
     }
     if let Command::Snapshot(command) = command {
-        return snapshots::execute(
-            command,
-            &storage_root,
-            stdin,
-            stdout,
-            stderr,
-            cancellation,
-            format,
-        );
+        return snapshots::execute(command, &storage_root, stdin, stderr, cancellation, format);
     }
     if let Command::CreateAndRestore(command) = command {
         return snapshots::create_and_restore(
             command,
             &storage_root,
             stdin,
-            stdout,
             stderr,
             cancellation,
             format,
         );
     }
     if let Command::ServiceStorage(command) = command {
-        return service_storage::execute(command, &storage_root, stdout, format);
+        return service_storage::execute(command, &storage_root, format);
     }
     if let Command::Catalog(command) = command {
-        return catalog::execute(command, &storage_root, stdout, format);
+        return catalog::execute(command, &storage_root, format);
     }
     let readonly = matches!(
         command,
@@ -1456,84 +1316,31 @@ fn execute(
             include_metadata,
         } => {
             let identity = resolve_revision(&application, revision)?;
-            writeln!(
-                stderr,
-                "warning: exported Pack is unencrypted and may contain sensitive authored content"
-            )
-            .map_err(io_operation)?;
             application
                 .export_revision_pack(&identity, &output, include_metadata, cancellation)
                 .map_err(app_error)?;
-            if format == Format::Json {
+            {
                 let result = transport_presentation::PackExport {
                     revision: (&identity).into(),
                     output: output.as_path().into(),
                     portable_metadata_included: include_metadata,
                 };
-                return render(
-                    format,
-                    "revision export",
-                    &result,
-                    stdout,
-                    |_, _| unreachable!(),
-                );
+                return emit_result(format, "revision export", &result);
             }
-            writeln!(
-                stdout,
-                "exported {}\noutput: {}",
-                format_revision(&identity),
-                format_path(&output)
-            )
-            .map_err(|error| {
-                CliError::operation(format!(
-                    "Pack destination was published, but reporting success failed: {error}"
-                ))
-            })?;
         }
         Command::Install {
             source_root,
             metadata_conflict,
+            names,
         } => {
             let installed = application
-                .install_pack(&source_root, metadata_conflict, cancellation)
+                .install_named_pack(&source_root, metadata_conflict, &names, cancellation)
                 .map_err(app_error)?;
-            if format == Format::Json {
-                return render(
-                    format,
-                    "pack install",
-                    &transport_presentation::PackInstall::from(&installed),
-                    stdout,
-                    |_, _| unreachable!(),
-                );
-            }
-            writeln!(stdout, "{}", format_revision(&installed.revision)).map_err(io_operation)?;
-            for (target, field) in &installed.kept_metadata {
-                writeln!(
-                    stdout,
-                    "metadata kept (not applied): {target:?} / {field:?}"
-                )
-                .map_err(io_operation)?;
-            }
-            for migration in installed.migrations {
-                match migration.state {
-                    MigrationRelationState::NotEvaluated => writeln!(
-                        stdout,
-                        "migration {}: not_evaluated",
-                        migration.source_revision_digest.as_str()
-                    ),
-                    MigrationRelationState::Valid => writeln!(
-                        stdout,
-                        "migration {}: valid",
-                        migration.source_revision_digest.as_str()
-                    ),
-                    MigrationRelationState::Invalid(reason) => writeln!(
-                        stdout,
-                        "migration {}: invalid: {reason}",
-                        migration.source_revision_digest.as_str()
-                    ),
-                }
-                .map_err(io_operation)?;
-            }
+            emit_result(
+                format,
+                "pack install",
+                &transport_presentation::PackInstall::from(&installed),
+            )?;
         }
         Command::CreateInstance {
             name,
@@ -1569,64 +1376,32 @@ fn execute(
             let view = application
                 .create_instance(name, revision, acquisitions)
                 .map_err(app_error)?;
-            render(
+            emit_result(
                 format,
                 "instance create",
                 &presentation::Instance::from(&view),
-                stdout,
-                presentation::Instance::human,
             )?;
         }
         Command::ListInstances => {
-            if format == Format::Json {
-                let full = application
-                    .inspect_instances_complete()
-                    .map_err(app_error)?;
-                let value = definitions::Instances {
+            let full = application
+                .inspect_instances_complete()
+                .map_err(app_error)?;
+            let value = definitions::Related::new(
+                definitions::Instances {
                     items: full.items.iter().map(Into::into).collect(),
-                };
-                return render(
-                    format,
-                    "instance list",
-                    &definitions::Related::new(value, &full.revisions, &[]),
-                    stdout,
-                    |_, _| unreachable!(),
-                );
-            }
-            let views = application.list_instances().map_err(app_error)?;
-            render(
-                format,
-                "instance list",
-                &presentation::Instances::from_views(&views),
-                stdout,
-                presentation::Instances::human,
-            )?;
+                },
+                &full.revisions,
+                &[],
+            );
+            emit_result(format, "instance list", &value)?;
         }
         Command::ShowInstance { name } => {
-            if format == Format::Json {
-                let (view, definition) = application
-                    .inspect_instance_definition(&name)
-                    .map_err(app_error)?;
-                return render(
-                    format,
-                    "instance show",
-                    &definitions::Related::new(
-                        presentation::Instance::from(&view),
-                        &[definition],
-                        &[],
-                    ),
-                    stdout,
-                    |_, _| unreachable!(),
-                );
-            }
-            let (_, view) = resolve_instance(&application, &name)?;
-            render(
-                format,
-                "instance show",
-                &presentation::Instance::from(&view),
-                stdout,
-                presentation::Instance::human,
-            )?;
+            let (view, definition) = application
+                .inspect_instance_definition(&name)
+                .map_err(app_error)?;
+            let value =
+                definitions::Related::new(presentation::Instance::from(&view), &[definition], &[]);
+            emit_result(format, "instance show", &value)?;
         }
         Command::ResolveManualRecovery { name, expected } => {
             let (instance, view) = resolve_instance(&application, &name)?;
@@ -1634,41 +1409,24 @@ fn execute(
             let next = application
                 .resolve_manual_recovery(instance, expected)
                 .map_err(app_error)?;
-            render(
+            emit_result(
                 format,
                 "instance resolve-manual-recovery",
                 &presentation::StateVersion {
                     state_version: next.to_string(),
                 },
-                stdout,
-                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
             )?;
         }
         Command::ListInputs { name } => {
-            if format == Format::Json {
-                let (view, definition) = application
-                    .inspect_instance_definition(&name)
-                    .map_err(app_error)?;
-                return render(
-                    format,
-                    "input list",
-                    &definitions::Related::new(
-                        presentation::Inputs::from_view(&view),
-                        &[definition],
-                        &[],
-                    ),
-                    stdout,
-                    |_, _| unreachable!(),
-                );
-            }
-            let (_, view) = resolve_instance(&application, &name)?;
-            render(
-                format,
-                "input list",
-                &presentation::Inputs::from_view(&view),
-                stdout,
-                presentation::Inputs::human,
-            )?;
+            let (view, definition) = application
+                .inspect_instance_definition(&name)
+                .map_err(app_error)?;
+            let value = definitions::Related::new(
+                presentation::Inputs::from_view(&view),
+                &[definition],
+                &[],
+            );
+            emit_result(format, "input list", &value)?;
         }
         Command::SetInput {
             name,
@@ -1685,16 +1443,16 @@ fn execute(
                 InputSourceSpec::Stdin => Box::new(&mut *stdin),
             };
             let version = application
-                .set_input(instance, input, expected, source)
+                .set_input(instance, input.clone(), expected, source)
                 .map_err(app_error)?;
-            render(
+            emit_result(
                 format,
                 "input set",
-                &presentation::StateVersion {
+                &presentation::InputMutation {
+                    instance_id: instance.to_string(),
+                    input_id: input.as_str().to_owned(),
                     state_version: version.to_string(),
                 },
-                stdout,
-                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
             )?;
         }
         Command::ExportInput {
@@ -1716,26 +1474,12 @@ fn execute(
                 stdout.flush().map_err(io_operation)?;
             } else {
                 publish_output_file(&observation.bytes, Path::new(&output))?;
-                let destination: &mut dyn Write = if format == Format::Json {
-                    &mut *stdout
-                } else {
-                    &mut *stderr
-                };
-                render(
+                emit_result(
                     format,
                     "input export",
                     &presentation::InputExport {
                         input_id: input.as_str().into(),
                         state_version: observation.state_version.to_string(),
-                    },
-                    destination,
-                    |value, out| {
-                        writeln!(
-                            out,
-                            "exported {} at InstanceStateVersion {}",
-                            value.input_id, value.state_version
-                        )
-                        .map_err(io_operation)
                     },
                 )?;
             }
@@ -1750,14 +1494,14 @@ fn execute(
             let version = application
                 .delete_input(instance, &input, expected)
                 .map_err(app_error)?;
-            render(
+            emit_result(
                 format,
                 "input delete",
-                &presentation::StateVersion {
+                &presentation::InputMutation {
+                    instance_id: instance.to_string(),
+                    input_id: input.as_str().to_owned(),
                     state_version: version.to_string(),
                 },
-                stdout,
-                |value, out| writeln!(out, "{}", value.state_version).map_err(io_operation),
             )?;
         }
         Command::ListActions { name } => {
@@ -1769,33 +1513,22 @@ fn execute(
                 &definition,
                 &[&capability_presentation::Selection::Actions],
             );
-            if format == Format::Json {
+            {
                 let result = execution_presentation::Actions {
                     items: actions
                         .iter()
                         .map(|a| execution_presentation::Action::defined(a, &definition))
                         .collect(),
                 };
-                return render(
+                return emit_result(
                     format,
                     "action list",
                     &capability_presentation::Presented {
                         value: result,
                         presentation: author,
                     },
-                    stdout,
-                    |_, _| unreachable!(),
                 );
             }
-            if actions.is_empty() {
-                writeln!(stdout, "No Actions declared.").map_err(io_operation)?;
-            } else {
-                writeln!(stdout, "ACTION  ACCESS  PARAMETERS  OUTPUTS").map_err(io_operation)?;
-            }
-            for action in actions {
-                write_action_summary(stdout, action)?;
-            }
-            capability_presentation::write(stdout, &author, true)?;
         }
         Command::ShowAction { name, action } => {
             let (_, definition) = application
@@ -1813,20 +1546,16 @@ fn execute(
                 .ok_or_else(|| {
                     app_error(crate::domain::ActionResolutionError::ActionNotFound.into())
                 })?;
-            if format == Format::Json {
-                return render(
+            {
+                return emit_result(
                     format,
                     "action show",
                     &capability_presentation::Presented {
                         value: execution_presentation::Action::defined(action, &definition),
                         presentation: author,
                     },
-                    stdout,
-                    |_, _| unreachable!(),
                 );
             }
-            write_action_detail(stdout, action)?;
-            capability_presentation::write(stdout, &author, false)?;
         }
         Command::Invoke {
             no_retain_hook_text: _,
@@ -1890,7 +1619,7 @@ fn execute(
                         capability_presentation::Selection::Action(action.clone()),
                     )],
                 )?;
-                if format == Format::Json {
+                {
                     let result = execution_presentation::Plan::new(
                         &compiled,
                         recovery_override,
@@ -1898,27 +1627,15 @@ fn execute(
                         action_timeout_ms,
                         termination_grace_ms,
                     );
-                    return render(
+                    return emit_result(
                         format,
                         "invoke",
                         &capability_presentation::Presented {
                             value: result,
                             presentation: author,
                         },
-                        stdout,
-                        |_, _| unreachable!(),
                     );
                 }
-                write_plan(
-                    stdout,
-                    &compiled,
-                    recovery_override,
-                    startup_timeout_ms,
-                    action_timeout_ms,
-                    termination_grace_ms,
-                )?;
-                capability_presentation::write(stdout, &author, false)?;
-                return Ok(());
             }
             if cancellation.is_requested() {
                 return Err(CliError::operation(
@@ -1932,6 +1649,36 @@ fn execute(
                 cancellation,
             ) {
                 Ok(admitted) => admitted,
+                Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
+                    let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
+                        &error
+                    else {
+                        unreachable!()
+                    };
+                    let run = *run;
+                    let input_binding_advice = match refusal {
+                        crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
+                            Some(reply::InputBindingAdvice {
+                                instance: name.clone(),
+                                inputs: inputs.clone(),
+                            })
+                        }
+                        _ => None,
+                    };
+                    let mut error = app_error(error);
+                    error.details.input_binding_advice = input_binding_advice;
+                    // The accepted no-launch Run is already durable. Return the
+                    // same safe historical projection as a subsequent query.
+                    if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
+                        error.partial = Some(presentation::PartialResult::RefusedExecution(
+                            Box::new(execution_presentation::RefusedExecution {
+                                run_id: run.to_string(),
+                                inspection: execution_presentation::Inspection::from(&inspection),
+                            }),
+                        ));
+                    }
+                    return Err(error);
+                }
                 Err(ApplicationError::Execution(ExecutorError::CancelledBeforeAcceptance)) => {
                     return Err(CliError::operation(
                         "invoke cancelled before Run acceptance; no Run was created",
@@ -1966,74 +1713,46 @@ fn execute(
                     Ok(true) => break,
                     Ok(false) => std::thread::sleep(std::time::Duration::from_millis(1_000)),
                     Err(_error) => {
-                        let _ = writeln!(
-                            stderr,
-                            "run {run}: finalization retry: durable state retained"
-                        );
+                        cancellation
+                            .delivery
+                            .progress(run, crate::hook::delivery::CorePhase::RetryingStorage);
                         std::thread::sleep(std::time::Duration::from_millis(1_000));
                     }
                 }
             }
-            let inspection = loop {
-                match application.load_run_inspection(run) {
+            cancellation.diagnostics.finish();
+            let managed = loop {
+                match application.managed_run_inspection(run) {
                     Ok(Some(inspection))
                         if matches!(inspection.run.state, RunState::Finished(_)) =>
                     {
                         break inspection;
                     }
                     Ok(Some(_)) | Ok(None) | Err(_) => {
+                        cancellation
+                            .delivery
+                            .progress(run, crate::hook::delivery::CorePhase::RetryingStorage);
                         thread::sleep(Duration::from_millis(1_000));
                     }
                 }
             };
-            if format == Format::Human {
-                if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
-                {
-                    let _ = writeln!(stderr, "run: {run}\noutcome: succeeded");
-                } else {
-                    let _ = write_run(stderr, &inspection);
-                }
-            }
-            if format == Format::Json {
-                let managed = application
-                    .managed_run_inspection(run)
-                    .map_err(|error| app_error(error).with_run_context(run))?
-                    .ok_or_else(|| {
-                        CliError::operation("completed Run inspection is unavailable")
-                            .with_run_context(run)
-                    })?;
+            {
                 let result = execution_presentation::Inspection::from(&managed);
                 if matches!(&managed.run.state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded)
                 {
-                    return render(format, "invoke", &result, stdout, |_, _| unreachable!());
+                    return emit_result(format, "invoke", &result);
                 }
-                let mut error = CliError::operation(
-                    "Run did not succeed; inspect the typed Run outcome before deciding what to do next",
-                );
+                let mut error = CliError::operation("Action did not complete successfully");
                 error.partial = Some(presentation::PartialResult::Inspection(Box::new(result)));
                 return Err(error);
-            }
-            match inspection.run.state {
-                crate::domain::RunState::Finished(outcome)
-                    if outcome.outcome == RunOutcome::Succeeded => {}
-                crate::domain::RunState::Finished(outcome) => {
-                    return Err(CliError::operation(format!(
-                        "Run {} finished with outcome {}",
-                        run,
-                        format_outcome(outcome.outcome)
-                    )));
-                }
-                crate::domain::RunState::Running(_) => {
-                    return Err(CliError::operation("Run was not durably finished"));
-                }
             }
         }
         Command::ShowRun { run } => {
             let run = run.full();
-            if format == Format::Json {
+            {
                 let full = application.inspect_run_complete(run).map_err(app_error)?;
                 let inspection = full.inspections.first().expect("one requested Run");
-                return render(
+                return emit_result(
                     format,
                     "run show",
                     &definitions::Related::new(
@@ -2041,16 +1760,8 @@ fn execute(
                         &full.revisions,
                         &full.unavailable_revisions,
                     ),
-                    stdout,
-                    |_, _| unreachable!(),
                 );
             }
-            let inspection = application
-                .managed_run_inspection(run)
-                .map_err(app_error)?
-                .ok_or_else(|| CliError::operation("Run is not persisted"))?;
-            snapshots::write_run(stdout, &inspection)?;
-            write_diagnostics(stdout, run, inspection.diagnostics.as_ref())?;
         }
         Command::ReconcileRuns => {
             let runs = application
@@ -2059,17 +1770,10 @@ fn execute(
             let result = execution_presentation::Reconciled {
                 run_ids: runs.iter().map(ToString::to_string).collect(),
             };
-            render(format, "run reconcile", &result, stdout, |value, out| {
-                if value.run_ids.is_empty() {
-                    return writeln!(out, "No lost Run owners to reconcile.").map_err(io_operation);
-                }
-                for id in &value.run_ids {
-                    writeln!(out, "{id}").map_err(io_operation)?;
-                }
-                Ok(())
-            })?;
+            emit_result(format, "run reconcile", &result)?;
         }
-        Command::Help
+        Command::Help(_)
+        | Command::Name(_)
         | Command::Catalog(_)
         | Command::Version
         | Command::GeneratePackageId
@@ -2108,6 +1812,7 @@ fn recover_candidate_admission(
     candidate: RunId,
     cancellation: &ActionCancellation,
 ) -> Result<AdmissionRecovery, CliError> {
+    cancellation.delivery.acceptance_pending(candidate);
     loop {
         match application.load_run(candidate) {
             Ok(Some(view)) => match view.state {
@@ -2145,6 +1850,9 @@ fn recover_candidate_admission(
             }
             Err(_) => {}
         }
+        cancellation
+            .delivery
+            .progress(candidate, crate::hook::delivery::CorePhase::RetryingStorage);
         thread::sleep(Duration::from_millis(1_000));
     }
 }
@@ -2164,26 +1872,15 @@ fn resolve_revision(
     reference: RevisionReference,
 ) -> Result<RevisionIdentity, CliError> {
     match reference {
+        RevisionReference::Named(reference) => application
+            .resolve_named_revision(&reference)
+            .map_err(app_error),
         RevisionReference::Prefix { .. } => unreachable!("resolved CLI selector"),
         RevisionReference::Exact(identity) => {
             if application.revision_exists(&identity).map_err(app_error)? {
                 Ok(identity)
             } else {
                 Err(CliError::operation("exact Revision is not installed"))
-            }
-        }
-        RevisionReference::Alias(alias) => application
-            .resolve_local_alias(&alias)
-            .map_err(app_error)?
-            .ok_or_else(|| CliError::operation("local alias does not resolve")),
-        RevisionReference::Label(label) => {
-            let revisions = application
-                .resolve_reference_label(&label)
-                .map_err(app_error)?;
-            match revisions.as_slice() {
-                [revision] => Ok(revision.clone()),
-                [] => Err(CliError::operation("reference label does not resolve")),
-                _ => Err(CliError::operation("resolution.ambiguous_reference")),
             }
         }
     }
@@ -2233,13 +1930,6 @@ fn format_outcome(outcome: RunOutcome) -> &'static str {
     }
 }
 
-fn format_phase(phase: crate::domain::RunPhase) -> &'static str {
-    match phase {
-        crate::domain::RunPhase::Running => "running",
-        crate::domain::RunPhase::Finished => "finished",
-    }
-}
-
 fn format_boundary(boundary: crate::domain::ActionRunBoundary) -> &'static str {
     match boundary {
         crate::domain::ActionRunBoundary::Accepted => "accepted",
@@ -2267,36 +1957,6 @@ fn format_hook_status(status: crate::domain::HookCompletionStatus) -> &'static s
         crate::domain::HookCompletionStatus::Success => "success",
         crate::domain::HookCompletionStatus::Failure => "failure",
     }
-}
-
-fn format_path(path: &Path) -> String {
-    match path.to_str() {
-        Some(path) => path.chars().flat_map(char::escape_default).collect(),
-        None => format_native_path(path),
-    }
-}
-
-#[cfg(unix)]
-fn format_native_path(path: &Path) -> String {
-    let bytes = path
-        .as_os_str()
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("unix-bytes[{bytes}]")
-}
-
-#[cfg(windows)]
-fn format_native_path(path: &Path) -> String {
-    let units = path
-        .as_os_str()
-        .encode_wide()
-        .map(|unit| format!("{unit:04x}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("windows-utf16[{units}]")
 }
 
 fn format_failed_step(step: crate::domain::RunFailedStep) -> String {
@@ -2328,184 +1988,6 @@ fn format_failed_step(step: crate::domain::RunFailedStep) -> String {
         }
         .to_owned(),
     }
-}
-
-fn write_action_summary(output: &mut dyn Write, action: &ActionV1) -> Result<(), CliError> {
-    writeln!(
-        output,
-        "{}  {}  {}  {}",
-        action.id.as_str(),
-        access_name(action.access),
-        action.parameters.len(),
-        action.outputs.len()
-    )
-    .map_err(io_operation)
-}
-
-fn write_action_detail(output: &mut dyn Write, action: &ActionV1) -> Result<(), CliError> {
-    writeln!(output, "action: {}", action.id.as_str()).map_err(io_operation)?;
-    writeln!(output, "access: {}", access_name(action.access)).map_err(io_operation)?;
-    writeln!(
-        output,
-        "terminal: {}",
-        terminal_name(action.hook.io.terminal)
-    )
-    .map_err(io_operation)?;
-    for parameter in &action.parameters {
-        write!(
-            output,
-            "parameter: {}\ttype: {}",
-            parameter.id.as_str(),
-            parameter_type_name(parameter.parameter_type),
-        )
-        .map_err(io_operation)?;
-        if parameter.sensitive {
-            write!(output, "\tsensitive").map_err(io_operation)?;
-        }
-        match &parameter.default {
-            Some(_) if parameter.sensitive => write!(output, "\tdefault: [redacted]"),
-            Some(value) => {
-                let value = match value {
-                    crate::domain::ParameterDefaultV1::Integer(v) => v.get().to_string(),
-                    crate::domain::ParameterDefaultV1::Float(v) => v.get().to_string(),
-                    crate::domain::ParameterDefaultV1::Boolean(v) => v.to_string(),
-                    crate::domain::ParameterDefaultV1::String(v) => format!("{v:?}"),
-                };
-                write!(output, "\tdefault: {value}")
-            }
-            None => write!(output, "\trequired"),
-        }
-        .map_err(io_operation)?;
-        writeln!(output).map_err(io_operation)?;
-    }
-    for output_definition in &action.outputs {
-        writeln!(output, "output: {}", output_definition.id.as_str()).map_err(io_operation)?;
-    }
-    Ok(())
-}
-
-fn write_plan(
-    output: &mut dyn Write,
-    plan: &crate::domain::ActionExecutionPlan,
-    recovery_override: bool,
-    startup_timeout_ms: Option<u64>,
-    action_timeout_ms: Option<u64>,
-    termination_grace_ms: Option<u64>,
-) -> Result<(), CliError> {
-    writeln!(output, "action: {}", plan.action().as_str()).map_err(io_operation)?;
-    writeln!(output, "instance_id: {}", plan.instance()).map_err(io_operation)?;
-    writeln!(
-        output,
-        "revision: {}",
-        format_revision(plan.active_revision())
-    )
-    .map_err(io_operation)?;
-    writeln!(output, "access: {}", access_name(plan.access())).map_err(io_operation)?;
-    writeln!(
-        output,
-        "required_inputs_satisfied: {}",
-        plan.required_inputs_satisfied()
-    )
-    .map_err(io_operation)?;
-    writeln!(output, "terminal: {}", terminal_name(plan.terminal())).map_err(io_operation)?;
-    for parameter in plan.parameters() {
-        writeln!(
-            output,
-            "parameter: {}\teffective_redaction: {}",
-            parameter.id.as_str(),
-            parameter.effective_redaction
-        )
-        .map_err(io_operation)?;
-    }
-    match plan.launch() {
-        CompiledHookLaunch::ShellLoader {
-            shell,
-            launcher,
-            script,
-        } => {
-            writeln!(
-                output,
-                "launch: shell_loader\tshell: {}\tcommand: {}\truntime_path: {}",
-                shell.as_str(),
-                launcher.command.as_str(),
-                script.path.as_str()
-            )
-            .map_err(io_operation)?;
-        }
-        CompiledHookLaunch::Direct { executable } => {
-            writeln!(
-                output,
-                "launch: direct\truntime_path: {}\texecutable: {}",
-                executable.path.as_str(),
-                executable.executable
-            )
-            .map_err(io_operation)?;
-        }
-        CompiledHookLaunch::Interpreter {
-            launcher, script, ..
-        } => {
-            writeln!(
-                output,
-                "launch: interpreter\tcommand: {}\tresolved_path: {}\tscript: {}",
-                launcher.command.as_str(),
-                format_path(&launcher.resolved_absolute_path),
-                script.path.as_str()
-            )
-            .map_err(io_operation)?;
-        }
-    }
-    writeln!(output, "step: launch_hook").map_err(io_operation)?;
-    for output_id in plan.outputs() {
-        writeln!(output, "output: {}", output_id.as_str()).map_err(io_operation)?;
-    }
-    writeln!(
-        output,
-        "startup_timeout_ms: {}",
-        startup_timeout_ms
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "unlimited".to_owned())
-    )
-    .map_err(io_operation)?;
-    writeln!(
-        output,
-        "action_timeout_ms: {}",
-        action_timeout_ms
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "unlimited".to_owned())
-    )
-    .map_err(io_operation)?;
-    writeln!(
-        output,
-        "termination_grace_ms: {}",
-        termination_grace_ms.unwrap_or(5_000)
-    )
-    .map_err(io_operation)?;
-    writeln!(
-        output,
-        "recovery_override: {}",
-        if recovery_override {
-            "authorized_for_this_invocation"
-        } else {
-            "not_authorized"
-        }
-    )
-    .map_err(io_operation)?;
-    writeln!(output, "Mode: preview").map_err(io_operation)
-}
-
-fn write_run_summary(
-    output: &mut dyn Write,
-    summary: &crate::domain::RunSummary,
-) -> Result<(), CliError> {
-    writeln!(
-        output,
-        "run: {}\taction: {}\tphase: {}\toutcome: {}",
-        summary.id,
-        summary.action.action.as_str(),
-        format_phase(summary.phase),
-        summary.outcome.map(format_outcome).unwrap_or("running")
-    )
-    .map_err(io_operation)
 }
 
 fn write_run(
@@ -2856,79 +2338,8 @@ fn resolve_instance(
     Ok((id, view))
 }
 
-fn write_instance(
-    output: &mut dyn Write,
-    view: &crate::domain::InstanceView,
-) -> Result<(), CliError> {
-    writeln!(output, "instance_id: {}", view.id).map_err(io_operation)?;
-    if let Some(guard) = &view.recovery_guard {
-        writeln!(
-            output,
-            "current_recovery_guard: {} run={} entered_at_unix_ms={}",
-            format_trigger(guard.trigger),
-            guard.run,
-            guard.entered_at_unix_ms
-        )
-        .map_err(io_operation)?;
-    } else {
-        writeln!(output, "current_recovery_guard: none").map_err(io_operation)?;
-    }
-    writeln!(output, "name: {}", view.name.as_str()).map_err(io_operation)?;
-    writeln!(
-        output,
-        "revision: {}",
-        format_revision(&view.active_revision)
-    )
-    .map_err(io_operation)?;
-    writeln!(output, "state_version: {}", view.state_version).map_err(io_operation)?;
-    writeln!(
-        output,
-        "required_inputs_satisfied: {}",
-        view.required_inputs_satisfied
-    )
-    .map_err(io_operation)?;
-    write_inputs(output, view)
-}
-
-fn write_inputs(
-    output: &mut dyn Write,
-    view: &crate::domain::InstanceView,
-) -> Result<(), CliError> {
-    for binding in &view.bindings {
-        let role = match binding.role {
-            ManagedInputRole::Active { required: true } => "active_required",
-            ManagedInputRole::Active { required: false } => "active_optional",
-            ManagedInputRole::Retained => "retained",
-        };
-        let protection = match binding.protection {
-            ManagedInputProtection::Normal => "normal",
-            ManagedInputProtection::Secret => "secret",
-        };
-        writeln!(
-            output,
-            "input: {}\t{}\t{}\t{}",
-            binding.input_id.as_str(),
-            role,
-            if binding.present { "present" } else { "absent" },
-            protection
-        )
-        .map_err(io_operation)?;
-    }
-    Ok(())
-}
-
 fn parse_revision_reference(value: String) -> Result<RevisionReference, CliError> {
-    if let Some(label) = value.strip_prefix("label:") {
-        return ReferenceLabel::parse(label.to_owned())
-            .map(RevisionReference::Label)
-            .map_err(|error| CliError::usage(error.to_string()));
-    }
-    if let Some(alias) = value.strip_prefix("alias:") {
-        return LocalAlias::parse(alias.to_owned())
-            .map(RevisionReference::Alias)
-            .map_err(|error| CliError::usage(error.to_string()));
-    }
-    if let Some(exact) = value.strip_prefix("exact:") {
+    if let Some(exact) = value.strip_prefix("exact:").filter(|v| v.contains('/')) {
         let (package, digest) = exact.split_once('/').ok_or_else(|| {
             CliError::usage("exact Revision requires <PackageId>/sha256:<digest>")
         })?;
@@ -2953,9 +2364,19 @@ fn parse_revision_reference(value: String) -> Result<RevisionReference, CliError
             content_digest,
         )));
     }
-    Err(CliError::usage(
-        "Revision reference must use label:, alias:, or exact:",
-    ))
+    let reference = crate::domain::LocalRevisionReference::parse(&value)
+        .map_err(|e| CliError::usage(e.to_string()))?;
+    let (package, revision) = reference.components();
+    if package.as_str().len() == 32 && revision.as_str().len() == 64 {
+        // Complete IDs cannot be local names. Keep exact-object semantics,
+        // including idempotent deletion after the installed row is gone.
+        return Ok(RevisionReference::Exact(RevisionIdentity::new(
+            PackageId::from_str(package.as_str()).map_err(CliError::usage)?,
+            RevisionContentDigest::from_str(&format!("sha256:{}", revision.as_str()))
+                .map_err(CliError::usage)?,
+        )));
+    }
+    Ok(RevisionReference::Named(reference))
 }
 
 fn parse_instance_name(value: String) -> Result<InstanceName, CliError> {
@@ -3186,64 +2607,6 @@ fn publish_output_file_with_fault(
     .map_err(io_operation)
 }
 
-fn write_diagnostics(
-    output: &mut dyn Write,
-    run: RunId,
-    inspection: Option<&crate::persistence::DiagnosticInspection>,
-) -> Result<(), CliError> {
-    let Some(view) = inspection else {
-        return writeln!(
-            output,
-            "hook diagnostics: legacy/not collected by this feature"
-        )
-        .map_err(io_operation);
-    };
-    writeln!(
-        output,
-        "hook diagnostics: retain_text={} started={} collection_closed={} persistence_failed={}",
-        view.retain_text, view.started, view.closed, view.failed
-    )
-    .map_err(io_operation)?;
-    if !view.closed {
-        writeln!(
-            output,
-            "hook diagnostics: collection unfinished; tail completeness unknown"
-        )
-        .map_err(io_operation)?;
-    }
-    if !view.retain_text {
-        return writeln!(
-            output,
-            "hook text: retention disabled; absence is not evidence of no emission"
-        )
-        .map_err(io_operation);
-    }
-    let mut previous = 0;
-    for event in &view.events {
-        if event.sequence > previous + 1 {
-            writeln!(
-                output,
-                "hook diagnostics: omitted sequence {}..{}",
-                previous + 1,
-                event.sequence - 1
-            )
-            .map_err(io_operation)?;
-        }
-        crate::hook::diagnostics::write_event(output, run, event).map_err(io_operation)?;
-        previous = event.sequence;
-    }
-    if view.observed > previous {
-        writeln!(
-            output,
-            "hook diagnostics: omitted sequence {}..{}",
-            previous + 1,
-            view.observed
-        )
-        .map_err(io_operation)?;
-    }
-    Ok(())
-}
-
 const DELETION_OBLIGATION_GUIDANCE: &str = "Admission was refused because a deletion obligation was unresolved, independently of recovery guard state. Inspect pactrun instance deletion show <instance-id> for current evidence. Finalization may already have removed data; do not assume an intact service or replay completed Cleanup. This diagnostic does not authorize retry, repair or abandonment.";
 
 fn failure_detail(record: &crate::domain::RunFailureRecord) -> Option<&str> {
@@ -3323,6 +2686,7 @@ mod tests {
     use tempfile::TempDir;
 
     include!("cli/create_restore_tests.rs");
+    include!("cli/names_tests.rs");
     include!("cli/json_tests.rs");
     include!("cli/machine_delivery_tests.rs");
     include!("cli/short_id_tests.rs");
@@ -3496,7 +2860,7 @@ mod tests {
         fs::create_dir(&source).unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000021
 revision:
   inputs:
@@ -3507,10 +2871,6 @@ revision:
   migrations: []
 runtime_content:
   files: []
-portable_metadata:
-  reference_labels:
-    - label: stable
-      source: { kind: unattributed }
 "#,
         )
         .unwrap();
@@ -3540,7 +2900,7 @@ portable_metadata:
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1.0-alpha.1
+                r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000036
 revision:
   inputs: []
@@ -3589,7 +2949,7 @@ runtime_content:
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1.0-alpha.1
+                r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000037
 revision:
   inputs:
@@ -3637,7 +2997,13 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["pack".into(), "install".into(), source.into_os_string()],
+                vec![
+                    "--format".into(),
+                    "json".into(),
+                    "pack".into(),
+                    "install".into(),
+                    source.into_os_string()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -3647,7 +3013,7 @@ runtime_content:
             "{}",
             String::from_utf8_lossy(&stderr)
         );
-        let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
+        let revision = installed_reference(&stdout);
         let expected_path = temporary.path().join("expected-binding.txt");
         let sensitive_path = temporary.path().join("sensitive-value.txt");
         fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
@@ -3829,6 +3195,7 @@ runtime_content:
                     terminal_risk: crate::domain::RecoveryRiskState::Clear,
                     finished_at_unix_ms: 20,
                     primary_failure: Some(crate::domain::RunPrimaryFailure {
+                        cause: None,
                         failure: crate::domain::RunFailureRecord {
                             error: crate::domain::PactrunErrorRef::new(
                                 "execution",
@@ -4004,7 +3371,10 @@ runtime_content:
             0
         );
         assert!(
-            String::from_utf8_lossy(&stdout).contains("0 records shown."),
+            json_ok(&storage, &["run", "list"])["items"]
+                .as_array()
+                .unwrap()
+                .is_empty(),
             "invalid timeout must create no Run"
         );
     }
@@ -4041,7 +3411,13 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["pack".into(), "install".into(), source.into_os_string()],
+                vec![
+                    "--format".into(),
+                    "json".into(),
+                    "pack".into(),
+                    "install".into(),
+                    source.into_os_string()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -4051,7 +3427,7 @@ runtime_content:
             "{}",
             String::from_utf8_lossy(&stderr)
         );
-        let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
+        let revision = installed_reference(&stdout);
         stdout.clear();
         stderr.clear();
         assert_eq!(
@@ -4118,7 +3494,25 @@ runtime_content:
         );
         let plan = String::from_utf8_lossy(&stdout);
         assert!(plan.contains("Mode: preview"));
-        assert!(plan.contains("step: launch_hook"));
+        assert!(plan.contains("Launch"));
+        let typed = json_ok(
+            &storage,
+            &[
+                "invoke",
+                "node",
+                "inspect",
+                "--param",
+                "value=exact text",
+                "--plan",
+            ],
+        );
+        assert!(
+            typed["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|step| step == "launch_hook")
+        );
         assert!(!plan.contains("exact text"));
         assert_eq!(
             fs::read(storage.join("database/pactrun.sqlite3")).unwrap(),
@@ -4142,7 +3536,13 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["pack".into(), "install".into(), source.into_os_string()],
+                vec![
+                    "--format".into(),
+                    "json".into(),
+                    "pack".into(),
+                    "install".into(),
+                    source.into_os_string()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -4152,7 +3552,7 @@ runtime_content:
             "{}",
             String::from_utf8_lossy(&stderr)
         );
-        let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
+        let revision = installed_reference(&stdout);
         stdout.clear();
         stderr.clear();
         let expected_path = temporary.path().join("expected-binding.txt");
@@ -4210,7 +3610,7 @@ runtime_content:
         let summary = String::from_utf8_lossy(&stderr);
         let run_id = summary
             .lines()
-            .find_map(|line| line.strip_prefix("run: "))
+            .find_map(|line| line.strip_prefix("Run: "))
             .expect("invoke prints the completed RunId")
             .to_owned();
         assert!(!summary.contains("hook-fixture-sensitive-parameter"));
@@ -4244,7 +3644,7 @@ runtime_content:
             ),
             0
         );
-        assert!(String::from_utf8_lossy(&stdout).contains("outcome: succeeded"));
+        assert!(String::from_utf8_lossy(&stdout).contains("Outcome: succeeded"));
     }
 
     // Test-ID: PR-TEST-0124
@@ -4257,7 +3657,13 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["pack".into(), "install".into(), source.into_os_string()],
+                vec![
+                    "--format".into(),
+                    "json".into(),
+                    "pack".into(),
+                    "install".into(),
+                    source.into_os_string()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -4267,7 +3673,7 @@ runtime_content:
             "{}",
             String::from_utf8_lossy(&stderr)
         );
-        let revision = String::from_utf8(stdout.clone()).unwrap().trim().to_owned();
+        let revision = installed_reference(&stdout);
         let expected_path = storage.parent().unwrap().join("expected-binding.txt");
         let sensitive_path = storage.parent().unwrap().join("sensitive-value.txt");
         fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
@@ -4320,7 +3726,7 @@ runtime_content:
                 &mut stdout,
                 &mut broken_stderr,
             ),
-            0
+            1
         );
         assert!(marker.with_extension("session").exists());
 
@@ -4348,7 +3754,7 @@ runtime_content:
             listing
                 .lines()
                 .skip(1)
-                .any(|line| line.ends_with("  finished  succeeded"))
+                .any(|line| line.ends_with("  succeeded"))
         );
     }
 
@@ -4373,7 +3779,7 @@ runtime_content:
                 &mut stdout,
                 &mut broken_stderr,
             ),
-            0
+            1
         );
         assert!(marker.with_extension("session").exists());
 
@@ -4403,7 +3809,7 @@ runtime_content:
             .take_while(|line| !line.is_empty())
             .collect();
         assert_eq!(rows.len(), 1);
-        assert!(rows[0].ends_with("  finished  succeeded"));
+        assert!(rows[0].ends_with("  succeeded"));
     }
 
     // Test-ID: PR-TEST-0127
@@ -4412,7 +3818,7 @@ runtime_content:
     fn repeated_finalization_failures_keep_owner_until_terminal_commit() {
         let (_temporary, storage, expected_path, sensitive_path) = prepared_cli_hook_instance();
         let storage_env = Some(storage.as_os_str().to_owned());
-        crate::application::fail_next_finalization_advances_for_test(3);
+        let faults = crate::application::fail_next_finalization_advances_for_test(3);
         let marker = storage.parent().unwrap().join("finalization-retry-marker");
         let mut stdout = Vec::new();
         let mut broken_stderr = PrefixFailWriter {
@@ -4427,37 +3833,15 @@ runtime_content:
                 &mut stdout,
                 &mut broken_stderr,
             ),
-            0
+            1
         );
+        assert_eq!(faults.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert!(marker.with_extension("session").exists());
 
-        let mut listing = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "run".into(),
-                    "list".into(),
-                    "node".into(),
-                    "--no-trunc".into()
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut listing,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let listing = String::from_utf8_lossy(&listing);
-        let rows: Vec<_> = listing
-            .lines()
-            .skip(1)
-            .take_while(|line| !line.is_empty())
-            .collect();
-        assert_eq!(rows.len(), 1);
-        assert!(rows[0].ends_with("  finished  succeeded"));
+        let runs = json_ok(&storage, &["run", "list", "node"]);
+        assert_eq!(runs["items"].as_array().unwrap().len(), 1);
+        assert_eq!(runs["items"][0]["state"]["phase"], "finished");
+        assert_eq!(runs["items"][0]["state"]["outcome"], "succeeded");
     }
 
     // Test-ID: PR-TEST-0078
@@ -4470,7 +3854,13 @@ runtime_content:
         let mut stderr = Vec::new();
         assert_eq!(
             run(
-                vec!["pack".into(), "install".into(), source.into_os_string()],
+                vec![
+                    "--format".into(),
+                    "json".into(),
+                    "pack".into(),
+                    "install".into(),
+                    source.into_os_string()
+                ],
                 storage_env.clone(),
                 &mut io::empty(),
                 &mut stdout,
@@ -4480,8 +3870,7 @@ runtime_content:
             "{}",
             String::from_utf8_lossy(&stderr)
         );
-        let revision = String::from_utf8(stdout.clone()).unwrap();
-        let revision = revision.trim().to_owned();
+        let revision = installed_reference(&stdout);
         assert!(revision.starts_with("exact:"));
 
         let config_path = storage.parent().unwrap().join("config.bin");

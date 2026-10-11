@@ -22,7 +22,7 @@ source location or content. ID generation is a separate non-mutating operation.
 
 `RevisionContentDigest` MUST identify Pactrun-managed operational semantics and
 immutable owned runtime content. It MUST exclude `PackageId`, display content,
-publisher claims, labels, source location, install time, local aliases, notes,
+publisher claims, source location, install time, local names, notes,
 and local trust decisions. ServiceStorage and Managed Service Resource
 declarations are identity-bearing under the
 [Revision baseline](./revision-format.md). The service-owned live

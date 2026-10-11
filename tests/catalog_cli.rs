@@ -40,24 +40,15 @@ fn catalog_cli_discovers_installed_content_and_retired_history_without_install_r
     fs::create_dir(&source).unwrap();
     let tool = if cfg!(windows) { "tool.exe" } else { "tool" };
     fs::copy(std::env::current_exe().unwrap(), source.join(tool)).unwrap();
-    fs::write(source.join("pactrun.yaml"), format!("source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000089\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'catalog_hook_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
+    fs::write(source.join("pactrun.yaml"), format!("source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000089\nrevision:\n  inputs: []\n  actions:\n    - id: inspect\n      access: observe\n      parameters: []\n      hook:\n        protocol_version: 1.0-alpha.1\n        launch: {{ kind: direct, executable: tool }}\n        args: ['--exact', 'catalog_hook_without_protocol', '--nocapture']\n        io: {{ terminal: none }}\n      outputs: []\n  migrations: []\nruntime_content:\n  files:\n    - {{ id: tool, source: {tool}, path: bin/{tool}, executable: true }}\n")).unwrap();
     success(&root, &["pack", "install", source.to_str().unwrap()]);
     // Discard installation output; discover using only the catalog.
     let listing = success(&root, &["revision", "list", "--no-trunc"]);
     let columns: Vec<_> = listing.lines().nth(1).unwrap().split_whitespace().collect();
-    let reference = format!("exact:{}/{}", columns[0], columns[1]);
-    assert!(success(&root, &["revision", "show", &reference]).contains("Action: inspect"));
-    success(
-        &root,
-        &[
-            "revision",
-            "alias",
-            "set",
-            "production",
-            &reference,
-            "--expect-absent",
-        ],
-    );
+    let reference = columns[0].to_owned();
+    assert!(success(&root, &["revision", "show", &reference]).contains("Action ID: inspect"));
+    success(&root, &["revision", "rename", &reference, "production"]);
+    let named = format!("{}:production", reference.split_once(':').unwrap().0);
     success(
         &root,
         &[
@@ -71,13 +62,7 @@ fn catalog_cli_discovers_installed_content_and_retired_history_without_install_r
     );
     success(
         &root,
-        &[
-            "instance",
-            "create",
-            "sample",
-            "--revision",
-            "alias:production",
-        ],
+        &["instance", "create", "sample", "--revision", &named],
     );
     // Descriptive distrust does not reject invocation: this Hook runs and fails
     // only because the fixture deliberately does not speak the Hook protocol.
@@ -110,15 +95,9 @@ fn catalog_cli_discovers_installed_content_and_retired_history_without_install_r
     assert!(history.contains("Retired"));
     success(
         &root,
-        &[
-            "instance",
-            "create",
-            "sample",
-            "--revision",
-            "alias:production",
-        ],
+        &["instance", "create", "sample", "--revision", &named],
     );
-    assert!(success(&root, &["run", "list", "sample"]).contains("0 records shown."));
+    assert!(success(&root, &["run", "list", "sample"]).contains("No Runs."));
     let runs = success(
         &root,
         &[
@@ -138,7 +117,7 @@ fn catalog_cli_discovers_installed_content_and_retired_history_without_install_r
         .unwrap();
     let args: Vec<_> = continuation.split_whitespace().skip(1).collect();
     let next = success(&root, &args);
-    assert!(next.contains("1 records shown."));
+    assert!(next.contains("1 record shown."));
     assert!(!next.contains("More results"));
     let first_id = runs
         .lines()
@@ -148,8 +127,8 @@ fn catalog_cli_discovers_installed_content_and_retired_history_without_install_r
         .next()
         .unwrap();
     assert!(!next.lines().nth(1).unwrap().starts_with(first_id));
-    let metadata = success(&root, &["revision", "metadata", "show", "alias:production"]);
-    assert!(metadata.contains("Local alias: production"));
-    assert!(metadata.contains("Distrusted"));
+    let metadata = success(&root, &["revision", "metadata", "show", &named]);
+    assert!(success(&root, &["revision", "show", &named]).contains("production"));
+    assert!(metadata.contains("distrusted"));
     assert!(success(&root, &["instance", "deletion", "list", "--no-trunc"]).contains(&old));
 }

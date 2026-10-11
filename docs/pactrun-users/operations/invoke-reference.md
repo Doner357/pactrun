@@ -23,11 +23,24 @@ pactrun [--format human|json|jsonl] invoke <instance> <action>
     [--cancel-on-output-close]
 ```
 
-The global output selection precedes the command. This candidate has no
-`invoke … --help` subcommand help; that option is rejected. Use this reference
-for invocation details and `pactrun --help` for the command overview.
+The global output selection precedes the command. Use `pactrun invoke --help`
+for command syntax without supplying Instance or Action operands. Use
+`pactrun action show <instance> <action>` for the installed Action's own
+parameters and explanations. `pactrun --help` provides the command overview.
 
 ## Parameters
+
+Use `--plan` to check the exact Instance, Action, and missing required Input IDs
+without creating a Run. Bind missing Inputs with `pactrun input set <instance>
+<input> --file <path>`, then preview again. A plan is checked again at admission.
+If admission already refused a Run, `run show <run-id>` retains the missing IDs
+observed then, even after the Inputs have been supplied.
+
+Accepted Hook completion is not final command success. Pactrun waits for the
+supervised processes to exit, then performs storage and Run finalization. Live
+Core progress reports those waits or storage retries in Human and JSONL; batch
+JSON includes the same events in `delivery.events`. A retry does not replay the
+Hook. Inspect the final Run outcome separately from output-delivery completeness.
 
 | Option | Operand and behavior |
 | --- | --- |

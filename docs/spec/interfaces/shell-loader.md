@@ -10,7 +10,7 @@ The built-in Loader MUST own one persistent canonical Hook connection and Sessio
 lifecycle. It MUST validate the admitted protocol version, receive Session start,
 and send readiness before running a script. Scripts MUST NOT need setup imports,
 handshake or completion boilerplate. Repeated helpers MUST use separate private
-IPC, not reconnect the Core endpoint or consume terminal streams.
+IPC, not reconnect the canonical Hook Protocol endpoint or consume terminal streams.
 
 The host interpreter is not bundled. Sh receives the absolute script path and
 ordered args; Bash receives `--noprofile --norc --`, script and args. PowerShell
@@ -53,6 +53,11 @@ presented live and retained by default for Run inspection under the
 display. Interactive presentation waits until the terminal is returned. Hook
 authors remain responsible for keeping sensitive values out of diagnostics.
 
+Built-in helper errors report a safe command, stage and reason through
+[Pactrun-owned Run diagnostics](../operations/diagnostics.md#pr-req-0378---pactrun-owned-execution-diagnostics).
+A handled helper failure remains diagnostic evidence when the script later
+succeeds. It is not a Hook-authored diagnostic or a new completion-failure rule.
+
 Read results support `--output FILE`, creating a new file instead of overwriting
 an existing file. JSON files are UTF-8 without an added BOM. Text-file output
 contains the exact text without an added newline; terminal results append a
@@ -87,6 +92,8 @@ ordinary success and independent risk resolution are forbidden. No automatic
 repair, replay, rollback, risk resolution or inference of service coherence occurs.
 Existing Core supervision owns cancellation, terminal channels, child-tree
 termination and durable outcome arbitration.
+
+**Verification: PR-TEST-0690.**
 
 **Verification: PR-TEST-0486, PR-TEST-0488, PR-TEST-0489, PR-TEST-0490, PR-TEST-0491,
 PR-TEST-0495, PR-TEST-0496, PR-TEST-0497, PR-TEST-0498, PR-TEST-0499,

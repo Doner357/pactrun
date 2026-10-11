@@ -37,6 +37,26 @@ fn database(root: &Path) -> rusqlite::Connection {
     )
     .unwrap()
 }
+fn installed_reference(root: &Path, source: &Path) -> String {
+    let output = success(
+        root,
+        &[
+            "--format",
+            "json",
+            "pack",
+            "install",
+            source.to_str().unwrap(),
+        ],
+    );
+    let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+    format!(
+        "exact:{}/{}",
+        value["result"]["revision"]["package_id"].as_str().unwrap(),
+        value["result"]["revision"]["content_digest"]
+            .as_str()
+            .unwrap()
+    )
+}
 fn fixture() -> Fixture {
     fixture_with_hooks(false)
 }
@@ -50,12 +70,12 @@ fn fixture_with_hooks(hooks: bool) -> Fixture {
     }
     let source = temp.path().join("pack");
     fs::create_dir(&source).unwrap();
-    fs::write(source.join("pactrun.yaml"),"source_format: 1.0-alpha.1\npackage_id: 00000000000000000000000000000097\nrevision:\n  service_storages: [{id: data}]\nruntime_content: {}\n").unwrap();
+    fs::write(source.join("pactrun.yaml"),"source_format: 1.0-alpha.2\npackage_id: 00000000000000000000000000000097\nrevision:\n  service_storages: [{id: data}]\nruntime_content: {}\n").unwrap();
     if hooks {
         fs::write(source.join("script.sh"), "printf 'cleanup-marker\\n'\n").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000097
 revision:
   service_storages: [{id: data}]
@@ -83,11 +103,7 @@ runtime_content:
         )
         .unwrap();
     }
-    let revision = success(&store, &["pack", "install", source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let revision = installed_reference(&store, &source);
     success(
         &store,
         &["instance", "create", "sample", "--revision", &revision],
@@ -134,11 +150,7 @@ fn socket_finalization_diagnostics_preserve_cleanup_and_admission_boundaries() {
         yaml.replace("runtime_content:", &format!("{migration}runtime_content:")),
     )
     .unwrap();
-    let target = success(&f.store, &["pack", "install", source.to_str().unwrap()])
-        .lines()
-        .next()
-        .unwrap()
-        .to_owned();
+    let target = installed_reference(&f.store, &source);
     let directory = fs::File::open(&f.data).unwrap();
     let held = PathBuf::from(format!("/proc/self/fd/{}", directory.as_raw_fd()));
     let socket = held.join("private-socket-sentinel");
@@ -333,15 +345,18 @@ fn actual_cli_plan_delete_and_old_identity_inspection_preserve_name_reuse_bounda
         fs::read(f.data.join("private-data")).unwrap(),
         b"service-owned private bytes"
     );
-    let deleted = success(&f.store, &["instance", "delete", "sample"]);
-    assert!(deleted.contains(&format!("retired_instance: {}", f.instance)));
+    let deleted = call(&f.store, &["instance", "delete", "sample"]);
+    assert!(deleted.status.success());
+    assert!(
+        String::from_utf8_lossy(&deleted.stderr).contains(&format!("Instance: {}", f.instance))
+    );
     assert!(!f.data.exists());
     success(
         &f.store,
         &["instance", "create", "sample", "--revision", &f.revision],
     );
     let old = success(&f.store, &["instance", "deletion", "show", &f.instance]);
-    assert!(old.contains("managed: false"));
+    assert!(old.contains("Managed: No"));
     assert!(old.contains("instance_delete"));
     let current: Vec<u8> = database(&f.store)
         .query_row("SELECT instance_id FROM instances", [], |r| r.get(0))
@@ -365,7 +380,7 @@ fn actual_cli_abandon_handoff_and_confirmed_discard_do_not_infer_destruction() {
         &f.store,
         &["service-storage", "detached", "show", &f.allocation],
     );
-    assert!(listing.contains("state: preserved"));
+    assert!(listing.contains("preserved"));
     assert!(!listing.contains("native_location"));
     assert!(!listing.contains("service-owned private bytes"));
     let handoff = success(
@@ -378,7 +393,7 @@ fn actual_cli_abandon_handoff_and_confirmed_discard_do_not_infer_destruction() {
             "--reveal-location",
         ],
     );
-    assert!(handoff.contains("native_location:"));
+    assert!(handoff.contains("Native Location"));
     assert!(handoff.contains(&format!("alloc-{}", f.allocation)));
     assert_eq!(
         call(
@@ -410,11 +425,11 @@ fn actual_cli_abandon_handoff_and_confirmed_discard_do_not_infer_destruction() {
         &f.allocation,
         "--confirm-discard",
     ];
-    assert!(success(&f.store, &args).contains("new_completion: true"));
+    assert!(success(&f.store, &args).contains("New Completion: Yes"));
     assert!(!f.data.exists());
     fs::create_dir(&f.data).unwrap();
     fs::write(f.data.join("replacement"), b"new unrelated bytes").unwrap();
-    assert!(success(&f.store, &args).contains("new_completion: false"));
+    assert!(success(&f.store, &args).contains("New Completion: No"));
     assert_eq!(
         fs::read(f.data.join("replacement")).unwrap(),
         b"new unrelated bytes"

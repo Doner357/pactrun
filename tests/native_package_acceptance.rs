@@ -1,5 +1,28 @@
-//! Opt-in real-manager gate. Never installs into the user's existing manager.
+//! Offline runner regressions and an opt-in real-manager gate.
 use std::{env, path::Path, process::Command};
+
+// Test-ID: PR-TEST-0637
+// Verifies: PR-REQ-0329, PR-REQ-0330, PR-REQ-0332, PR-REQ-0333
+#[test]
+fn native_acceptance_runner_offline_regressions() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+        .args([
+            "-B",
+            "-m",
+            "unittest",
+            "tools.test_native_package_acceptance",
+        ])
+        .current_dir(root)
+        .output()
+        .expect("run offline native acceptance regressions");
+    assert!(
+        output.status.success(),
+        "offline native acceptance regressions failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 // Test-ID: PR-TEST-0637
 // Verifies: PR-REQ-0329, PR-REQ-0330, PR-REQ-0332, PR-REQ-0333

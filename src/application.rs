@@ -17,16 +17,28 @@ use std::{
 };
 
 #[cfg(test)]
-use std::cell::Cell;
+use std::cell::RefCell;
 
 #[cfg(test)]
 thread_local! {
-    static FAIL_FINALIZATION_ADVANCES_FOR_TEST: Cell<usize> = const { Cell::new(0) };
+    static FAIL_FINALIZATION_ADVANCES_FOR_TEST: RefCell<Arc<std::sync::atomic::AtomicUsize>> = RefCell::new(Arc::new(std::sync::atomic::AtomicUsize::new(0)));
 }
 
 #[cfg(test)]
-pub(crate) fn fail_next_finalization_advances_for_test(count: usize) {
-    FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|remaining| remaining.set(count));
+pub(crate) fn fail_next_finalization_advances_for_test(
+    count: usize,
+) -> Arc<std::sync::atomic::AtomicUsize> {
+    let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(count));
+    install_finalization_faults_for_test(remaining.clone());
+    remaining
+}
+#[cfg(test)]
+pub(crate) fn finalization_faults_for_test() -> Arc<std::sync::atomic::AtomicUsize> {
+    FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|r| r.borrow().clone())
+}
+#[cfg(test)]
+pub(crate) fn install_finalization_faults_for_test(value: Arc<std::sync::atomic::AtomicUsize>) {
+    FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|r| *r.borrow_mut() = value);
 }
 
 pub(crate) use installation::{InstallPackResult, MigrationRelationState};
@@ -36,10 +48,10 @@ use crate::{
     domain::{
         ActionCompilationObservation, ActionExecutionPlan, ActionIdentity, ActionResolutionError,
         ActionV1, ExecutionOwnerSession, InputIdentity, InstanceId, InstanceName,
-        InstanceStateVersion, InstanceSummary, InstanceView, InvokeAction, LocalAlias,
-        ManagedOutputIdentity, PlanCompilationError, RawParameterInput, ReferenceLabel,
-        RevisionError, RevisionIdentity, RevisionMetadataMutationBatch, RunFinish, RunId,
-        RunInspectionData, RunOutcome, RunSummary, RunView, bind_action_parameters,
+        InstanceStateVersion, InstanceView, InvokeAction, ManagedOutputIdentity,
+        PlanCompilationError, RawParameterInput, RevisionError, RevisionIdentity,
+        RevisionMetadataMutationBatch, RunFinish, RunId, RunInspectionData, RunOutcome, RunSummary,
+        RunView, bind_action_parameters,
     },
     executor::{AdmissionOptions, AdmittedExecution, ExecutorError},
     hook::{ActionCancellation, ContinuationGuard, HookRuntimePolicy, OwnerContinuationRegistry},
@@ -385,6 +397,7 @@ impl PactrunApplication {
                 "PACTRUN_STORAGE_ROOT must be a non-empty absolute path".to_owned(),
             ));
         }
+        crate::persistence::prepare_new_store(requested)?;
         let root = validate_supported_storage_root(requested)
             .map_err(|error| ApplicationError::Configuration(error.to_string()))?;
         for child in ["database", "runtime-content", "staging"] {
@@ -465,16 +478,77 @@ impl PactrunApplication {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn install_pack(
         &self,
         path: &Path,
         policy: crate::domain::PackMetadataConflict,
         cancellation: &ActionCancellation,
     ) -> Result<InstallPackResult, ApplicationError> {
+        self.install_named_pack(
+            path,
+            policy,
+            &crate::domain::InstallNames::default(),
+            cancellation,
+        )
+    }
+
+    pub(crate) fn install_named_pack(
+        &self,
+        path: &Path,
+        policy: crate::domain::PackMetadataConflict,
+        names: &crate::domain::InstallNames,
+        cancellation: &ActionCancellation,
+    ) -> Result<InstallPackResult, ApplicationError> {
         let candidate = crate::pack_transport::acquire(path, self.staging()?, cancellation)
             .map_err(ApplicationError::InvalidInstallation)?;
         let empty = RevisionMetadataMutationBatch::new(Vec::new()).expect("empty metadata plan");
-        installation::install_prepared(&self.persistence, candidate, &empty, policy, cancellation)
+        installation::install_prepared(
+            &self.persistence,
+            candidate,
+            &empty,
+            policy,
+            names,
+            cancellation,
+        )
+    }
+
+    pub(crate) fn resolve_named_revision(
+        &self,
+        reference: &crate::domain::LocalRevisionReference,
+    ) -> Result<RevisionIdentity, ApplicationError> {
+        Ok(self.persistence.resolve_named_revision(reference)?)
+    }
+
+    pub(crate) fn resolve_named_package(
+        &self,
+        reference: &crate::domain::LocalSelector,
+    ) -> Result<crate::domain::PackageId, ApplicationError> {
+        Ok(self.persistence.resolve_named_package(reference)?)
+    }
+
+    pub(crate) fn rename_package(
+        &self,
+        id: crate::domain::PackageId,
+        name: Option<&crate::domain::LocalName>,
+    ) -> Result<(), ApplicationError> {
+        Ok(self.persistence.rename_package(id, name)?)
+    }
+
+    pub(crate) fn rename_revision(
+        &self,
+        id: &RevisionIdentity,
+        name: Option<&crate::domain::LocalName>,
+    ) -> Result<(), ApplicationError> {
+        Ok(self.persistence.rename_revision(id, name)?)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn local_revision_facts(
+        &self,
+        id: &RevisionIdentity,
+    ) -> Result<crate::domain::LocalRevisionFacts, ApplicationError> {
+        Ok(self.persistence.local_revision_facts(id)?)
     }
 
     pub(crate) fn export_revision_pack(
@@ -501,20 +575,6 @@ impl PactrunApplication {
                 source: failure.source,
             },
         )
-    }
-
-    pub(crate) fn resolve_reference_label(
-        &self,
-        label: &ReferenceLabel,
-    ) -> Result<Vec<RevisionIdentity>, ApplicationError> {
-        Ok(self.persistence.lookup_reference_label(label)?)
-    }
-
-    pub(crate) fn resolve_local_alias(
-        &self,
-        alias: &LocalAlias,
-    ) -> Result<Option<RevisionIdentity>, ApplicationError> {
-        Ok(self.persistence.lookup_local_alias(alias)?)
     }
 
     pub(crate) fn revision_exists(
@@ -574,7 +634,10 @@ impl PactrunApplication {
             .create_instance(name, revision, &mut writes)?)
     }
 
-    pub(crate) fn list_instances(&self) -> Result<Vec<InstanceSummary>, ApplicationError> {
+    #[cfg(test)]
+    pub(crate) fn list_instances(
+        &self,
+    ) -> Result<Vec<crate::domain::InstanceSummary>, ApplicationError> {
         Ok(self.persistence.list_instances()?)
     }
 
@@ -1020,13 +1083,14 @@ impl PactrunApplication {
     pub(crate) fn advance_owner_continuation(&self, run: RunId) -> Result<bool, ApplicationError> {
         #[cfg(test)]
         if FAIL_FINALIZATION_ADVANCES_FOR_TEST.with(|remaining| {
-            let current = remaining.get();
-            if current == 0 {
-                false
-            } else {
-                remaining.set(current - 1);
-                true
-            }
+            remaining
+                .borrow()
+                .try_update(
+                    std::sync::atomic::Ordering::SeqCst,
+                    std::sync::atomic::Ordering::SeqCst,
+                    |n| n.checked_sub(1),
+                )
+                .is_ok()
         }) {
             return Err(ApplicationError::Persistence(
                 PersistenceError::DatabaseLockPoisoned,
@@ -1166,7 +1230,7 @@ mod action_tests {
         fs::write(source.join("config.bin"), b"secret config").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000031
 revision:
   inputs:
@@ -1304,7 +1368,7 @@ runtime_content:
         fs::write(source.join("tool.bin"), b"tool").unwrap();
         fs::write(
             source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.1
+            r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000032
 revision:
   inputs:
@@ -1574,7 +1638,7 @@ mod admission_tests {
         fs::write(
             source.join("pactrun.yaml"),
             format!(
-                r#"source_format: 1.0-alpha.1
+                r#"source_format: 1.0-alpha.2
 package_id: 00000000000000000000000000000033
 revision:
   inputs:
@@ -2063,7 +2127,9 @@ runtime_content:
         let unready = plan(&application, &fixture, "unready", "inspect");
         let (run, refusal) = expect_refusal(admit(&application, &unready, false));
         match refusal {
-            AdmissionRefusal::PlanInvalidated(reason) => assert!(reason.contains("config")),
+            AdmissionRefusal::MissingRequiredInputs(ids) => {
+                assert_eq!(ids, vec![InputIdentity::parse("config").unwrap()])
+            }
             other => panic!("unexpected refusal {other:?}"),
         }
         assert_refused_run(

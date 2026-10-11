@@ -113,28 +113,6 @@
       ],
       "type": "object"
     },
-    "Alias": {
-      "properties": {
-        "alias": {
-          "type": "string"
-        },
-        "target": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Revision"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "alias",
-        "target"
-      ],
-      "type": "object"
-    },
     "Artifact": {
       "properties": {
         "byte_length": {
@@ -184,10 +162,16 @@
             "$ref": "#/$defs/Revision"
           },
           "type": "array"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "path_id",
+        "unique_prefix_length",
         "revisions",
         "edge_count"
       ],
@@ -502,6 +486,10 @@
         "hook_ordinal": {
           "type": "string"
         },
+        "interactive": {
+          "default": false,
+          "type": "boolean"
+        },
         "operation": {
           "type": "string"
         },
@@ -533,6 +521,7 @@
         }
       },
       "required": [
+        "interactive",
         "run_id",
         "hook_ordinal",
         "operation",
@@ -542,6 +531,86 @@
         "target_revision"
       ],
       "type": "object"
+    },
+    "CoreCollectionIssue": {
+      "enum": [
+        "transport",
+        "capacity",
+        "storage"
+      ],
+      "type": "string"
+    },
+    "CoreDiagnostics": {
+      "properties": {
+        "collection_closed": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CoreEvent"
+          },
+          "type": "array"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "persistence_failed": {
+          "type": "boolean"
+        },
+        "started": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "started",
+        "observed",
+        "collection_closed",
+        "persistence_failed",
+        "events"
+      ],
+      "type": "object"
+    },
+    "CoreEvent": {
+      "properties": {
+        "failure": {
+          "$ref": "#/$defs/HelperFailure"
+        },
+        "message": {
+          "type": "string"
+        },
+        "received_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "source": {
+          "const": "pactrun"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "sequence",
+        "received_at_unix_ms",
+        "stage",
+        "failure",
+        "message"
+      ],
+      "type": "object"
+    },
+    "CorePhase": {
+      "enum": [
+        "waiting_for_process_tree",
+        "retrying_storage",
+        "finalizing_execution"
+      ],
+      "type": "string"
     },
     "CreatedResource": {
       "properties": {
@@ -786,9 +855,15 @@
         },
         "state": {
           "type": "string"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "unique_prefix_length",
         "allocation_id",
         "former_instance_id",
         "state",
@@ -846,6 +921,16 @@
         "observed": {
           "type": "string"
         },
+        "pactrun": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "persistence_failed": {
           "type": "boolean"
         },
@@ -857,6 +942,7 @@
         }
       },
       "required": [
+        "pactrun",
         "retain_text",
         "started",
         "collection_closed",
@@ -1016,6 +1102,16 @@
     },
     "Failure": {
       "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureCause"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "detail": {
           "type": [
             "string",
@@ -1048,6 +1144,44 @@
         "explanation",
         "detail",
         "step"
+      ],
+      "type": "object"
+    },
+    "FailureCause": {
+      "oneOf": [
+        {
+          "properties": {
+            "input_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "missing_required_inputs",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "input_ids"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Form": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "usage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "usage",
+        "description"
       ],
       "type": "object"
     },
@@ -1105,6 +1239,34 @@
     },
     "Help": {
       "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HelpCommand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/HelpCommand"
+          },
+          "type": "array"
+        },
+        "global_options": {
+          "items": {
+            "$ref": "#/$defs/HelpOption"
+          },
+          "type": "array"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "usage": {
           "type": "string"
         }
@@ -1113,6 +1275,147 @@
         "usage"
       ],
       "type": "object"
+    },
+    "HelpCommand": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "examples": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forms": {
+          "items": {
+            "$ref": "#/$defs/Form"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/HelpOption"
+          },
+          "type": "array"
+        },
+        "path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "description",
+        "forms",
+        "options",
+        "notes",
+        "examples"
+      ],
+      "type": "object"
+    },
+    "HelpOption": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "description"
+      ],
+      "type": "object"
+    },
+    "HelperCommand": {
+      "enum": [
+        "unknown",
+        "session",
+        "parameter",
+        "workspace",
+        "input",
+        "resource",
+        "output",
+        "output_register",
+        "candidate",
+        "snapshot_content",
+        "diagnostic",
+        "protocol_error",
+        "risk",
+        "capture_register",
+        "completion",
+        "target_ready"
+      ],
+      "type": "string"
+    },
+    "HelperFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/HelperCommand"
+        },
+        "reason": {
+          "$ref": "#/$defs/HelperReason"
+        },
+        "stage": {
+          "$ref": "#/$defs/HelperStage"
+        }
+      },
+      "required": [
+        "command",
+        "stage",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "HelperReason": {
+      "enum": [
+        "invalid_arguments",
+        "not_found",
+        "permission_denied",
+        "already_exists",
+        "invalid_json",
+        "too_large",
+        "unavailable",
+        "invalid_request",
+        "invalid_reply",
+        "parameter_unavailable",
+        "invalid_message",
+        "io"
+      ],
+      "type": "string"
+    },
+    "HelperStage": {
+      "enum": [
+        "arguments",
+        "read_json",
+        "parse_json",
+        "connect",
+        "submit",
+        "reply",
+        "read_input",
+        "copy_data",
+        "write_output",
+        "request"
+      ],
+      "type": "string"
     },
     "History": {
       "properties": {
@@ -1136,9 +1439,15 @@
         },
         "retired": {
           "type": "boolean"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "unique_prefix_length",
         "instance_id",
         "recorded_name",
         "current_name",
@@ -1225,7 +1534,7 @@
           ]
         },
         "source": {
-          "type": "string"
+          "const": "hook"
         },
         "stage": {
           "type": "string"
@@ -1341,6 +1650,23 @@
       ],
       "type": "object"
     },
+    "InputMutation": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": "string"
+        },
+        "state_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state_version"
+      ],
+      "type": "object"
+    },
     "InputRef": {
       "properties": {
         "input_id": {
@@ -1385,6 +1711,11 @@
         "instance_id": {
           "type": "string"
         },
+        "instance_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "operation": {
           "$ref": "#/$defs/Operation"
         },
@@ -1394,11 +1725,18 @@
         "run_id": {
           "type": "string"
         },
+        "run_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "state": {
           "$ref": "#/$defs/State"
         }
       },
       "required": [
+        "run_prefix_length",
+        "instance_prefix_length",
         "run_id",
         "instance_id",
         "revision",
@@ -1627,6 +1965,34 @@
       ],
       "type": "object"
     },
+    "LocalRevision": {
+      "properties": {
+        "installed_at_unix_ms": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "package_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "package_name",
+        "revision_name",
+        "installed_at_unix_ms"
+      ],
+      "type": "object"
+    },
     "Location": {
       "properties": {
         "path": {
@@ -1655,43 +2021,6 @@
     },
     "Metadata": {
       "oneOf": [
-        {
-          "properties": {
-            "kind": {
-              "const": "reference_label",
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "namespace": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "publisher": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "source_uri": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "kind",
-            "label",
-            "publisher",
-            "namespace",
-            "source_uri"
-          ],
-          "type": "object"
-        },
         {
           "properties": {
             "field": {
@@ -1782,22 +2111,6 @@
             "kind",
             "text",
             "source_uri"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "alias": {
-              "type": "string"
-            },
-            "kind": {
-              "const": "local_alias",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "alias"
           ],
           "type": "object"
         },
@@ -2003,33 +2316,6 @@
       "oneOf": [
         {
           "properties": {
-            "alias": {
-              "type": "string"
-            },
-            "field": {
-              "const": "alias",
-              "type": "string"
-            },
-            "target": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Revision"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          },
-          "required": [
-            "field",
-            "alias",
-            "target"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
             "field": {
               "const": "note",
               "type": "string"
@@ -2067,6 +2353,31 @@
           "type": "object"
         }
       ]
+    },
+    "NameResult": {
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "package_id": {
+          "type": "string"
+        },
+        "revision_content_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "package_id",
+        "revision_content_digest",
+        "name"
+      ],
+      "type": "object"
     },
     "NativePath": {
       "oneOf": [
@@ -2335,11 +2646,20 @@
           },
           "type": "array"
         },
+        "local": {
+          "$ref": "#/$defs/LocalRevision"
+        },
         "migrations": {
           "items": {
             "$ref": "#/$defs/Relation"
           },
           "type": "array"
+        },
+        "newly_installed": {
+          "type": "boolean"
+        },
+        "reference": {
+          "type": "string"
         },
         "revision": {
           "$ref": "#/$defs/Revision"
@@ -2347,6 +2667,9 @@
       },
       "required": [
         "revision",
+        "reference",
+        "local",
+        "newly_installed",
         "migrations",
         "kept_metadata"
       ],
@@ -2523,6 +2846,9 @@
         },
         {
           "$ref": "#/$defs/KnownRun"
+        },
+        {
+          "$ref": "#/$defs/RefusedExecution"
         },
         {
           "$ref": "#/$defs/Inspection"
@@ -2707,6 +3033,12 @@
         "launch": {
           "$ref": "#/$defs/CompiledLaunch"
         },
+        "missing_input_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "output_ids": {
           "items": {
             "type": "string"
@@ -2797,6 +3129,9 @@
             }
           ]
         },
+        "local": {
+          "$ref": "#/$defs/LocalRevision"
+        },
         "metadata": {
           "items": {
             "$ref": "#/$defs/Metadata"
@@ -2812,12 +3147,17 @@
           },
           "type": "array"
         },
+        "reference": {
+          "type": "string"
+        },
         "revision": {
           "$ref": "#/$defs/Revision"
         }
       },
       "required": [
         "revision",
+        "reference",
+        "local",
         "core_version",
         "metadata",
         "declarations",
@@ -3098,6 +3438,22 @@
       "oneOf": [
         {
           "properties": {
+            "candidate_run_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "acceptance_pending",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "candidate_run_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "run_id": {
               "type": "string"
             },
@@ -3109,6 +3465,80 @@
           "required": [
             "type",
             "run_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "interactive": {
+              "type": "boolean"
+            },
+            "phase": {
+              "$ref": "#/$defs/CorePhase"
+            },
+            "run_id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "core_progress",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run_id",
+            "phase",
+            "interactive"
+          ],
+          "type": "object"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "failure": {
+                  "$ref": "#/$defs/HelperFailure"
+                },
+                "kind": {
+                  "const": "helper_failure",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "failure"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "collection_incomplete",
+                  "type": "string"
+                },
+                "reason": {
+                  "$ref": "#/$defs/CoreCollectionIssue"
+                }
+              },
+              "required": [
+                "kind",
+                "reason"
+              ],
+              "type": "object"
+            }
+          ],
+          "properties": {
+            "context": {
+              "$ref": "#/$defs/Context"
+            },
+            "type": {
+              "const": "core_diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "context"
           ],
           "type": "object"
         },
@@ -3159,6 +3589,13 @@
                 "null"
               ]
             },
+            "completion_status": {
+              "enum": [
+                null,
+                "success",
+                "failure"
+              ]
+            },
             "context": {
               "$ref": "#/$defs/Context"
             },
@@ -3187,6 +3624,7 @@
             "context",
             "kind",
             "severity",
+            "completion_status",
             "code",
             "message"
           ],
@@ -3201,7 +3639,7 @@
           "const": "pactrun.cli"
         },
         "format_version": {
-          "const": "1.0-alpha.1"
+          "const": "1.0-alpha.3"
         },
         "received_at_unix_ms": {
           "type": [
@@ -3243,6 +3681,62 @@
         "role",
         "kind",
         "id"
+      ],
+      "type": "object"
+    },
+    "RefusedExecution": {
+      "description": "Adds the historical inspection without removing the established partial Run ID.",
+      "properties": {
+        "capture_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_recovery_guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Guard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Diagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "migration_progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MigrationProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "run",
+        "current_recovery_guard",
+        "capture_result",
+        "migration_progress",
+        "diagnostics"
       ],
       "type": "object"
     },
@@ -3540,9 +4034,15 @@
             "$ref": "#/$defs/Revision"
           },
           "type": "array"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "unique_prefix_length",
         "snapshot_id",
         "integrity_format",
         "producer_revision",
@@ -3749,9 +4249,15 @@
         },
         "retired": {
           "type": "boolean"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "unique_prefix_length",
         "instance_id",
         "recorded_name",
         "current_name",
@@ -3846,6 +4352,9 @@
             }
           ]
         },
+        "local": {
+          "$ref": "#/$defs/LocalRevision"
+        },
         "metadata": {
           "items": {
             "$ref": "#/$defs/Metadata"
@@ -3855,12 +4364,17 @@
         "metadata_scope": {
           "type": "string"
         },
+        "reference": {
+          "type": "string"
+        },
         "revision": {
           "$ref": "#/$defs/Revision"
         }
       },
       "required": [
         "revision",
+        "reference",
+        "local",
         "core_version",
         "metadata",
         "declarations",
@@ -3879,6 +4393,11 @@
         "instance_id": {
           "type": "string"
         },
+        "instance_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "operation": {
           "$ref": "#/$defs/Operation"
         },
@@ -3888,11 +4407,18 @@
         "run_id": {
           "type": "string"
         },
+        "run_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "state": {
           "$ref": "#/$defs/State"
         }
       },
       "required": [
+        "run_prefix_length",
+        "instance_prefix_length",
         "run_id",
         "instance_id",
         "revision",
@@ -4079,9 +4605,15 @@
         },
         "target_eligibility": {
           "type": "string"
+        },
+        "unique_prefix_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "unique_prefix_length",
         "snapshot_id",
         "integrity_format",
         "producer_revision",
@@ -4878,7 +5410,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/StateVersion"
+            "$ref": "#/$defs/InputMutation"
           }
         }
       }
@@ -4897,7 +5429,7 @@
       "then": {
         "properties": {
           "result": {
-            "$ref": "#/$defs/StateVersion"
+            "$ref": "#/$defs/InputMutation"
           }
         }
       }
@@ -5057,6 +5589,82 @@
         "properties": {
           "result": {
             "$ref": "#/$defs/Collection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "package rename"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/NameResult"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "package unname"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/NameResult"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision rename"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/NameResult"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision unname"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/NameResult"
           }
         }
       }
@@ -5293,25 +5901,6 @@
       "if": {
         "properties": {
           "command": {
-            "const": "revision alias show"
-          },
-          "status": {
-            "const": "success"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "result": {
-            "$ref": "#/$defs/Alias"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "command": {
             "const": "revision note show"
           },
           "status": {
@@ -5342,44 +5931,6 @@
         "properties": {
           "result": {
             "$ref": "#/$defs/Local"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "command": {
-            "const": "revision alias set"
-          },
-          "status": {
-            "const": "success"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "result": {
-            "$ref": "#/$defs/Mutation2"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "command": {
-            "const": "revision alias clear"
-          },
-          "status": {
-            "const": "success"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "result": {
-            "$ref": "#/$defs/Mutation2"
           }
         }
       }
@@ -5893,6 +6444,2287 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "help"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Help"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "version"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Version"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "pack generate-id"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Package"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "pack install"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/PackInstall"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision export"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/PackExport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance create"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Instance"
+                  },
+                  {
+                    "$ref": "#/$defs/CreatedRestore"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance resolve-manual-recovery"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/StateVersion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input set"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/InputMutation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/InputMutation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related3"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "input export"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/InputExport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "action list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Presented"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "action show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Presented2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "invoke"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Inspection"
+                  },
+                  {
+                    "$ref": "#/$defs/Presented3"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related4"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run reconcile"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Reconciled"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "storage gc"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Collection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "package rename"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/NameResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "package unname"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/NameResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision rename"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/NameResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision unname"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/NameResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Deletion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Deletion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Deletion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run artifact export"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/ArtifactResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run artifact delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/ArtifactResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Page"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Presented4"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision metadata show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/RevisionEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance history list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Page2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Page3"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance history show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/History"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "run list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related5"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Local"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Local"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note set"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Mutation2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision note clear"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Mutation2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust set"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Mutation2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "revision trust clear"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Mutation2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Storages"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Resources"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Resource2"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource observe"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Observation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "resource locate"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance delete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Inspection"
+                  },
+                  {
+                    "$ref": "#/$defs/Presented5"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance abandon"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Inspection"
+                  },
+                  {
+                    "$ref": "#/$defs/Presented5"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/RetirementInspection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance deletion confirm-complete"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Confirmation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/DetachedList"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/DetachedInspection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "service-storage detached discard"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Discard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related6"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Related7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot verify"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/SnapshotVerified"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot import"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/SnapshotImported"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot export"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/SnapshotExported"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot capture"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Inspection"
+                  },
+                  {
+                    "$ref": "#/$defs/Presented6"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "snapshot restore"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Inspection"
+                  },
+                  {
+                    "$ref": "#/$defs/Presented6"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance migration-paths"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Presented7"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "instance migrate"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Presented8"
+                  },
+                  {
+                    "$ref": "#/$defs/Completed"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "oneOf": [
@@ -5915,6 +8747,13 @@
     {
       "properties": {
         "error": {
+          "properties": {
+            "kind": {
+              "not": {
+                "const": "output"
+              }
+            }
+          },
           "type": "object"
         },
         "result": {
@@ -5929,6 +8768,21 @@
               "type": "null"
             }
           ]
+        },
+        "status": {
+          "const": "failure"
+        }
+      }
+    },
+    {
+      "properties": {
+        "error": {
+          "properties": {
+            "kind": {
+              "const": "output"
+            }
+          },
+          "type": "object"
         },
         "status": {
           "const": "failure"
@@ -5960,6 +8814,10 @@
             "run show",
             "run reconcile",
             "storage gc",
+            "package rename",
+            "package unname",
+            "revision rename",
+            "revision unname",
             "run delete",
             "revision delete",
             "snapshot delete",
@@ -5972,11 +8830,8 @@
             "instance deletion list",
             "instance history show",
             "run list",
-            "revision alias show",
             "revision note show",
             "revision trust show",
-            "revision alias set",
-            "revision alias clear",
             "revision note set",
             "revision note clear",
             "revision trust set",
@@ -6067,7 +8922,7 @@
       "const": "pactrun.cli"
     },
     "format_version": {
-      "const": "1.0-alpha.1"
+      "const": "1.0-alpha.3"
     },
     "result": {
       "type": [
@@ -6090,6 +8945,6 @@
     "result",
     "error"
   ],
-  "title": "Pactrun CLI machine interface 1.0-alpha.1",
+  "title": "Pactrun CLI machine interface 1.0-alpha.3",
   "type": "object"
 }

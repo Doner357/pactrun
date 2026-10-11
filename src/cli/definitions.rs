@@ -30,7 +30,7 @@ impl Text {
         text
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub(super) enum DefaultValue {
@@ -49,7 +49,7 @@ impl From<&ParameterDefaultV1> for DefaultValue {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Parameter {
     pub(super) parameter_id: String,
@@ -78,13 +78,13 @@ impl Parameter {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Output {
     pub(super) output_id: String,
     pub(super) metadata: Text,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Input {
     input_id: String,
@@ -92,7 +92,7 @@ pub(super) struct Input {
     protection: &'static str,
     metadata: Text,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Hook {
     protocol_version: String,
@@ -102,7 +102,7 @@ pub(super) struct Hook {
     service_access: Vec<Grant>,
     service_requires: Vec<Requirement>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Reference {
     view: &'static str,
@@ -134,13 +134,13 @@ fn role(r: ServiceRole) -> &'static str {
         ServiceRole::Retained => "retained",
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Grant {
     reference: Reference,
     mode: &'static str,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Requirement {
     reference: Reference,
@@ -179,7 +179,7 @@ impl Hook {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Capability {
     access: &'static str,
@@ -187,7 +187,7 @@ struct Capability {
     hook: Hook,
     metadata: Text,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct InputRef {
     role: &'static str,
@@ -204,20 +204,20 @@ impl From<&InputBindingRefV1> for InputRef {
         }
     }
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Transition {
     kind: &'static str,
     source: InputRef,
     target_input_id: Option<String>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct ServiceSource {
     role: &'static str,
     id: String,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct ServiceTransition {
     kind: &'static str,
@@ -225,7 +225,7 @@ struct ServiceTransition {
     targets: Vec<String>,
     presence: Option<&'static str>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Migration {
     source_revision_digest: String,
@@ -238,19 +238,19 @@ struct Migration {
     resource_transitions: Vec<ServiceTransition>,
     metadata: Text,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Cleanup {
     requires: Vec<InputRef>,
     hook: Hook,
     metadata: Text,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Storage {
     storage_id: String,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Resource {
     resource_id: String,
@@ -261,7 +261,7 @@ struct Resource {
     user_mutation: service_storage::Mutation,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Capabilities {
     metadata: Text,
@@ -473,7 +473,7 @@ fn resource_transition(t: &ResourceTransitionV2) -> ServiceTransition {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Related<T> {
     #[serde(flatten)]
@@ -498,13 +498,13 @@ impl<T> Related<T> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Instances {
     pub(super) items: Vec<presentation::Instance>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct InspectedRun {
     #[serde(flatten)]

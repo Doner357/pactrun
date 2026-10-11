@@ -13,7 +13,7 @@ const help = await commandHelp(root);
 if (version !== help.version) throw new Error('The documentation version must match Cargo.toml');
 const versions = JSON.parse(await readFile(path.join(siteDir, 'versions.json'), 'utf8'));
 if (versions.includes(version)) throw new Error('Documentation version already exists');
-const changed = execFileSync('git', ['status', '--porcelain', '--', 'docs', 'website/sidebars.ts', 'src/cli.rs', 'Cargo.toml'], {cwd: root, encoding: 'utf8'});
+const changed = execFileSync('git', ['status', '--porcelain', '--', 'docs', 'website/sidebars.ts', 'src/cli.rs', 'src/cli/help.rs', 'src/cli/help_catalog.json', 'Cargo.toml'], {cwd: root, encoding: 'utf8'});
 if (changed.trim()) throw new Error('Commit the reviewed documentation, sidebar and CLI inputs before capturing a release');
 const source_commit = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
 const require = createRequire(import.meta.url);

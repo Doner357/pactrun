@@ -3,6 +3,70 @@ use crate::domain::{DiagnosticKind, DiagnosticSeverity, HookEvidence, HookText, 
 fn text(kind: DiagnosticKind, message: &str) -> HookText {
     HookText { kind, severity: (kind==DiagnosticKind::Diagnostic).then_some(DiagnosticSeverity::Info), code:Some("evidence".into()), message:Some(message.into()), completion_status:(kind==DiagnosticKind::Completion).then_some(crate::domain::HookCompletionStatus::Failure),truncated:false, truncated_prefix_bytes:0 }
 }
+
+// Supporting coverage for PR-TEST-0689.
+#[test]
+fn core_diagnostic_history_is_separate_from_hook_text_retention() {
+    use crate::domain::{CoreDiagnosticWindow, CoreEvidence, HelperCommand, HelperFailure, HelperReason, HelperStage};
+    let fixture = RuntimeFixture::new();
+    let admitted = fixture.admit("direct", "success", &fixture.marker("not-launched"));
+    let run = admitted.run();
+    let store = persistence(&fixture.storage);
+    let mut core = CoreDiagnosticWindow::default();
+    let failure = HelperFailure { command: HelperCommand::Diagnostic, stage: HelperStage::ReadJson, reason: HelperReason::NotFound };
+    for _ in 0..4500 { core.push(CoreEvidence { sequence: 0, received_at_unix_ms: Some(7), stage: "Action hook_ordinal=1".into(), failure }); }
+    store.save_diagnostics(run, &DiagnosticWindow::default(), false, true, false).unwrap();
+    store.save_core_diagnostics(run, &core, true, false).unwrap();
+    let reopened = PactrunPersistence::open_read_only(&fixture.storage).unwrap();
+    let view = reopened.inspect_diagnostics(run).unwrap().unwrap();
+    assert!(!view.retain_text && view.events.is_empty());
+    let saved = view.core.unwrap();
+    assert_eq!(saved.observed, 4500);
+    assert!(saved.collection_closed && !saved.persistence_failed);
+    assert_eq!(saved.events.len(), 4096);
+    assert_eq!(saved.events.last().unwrap().sequence, 4500);
+    assert_eq!(saved.events.last().unwrap().failure, failure);
+    core.incomplete = true;
+    store.save_core_diagnostics(run, &core, true, false).unwrap();
+    assert!(!reopened.inspect_diagnostics(run).unwrap().unwrap().core.unwrap().collection_closed);
+    assert!(matches!(store.load_run(run).unwrap().unwrap().state, RunState::Running(_)));
+    let db = rusqlite::Connection::open(fixture.storage.join("database/pactrun.sqlite3")).unwrap();
+    db.execute("DELETE FROM run_core_diagnostic_events WHERE run_id=?1", [run.as_bytes().as_slice()]).unwrap();
+    db.execute("DELETE FROM run_core_diagnostic_collections WHERE run_id=?1", [run.as_bytes().as_slice()]).unwrap();
+    assert!(store.save_core_diagnostics(run, &core, true, false).is_err());
+    assert!(reopened.inspect_diagnostics(run).unwrap().unwrap().core.is_none());
+    drop(admitted);
+}
+
+// Supporting coverage for PR-TEST-0693.
+#[test]
+fn malformed_private_core_evidence_is_incomplete_without_changing_run_state() {
+    use std::io::Write as _;
+    let fixture = RuntimeFixture::new();
+    let admitted = fixture.admit("direct", "success", &fixture.marker("not-launched"));
+    let run = admitted.run();
+    let cancellation = ActionCancellation::default();
+    let delivery = super::super::delivery::Delivery::start(&fixture.storage, "invoke").unwrap();
+    cancellation.delivery.set(delivery.clone());
+    let mut scope = cancellation.diagnostics.scope(fixture.storage.clone(), run, "Action".into(), false);
+    scope.delivery = cancellation.delivery.scope(run, &serde_json::json!({"revision":{"package_id":"0".repeat(32),"revision_content_digest":format!("sha256:{}", "0".repeat(64))},"operation":{"kind":"action","action_id":"inspect"}}), false);
+    let mut bridge = super::super::core_diagnostics::Bridge::start(scope.core_sink()).unwrap();
+    bridge.mark_launched();
+    let mut stream = super::super::shell_loader::connect(bridge.endpoint()).unwrap();
+    stream.write_all(&1025_u32.to_be_bytes()).unwrap();
+    drop(stream);
+    drop(bridge);
+    drop(scope);
+    cancellation.diagnostics.finish();
+    delivery.finish();
+    assert!(!delivery.summary().complete);
+    let store = persistence(&fixture.storage);
+    let view = store.inspect_diagnostics(run).unwrap().unwrap().core.unwrap();
+    assert!(!view.collection_closed);
+    assert!(view.events.is_empty());
+    assert!(matches!(store.load_run(run).unwrap().unwrap().state, RunState::Running(_)));
+    drop(admitted);
+}
 // Test-ID: PR-TEST-0521
 // Verifies: PR-REQ-0352
 #[test]

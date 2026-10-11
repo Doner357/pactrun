@@ -201,6 +201,7 @@ pub(crate) struct CompilationFacts {
     pub(crate) active_revision: RevisionIdentity,
     pub(crate) active_bindings: Vec<ActiveInstanceBindingReference>,
     pub(crate) required_inputs_satisfied: bool,
+    pub(crate) missing_input_ids: Vec<super::InputIdentity>,
     pub(crate) action: ActionV1,
     pub(crate) parameters: Vec<ParameterBinding>,
     pub(crate) runtime_content: Vec<RuntimeFileV1>,
@@ -228,6 +229,7 @@ pub(crate) struct ActionExecutionPlan {
     parameters: Vec<ParameterBinding>,
     active_bindings: Vec<ActiveInstanceBindingReference>,
     required_inputs_satisfied: bool,
+    missing_input_ids: Vec<super::InputIdentity>,
     runtime_content: Vec<RuntimeFileV1>,
     protocol_version: FormatVersion,
     terminal: TerminalContractV1,
@@ -240,6 +242,9 @@ pub(crate) struct ActionExecutionPlan {
 }
 
 impl ActionExecutionPlan {
+    pub(crate) fn missing_input_ids(&self) -> &[super::InputIdentity] {
+        &self.missing_input_ids
+    }
     pub(crate) fn service_bindings(&self) -> &super::ServiceHookBindings {
         &self.service_bindings
     }
@@ -553,6 +558,7 @@ pub(crate) fn build_action_plan(
         parameters: intent.parameters.clone(),
         active_bindings: facts.active_bindings,
         required_inputs_satisfied: facts.required_inputs_satisfied,
+        missing_input_ids: facts.missing_input_ids,
         runtime_content: facts.runtime_content,
         protocol_version: action.hook.protocol_version,
         terminal: action.hook.io.terminal,

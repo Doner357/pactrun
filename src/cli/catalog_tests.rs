@@ -1,5 +1,12 @@
 use super::*;
 use crate::persistence::PactrunPersistence;
+fn exact_text(id: &RevisionIdentity) -> String {
+    format!(
+        "{}:{}",
+        id.package_id,
+        hex::encode(id.content_digest.as_bytes())
+    )
+}
 
 fn fixture(count: u8) -> (tempfile::TempDir, PathBuf, Vec<RevisionIdentity>) {
     let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/catalog-tests");
@@ -57,33 +64,117 @@ fn ok(root: &Path, args: &[&str]) -> String {
 #[test]
 fn catalog_pages_are_bounded_ordered_and_continue_after_deleted_cursors() {
     let (_temp, root, ids) = fixture(51);
+    let db = rusqlite::Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    for (index, id) in ids.iter().enumerate() {
+        db.execute(
+            "UPDATE revision_installations SET installed_at_unix_ms=?1 WHERE package_id=?2",
+            rusqlite::params![index as i64 * 1000, id.package_id.as_bytes().as_slice()],
+        )
+        .unwrap();
+    }
     let first = ok(&root, &["revision", "list", "--no-trunc"]);
     assert!(first.contains("50 records shown."));
-    assert!(!first.contains(&ids[50].package_id.to_string()));
-    assert!(first.contains(&format!("--after {} --no-trunc", exact_text(&ids[49]))));
-    let after = exact_text(&ids[49]);
-    ok(&root, &["revision", "delete", &after]);
+    assert!(!first.contains(&ids[0].package_id.to_string()));
+    let after = RevisionCursor {
+        identity: ids[1].clone(),
+        installed_at_unix_ms: Some(1000),
+    }
+    .to_string();
+    assert!(first.contains(&format!("--after {after} --no-trunc")));
+    ok(&root, &["revision", "delete", &exact_text(&ids[1])]);
     let last = ok(
         &root,
         &["revision", "list", "--after", &after, "--no-trunc"],
     );
-    assert!(last.contains(&ids[50].package_id.to_string()));
-    assert!(last.contains("1 records shown."));
+    assert!(last.contains(&ids[0].package_id.to_string()));
+    assert!(last.contains("1 record shown."));
     assert!(!last.contains("More results"));
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     let page = p.catalog_revisions(500, None).unwrap();
-    assert!(page.items.windows(2).all(|v| v[0].identity < v[1].identity));
+    assert!(
+        page.items
+            .windows(2)
+            .all(|v| v[0].local.installed_at_unix_ms > v[1].local.installed_at_unix_ms)
+    );
     assert!(p.catalog_revisions(0, None).is_err());
     assert!(p.catalog_revisions(501, None).is_err());
     let short = ok(&root, &["revision", "list", "--limit", "1"]);
     let columns: Vec<_> = short.lines().nth(1).unwrap().split_whitespace().collect();
     assert!(!columns[0].contains("..."));
     assert!(!columns[1].contains("..."));
-    let reference = format!("exact:{}/{}", columns[0], columns[1]);
-    assert!(ok(&root, &["revision", "show", &reference]).contains("Core format: 1.0-alpha.1"));
+    let reference = columns[0];
+    assert!(ok(&root, &["revision", "show", reference]).contains("Core format: 1.0-alpha.1"));
     let show = ok(&root, &["revision", "show", &exact_text(&ids[0])]);
     assert!(show.contains("Core format: 1.0-alpha.1"));
     assert!(show.contains(&exact_text(&ids[0])));
+}
+
+// Test-ID: PR-TEST-0678
+// Verifies: PR-REQ-0376, PR-REQ-0371
+#[test]
+fn revision_catalog_orders_unknown_times_last_and_retains_deleted_cursor_position() {
+    let (_temp, root, ids) = fixture(4);
+    let db = rusqlite::Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    for (id, time) in ids.iter().zip([Some(1000), Some(1000), None, Some(2000)]) {
+        db.execute(
+            "UPDATE revision_installations SET installed_at_unix_ms=?1 WHERE package_id=?2",
+            rusqlite::params![time, id.package_id.as_bytes().as_slice()],
+        )
+        .unwrap();
+    }
+    let reader = PactrunPersistence::open_read_only(&root).unwrap();
+    let first = reader.catalog_revisions(2, None).unwrap();
+    assert_eq!(
+        first
+            .items
+            .iter()
+            .map(|r| r.identity.clone())
+            .collect::<Vec<_>>(),
+        vec![ids[3].clone(), ids[0].clone()]
+    );
+    let cursor = first.next.unwrap();
+    assert_eq!(
+        cursor.to_string().parse::<RevisionCursor>().unwrap(),
+        cursor
+    );
+    ok(&root, &["revision", "delete", &exact_text(&ids[0])]);
+    let second = reader.catalog_revisions(2, Some(&cursor)).unwrap();
+    assert_eq!(
+        second
+            .items
+            .iter()
+            .map(|r| r.identity.clone())
+            .collect::<Vec<_>>(),
+        vec![ids[1].clone(), ids[2].clone()]
+    );
+    assert!(second.next.is_none());
+    assert!(second.items[1].local.installed_at_unix_ms.is_none());
+    let shown = ok(&root, &["revision", "list", "--after", &cursor.to_string()]);
+    assert!(shown.contains("1970-01-01T00:00:01Z"));
+    assert!(shown.contains("Unknown"));
+    let writer = PactrunPersistence::open(&root).unwrap();
+    writer
+        .rename_package(
+            ids[3].package_id,
+            Some(&LocalName::parse("010101010101").unwrap()),
+        )
+        .unwrap();
+    let row = reader
+        .catalog_revisions(4, None)
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|r| r.identity == ids[1])
+        .unwrap();
+    let reference = LocalRevisionReference::parse(&row.reference).unwrap();
+    assert_eq!(
+        reader.resolve_named_revision(&reference).unwrap(),
+        row.identity
+    );
+    assert_eq!(row.reference.split(':').next().unwrap().len(), 32);
+    for invalid in ["r1:00", "r1:-1", "web:stable", "r2:u:0:0"] {
+        assert!(invalid.parse::<RevisionCursor>().is_err());
+    }
 }
 
 // Test-ID: PR-TEST-0530
@@ -96,75 +187,42 @@ fn catalog_local_mutations_require_semantic_cas_and_do_not_enforce_trust() {
     ok(
         &root,
         &[
-            "revision",
-            "alias",
-            "set",
-            "--literal-alias",
-            &a,
-            "--expect-absent",
-        ],
-    );
-    assert!(ok(&root, &["revision", "alias", "show", "--literal-alias"]).contains(&a));
-    ok(
-        &root,
-        &[
-            "revision",
-            "alias",
-            "clear",
-            "--literal-alias",
-            "--expect",
-            &a,
-        ],
-    );
-    ok(
-        &root,
-        &[
-            "revision",
-            "alias",
-            "set",
+            "package",
+            "rename",
+            &ids[0].package_id.to_string(),
             "production",
-            &a,
-            "--expect-absent",
         ],
     );
+    ok(&root, &["revision", "rename", &a, "current"]);
+    ok(&root, &["revision", "rename", &a, "current"]);
+    assert!(ok(&root, &["revision", "show", "production:current"]).contains(&a));
+    assert_eq!(
+        invoke(
+            &root,
+            &[
+                "package",
+                "rename",
+                &ids[1].package_id.to_string(),
+                "production"
+            ]
+        )
+        .0,
+        1
+    );
+    ok(&root, &["package", "unname", "production"]);
     ok(
         &root,
         &[
-            "revision",
-            "alias",
-            "set",
+            "package",
+            "rename",
+            &ids[1].package_id.to_string(),
             "production",
-            &a,
-            "--expect-absent",
         ],
     );
-    let (code, _, err) = invoke(
-        &root,
-        &[
-            "revision",
-            "alias",
-            "set",
-            "production",
-            &b,
-            "--expect-absent",
-        ],
-    );
-    assert_eq!(code, 1);
-    assert!(err.contains("No changes applied"));
-    assert!(err.contains("Inspect:"));
-    ok(
-        &root,
-        &["revision", "alias", "set", "production", &b, "--expect", &a],
-    );
-    assert!(ok(&root, &["revision", "alias", "show", "production"]).contains(&b));
-    ok(
-        &root,
-        &["revision", "alias", "clear", "production", "--expect", &b],
-    );
-    ok(
-        &root,
-        &["revision", "alias", "clear", "production", "--expect", &b],
-    );
+    ok(&root, &["revision", "rename", &b, "current"]);
+    assert!(ok(&root, &["revision", "show", "production:current"]).contains(&b));
+    ok(&root, &["revision", "unname", &b]);
+    ok(&root, &["revision", "unname", &b]);
     let text = "已驗證\nnext\u{1b}[31m";
     ok(
         &root,
@@ -190,7 +248,7 @@ fn catalog_local_mutations_require_semantic_cas_and_do_not_enforce_trust() {
         1
     );
     ok(&root, &["revision", "note", "clear", &a, "--expect", text]);
-    assert!(ok(&root, &["revision", "note", "show", &a]).contains("Absent"));
+    assert!(ok(&root, &["revision", "note", "show", &a]).contains("Not set"));
     ok(
         &root,
         &[
@@ -203,12 +261,12 @@ fn catalog_local_mutations_require_semantic_cas_and_do_not_enforce_trust() {
         ],
     );
     ok(&root, &["instance", "create", "allowed", "--revision", &a]);
-    assert!(ok(&root, &["revision", "trust", "show", &a]).contains("Distrusted"));
+    assert!(ok(&root, &["revision", "trust", "show", &a]).contains("distrusted"));
     ok(
         &root,
         &["revision", "trust", "clear", &a, "--expect", "distrusted"],
     );
-    assert!(ok(&root, &["revision", "trust", "show", &a]).contains("NoDecision"));
+    assert!(ok(&root, &["revision", "trust", "show", &a]).contains("Not set"));
 }
 
 // Test-ID: PR-TEST-0531
@@ -249,13 +307,13 @@ fn catalog_history_survives_retirement_and_name_reuse_without_rebinding_runs() {
         ],
     );
     let new_runs = ok(&root, &["run", "list", "same name; literal"]);
-    assert!(new_runs.contains("0 records shown."));
+    assert!(new_runs.contains("No Runs."));
     let history = ok(&root, &["instance", "history", "list", "--no-trunc"]);
     assert!(history.contains("Retired"));
     assert!(history.contains("Managed"));
     assert!(history.contains(&old.id.to_string()));
     let deletions = ok(&root, &["instance", "deletion", "list", "--no-trunc"]);
-    assert!(deletions.contains("1 records shown."));
+    assert!(deletions.contains("1 record shown."));
     assert!(deletions.contains(&old.id.to_string()));
     let unknown = InstanceId::from_bytes([254; 16]).to_string();
     assert_eq!(
@@ -273,24 +331,17 @@ fn catalog_history_survives_retirement_and_name_reuse_without_rebinding_runs() {
 fn catalog_metadata_preserves_claim_sources_and_refuses_ambiguous_resolution() {
     let (_temp, root, ids) = fixture(2);
     let p = PactrunPersistence::open(&root).unwrap();
-    let label = ReferenceLabel::parse("stable").unwrap();
     for revision in &ids {
         p.apply_revision_metadata_batch(
             revision,
             &RevisionMetadataMutationBatch::new([
-                RevisionMetadataMutation::AddReferenceLabel(ReferenceLabelBinding {
-                    revision: revision.clone(),
-                    label: label.clone(),
-                    source: ReferenceLabelSource::Unattributed,
-                }),
-                RevisionMetadataMutation::AddReferenceLabel(ReferenceLabelBinding {
-                    revision: revision.clone(),
-                    label: label.clone(),
-                    source: ReferenceLabelSource::PublisherSourceUri {
-                        name: PublisherName::parse("team").unwrap(),
-                        namespace: Some(PublisherNamespace::parse("tools").unwrap()),
-                        source_uri: SourceUri::parse("https://example.invalid/releases").unwrap(),
-                    },
+                RevisionMetadataMutation::AddProvenance(ProvenanceClaim::SourceUri(
+                    SourceUri::parse("https://example.invalid/source").unwrap(),
+                )),
+                RevisionMetadataMutation::AddProvenance(ProvenanceClaim::PublisherAttribution {
+                    publisher: PublisherName::parse("team").unwrap(),
+                    namespace: Some(PublisherNamespace::parse("tools").unwrap()),
+                    source_uri: Some(SourceUri::parse("https://example.invalid/releases").unwrap()),
                 }),
             ])
             .unwrap(),
@@ -302,34 +353,41 @@ fn catalog_metadata_preserves_claim_sources_and_refuses_ambiguous_resolution() {
         &root,
         &["revision", "metadata", "show", &exact_text(&ids[0])],
     );
-    assert!(shown.contains("Unattributed"));
-    assert!(shown.contains("PublisherSourceUri"));
+    assert!(shown.contains("https://example.invalid/source"));
+    assert!(shown.contains("team"));
     assert!(shown.contains("tools"));
     assert!(shown.contains("https://example.invalid/releases"));
     assert!(shown.contains("Metadata"));
     assert!(!shown.contains("claims are not authentication"));
-    let (code, _, err) = invoke(&root, &["revision", "show", "label:stable"]);
+    // A hexadecimal Package name can also match another Package's ID prefix.
+    ok(
+        &root,
+        &[
+            "package",
+            "rename",
+            &ids[1].package_id.to_string(),
+            "00000000",
+        ],
+    );
+    for revision in &ids {
+        ok(
+            &root,
+            &["revision", "rename", &exact_text(revision), "stable"],
+        );
+    }
+    let (code, _, err) = invoke(&root, &["revision", "show", "00000000:stable"]);
     assert_eq!(code, 1);
     assert!(err.contains("resolution.ambiguous_reference"));
-    let p = PactrunPersistence::open(&root).unwrap();
-    for (label, revision) in [("é", &ids[0]), ("e\u{301}", &ids[1])] {
-        p.apply_revision_metadata_batch(
-            revision,
-            &RevisionMetadataMutationBatch::new([RevisionMetadataMutation::AddReferenceLabel(
-                ReferenceLabelBinding {
-                    revision: revision.clone(),
-                    label: ReferenceLabel::parse(label).unwrap(),
-                    source: ReferenceLabelSource::Unattributed,
-                },
-            )])
-            .unwrap(),
-        )
-        .unwrap();
-        let shown = ok(&root, &["revision", "show", &format!("label:{label}")]);
+    for revision in &ids {
+        let reference = format!("{}:stable", revision.package_id);
+        let shown = ok(&root, &["revision", "show", &reference]);
         assert!(shown.contains(&exact_text(revision)));
     }
-    assert_eq!(invoke(&root, &["revision", "show", "label:Stable"]).0, 1);
-    assert_eq!(invoke(&root, &["revision", "show", "label:stable "]).0, 1);
+    assert_ne!(invoke(&root, &["revision", "show", "00000000:Stable"]).0, 0);
+    assert_ne!(
+        invoke(&root, &["revision", "show", "00000000:stable "]).0,
+        0
+    );
 }
 
 // Test-ID: PR-TEST-0537
@@ -367,12 +425,12 @@ fn catalog_reports_actual_core_version_and_distinguishes_present_absence_text() 
             "--expect-absent",
         ],
     );
-    assert!(ok(&root, &["revision", "note", "show", &exact]).contains("Local note: \"Absent\""));
+    assert!(ok(&root, &["revision", "note", "show", &exact]).contains("Note: \"Absent\""));
     ok(
         &root,
         &["revision", "note", "clear", &exact, "--expect", "Absent"],
     );
-    assert!(ok(&root, &["revision", "note", "show", &exact]).contains("Local note: Absent\n"));
+    assert!(ok(&root, &["revision", "note", "show", &exact]).contains("Note: Not set\n"));
 }
 
 // Test-ID: PR-TEST-0533
@@ -415,7 +473,7 @@ fn catalog_rejects_invalid_options_before_storage_and_queries_do_not_bootstrap()
         vec!["instance", "history", "list"],
         vec!["instance", "deletion", "list"],
     ] {
-        assert_eq!(invoke(&absent, &args).0, 1);
+        assert_eq!(invoke(&absent, &args).0, 0);
         assert!(!absent.exists());
         ok(&root, &args);
     }
@@ -427,7 +485,7 @@ fn catalog_rejects_invalid_options_before_storage_and_queries_do_not_bootstrap()
     let version: i64 = db
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 0);
+    assert_eq!(version, 3);
 }
 
 // Test-ID: PR-TEST-0534
@@ -449,10 +507,19 @@ fn catalog_output_failure_is_read_only_and_control_text_is_escaped() {
         after: None,
         no_trunc: false,
     });
-    assert!(execute(command, &root, &mut Broken, presentation::Format::Human).is_err());
+    let capture = reply::Capture::new("revision list", false, reply::DisplayOptions::default());
+    execute(command, &root, reply::OutputContext(&capture)).unwrap();
+    assert_eq!(
+        capture.finish(None, false).render(
+            presentation::Format::Human,
+            &mut Broken,
+            &mut io::sink()
+        ),
+        1
+    );
     assert!(safe("中文\u{1b}[2J\r\n\u{202e}").starts_with("中文\\u{1b}"));
     assert_ne!(safe("\\n"), safe("\n"));
-    assert_eq!(quoted("Absent"), "\"Absent\"");
+    assert_eq!(human::quoted("Absent"), "\"Absent\"");
     let p = PactrunPersistence::open_read_only(&root).unwrap();
     assert!(
         p.catalog_runs(&CatalogRunSelector::All, 50, None)
