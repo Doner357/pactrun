@@ -21,6 +21,8 @@ fn cli_startup_commands_do_not_require_or_create_storage() {
         assert_success(&output);
         assert!(!absent_storage.exists());
         assert!(!temporary.path().join(".pactrun").exists());
+        assert!(!temporary.path().join("startup-data").exists());
+        assert!(!temporary.path().join("startup-home").exists());
     }
     let output = run_command(command(
         &absent_storage,

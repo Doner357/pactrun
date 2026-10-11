@@ -5,7 +5,7 @@ title: Install a Pack and create an Instance
 # Install a Pack and create an Instance
 
 Use this after [Pactrun is installed and verified](./installation.md). You need
-a trusted Pack supplied by its author. The package launcher selects a default
+a trusted Pack supplied by its author. Pactrun selects a default
 [store](./data-location.md), which Pactrun prepares when first needed; select
 another location only if you want one. Installing Pactrun and installing a Pack are different
 operations. You do not need to write a manifest to use a supplied Pack.

@@ -66,8 +66,8 @@ pactrun --help
 ```
 
 Use `brew tap-info doner357/pactrun` to inspect an existing source. `command -v
-pactrun` should resolve to the Homebrew installation. Keep using the manager's
-launcher; do not copy the internal `libexec` executable into another directory.
+pactrun` should resolve to the Homebrew installation. Let the manager maintain
+that executable; use the standalone archive for a separate unmanaged copy.
 
 ## Verify and continue
 

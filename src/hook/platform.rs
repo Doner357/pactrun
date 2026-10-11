@@ -39,6 +39,7 @@ pub(super) struct ProtocolListener {
     inner: PlatformProtocolListener,
     startup: Option<std::sync::Arc<super::startup::Setup>>,
     core_endpoint: String,
+    configured_root: Option<std::path::PathBuf>,
     #[cfg(unix)]
     directory: Option<super::startup::PrivateDirectory>,
 }
@@ -77,6 +78,7 @@ impl ProtocolListener {
             inner,
             startup: None,
             core_endpoint: String::new(),
+            configured_root: None,
             directory: Some(owned),
         };
         listener.inner.set_nonblocking(true)?;
@@ -92,8 +94,10 @@ impl ProtocolListener {
         program: &Path,
         arguments: &[String],
         root: &Path,
+        configured_root: &Path,
     ) -> io::Result<Self> {
         let mut listener = Self::bind()?;
+        listener.configured_root = Some(configured_root.to_path_buf());
         if arguments
             .first()
             .is_some_and(|a| a == "--pactrun-internal-shell-loader")
@@ -120,6 +124,7 @@ impl ProtocolListener {
                 inner,
                 startup: None,
                 core_endpoint: String::new(),
+                configured_root: None,
             })
         }
     }
@@ -148,16 +153,24 @@ impl ProtocolListener {
             }
         }
     }
-    fn environment(&self) -> [(&str, &str); 4] {
-        [
-            (super::core_diagnostics::ENDPOINT_ENV, &self.core_endpoint),
-            (TRANSPORT_ENVIRONMENT, platform_transport_name()),
-            (ENDPOINT_ENVIRONMENT, &self.endpoint),
+    fn environment(&self) -> Vec<(&str, &std::ffi::OsStr)> {
+        use std::ffi::OsStr;
+        let mut values = vec![
+            (
+                super::core_diagnostics::ENDPOINT_ENV,
+                OsStr::new(&self.core_endpoint),
+            ),
+            (TRANSPORT_ENVIRONMENT, OsStr::new(platform_transport_name())),
+            (ENDPOINT_ENVIRONMENT, OsStr::new(&self.endpoint)),
             (
                 super::startup::STATUS_ENV,
-                self.startup.as_ref().map_or("", |s| s.status.as_str()),
+                OsStr::new(self.startup.as_ref().map_or("", |s| s.status.as_str())),
             ),
-        ]
+        ];
+        if let Some(root) = &self.configured_root {
+            values.push(("PACTRUN_STORAGE_ROOT", root.as_os_str()));
+        }
+        values
     }
 
     pub(super) fn try_accept(&mut self) -> io::Result<Option<ProtocolStream>> {
@@ -302,7 +315,7 @@ impl ProcessSupervisor {
                 HookProcess::spawn_captured(
                     &program,
                     &arguments,
-                    listener.environment(),
+                    &listener.environment(),
                     stdout,
                     stderr,
                 )?
@@ -311,26 +324,26 @@ impl ProcessSupervisor {
                     &program,
                     &arguments,
                     terminal,
-                    listener.environment(),
+                    &listener.environment(),
                     (
                         TEST_INTERACTIVE_PROGRAM_ENVIRONMENT,
                         admitted_program.as_os_str(),
                     ),
                 )?
             } else {
-                HookProcess::spawn(&program, &arguments, terminal, listener.environment())?
+                HookProcess::spawn(&program, &arguments, terminal, &listener.environment())?
             };
             #[cfg(not(test))]
             let child = if let Some((stdout, stderr)) = &pipes {
                 HookProcess::spawn_captured(
                     &program,
                     &arguments,
-                    listener.environment(),
+                    &listener.environment(),
                     stdout,
                     stderr,
                 )?
             } else {
-                HookProcess::spawn(&program, &arguments, terminal, listener.environment())?
+                HookProcess::spawn(&program, &arguments, terminal, &listener.environment())?
             };
             Ok(Self {
                 child,
@@ -1073,6 +1086,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         inner,
         startup: None,
         core_endpoint: String::new(),
+        configured_root: None,
     })
 }
 
@@ -1104,6 +1118,7 @@ fn platform_listener() -> io::Result<ProtocolListener> {
         inner,
         startup: None,
         core_endpoint: String::new(),
+        configured_root: None,
         directory: Some(directory),
     })
 }

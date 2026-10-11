@@ -233,7 +233,10 @@ where
     command
         .args(arguments)
         .current_dir(cwd)
-        .env_remove("PACTRUN_STORAGE_ROOT");
+        .env_remove("PACTRUN_STORAGE_ROOT")
+        .env("LOCALAPPDATA", cwd.join("startup-data"))
+        .env("XDG_DATA_HOME", cwd.join("startup-data"))
+        .env("HOME", cwd.join("startup-home"));
     command
 }
 

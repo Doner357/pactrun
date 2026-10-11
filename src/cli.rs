@@ -40,6 +40,7 @@ mod retirements;
 mod schema_tests;
 mod service_storage;
 mod snapshots;
+mod storage_config;
 mod streaming;
 mod transport_presentation;
 
@@ -271,7 +272,8 @@ pub(crate) fn run_from_env() -> i32 {
     {
         return crate::hook::run_interactive_adapter(&args[1..]);
     }
-    let storage_root = env::var_os(STORAGE_ROOT_ENV);
+    let executable = env::current_exe().ok();
+    let storage_root = storage_config::selected_root(executable.as_deref(), |key| env::var_os(key));
     let cancellation = ActionCancellation::default();
     if presentation::recognize(&args) == presentation::Format::Human {
         cancellation.diagnostics.enable_live();

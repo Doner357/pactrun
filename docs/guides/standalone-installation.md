@@ -28,7 +28,7 @@ archives contain the executable at the archive root. The normal/test native
 package archives have a different layout; do not substitute one here.
 
 If Pactrun is already installed by an approved Scoop or Homebrew source, keep
-using that package's launcher and proceed to [verify the selected command](#verify-the-selected-command).
+using that managed command and proceed to [verify the selected command](#verify-the-selected-command).
 Return to the primary installation guide for the maintained package sources.
 
 ## Windows: install a supplied standalone archive
