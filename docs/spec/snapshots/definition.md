@@ -4,6 +4,12 @@ title: Snapshot Definition and Managed Data
 
 # Snapshot Definition and Managed Data
 
+Snapshot bodies retain their exact original producer identity. Implemented
+Revision `1.0-alpha.1` and Revision
+`1.0-alpha.2` both require [exact producer/target equality](./restore-compatibility.md).
+Operation-scoped requirements do not change
+the complete binding-state or integrity boundary defined here.
+
 ## Managed data concepts
 
 ### PR-REQ-0143 - Workspace

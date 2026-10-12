@@ -35,7 +35,18 @@ pub(crate) fn validate_revision_content(
     core: RevisionCore,
     runtime: RuntimeContentClosureIdentityV1,
 ) -> Result<ValidatedRevisionContent, RevisionContentError> {
-    Ok(validate_service_content(core.0, runtime)?.into())
+    if let Some(operation) = core.operation() {
+        validate_operation_content(operation.clone(), runtime.clone())?;
+    } else {
+        validate_service_content(
+            core.service_core().expect("complete service view").clone(),
+            runtime.clone(),
+        )?;
+    }
+    Ok(ValidatedRevisionContent {
+        core,
+        runtime_content: runtime,
+    })
 }
 pub(crate) fn core_format_version(bytes: &[u8]) -> Result<FormatVersion, RevisionContentError> {
     let value = strict_json::parse_json(bytes, 16 * 1024 * 1024)
@@ -59,8 +70,12 @@ pub(crate) fn core_format_version(bytes: &[u8]) -> Result<FormatVersion, Revisio
 pub(crate) fn decode_canonical_revision_core(
     bytes: &[u8],
 ) -> Result<RevisionCore, RevisionContentError> {
-    core_format_version(bytes)?;
-    Ok(canonical::decode_canonical_service_revision(bytes)?.into())
+    let version = core_format_version(bytes)?;
+    if version.to_string() == OPERATION_CORE_FORMAT {
+        Ok(canonical::operation::decode(bytes)?.into())
+    } else {
+        Ok(canonical::decode_canonical_service_revision(bytes)?.into())
+    }
 }
 pub(crate) fn decode_canonical_revision_content(
     core: &[u8],
@@ -74,17 +89,34 @@ pub(crate) fn decode_canonical_revision_content(
 pub(crate) fn encode_canonical_revision_core(
     core: &RevisionCore,
 ) -> Result<Vec<u8>, RevisionContentError> {
-    Ok(canonical::encode_service_core(&core.0)?)
+    if let Some(operation) = core.operation() {
+        Ok(canonical::operation::encode(operation)?)
+    } else {
+        Ok(canonical::encode_service_core(
+            core.service_core().expect("complete service view"),
+        )?)
+    }
 }
 pub(crate) fn calculate_revision_content_digest(
     content: &ValidatedRevisionContent,
 ) -> Result<RevisionContentDigest, RevisionContentError> {
-    Ok(canonical::calculate_service_revision_digest(
-        &ServiceRevisionContent {
-            core: content.core.0.clone(),
-            runtime_content: content.runtime_content.clone(),
-        },
-    )?)
+    if let Some(operation) = content.core.operation() {
+        Ok(canonical::operation::digest(&validate_operation_content(
+            operation.clone(),
+            content.runtime_content.clone(),
+        )?)?)
+    } else {
+        Ok(canonical::calculate_service_revision_digest(
+            &ServiceRevisionContent {
+                core: content
+                    .core
+                    .service_core()
+                    .expect("complete service view")
+                    .clone(),
+                runtime_content: content.runtime_content.clone(),
+            },
+        )?)
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -95,7 +127,7 @@ mod tests {
     fn exact_baseline_roundtrips_and_refuses_development_or_unknown_versions() {
         let bytes = br#"{"actions":[],"format_version":"1.0-alpha.1","inputs":[],"migrations":[],"service_resources":[],"service_storages":[]}"#;
         let content = decode_canonical_revision_content(bytes, br#"{"files":[]}"#).unwrap();
-        assert_eq!(content.core.version(), VersionDomain::Revision.current());
+        assert_eq!(content.core.version(), FormatVersion::BASELINE);
         assert_eq!(
             encode_canonical_revision_core(&content.core).unwrap(),
             bytes
@@ -106,7 +138,7 @@ mod tests {
             "3",
             "0",
             "\"1.0\"",
-            "\"1.0-alpha.2\"",
+            "\"1.0-alpha.3\"",
             "\"1.0-alpha.01\"",
         ] {
             let bad = String::from_utf8(bytes.to_vec())

@@ -57,6 +57,21 @@ impl MaterializedExecution {
                 } else {
                     "retained"
                 };
+                if let Some(grants) = &compiled.source_inputs {
+                    let reference = crate::domain::InputBindingRefV1 {
+                        input_id: binding.input.clone(),
+                        role: if role == "active" {
+                            crate::domain::InputBindingRoleV1::Active
+                        } else {
+                            crate::domain::InputBindingRoleV1::Retained
+                        },
+                    };
+                    if grants.required.binary_search(&reference).is_err()
+                        && grants.optional.binary_search(&reference).is_err()
+                    {
+                        continue;
+                    }
+                }
                 let path = materialize_binding(p, run, &directory, "source", binding, inputs)?;
                 source_bindings.push(json!({"handle":random_handle()?, "input_id":binding.input.as_str(), "role":role, "readonly_path":host_path(&path)?}));
             }
@@ -70,6 +85,12 @@ impl MaterializedExecution {
                 .iter()
                 .filter(|b| target_inputs.contains(&b.input))
             {
+                if let Some(grants) = &compiled.target_inputs
+                    && grants.required.binary_search(&binding.input).is_err()
+                    && grants.optional.binary_search(&binding.input).is_err()
+                {
+                    continue;
+                }
                 let path = materialize_binding(p, run, &directory, "target", binding, inputs)?;
                 target_bindings.push(json!({"handle":random_handle()?, "input_id":binding.input.as_str(), "role":"active", "readonly_path":host_path(&path)?}));
             }
@@ -91,14 +112,22 @@ impl MaterializedExecution {
             arguments.extend(hook.args.iter().cloned());
             let session_id = random_handle()?;
             let revision = |r: &crate::domain::RevisionIdentity| json!({"package_id":r.package_id.to_string(),"revision_content_digest":r.content_digest.to_string()});
-            let session = json!({
+            let parameters = compiled.parameters.iter().map(|parameter| {
+                Ok(json!({"parameter_id":parameter.id.as_str(), "value":parameter_value(parameter.value())?}))
+            }).collect::<Result<Vec<_>, MaterializationError>>()?;
+            let mut session = json!({
                 "type":"session_start", "protocol_version":hook.protocol_version, "session_id":session_id,
-                "run_id":run.to_string(), "revision":revision(edge.target()), "parameters":[],
+                "run_id":run.to_string(), "revision":revision(edge.target()), "parameters":parameters,
                 "workspace":{"handle":random_handle()?, "root_path":host_path(&workspace)?},
                 "io":{"terminal":terminal_name(hook.io.terminal)},
                 "operation":{"kind":"migration", "source_revision":revision(edge.source()),
                     "source_bindings":source_bindings, "target_bindings":target_bindings, "target_outputs":target_outputs}
             });
+            let (ordinary_outputs, ordinary_authorities) =
+                materialize_outputs(&directory, &compiled.outputs, "artifacts")?;
+            if hook.protocol_version == crate::domain::operation_hook_version() {
+                session["operation"]["outputs"] = json!(ordinary_authorities);
+            }
             super::super::protocol::validate_session_frame(&session)?;
             Ok((
                 program,
@@ -106,11 +135,12 @@ impl MaterializedExecution {
                 session_id,
                 session,
                 outputs,
+                ordinary_outputs,
                 hook.io.terminal,
             ))
         })();
         match result {
-            Ok((program, arguments, session_id, session, migration_outputs, terminal)) => {
+            Ok((program, arguments, session_id, session, migration_outputs, outputs, terminal)) => {
                 let materialized = Self {
                     directory,
                     program,
@@ -119,7 +149,7 @@ impl MaterializedExecution {
                     session,
                     migration_outputs,
                     terminal,
-                    outputs: Vec::new(),
+                    outputs,
                     capture: None,
                     operation: super::super::protocol::SessionOperation::Migration,
                     protocol_state: None,

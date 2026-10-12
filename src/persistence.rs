@@ -107,4 +107,6 @@ pub(crate) use sqlite_revision_store::{
 #[cfg(test)]
 pub(crate) use sqlite_runs::fail_next_capture_publication_for_test;
 #[allow(unused_imports)]
-pub(crate) use sqlite_runs::{RunArtifactWrite, RunFinishReceipt, SnapshotBlobWrite};
+pub(crate) use sqlite_runs::{
+    RunArtifactSubmission, RunArtifactWrite, RunFinishReceipt, SnapshotBlobWrite,
+};

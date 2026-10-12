@@ -12,6 +12,7 @@ use yaml_rust2::{
     scanner::{Marker, Scanner, TScalarStyle, TokenType},
 };
 
+pub(crate) mod operation;
 mod source_acquisition;
 #[path = "authoring_projection.rs"]
 mod source_projection;

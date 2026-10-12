@@ -7,6 +7,30 @@ title: Declare Actions, Inputs, and parameters
 For all types, allowed values, omission defaults, and constraints, use
 [Pack fields and values](../reference/pack-fields.md).
 
+## Choose the Input contract
+
+The examples inherited from the first Pack tutorial use Source `1.0-alpha.2`.
+That format keeps global `required` declarations and its existing Hook behavior.
+It remains supported; updating Pactrun does not rewrite your Pack.
+
+Choose Source `1.0-alpha.3` when operations need different Inputs. Keep Input
+identities and protection global, omit global `required`, and give each operation
+an `inputs` object with `required` and `optional` lists. An environment precheck
+can use empty lists and run before service configuration is supplied. Its Hook
+receives no managed Input files unless they are declared in those lists.
+
+Migration distinguishes source and target lists; Cleanup also supports retained
+references. See [operation-scoped fields](../reference/operation-format.md) and
+[Input read scope](../reference/operation-inputs.md) for exact syntax and defaults.
+Source `1.0-alpha.3` uses Hook Protocol `1.0-alpha.2`; direct Hooks must implement
+that selected protocol, while the built-in Shell loader supplies it for scripts.
+
+Parameters are now available on Migration and Cleanup as well as Actions and
+Snapshot operations. All may declare ordinary reports. A report is not a
+Snapshot payload or a Migration target Input: see
+[common capabilities](../reference/operation-capabilities.md). Restore still
+requires the Snapshot's exact producer Revision; it does not perform Migration.
+
 ## Choose the data lifetime
 
 Before editing, complete the [first Pack tutorial](./authoring-model.md) so you

@@ -30,6 +30,7 @@ mod export_paths;
 mod help;
 mod human;
 mod lifecycle;
+mod machine;
 mod migration_presentation;
 mod migrations;
 mod names;
@@ -168,6 +169,13 @@ enum ParameterSourceSpec {
     Text(ParameterIdentity, String),
     File(ParameterIdentity, PathBuf),
     Stdin(ParameterIdentity),
+}
+impl ParameterSourceSpec {
+    fn id(&self) -> &ParameterIdentity {
+        match self {
+            Self::Text(id, _) | Self::File(id, _) | Self::Stdin(id) => id,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -484,16 +492,20 @@ fn run_with_cancellation(
     stderr: &mut (dyn Write + Send),
     cancellation: &ActionCancellation,
 ) -> i32 {
-    let recognized = presentation::recognize(&args);
-    let (format, args) = match presentation::select(args) {
+    let recognized = machine::recognize(&args);
+    let raw_prefix_request = presentation::raw_input_request(&args);
+    let (selected, args) = match machine::select(args) {
         Ok(selected) => selected,
-        Err(error) => return report_cli_failure(recognized, None, false, error, stdout, stderr),
+        Err(error) => {
+            return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
+        }
     };
+    let format = selected.format;
     let raw_request = presentation::raw_input_request(&args);
     let mut command = match parse_command(args) {
         Ok(command) => command,
         Err(error) => {
-            return report_cli_failure(format, None, raw_request, error, stdout, stderr);
+            return report_cli_failure(selected, None, raw_request, error, stdout, stderr);
         }
     };
     let command_name = presentation::command_name(&command);
@@ -501,7 +513,7 @@ fn run_with_cancellation(
     let (executing, cancel_on_close) = streaming::execution_options(&command);
     if cancel_on_close && (format != presentation::Format::Jsonl || !executing) {
         return report_cli_failure(
-            format,
+            selected,
             Some(command_name),
             false,
             CliError::usage("--cancel-on-output-close requires a JSONL execution"),
@@ -511,7 +523,7 @@ fn run_with_cancellation(
     }
     if raw && format == presentation::Format::Jsonl {
         return report_cli_failure(
-            format,
+            selected,
             Some(command_name),
             false,
             CliError::usage("Choose a file destination with --output <path> for JSONL export"),
@@ -520,7 +532,7 @@ fn run_with_cancellation(
         );
     }
     if let Err(error) = short_ids::resolve(&mut command, storage_root.as_ref(), cancellation) {
-        return report_cli_failure(format, Some(command_name), raw, error, stdout, stderr);
+        return report_cli_failure(selected, Some(command_name), raw, error, stdout, stderr);
     }
     let disable_text = match &command {
         Command::Invoke {
@@ -552,12 +564,13 @@ fn run_with_cancellation(
             stdout,
             stderr,
             cancellation,
-            format,
+            selected,
             cancel_on_close,
         );
     }
     if format == presentation::Format::Jsonl {
-        let mut writer = streaming::ResultWriter::new(stdout, Some(command_name));
+        let mut writer =
+            streaming::ResultWriter::new(stdout, Some(command_name)).with_version(selected.version);
         let code = run_selected(
             command,
             storage_root,
@@ -565,7 +578,7 @@ fn run_with_cancellation(
             &mut writer,
             stderr,
             cancellation,
-            presentation::Format::Json,
+            selected.with_format(presentation::Format::Json),
         );
         return if writer.finish().is_err() { 1 } else { code };
     }
@@ -576,7 +589,7 @@ fn run_with_cancellation(
         stdout,
         stderr,
         cancellation,
-        format,
+        selected,
     )
 }
 
@@ -587,8 +600,9 @@ fn run_selected(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
-    format: presentation::Format,
+    selection: impl Into<machine::Selection>,
 ) -> i32 {
+    let selected = selection.into();
     collect_reply(
         command,
         storage_root,
@@ -596,9 +610,9 @@ fn run_selected(
         stdout,
         stderr,
         cancellation,
-        !format.requires_noninteractive(),
+        selected,
     )
-    .render(format, stdout, stderr)
+    .render(selected.format, stdout, stderr)
 }
 
 fn collect_reply(
@@ -608,15 +622,16 @@ fn collect_reply(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
-    interactive: bool,
+    selected: machine::Selection,
 ) -> reply::Reply {
     let command_name = presentation::command_name(&command);
     let raw = matches!(&command,Command::ExportInput {output,..} if output=="-");
     let capture = reply::Capture::new(
         command_name,
-        interactive,
+        !selected.format.requires_noninteractive(),
         reply::DisplayOptions::for_command(&command),
-    );
+    )
+    .with_version(selected.version);
     let result = execute(
         command,
         storage_root,
@@ -638,7 +653,7 @@ fn preflight_presentation(
     let parsed = presentation::select(args.to_vec()).and_then(|(_, args)| parse_command(args));
     parsed.err().map(|error| {
         report_cli_failure(
-            presentation::recognize(args),
+            machine::recognize(args),
             None,
             presentation::raw_input_request(args),
             error,
@@ -662,28 +677,24 @@ fn report_startup_failure(
         .is_some_and(
             |command| matches!(command, Command::ExportInput { output, .. } if output == "-"),
         );
-    report_cli_failure(
-        presentation::recognize(args),
-        None,
-        raw,
-        error,
-        stdout,
-        stderr,
-    )
+    report_cli_failure(machine::recognize(args), None, raw, error, stdout, stderr)
 }
 
 fn report_cli_failure(
-    format: presentation::Format,
+    selected: impl Into<machine::Selection>,
     command: Option<&str>,
     raw: bool,
     error: CliError,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> i32 {
+    let selected = selected.into();
+    let format = selected.format;
     if format == presentation::Format::Jsonl {
-        let mut writer = streaming::ResultWriter::new(stdout, command);
+        let mut writer =
+            streaming::ResultWriter::new(stdout, command).with_version(selected.version);
         let code = report_cli_failure(
-            presentation::Format::Json,
+            selected.with_format(presentation::Format::Json),
             command,
             false,
             error,
@@ -697,9 +708,13 @@ fn report_cli_failure(
         && !matches!(error.kind, presentation::ErrorKind::Output)
     {
         let destination: &mut dyn Write = if raw { &mut *stderr } else { &mut *stdout };
-        if let Err(output_error) =
-            presentation::failure(command, error.partial.as_ref(), &error, destination)
-        {
+        if let Err(output_error) = presentation::failure_versioned(
+            selected.version,
+            command,
+            error.partial.as_ref(),
+            &error,
+            destination,
+        ) {
             if !raw {
                 let _ = writeln!(
                     stderr,
@@ -1213,7 +1228,7 @@ fn execute(
                     source_manifest_sha256: option_env!("PACTRUN_BUILD_SOURCE_MANIFEST"),
                     supported_formats: crate::domain::VersionDomain::ALL
                         .into_iter()
-                        .map(|domain| (domain.name(), vec![domain.current_text()]))
+                        .map(|domain| (domain.name(), domain.supported_texts().to_vec()))
                         .collect(),
                     default_formats: crate::domain::VersionDomain::ALL
                         .into_iter()
@@ -1271,10 +1286,10 @@ fn execute(
         return artifacts::execute(command, &storage_root, format);
     }
     if let Command::Retirement(command) = command {
-        return retirements::execute(command, &storage_root, stderr, cancellation, format);
+        return retirements::execute(command, &storage_root, stdin, stderr, cancellation, format);
     }
     if let Command::Migration(command) = command {
-        return migrations::execute(command, &storage_root, cancellation, format);
+        return migrations::execute(command, &storage_root, stdin, cancellation, format);
     }
     if let Command::Snapshot(command) = command {
         return snapshots::execute(command, &storage_root, stdin, stderr, cancellation, format);
@@ -1350,6 +1365,13 @@ fn execute(
             inputs,
         } => {
             let revision = resolve_revision(&application, revision)?;
+            let definitions = application
+                .inspect_revision_definitions(std::slice::from_ref(&revision))
+                .map_err(app_error)?;
+            let definition = definitions
+                .first()
+                .ok_or_else(|| CliError::operation("Revision definition is unavailable"))?;
+            format.version().require_core(&definition.core)?;
             let mut acquisitions = Vec::new();
             let mut stdin_id = None;
             for input in inputs {
@@ -1381,28 +1403,41 @@ fn execute(
             emit_result(
                 format,
                 "instance create",
-                &presentation::Instance::from(&view),
+                &presentation::Instance::for_version(&view, &definition.core, format.version())?,
             )?;
         }
         Command::ListInstances => {
             let full = application
                 .inspect_instances_complete()
                 .map_err(app_error)?;
-            let value = definitions::Related::new(
-                definitions::Instances {
-                    items: full.items.iter().map(Into::into).collect(),
-                },
-                &full.revisions,
-                &[],
-            );
+            format.require_revisions(&full.revisions)?;
+            let items = full
+                .items
+                .iter()
+                .map(|view| {
+                    let revision = full
+                        .revisions
+                        .iter()
+                        .find(|revision| revision.identity == view.active_revision)
+                        .ok_or_else(|| {
+                            CliError::operation("Instance Revision definition is unavailable")
+                        })?;
+                    presentation::Instance::for_version(view, &revision.core, format.version())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let value =
+                definitions::Related::new(definitions::Instances { items }, &full.revisions, &[]);
             emit_result(format, "instance list", &value)?;
         }
         Command::ShowInstance { name } => {
             let (view, definition) = application
                 .inspect_instance_definition(&name)
                 .map_err(app_error)?;
-            let value =
-                definitions::Related::new(presentation::Instance::from(&view), &[definition], &[]);
+            let value = definitions::Related::new(
+                presentation::Instance::for_version(&view, &definition.core, format.version())?,
+                &[definition],
+                &[],
+            );
             emit_result(format, "instance show", &value)?;
         }
         Command::ResolveManualRecovery { name, expected } => {
@@ -1424,7 +1459,7 @@ fn execute(
                 .inspect_instance_definition(&name)
                 .map_err(app_error)?;
             let value = definitions::Related::new(
-                presentation::Inputs::from_view(&view),
+                presentation::Inputs::for_version(&view, &definition.core, format.version())?,
                 &[definition],
                 &[],
             );
@@ -1510,6 +1545,7 @@ fn execute(
             let (_, definition) = application
                 .inspect_instance_definition(&name)
                 .map_err(app_error)?;
+            format.version().require_core(&definition.core)?;
             let actions = definition.core.actions();
             let author = capability_presentation::project(
                 &definition,
@@ -1536,6 +1572,7 @@ fn execute(
             let (_, definition) = application
                 .inspect_instance_definition(&name)
                 .map_err(app_error)?;
+            format.version().require_core(&definition.core)?;
             let author = capability_presentation::project(
                 &definition,
                 &[&capability_presentation::Selection::Action(action.clone())],
@@ -1580,6 +1617,10 @@ fn execute(
             let (_, action_definition) = application
                 .load_action_definition(&name, &action)
                 .map_err(app_error)?;
+            let (_, definition) = application
+                .inspect_instance_definition(&name)
+                .map_err(app_error)?;
+            format.version().require_core(&definition.core)?;
             validate_parameter_sources(&action_definition, &parameters)?;
             if action_definition.hook.io.terminal == crate::domain::TerminalContractV1::Interactive
                 && parameters
@@ -1608,6 +1649,13 @@ fn execute(
             let compiled = application
                 .compile_action(&intent, &launcher_directories)
                 .map_err(app_error)?;
+            if format.version() == machine::Version::Legacy
+                && compiled.protocol_version() == crate::domain::operation_hook_version()
+            {
+                return Err(CliError::operation(
+                    "machine interface 1.0-alpha.3 cannot represent this operation; select --machine-version 1.0-alpha.4",
+                ));
+            }
             if cancellation.is_requested() {
                 return Err(CliError::operation(
                     "invoke cancelled before Run acceptance; no Run was created",
@@ -1628,7 +1676,8 @@ fn execute(
                         startup_timeout_ms,
                         action_timeout_ms,
                         termination_grace_ms,
-                    );
+                    )
+                    .with_version(&compiled, format.version())?;
                     return emit_result(
                         format,
                         "invoke",
@@ -1675,7 +1724,10 @@ fn execute(
                         error.partial = Some(presentation::PartialResult::RefusedExecution(
                             Box::new(execution_presentation::RefusedExecution {
                                 run_id: run.to_string(),
-                                inspection: execution_presentation::Inspection::from(&inspection),
+                                inspection: execution_presentation::Inspection::for_version(
+                                    &inspection,
+                                    format.version(),
+                                )?,
                             }),
                         ));
                     }
@@ -1739,7 +1791,8 @@ fn execute(
                 }
             };
             {
-                let result = execution_presentation::Inspection::from(&managed);
+                let result =
+                    execution_presentation::Inspection::for_version(&managed, format.version())?;
                 if matches!(&managed.run.state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded)
                 {
                     return emit_result(format, "invoke", &result);
@@ -1753,12 +1806,16 @@ fn execute(
             let run = run.full();
             {
                 let full = application.inspect_run_complete(run).map_err(app_error)?;
+                format.require_revisions(&full.revisions)?;
                 let inspection = full.inspections.first().expect("one requested Run");
                 return emit_result(
                     format,
                     "run show",
                     &definitions::Related::new(
-                        execution_presentation::Inspection::from(inspection),
+                        execution_presentation::Inspection::for_version(
+                            inspection,
+                            format.version(),
+                        )?,
                         &full.revisions,
                         &full.unavailable_revisions,
                     ),
@@ -2242,6 +2299,42 @@ fn read_parameter_sources(
         .collect()
 }
 
+fn read_operation_parameter_sources(
+    declarations: &[crate::domain::ParameterV1],
+    terminal: crate::domain::TerminalContractV1,
+    sources: &[ParameterSourceSpec],
+    stdin: &mut dyn Read,
+    cancellation: &ActionCancellation,
+) -> Result<Vec<RawParameterInput>, CliError> {
+    validate_parameter_source_shape(sources)?;
+    for source in sources {
+        let id = match source {
+            ParameterSourceSpec::Text(id, _)
+            | ParameterSourceSpec::File(id, _)
+            | ParameterSourceSpec::Stdin(id) => id,
+        };
+        if !declarations.iter().any(|declaration| &declaration.id == id) {
+            return Err(CliError::usage(
+                "unknown operation parameter; inspect the authored declaration",
+            ));
+        }
+    }
+    if terminal == crate::domain::TerminalContractV1::Interactive
+        && sources
+            .iter()
+            .any(|source| matches!(source, ParameterSourceSpec::Stdin(_)))
+    {
+        return Err(CliError::usage(
+            "interactive Hooks do not accept --param-stdin",
+        ));
+    }
+    read_parameter_sources(sources, stdin, cancellation).map_err(|_| {
+        CliError::operation(
+            "parameter source could not be read as UTF-8 or acquisition was cancelled",
+        )
+    })
+}
+
 fn read_cancellable_bytes(
     source: &mut dyn Read,
     cancellation: &ActionCancellation,
@@ -2683,1404 +2776,4 @@ fn failure_explanation(error: &crate::domain::PactrunErrorRef) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    include!("cli/create_restore_tests.rs");
-    include!("cli/names_tests.rs");
-    include!("cli/json_tests.rs");
-    include!("cli/machine_delivery_tests.rs");
-    include!("cli/short_id_tests.rs");
-
-    // Test-ID: PR-TEST-0593
-    // Verifies: PR-REQ-0038, PR-REQ-0116, PR-REQ-0119
-    #[test]
-    fn generic_confirmation_never_grants_disclosure_declassification_or_recovery_authority() {
-        let (temporary, _, _) = cli_roots();
-        let missing = temporary.path().join("must-not-open");
-        let id = "00000000000000000000000000000001";
-        let revision = "exact:00000000000000000000000000000001/sha256:0000000000000000000000000000000000000000000000000000000000000001";
-        let export = temporary.path().join("must-not-export");
-        for flag in ["--force", "--yes"] {
-            for mut args in [
-                vec!["input", "export", "node", "secret", "--output", "-"],
-                vec![
-                    "snapshot",
-                    "export",
-                    id,
-                    "--output",
-                    export.to_str().unwrap(),
-                ],
-                vec!["instance", "migrate", "node", "--to", revision],
-                vec!["invoke", "node", "recover"],
-                vec!["instance", "abandon", "node"],
-            ] {
-                assert!(
-                    parse_command(args.iter().map(OsString::from).collect()).is_ok(),
-                    "invalid test command: {args:?}"
-                );
-                args.push(flag);
-                let mut output = Vec::new();
-                let mut errors = Vec::new();
-                let code = run(
-                    args.iter().map(OsString::from).collect(),
-                    Some(missing.as_os_str().into()),
-                    &mut io::empty(),
-                    &mut output,
-                    &mut errors,
-                );
-                assert_eq!(code, 2, "{args:?}: {}", String::from_utf8_lossy(&errors));
-                assert!(!missing.exists());
-                assert!(!export.exists());
-                assert!(output.is_empty());
-            }
-        }
-        for flag in ["--secret", "--normal", "--protection"] {
-            let mut output = Vec::new();
-            let mut errors = Vec::new();
-            assert_eq!(
-                run(
-                    ["input", "set", "node", "secret", "--stdin", flag]
-                        .map(OsString::from)
-                        .to_vec(),
-                    Some(missing.as_os_str().into()),
-                    &mut io::empty(),
-                    &mut output,
-                    &mut errors
-                ),
-                2
-            );
-            assert!(!missing.exists());
-        }
-    }
-
-    // Test-ID: PR-TEST-0599
-    // Verifies: PR-REQ-0031, PR-REQ-0032, PR-REQ-0115, PR-REQ-0265
-    #[test]
-    fn initial_input_acquisition_failure_is_atomic_at_the_public_create_boundary() {
-        let (temporary, root, source) = cli_roots();
-        let manifest = source.join("pactrun.yaml");
-        let text = fs::read_to_string(&manifest).unwrap();
-        fs::write(
-            &manifest,
-            text.replace("    - id: config", "    - id: config\n      required: true"),
-        )
-        .unwrap();
-        let revision = json_install(&root, &source);
-        let good = temporary.path().join("opaque.json");
-        fs::write(&good, [0, 255, 13, 10]).unwrap();
-        let missing = temporary.path().join("missing-secret");
-        let args = vec![
-            "instance".into(),
-            "create".into(),
-            "atomic-create".into(),
-            "--revision".into(),
-            revision.clone().into(),
-            "--input-file".into(),
-            format!("config={}", good.display()).into(),
-            "--input-file".into(),
-            format!("secret={}", missing.display()).into(),
-        ];
-        let (code, _, _) = json_invoke(&root, args);
-        assert_eq!(code, 1);
-        assert!(
-            PactrunApplication::open(&root)
-                .unwrap()
-                .list_instances()
-                .unwrap()
-                .is_empty()
-        );
-        let database = rusqlite::Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        for table in [
-            "instances",
-            "managed_input_bindings",
-            "managed_input_payloads",
-            "runs",
-        ] {
-            let count: i64 = database
-                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, 0, "partial create in {table}");
-        }
-        drop(database);
-        let incomplete = json_ok(
-            &root,
-            &["instance", "create", "incomplete", "--revision", &revision],
-        );
-        assert_eq!(incomplete["required_inputs_satisfied"], false);
-        assert_eq!(
-            json_ok(&root, &["instance", "show", "incomplete"])["instance_id"],
-            incomplete["instance_id"]
-        );
-    }
-
-    struct FailingCancellationHandler;
-
-    impl CancellationHandlerInstaller for FailingCancellationHandler {
-        fn install(&self, _cancellation: ActionCancellation) -> Result<(), ()> {
-            Err(())
-        }
-    }
-
-    struct PrefixFailWriter {
-        bytes: Vec<u8>,
-        remaining: usize,
-    }
-
-    impl Write for PrefixFailWriter {
-        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-            if self.remaining == 0 {
-                return Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed"));
-            }
-            let written = self.remaining.min(bytes.len());
-            self.bytes.extend_from_slice(&bytes[..written]);
-            self.remaining -= written;
-            Ok(written)
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn cli_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/input-cli-tests");
-        fs::create_dir_all(&parent).unwrap();
-        let temporary = tempfile::Builder::new()
-            .prefix("cli-")
-            .tempdir_in(parent)
-            .unwrap();
-        let storage = temporary.path().join("storage");
-        let source = temporary.path().join("source");
-        fs::create_dir(&storage).unwrap();
-        fs::create_dir(storage.join("database")).unwrap();
-        fs::create_dir(storage.join("runtime-content")).unwrap();
-        fs::create_dir(storage.join("staging")).unwrap();
-        fs::create_dir(&source).unwrap();
-        fs::write(
-            source.join("pactrun.yaml"),
-            r#"source_format: 1.0-alpha.2
-package_id: 00000000000000000000000000000021
-revision:
-  inputs:
-    - id: config
-    - id: secret
-      protection: secret
-  actions: []
-  migrations: []
-runtime_content:
-  files: []
-"#,
-        )
-        .unwrap();
-        (temporary, storage, source)
-    }
-
-    fn cli_action_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/invoke-cli-tests");
-        fs::create_dir_all(&parent).unwrap();
-        let temporary = tempfile::Builder::new()
-            .prefix("cli-action-")
-            .tempdir_in(parent)
-            .unwrap();
-        let storage = temporary.path().join("storage");
-        let source = temporary.path().join("source");
-        fs::create_dir(&storage).unwrap();
-        fs::create_dir(storage.join("database")).unwrap();
-        fs::create_dir(storage.join("runtime-content")).unwrap();
-        fs::create_dir(storage.join("staging")).unwrap();
-        fs::create_dir(&source).unwrap();
-        let worker_name = if cfg!(windows) {
-            "worker.exe"
-        } else {
-            "worker"
-        };
-        fs::copy(env::current_exe().unwrap(), source.join(worker_name)).unwrap();
-        fs::write(
-            source.join("pactrun.yaml"),
-            format!(
-                r#"source_format: 1.0-alpha.2
-package_id: 00000000000000000000000000000036
-revision:
-  inputs: []
-  actions:
-    - id: inspect
-      access: observe
-      parameters:
-        - {{ id: value, type: string, sensitive: false }}
-      hook:
-        protocol_version: 1.0-alpha.1
-        launch: {{ kind: direct, executable: worker }}
-        args: []
-        io: {{ terminal: none }}
-      outputs: []
-  migrations: []
-runtime_content:
-  files:
-    - {{ id: worker, source: {worker_name}, path: bin/{worker_name}, executable: true }}
-"#
-            ),
-        )
-        .unwrap();
-        (temporary, storage, source)
-    }
-
-    fn cli_hook_roots() -> (TempDir, PathBuf, PathBuf) {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/invoke-cli-tests");
-        fs::create_dir_all(&parent).unwrap();
-        let temporary = tempfile::Builder::new()
-            .prefix("cli-hook-")
-            .tempdir_in(parent)
-            .unwrap();
-        let storage = temporary.path().join("storage");
-        let source = temporary.path().join("source");
-        fs::create_dir(&storage).unwrap();
-        fs::create_dir(storage.join("database")).unwrap();
-        fs::create_dir(storage.join("runtime-content")).unwrap();
-        fs::create_dir(storage.join("staging")).unwrap();
-        fs::create_dir(&source).unwrap();
-        let worker_name = if cfg!(windows) {
-            "worker.exe"
-        } else {
-            "worker"
-        };
-        fs::copy(env::current_exe().unwrap(), source.join(worker_name)).unwrap();
-        fs::write(
-            source.join("pactrun.yaml"),
-            format!(
-                r#"source_format: 1.0-alpha.2
-package_id: 00000000000000000000000000000037
-revision:
-  inputs:
-    - {{ id: secret_config, required: true, protection: secret }}
-  actions:
-    - id: execute
-      access: observe
-      parameters:
-        - {{ id: mode, type: string, sensitive: false }}
-        - {{ id: marker, type: string, sensitive: false }}
-        - {{ id: expected_binding, type: string, sensitive: true }}
-        - {{ id: sensitive_value, type: string, sensitive: true }}
-      hook:
-        protocol_version: 1.0-alpha.1
-        launch: {{ kind: direct, executable: worker }}
-        args: ["--exact", "hook::tests::hook_protocol_worker", "--nocapture", "--test-threads=1", "hook-fixture-argument-tail"]
-        io: {{ terminal: none }}
-      outputs: [{{ id: report }}]
-  migrations: []
-runtime_content:
-  files:
-    - {{ id: worker, source: {worker_name}, path: bin/{worker_name}, executable: true }}
-"#
-            ),
-        )
-        .unwrap();
-        (temporary, storage, source)
-    }
-
-    fn prepared_cli_hook_instance() -> (TempDir, PathBuf, PathBuf, PathBuf) {
-        prepared_cli_hook_instance_with_terminal("none")
-    }
-
-    fn prepared_cli_hook_instance_with_terminal(
-        terminal: &str,
-    ) -> (TempDir, PathBuf, PathBuf, PathBuf) {
-        let (temporary, storage, source) = cli_hook_roots();
-        let manifest = source.join("pactrun.yaml");
-        let text = fs::read_to_string(&manifest)
-            .unwrap()
-            .replace("terminal: none", &format!("terminal: {terminal}"));
-        fs::write(manifest, text).unwrap();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "--format".into(),
-                    "json".into(),
-                    "pack".into(),
-                    "install".into(),
-                    source.into_os_string()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let revision = installed_reference(&stdout);
-        let expected_path = temporary.path().join("expected-binding.txt");
-        let sensitive_path = temporary.path().join("sensitive-value.txt");
-        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
-        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
-        assert_eq!(
-            run(
-                vec![
-                    "instance".into(),
-                    "create".into(),
-                    "node".into(),
-                    "--revision".into(),
-                    revision.into(),
-                    "--input-file".into(),
-                    format!("secret_config={}", expected_path.display()).into(),
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        (temporary, storage, expected_path, sensitive_path)
-    }
-
-    fn successful_invoke_args(
-        marker: &Path,
-        expected_path: &Path,
-        sensitive_path: &Path,
-    ) -> Vec<OsString> {
-        vec![
-            "invoke".into(),
-            "node".into(),
-            "execute".into(),
-            "--param".into(),
-            "mode=success".into(),
-            "--param".into(),
-            format!("marker={}", marker.display()).into(),
-            "--param-file".into(),
-            format!("expected_binding={}", expected_path.display()).into(),
-            "--param-file".into(),
-            format!("sensitive_value={}", sensitive_path.display()).into(),
-        ]
-    }
-
-    // Test-ID: PR-TEST-0079
-    // Verifies: PR-REQ-0263, PR-REQ-0265, PR-REQ-0271, PR-REQ-0272
-    #[test]
-    fn closed_cli_references_and_storage_root_boundary_are_exact() {
-        assert!(matches!(
-            parse_command(vec!["instance".into(), "show".into(), "Node".into()]).unwrap(),
-            Command::ShowInstance { .. }
-        ));
-        assert!(
-            parse_command(vec![
-                "instance".into(),
-                "show".into(),
-                "00".into(),
-                "extra".into()
-            ])
-            .is_err()
-        );
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::{OsStrExt, OsStringExt};
-
-            let (_, path) = split_initial_input_file(OsString::from_vec(
-                b"config=non-unicode-\xff.bin".to_vec(),
-            ))
-            .unwrap();
-            assert_eq!(path.as_os_str().as_bytes(), b"non-unicode-\xff.bin");
-        }
-        assert!(parse_revision_reference("bare".to_owned()).is_err());
-        assert!(
-            parse_revision_reference(format!(
-                "exact:{}/sha256:{}",
-                "00".repeat(16),
-                "11".repeat(32)
-            ))
-            .is_ok()
-        );
-        assert!(
-            parse_command(vec![
-                "instance".into(),
-                "create".into(),
-                "node".into(),
-                "--revision".into(),
-                format!("exact:{}/sha256:{}", "00".repeat(16), "11".repeat(32)).into(),
-                "--input-file".into(),
-                "config=missing-a".into(),
-                "--input-file".into(),
-                "config=missing-b".into(),
-            ])
-            .is_err()
-        );
-
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec!["pack".into(), "generate-id".into()],
-                None,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0
-        );
-        assert_eq!(stdout.len(), 33);
-        stdout.clear();
-        assert_eq!(
-            run(
-                vec!["instance".into(), "list".into()],
-                None,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            1
-        );
-    }
-
-    // Test-ID: PR-TEST-0114
-    // Verifies: PR-REQ-0097, PR-REQ-0114, PR-REQ-0284, PR-REQ-0285
-    #[test]
-    fn commands_and_run_projection_are_structural_and_redacted() {
-        assert!(matches!(
-            parse_command(vec!["action".into(), "list".into(), "node".into()]).unwrap(),
-            Command::ListActions { .. }
-        ));
-        assert!(matches!(
-            parse_command(vec![
-                "invoke".into(),
-                "node".into(),
-                "deploy".into(),
-                "--plan".into(),
-                "--authorize-recovery-override".into(),
-            ])
-            .unwrap(),
-            Command::Invoke {
-                plan: true,
-                recovery_override: true,
-                ..
-            }
-        ));
-        assert!(matches!(
-            parse_command(vec!["run".into(), "reconcile".into()]).unwrap(),
-            Command::ReconcileRuns
-        ));
-        assert!(matches!(
-            parse_command(vec![
-                "instance".into(),
-                "resolve-manual-recovery".into(),
-                "node".into(),
-            ])
-            .unwrap(),
-            Command::ResolveManualRecovery { expected: None, .. }
-        ));
-
-        let run = RunId::from_bytes([1; 16]);
-        let view = crate::domain::RunInspectionData {
-            run: crate::domain::RunView {
-                id: run,
-                instance: crate::domain::InstanceId::from_bytes([2; 16]),
-                accepted_state_version: crate::domain::InstanceStateVersion::from_bytes([3; 16]),
-                accepted_at_unix_ms: 10,
-                action: crate::domain::ActionRunIdentity {
-                    revision: RevisionIdentity::new(
-                        PackageId::from_bytes([4; 16]),
-                        RevisionContentDigest::from_bytes([5; 32]),
-                    ),
-                    action: ActionIdentity::parse("deploy").unwrap(),
-                },
-                state: crate::domain::RunState::Finished(crate::domain::RunOutcomeView {
-                    outcome: RunOutcome::Failed,
-                    boundary: crate::domain::ActionRunBoundary::Admitted,
-                    terminal_risk: crate::domain::RecoveryRiskState::Clear,
-                    finished_at_unix_ms: 20,
-                    primary_failure: Some(crate::domain::RunPrimaryFailure {
-                        cause: None,
-                        failure: crate::domain::RunFailureRecord {
-                            error: crate::domain::PactrunErrorRef::new(
-                                "execution",
-                                "launch_failed",
-                            )
-                            .unwrap(),
-                            message: "persisted-secret-message".to_owned(),
-                        },
-                        step: crate::domain::RunFailedStep::Plan(ActionPlanStep::LaunchHook),
-                    }),
-                    secondary_failures: vec![crate::domain::RunFailureRecord {
-                        error: crate::domain::PactrunErrorRef::new(
-                            "execution",
-                            "workspace_cleanup_failed",
-                        )
-                        .unwrap(),
-                        message: "another-persisted-secret-message".to_owned(),
-                    }],
-                    hook_completion: Some(crate::domain::HookCompletionRecord {
-                        status: crate::domain::HookCompletionStatus::Failure,
-                        code: Some(crate::domain::HookCodeV1::parse("hook_code").unwrap()),
-                        message: Some("hook-free-text-secret".to_owned()),
-                    }),
-                    artifacts: vec![crate::domain::RunArtifactSummary {
-                        output: crate::domain::ManagedOutputIdentity::parse("report").unwrap(),
-                        byte_length: 7,
-                    }],
-                }),
-            },
-            current_recovery_guard: None,
-        };
-        let mut output = Vec::new();
-        write_run(&mut output, &view).unwrap();
-        let output = String::from_utf8(output).unwrap();
-        assert!(output.contains("primary_failure: execution:launch_failed"));
-        assert!(output.contains("hook_completion_text: withheld"));
-        for secret in [
-            "persisted-secret-message",
-            "another-persisted-secret-message",
-            "hook_code",
-            "hook-free-text-secret",
-        ] {
-            assert!(
-                !output.contains(secret),
-                "structural Run output leaked {secret}"
-            );
-        }
-    }
-
-    // Test-ID: PR-TEST-0123
-    // Verifies: PR-REQ-0049, PR-REQ-0286
-    #[test]
-    fn cancellation_handler_installation_failure_precedes_storage_and_acceptance() {
-        let temporary = tempfile::tempdir().unwrap();
-        let storage = temporary.path().join("storage");
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        let status = run_with_handler_installer(
-            &FailingCancellationHandler,
-            vec![
-                "invoke".into(),
-                "node".into(),
-                "deploy".into(),
-                "--param".into(),
-                "secret=must-not-appear".into(),
-            ],
-            Some(storage.as_os_str().to_owned()),
-            &mut io::empty(),
-            &mut stdout,
-            &mut stderr,
-        );
-        assert_eq!(status, 1);
-        assert_eq!(stdout, Vec::<u8>::new());
-        assert!(String::from_utf8_lossy(&stderr).contains(CANCELLATION_HANDLER_FAILURE));
-        assert!(!String::from_utf8_lossy(&stderr).contains("must-not-appear"));
-        assert!(!storage.exists(), "handler failure must not open storage");
-    }
-
-    // Test-ID: PR-TEST-0116
-    // Verifies: PR-REQ-0135, PR-REQ-0288
-    #[test]
-    fn parameter_sources_preserve_exact_text_and_protected_channel() {
-        let command = parse_command(vec![
-            "invoke".into(),
-            "node".into(),
-            "deploy".into(),
-            "--param".into(),
-            "ordinary=a=b".into(),
-            "--param-file".into(),
-            "protected=host=path".into(),
-            "--startup-timeout-ms".into(),
-            "0".into(),
-        ])
-        .unwrap();
-        let Command::Invoke { parameters, .. } = command else {
-            panic!("expected Invoke");
-        };
-        assert!(matches!(
-            &parameters[0],
-            ParameterSourceSpec::Text(id, value)
-                if id.as_str() == "ordinary" && value == "a=b"
-        ));
-        assert!(matches!(
-            &parameters[1],
-            ParameterSourceSpec::File(id, path)
-                if id.as_str() == "protected" && path == Path::new("host=path")
-        ));
-
-        let temporary = tempfile::tempdir().unwrap();
-        let file = temporary.path().join("parameter.txt");
-        fs::write(&file, b"\xEF\xBB\xBF protected\n").unwrap();
-        let protected = ParameterIdentity::parse("protected").unwrap();
-        let mut stdin = io::Cursor::new(b"stdin\n".to_vec());
-        let values = read_parameter_sources(
-            &[
-                ParameterSourceSpec::File(protected.clone(), file),
-                ParameterSourceSpec::Stdin(ParameterIdentity::parse("from_stdin").unwrap()),
-            ],
-            &mut stdin,
-            &ActionCancellation::default(),
-        )
-        .unwrap();
-        assert_eq!(values[0].text, "\u{feff} protected\n");
-        assert_eq!(values[1].text, "stdin\n");
-        assert!(matches!(
-            values[0].source,
-            crate::domain::ParameterTextSource::Protected
-        ));
-        assert!(matches!(
-            values[1].source,
-            crate::domain::ParameterTextSource::Protected
-        ));
-    }
-
-    // Test-ID: PR-TEST-0130
-    // Verifies: PR-REQ-0286, PR-REQ-0288
-    #[test]
-    fn invoke_rejects_unrepresentable_deadlines_before_run_acceptance() {
-        let (_temporary, storage, _expected_path, _sensitive_path) = prepared_cli_hook_instance();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        let status = run(
-            vec![
-                "invoke".into(),
-                "node".into(),
-                "execute".into(),
-                "--startup-timeout-ms".into(),
-                u64::MAX.to_string().into(),
-            ],
-            storage_env.clone(),
-            &mut io::empty(),
-            &mut stdout,
-            &mut stderr,
-        );
-        assert_eq!(status, 2);
-        assert!(String::from_utf8_lossy(&stderr).contains("cannot be represented"));
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "run".into(),
-                    "list".into(),
-                    "node".into(),
-                    "--no-trunc".into()
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0
-        );
-        assert!(
-            json_ok(&storage, &["run", "list"])["items"]
-                .as_array()
-                .unwrap()
-                .is_empty(),
-            "invalid timeout must create no Run"
-        );
-    }
-
-    // Test-ID: PR-TEST-0118
-    // Verifies: PR-REQ-0284, PR-REQ-0287
-    #[test]
-    fn recovery_commands_have_explicit_operator_spellings() {
-        let expected = InstanceStateVersion::from_bytes([9; 16]).to_string();
-        assert!(matches!(
-            parse_command(vec![
-                "instance".into(),
-                "resolve-manual-recovery".into(),
-                "node".into(),
-                "--if-version".into(),
-                expected.into(),
-            ])
-            .unwrap(),
-            Command::ResolveManualRecovery {
-                expected: Some(_),
-                ..
-            }
-        ));
-        assert!(parse_command(vec!["run".into(), "reconcile".into(), "--force".into(),]).is_err());
-    }
-
-    // Test-ID: PR-TEST-0120
-    // Verifies: PR-REQ-0095, PR-REQ-0284
-    #[test]
-    fn human_action_and_plan_commands_use_the_read_only_path() {
-        let (_temporary, storage, source) = cli_action_roots();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "--format".into(),
-                    "json".into(),
-                    "pack".into(),
-                    "install".into(),
-                    source.into_os_string()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let revision = installed_reference(&stdout);
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "instance".into(),
-                    "create".into(),
-                    "node".into(),
-                    "--revision".into(),
-                    revision.into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec!["action".into(), "list".into(), "node".into()],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0
-        );
-        assert!(String::from_utf8_lossy(&stdout).contains("ACTION"));
-        assert!(
-            String::from_utf8_lossy(&stdout)
-                .lines()
-                .any(|line| line.starts_with("inspect  "))
-        );
-        stdout.clear();
-        let before_database = fs::read(storage.join("database/pactrun.sqlite3")).unwrap();
-        let mut before_staging = fs::read_dir(storage.join("staging"))
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name())
-            .collect::<Vec<_>>();
-        before_staging.sort();
-        assert_eq!(
-            run(
-                vec![
-                    "invoke".into(),
-                    "node".into(),
-                    "inspect".into(),
-                    "--param".into(),
-                    "value=exact text".into(),
-                    "--plan".into(),
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let plan = String::from_utf8_lossy(&stdout);
-        assert!(plan.contains("Mode: preview"));
-        assert!(plan.contains("Launch"));
-        let typed = json_ok(
-            &storage,
-            &[
-                "invoke",
-                "node",
-                "inspect",
-                "--param",
-                "value=exact text",
-                "--plan",
-            ],
-        );
-        assert!(
-            typed["steps"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|step| step == "launch_hook")
-        );
-        assert!(!plan.contains("exact text"));
-        assert_eq!(
-            fs::read(storage.join("database/pactrun.sqlite3")).unwrap(),
-            before_database
-        );
-        let mut after_staging = fs::read_dir(storage.join("staging"))
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name())
-            .collect::<Vec<_>>();
-        after_staging.sort();
-        assert_eq!(after_staging, before_staging);
-    }
-
-    // Test-ID: PR-TEST-0119
-    // Verifies: PR-REQ-0094, PR-REQ-0284
-    #[test]
-    fn human_invoke_creates_and_finishes_a_managed_run() {
-        let (temporary, storage, source) = cli_hook_roots();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "--format".into(),
-                    "json".into(),
-                    "pack".into(),
-                    "install".into(),
-                    source.into_os_string()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let revision = installed_reference(&stdout);
-        stdout.clear();
-        stderr.clear();
-        let expected_path = temporary.path().join("expected-binding.txt");
-        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
-        assert_eq!(
-            run(
-                vec![
-                    "instance".into(),
-                    "create".into(),
-                    "node".into(),
-                    "--revision".into(),
-                    revision.into(),
-                    "--input-file".into(),
-                    format!("secret_config={}", expected_path.display()).into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-
-        let marker = temporary.path().join("invoke-marker");
-        let sensitive_path = temporary.path().join("sensitive-value.txt");
-        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "invoke".into(),
-                    "node".into(),
-                    "execute".into(),
-                    "--param".into(),
-                    "mode=success".into(),
-                    "--param".into(),
-                    format!("marker={}", marker.display()).into(),
-                    "--param-file".into(),
-                    format!("expected_binding={}", expected_path.display()).into(),
-                    "--param-file".into(),
-                    format!("sensitive_value={}", sensitive_path.display()).into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let summary = String::from_utf8_lossy(&stderr);
-        let run_id = summary
-            .lines()
-            .find_map(|line| line.strip_prefix("Run: "))
-            .expect("invoke prints the completed RunId")
-            .to_owned();
-        assert!(!summary.contains("hook-fixture-sensitive-parameter"));
-        assert!(!summary.contains("hook-fixture-secret-binding"));
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "run".into(),
-                    "list".into(),
-                    "node".into(),
-                    "--no-trunc".into()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0
-        );
-        assert!(String::from_utf8_lossy(&stdout).contains(&run_id));
-        stdout.clear();
-        assert_eq!(
-            run(
-                vec!["run".into(), "show".into(), run_id.into()],
-                storage_env,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0
-        );
-        assert!(String::from_utf8_lossy(&stdout).contains("Outcome: succeeded"));
-    }
-
-    // Test-ID: PR-TEST-0124
-    // Verifies: PR-REQ-0052, PR-REQ-0286
-    #[test]
-    fn broken_final_diagnostic_writer_does_not_change_finished_run_ownership() {
-        let (_temporary, storage, source) = cli_hook_roots();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "--format".into(),
-                    "json".into(),
-                    "pack".into(),
-                    "install".into(),
-                    source.into_os_string()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let revision = installed_reference(&stdout);
-        let expected_path = storage.parent().unwrap().join("expected-binding.txt");
-        let sensitive_path = storage.parent().unwrap().join("sensitive-value.txt");
-        fs::write(&expected_path, b"hook-fixture-secret-binding").unwrap();
-        fs::write(&sensitive_path, b"hook-fixture-sensitive-parameter").unwrap();
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "instance".into(),
-                    "create".into(),
-                    "node".into(),
-                    "--revision".into(),
-                    revision.into(),
-                    "--input-file".into(),
-                    format!("secret_config={}", expected_path.display()).into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-
-        let marker = storage.parent().unwrap().join("broken-diagnostic-marker");
-        let mut broken_stderr = PrefixFailWriter {
-            bytes: Vec::new(),
-            remaining: 0,
-        };
-        assert_eq!(
-            run(
-                vec![
-                    "invoke".into(),
-                    "node".into(),
-                    "execute".into(),
-                    "--param".into(),
-                    "mode=success".into(),
-                    "--param".into(),
-                    format!("marker={}", marker.display()).into(),
-                    "--param-file".into(),
-                    format!("expected_binding={}", expected_path.display()).into(),
-                    "--param-file".into(),
-                    format!("sensitive_value={}", sensitive_path.display()).into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut broken_stderr,
-            ),
-            1
-        );
-        assert!(marker.with_extension("session").exists());
-
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "run".into(),
-                    "list".into(),
-                    "node".into(),
-                    "--no-trunc".into()
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let listing = String::from_utf8_lossy(&stdout);
-        assert!(
-            listing
-                .lines()
-                .skip(1)
-                .any(|line| line.ends_with("  succeeded"))
-        );
-    }
-
-    // Test-ID: PR-TEST-0126
-    // Verifies: PR-REQ-0049, PR-REQ-0286
-    #[test]
-    fn admission_retry_keeps_the_exact_run_with_a_broken_diagnostic_writer() {
-        let (_temporary, storage, expected_path, sensitive_path) = prepared_cli_hook_instance();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        crate::executor::fail_next_admission_for_test();
-        let marker = storage.parent().unwrap().join("admission-retry-marker");
-        let mut stdout = Vec::new();
-        let mut broken_stderr = PrefixFailWriter {
-            bytes: Vec::new(),
-            remaining: 0,
-        };
-        assert_eq!(
-            run(
-                successful_invoke_args(&marker, &expected_path, &sensitive_path),
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut broken_stderr,
-            ),
-            1
-        );
-        assert!(marker.with_extension("session").exists());
-
-        let mut listing = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "run".into(),
-                    "list".into(),
-                    "node".into(),
-                    "--no-trunc".into()
-                ],
-                storage_env,
-                &mut io::empty(),
-                &mut listing,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let listing = String::from_utf8_lossy(&listing);
-        let rows: Vec<_> = listing
-            .lines()
-            .skip(1)
-            .take_while(|line| !line.is_empty())
-            .collect();
-        assert_eq!(rows.len(), 1);
-        assert!(rows[0].ends_with("  succeeded"));
-    }
-
-    // Test-ID: PR-TEST-0127
-    // Verifies: PR-REQ-0052, PR-REQ-0286
-    #[test]
-    fn repeated_finalization_failures_keep_owner_until_terminal_commit() {
-        let (_temporary, storage, expected_path, sensitive_path) = prepared_cli_hook_instance();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let faults = crate::application::fail_next_finalization_advances_for_test(3);
-        let marker = storage.parent().unwrap().join("finalization-retry-marker");
-        let mut stdout = Vec::new();
-        let mut broken_stderr = PrefixFailWriter {
-            bytes: Vec::new(),
-            remaining: 0,
-        };
-        assert_eq!(
-            run(
-                successful_invoke_args(&marker, &expected_path, &sensitive_path),
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut broken_stderr,
-            ),
-            1
-        );
-        assert_eq!(faults.load(std::sync::atomic::Ordering::SeqCst), 0);
-        assert!(marker.with_extension("session").exists());
-
-        let runs = json_ok(&storage, &["run", "list", "node"]);
-        assert_eq!(runs["items"].as_array().unwrap().len(), 1);
-        assert_eq!(runs["items"][0]["state"]["phase"], "finished");
-        assert_eq!(runs["items"][0]["state"]["outcome"], "succeeded");
-    }
-
-    // Test-ID: PR-TEST-0078
-    // Verifies: PR-REQ-0092, PR-REQ-0119, PR-REQ-0263, PR-REQ-0266, PR-REQ-0268, PR-REQ-0271
-    #[test]
-    fn cli_install_instance_secret_export_and_atomic_no_clobber_are_end_to_end() {
-        let (_temporary, storage, source) = cli_roots();
-        let storage_env = Some(storage.as_os_str().to_owned());
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        assert_eq!(
-            run(
-                vec![
-                    "--format".into(),
-                    "json".into(),
-                    "pack".into(),
-                    "install".into(),
-                    source.into_os_string()
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        let revision = installed_reference(&stdout);
-        assert!(revision.starts_with("exact:"));
-
-        let config_path = storage.parent().unwrap().join("config.bin");
-        fs::write(&config_path, b"configuration").unwrap();
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "instance".into(),
-                    "create".into(),
-                    "node".into(),
-                    "--revision".into(),
-                    revision.into(),
-                    "--input-file".into(),
-                    format!("config={}", config_path.display()).into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        assert!(!String::from_utf8_lossy(&stdout).contains("configuration"));
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec!["instance".into(), "show".into(), "Node".into()],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            1
-        );
-
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "input".into(),
-                    "set".into(),
-                    "node".into(),
-                    "secret".into(),
-                    "--stdin".into(),
-                ],
-                storage_env.clone(),
-                &mut io::Cursor::new(b"top-secret"),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "input".into(),
-                    "export".into(),
-                    "node".into(),
-                    "secret".into(),
-                    "--output".into(),
-                    "-".into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            1
-        );
-        assert!(stdout.is_empty());
-
-        stdout.clear();
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "input".into(),
-                    "export".into(),
-                    "node".into(),
-                    "secret".into(),
-                    "--output".into(),
-                    "-".into(),
-                    "--authorize-secret-export".into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        assert_eq!(stdout, b"top-secret");
-
-        let mut partial = PrefixFailWriter {
-            bytes: Vec::new(),
-            remaining: 3,
-        };
-        stderr.clear();
-        assert_eq!(
-            run(
-                vec![
-                    "input".into(),
-                    "export".into(),
-                    "node".into(),
-                    "secret".into(),
-                    "--output".into(),
-                    "-".into(),
-                    "--authorize-secret-export".into(),
-                ],
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut partial,
-                &mut stderr,
-            ),
-            1
-        );
-        assert_eq!(partial.bytes, b"top");
-
-        let output = storage.parent().unwrap().join("export.bin");
-        stdout.clear();
-        stderr.clear();
-        let export_args = vec![
-            "input".into(),
-            "export".into(),
-            "node".into(),
-            "secret".into(),
-            "--output".into(),
-            output.as_os_str().to_owned(),
-            "--authorize-secret-export".into(),
-        ];
-        assert_eq!(
-            run(
-                export_args.clone(),
-                storage_env.clone(),
-                &mut io::empty(),
-                &mut stdout,
-                &mut stderr,
-            ),
-            0,
-            "{}",
-            String::from_utf8_lossy(&stderr)
-        );
-        assert_eq!(fs::read(&output).unwrap(), b"top-secret");
-        assert_eq!(
-            run(
-                export_args,
-                storage_env,
-                &mut io::empty(),
-                &mut Vec::new(),
-                &mut Vec::new(),
-            ),
-            1
-        );
-        assert_eq!(fs::read(&output).unwrap(), b"top-secret");
-
-        let staging = crate::managed_data::StagingSession::open(&storage).unwrap();
-        let staged = staging
-            .stage_managed_input(&mut io::Cursor::new(b"publication-window"))
-            .unwrap();
-        let before = storage.parent().unwrap().join("before-publication.bin");
-        assert!(
-            publish_output_file_with_fault(&staged, &before, |point| {
-                if point == OutputPublicationPoint::BeforeFinalNamePublication {
-                    Err(CliError::operation("injected pre-publication failure"))
-                } else {
-                    Ok(())
-                }
-            })
-            .is_err()
-        );
-        assert!(!before.exists());
-        assert!(
-            !fs::read_dir(before.parent().unwrap())
-                .unwrap()
-                .any(|entry| {
-                    entry
-                        .ok()
-                        .and_then(|entry| entry.file_name().into_string().ok())
-                        .is_some_and(|name| {
-                            name.starts_with(".pactrun-export-") && name.ends_with(".tmp")
-                        })
-                })
-        );
-
-        let after = storage.parent().unwrap().join("after-publication.bin");
-        assert!(
-            publish_output_file_with_fault(&staged, &after, |point| {
-                if point == OutputPublicationPoint::AfterFinalNamePublication {
-                    Err(CliError::operation("injected post-publication failure"))
-                } else {
-                    Ok(())
-                }
-            })
-            .is_err()
-        );
-        assert_eq!(fs::read(after).unwrap(), b"publication-window");
-    }
-}
+mod tests;

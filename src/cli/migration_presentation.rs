@@ -61,12 +61,25 @@ struct Edge {
     target: presentation::Revision,
     service: Option<Service>,
     operator_inputs: Vec<String>,
-    requires_source: Vec<InputReference>,
-    requires_target: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires_source: Option<Vec<InputReference>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires_target: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_inputs: Option<machine::BindingInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target_inputs: Option<machine::ActiveInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<Vec<execution_presentation::PlanParameter>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_requirements: Option<Vec<machine::Assessment>>,
     transitions: Vec<Transition>,
     mandatory_hook_outputs: Vec<String>,
     hook_present: bool,
-    predicted_required_inputs_satisfied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    predicted_required_inputs_satisfied: Option<bool>,
 }
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -125,6 +138,46 @@ enum Scope {
     Storage { storage_id: String },
 }
 impl Plan {
+    pub(super) fn with_version(
+        mut self,
+        plan: &MigrationExecutionPlan,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        for (index, (value, edge)) in self.edges.iter_mut().zip(plan.edges()).enumerate() {
+            if version == machine::Version::Legacy && edge.source_inputs.is_some() {
+                return Err(CliError::operation(
+                    "machine interface 1.0-alpha.3 cannot represent this Migration; select --machine-version 1.0-alpha.4",
+                ));
+            }
+            if version == machine::Version::Operations {
+                value.predicted_required_inputs_satisfied = None;
+                value.input_requirements =
+                    Some(vec![machine::Assessment::migration(edge, index > 0)]);
+                value.parameters = Some(
+                    edge.parameters
+                        .iter()
+                        .map(|parameter| execution_presentation::PlanParameter {
+                            parameter_id: parameter.id.as_str().into(),
+                            effective_redaction: parameter.effective_redaction,
+                        })
+                        .collect(),
+                );
+                value.output_ids = Some(
+                    edge.outputs
+                        .iter()
+                        .map(|output| output.as_str().into())
+                        .collect(),
+                );
+                value.source_inputs = edge.source_inputs.as_ref().map(Into::into);
+                value.target_inputs = edge.target_inputs.as_ref().map(Into::into);
+                if value.source_inputs.is_some() {
+                    value.requires_source = None;
+                    value.requires_target = None;
+                }
+            }
+        }
+        Ok(self)
+    }
     pub(super) fn new(
         id: &MigrationPathId,
         plan: &MigrationExecutionPlan,
@@ -145,6 +198,11 @@ impl Plan {
                 .map(|e| {
                     let b = &e.bindings;
                     Edge {
+                        source_inputs: None,
+                        target_inputs: None,
+                        parameters: None,
+                        output_ids: None,
+                        input_requirements: None,
                         source: b.source().into(),
                         target: b.target().into(),
                         operator_inputs: plan
@@ -153,18 +211,20 @@ impl Plan {
                             .filter(|i| i.revision == b.target().content_digest)
                             .map(|i| i.input.as_str().into())
                             .collect(),
-                        requires_source: b
-                            .declaration()
-                            .requires_source
-                            .iter()
-                            .map(Into::into)
-                            .collect(),
-                        requires_target: b
-                            .declaration()
-                            .requires_target
-                            .iter()
-                            .map(|i| i.as_str().into())
-                            .collect(),
+                        requires_source: Some(
+                            b.declaration()
+                                .requires_source
+                                .iter()
+                                .map(Into::into)
+                                .collect(),
+                        ),
+                        requires_target: Some(
+                            b.declaration()
+                                .requires_target
+                                .iter()
+                                .map(|i| i.as_str().into())
+                                .collect(),
+                        ),
                         transitions: b
                             .declaration()
                             .transitions
@@ -187,7 +247,7 @@ impl Plan {
                             .map(|i| i.as_str().into())
                             .collect(),
                         hook_present: e.launch.is_some(),
-                        predicted_required_inputs_satisfied: b.required_inputs_satisfied(),
+                        predicted_required_inputs_satisfied: Some(b.required_inputs_satisfied()),
                         service: e.service.as_ref().map(|s| Service {
                             transform: s.transform,
                             live_observation: "not_performed",

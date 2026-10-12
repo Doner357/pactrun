@@ -826,7 +826,7 @@ pub(crate) fn validate_revision_sources_v1(
     })
 }
 
-fn normalize_parameters(parameters: &mut [ParameterV1]) -> Result<(), RevisionError> {
+pub(super) fn normalize_parameters(parameters: &mut [ParameterV1]) -> Result<(), RevisionError> {
     for parameter in parameters.iter() {
         let matches = matches!(
             (parameter.parameter_type, parameter.default.as_ref()),

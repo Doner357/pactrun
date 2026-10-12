@@ -12,7 +12,11 @@ Start with the [Pack field guide](./pack-fields.md) for task-oriented explanatio
 
 ## Supported baseline
 
-The only supported source marker is the string `source_format: "1.0-alpha.2"`.
+The separate [operation-scoped Source contract](./operation-format.md) defines
+`1.0-alpha.3`. This page defines `1.0-alpha.2` only;
+its defaults and global required semantics remain unchanged.
+
+The source marker for this contract is the string `source_format: "1.0-alpha.2"`.
 Quoted and plain spellings of this string are accepted. Numeric markers are
 rejected without fallback. The author supplies no Core format field;
 the projector inserts the supported canonical string and normalizes the complete

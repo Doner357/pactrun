@@ -40,6 +40,7 @@ pub(super) enum MigrationCommand {
         authorize: bool,
         override_guard: bool,
         inputs: Vec<(InputTarget, PathBuf)>,
+        parameters: Vec<ParameterTarget>,
         policy: HookRuntimePolicy,
         resolved_instance: Option<InstanceId>,
     },
@@ -50,12 +51,24 @@ pub(super) struct InputTarget {
     revision: Selector<RevisionContentDigest>,
     input: InputIdentity,
 }
+pub(super) struct ParameterTarget {
+    revision: Selector<RevisionContentDigest>,
+    source: ParameterSourceSpec,
+}
 impl MigrationCommand {
     pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
         let scoped = match self {
             Self::List { after, .. } => matches!(after, Some(Selector::Prefix(_))),
-            Self::Plan { path, inputs, .. } => {
+            Self::Plan {
+                path,
+                inputs,
+                parameters,
+                ..
+            } => {
                 matches!(path, Some(Selector::Prefix(_)))
+                    || parameters
+                        .iter()
+                        .any(|p| matches!(p.revision, Selector::Prefix(_)))
                     || inputs
                         .iter()
                         .any(|(i, _)| matches!(i.revision, Selector::Prefix(_)))
@@ -117,15 +130,22 @@ impl MigrationCommand {
             )?;
             *path = Some(Selector::Full(selected.parse().map_err(migration_error)?));
         }
-        if let Self::Plan { inputs, .. } = self {
-            for (key, _) in inputs.iter_mut() {
-                if let Selector::Prefix(prefix) = &key.revision {
+        if let Self::Plan {
+            inputs, parameters, ..
+        } = self
+        {
+            for revision in inputs
+                .iter_mut()
+                .map(|(key, _)| &mut key.revision)
+                .chain(parameters.iter_mut().map(|p| &mut p.revision))
+            {
+                if let Selector::Prefix(prefix) = revision {
                     let mut candidates: Vec<_> = observation
                         .revisions
                         .iter()
                         .filter(|r| r.identity.package_id == observation.active_revision.package_id)
                         .map(|r| r.identity.content_digest.to_string())
-                        .filter(|s| s[7..].starts_with(prefix))
+                        .filter(|s| s[7..].starts_with(prefix.as_str()))
                         .take(21)
                         .collect();
                     let has_more = candidates.len() > 20;
@@ -138,13 +158,22 @@ impl MigrationCommand {
                             has_more,
                         },
                     )?;
-                    key.revision = Selector::Full(selected.parse().map_err(CliError::usage)?);
+                    *revision = Selector::Full(selected.parse().map_err(CliError::usage)?);
                 }
             }
             let mut seen = std::collections::BTreeSet::new();
             for (key, _) in inputs {
                 if !seen.insert((key.revision.clone().full(), key.input.clone())) {
                     return Err(CliError::usage("duplicate Migration target Input"));
+                }
+            }
+            let mut seen_parameters = BTreeSet::new();
+            for parameter in parameters {
+                if !seen_parameters.insert((
+                    parameter.revision.clone().full(),
+                    parameter.source.id().clone(),
+                )) {
+                    return Err(CliError::usage("duplicate Migration edge parameter"));
                 }
             }
         }
@@ -190,10 +219,60 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     let mut no_retain_hook_text = false;
     let mut cancel_on_output_close = false;
     let mut inputs = Vec::new();
+    let mut parameters: Vec<ParameterTarget> = Vec::new();
     let mut no_trunc = false;
     let (mut startup, mut execution, mut grace) = (None, None, None);
     while let Some(argument) = parser.next().map_err(lex_error)? {
         match argument {
+            Arg::Long(option @ ("param" | "param-file" | "param-stdin")) if !listing => {
+                let option = option.to_owned();
+                let (target, source) = if option == "param-stdin" {
+                    (
+                        required_value_string(parser, "Migration parameter target")?,
+                        None,
+                    )
+                } else {
+                    let value = required_parser_value(parser, "Migration parameter assignment")?;
+                    let (target, value) = split_parameter_assignment(
+                        value,
+                        &format!("--{option}"),
+                        option == "param",
+                    )?;
+                    (target, Some(value))
+                };
+                let (revision, id) = target.split_once('/').ok_or_else(|| {
+                    CliError::usage("Migration parameters require <target-digest>/<parameter-id>")
+                })?;
+                let id = parse_parameter_id(id)?;
+                let revision = revision.parse()?;
+                let source = match option.as_str() {
+                    "param" => ParameterSourceSpec::Text(
+                        id,
+                        os_string(source.expect("text assignment"), "parameter text")?,
+                    ),
+                    "param-file" => ParameterSourceSpec::File(
+                        id,
+                        PathBuf::from(source.expect("file assignment")),
+                    ),
+                    _ => ParameterSourceSpec::Stdin(id),
+                };
+                if parameters
+                    .iter()
+                    .any(|p| p.revision == revision && p.source.id() == source.id())
+                {
+                    return Err(CliError::usage("duplicate Migration edge parameter"));
+                }
+                if matches!(source, ParameterSourceSpec::Stdin(_))
+                    && parameters
+                        .iter()
+                        .any(|p| matches!(p.source, ParameterSourceSpec::Stdin(_)))
+                {
+                    return Err(CliError::usage(
+                        "only one --param-stdin source is allowed per Migration",
+                    ));
+                }
+                parameters.push(ParameterTarget { revision, source });
+            }
             Arg::Long("no-trunc") if listing && !no_trunc => no_trunc = true,
             Arg::Long("cancel-on-output-close") if !listing && !cancel_on_output_close => {
                 cancel_on_output_close = true
@@ -278,6 +357,7 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
             authorize,
             override_guard,
             inputs,
+            parameters,
             policy: HookRuntimePolicy::from_millis(startup, execution, grace.or(Some(5_000)))
                 .map_err(CliError::usage)?,
         })
@@ -290,9 +370,101 @@ fn migration_error(error: MigrationError) -> CliError {
     CliError::operation(error.to_string())
 }
 
+fn read_migration_parameters(
+    revisions: &[MigrationRevision],
+    selected: &[RevisionIdentity],
+    supplied: Vec<ParameterTarget>,
+    stdin: &mut dyn Read,
+    cancellation: &ActionCancellation,
+) -> Result<Vec<MigrationParameterInput>, CliError> {
+    let mut groups: std::collections::BTreeMap<MigrationEdgeIdentity, Vec<ParameterSourceSpec>> =
+        Default::default();
+    let has_stdin = supplied
+        .iter()
+        .any(|p| matches!(p.source, ParameterSourceSpec::Stdin(_)));
+    for input in supplied {
+        let target = input.revision.full();
+        let pair = selected
+            .windows(2)
+            .find(|pair| pair[1].content_digest == target)
+            .ok_or_else(|| migration_error(MigrationError::InvalidParameterTarget))?;
+        groups
+            .entry(MigrationEdgeIdentity {
+                source: pair[0].content_digest,
+                target,
+            })
+            .or_default()
+            .push(input.source);
+    }
+    let mut contexts = Vec::new();
+    for pair in selected.windows(2) {
+        let scope = MigrationEdgeIdentity {
+            source: pair[0].content_digest,
+            target: pair[1].content_digest,
+        };
+        let target = revisions
+            .iter()
+            .find(|r| r.identity == pair[1])
+            .ok_or_else(|| migration_error(MigrationError::MissingRevision))?;
+        let digest = Sha256Digest::from_bytes(*pair[0].content_digest.as_bytes());
+        let site = ServiceHookSite::Migration(digest.clone());
+        let declarations = target
+            .content
+            .core
+            .parameters(&site)
+            .ok_or_else(|| migration_error(MigrationError::InvalidEdge))?;
+        let hook = target
+            .content
+            .core
+            .migration_declaration(&digest)
+            .ok_or_else(|| migration_error(MigrationError::InvalidEdge))?
+            .hook;
+        let terminal = hook
+            .as_ref()
+            .map_or(TerminalContractV1::None, |hook| hook.io.terminal);
+        if has_stdin && terminal == TerminalContractV1::Interactive {
+            return Err(CliError::usage(
+                "Migration paths with interactive Hooks do not accept --param-stdin",
+            ));
+        }
+        let sources = groups.remove(&scope).unwrap_or_default();
+        validate_parameter_source_shape(&sources)?;
+        for source in &sources {
+            if !declarations.iter().any(|p| &p.id == source.id()) {
+                return Err(migration_error(MigrationError::Parameters {
+                    edge: scope.clone(),
+                    error: ActionResolutionError::UnknownParameter(source.id().clone()),
+                }));
+            }
+        }
+        for declaration in declarations {
+            if declaration.default.is_none() && !sources.iter().any(|p| p.id() == &declaration.id) {
+                return Err(migration_error(MigrationError::Parameters {
+                    edge: scope.clone(),
+                    error: ActionResolutionError::MissingParameter(declaration.id.clone()),
+                }));
+            }
+        }
+        contexts.push((scope, declarations, terminal, sources));
+    }
+    let mut result = Vec::new();
+    for (scope, declarations, terminal, sources) in contexts {
+        for parameter in
+            read_operation_parameter_sources(declarations, terminal, &sources, stdin, cancellation)?
+        {
+            result.push(MigrationParameterInput {
+                edge: scope.clone(),
+                parameter,
+            });
+        }
+    }
+    Ok(result)
+}
+
 pub(super) fn execute(
     command: MigrationCommand,
     root: &Path,
+    stdin: &mut dyn Read,
     cancellation: &ActionCancellation,
     format: reply::OutputContext,
 ) -> Result<(), CliError> {
@@ -374,6 +546,7 @@ pub(super) fn execute(
             plan: plan_only,
             override_guard,
             inputs,
+            parameters,
             policy,
             ..
         } => {
@@ -429,15 +602,34 @@ pub(super) fn execute(
                 },
             };
             let id = MigrationPathId::for_path(&selected).map_err(migration_error)?;
-            let intent = TransitionRevision {
+            for revision in &selected {
+                let node = observation
+                    .revisions
+                    .iter()
+                    .find(|node| &node.identity == revision)
+                    .ok_or_else(|| migration_error(MigrationError::MissingRevision))?;
+                format.version().require_core(&node.content.core)?;
+            }
+            let mut intent = TransitionRevision {
+                parameters: Vec::new(),
                 instance,
                 expected_state_version: observation.state_version,
-                source: observation.active_revision,
+                source: observation.active_revision.clone(),
                 target,
-                path: MigrationPathSelection::Exact(selected),
+                path: MigrationPathSelection::Exact(selected.clone()),
                 operator_inputs: inputs.iter().map(|(key, _)| key.clone()).collect(),
                 authorize_declassification: authorize,
             };
+            // Validate the symbolic chain before opening parameter sources.
+            build_migration_binding_plan(&intent, &observation.revisions, &observation.bindings)
+                .map_err(migration_error)?;
+            intent.parameters = read_migration_parameters(
+                &observation.revisions,
+                &selected,
+                parameters,
+                stdin,
+                cancellation,
+            )?;
             let plan = crate::workflow::compile_migration(
                 &app,
                 &crate::workflow::PlatformHostLauncherLookup,
@@ -501,7 +693,10 @@ pub(super) fn execute(
                 cancellation.diagnostics.finish();
                 let inspection=writer.managed_run_inspection(run).map_err(|error|app_error(error).with_run_context(run))?.ok_or_else(||CliError::operation("Migration acceptance was proven absent; no replacement Run was created").with_run_context(run))?;
                 {
-                    let result = execution_presentation::Inspection::from(&inspection);
+                    let result = execution_presentation::Inspection::for_version(
+                        &inspection,
+                        format.version(),
+                    )?;
                     if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
                     {
                         let current = writer
@@ -511,12 +706,23 @@ pub(super) fn execute(
                                 CliError::operation("Instance disappeared after Migration")
                                     .with_run_context(run)
                             })?;
+                        let definitions = app
+                            .inspect_revision_definitions(std::slice::from_ref(
+                                &current.active_revision,
+                            ))
+                            .map_err(|error| app_error(error).with_run_context(run))?;
+                        let definition=definitions.first().ok_or_else(||CliError::operation("Revision definition unavailable after Migration; inspect the retained Run").with_run_context(run))?;
                         return presentation::emit_result(
                             format,
                             "instance migrate",
                             &migration_presentation::Completed {
                                 inspection: result,
-                                current_instance: (&current).into(),
+                                current_instance: presentation::Instance::for_version(
+                                    &current,
+                                    &definition.core,
+                                    format.version(),
+                                )
+                                .map_err(|error| error.with_run_context(run))?,
                             },
                         );
                     }
@@ -545,7 +751,8 @@ pub(super) fn execute(
                     format,
                     "instance migrate",
                     &capability_presentation::Presented {
-                        value: migration_presentation::Plan::new(&id, &plan, &policy),
+                        value: migration_presentation::Plan::new(&id, &plan, &policy)
+                            .with_version(&plan, format.version())?,
                         presentation: author,
                     },
                 )
@@ -557,6 +764,58 @@ pub(super) fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Test-ID: PR-TEST-0719
+    // Verifies: PR-REQ-0390
+    #[test]
+    fn migration_parameter_sources_are_edge_scoped_and_stdin_is_single_use() {
+        let a = format!("sha256:{}", "1".repeat(64));
+        let b = format!("sha256:{}", "2".repeat(64));
+        let run = |args: Vec<String>| {
+            let mut parser = Parser::from_args(
+                ["demo".to_owned(), "--to".to_owned(), "app:next".to_owned()]
+                    .into_iter()
+                    .chain(args),
+            );
+            parse(&mut parser, false)
+        };
+        let MigrationCommand::Plan { parameters, .. } = run(vec![
+            "--param".into(),
+            format!("{a}/mode=false"),
+            "--param-file".into(),
+            format!("{b}/mode=directory/private=file"),
+        ])
+        .unwrap() else {
+            panic!("plan");
+        };
+        assert_eq!(parameters.len(), 2);
+        assert_eq!(parameters[0].source.id().as_str(), "mode");
+        assert!(
+            matches!(&parameters[0].source,ParameterSourceSpec::Text(_,value) if value=="false")
+        );
+        assert!(
+            matches!(&parameters[1].source,ParameterSourceSpec::File(_,path) if path==Path::new("directory/private=file"))
+        );
+        assert!(
+            run(vec![
+                "--param".into(),
+                format!("{a}/mode=false"),
+                "--param".into(),
+                format!("{a}/mode=true")
+            ])
+            .is_err()
+        );
+        assert!(
+            run(vec![
+                "--param-stdin".into(),
+                format!("{a}/mode"),
+                "--param-stdin".into(),
+                format!("{b}/mode")
+            ])
+            .is_err()
+        );
+        assert!(run(vec!["--param".into(), "mode=false".into()]).is_err());
+    }
 
     // Test-ID: PR-TEST-0324
     // Verifies: PR-REQ-0315, PR-REQ-0307

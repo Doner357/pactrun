@@ -4,6 +4,11 @@ title: Inputs, Secrets, and Readiness
 
 # Inputs, Secrets, and Readiness
 
+Global readiness and required-binding removal below describe implemented
+Revision `1.0-alpha.1`. Revision `1.0-alpha.2`
+uses [operation requirements and grants](../operations/input-authority.md),
+without changing Input ownership or independent Secret protection.
+
 ## Persistent and execution data scopes
 
 Pactrun keeps ownership and lifetime explicit:

@@ -244,7 +244,7 @@ fn alpha3_real_run_history_survives_upgrade_without_invented_core_events() {
     let before: Value = serde_json::from_slice(&output.stdout).unwrap();
     let run = before["result"]["run"]["run_id"].as_str().unwrap();
     let db = rusqlite::Connection::open(scenario.storage.join("database/pactrun.sqlite3")).unwrap();
-    db.execute_batch("PRAGMA foreign_keys=ON; DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
+    db.execute_batch("PRAGMA foreign_keys=ON; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
     let old = include_str!("../../src/persistence/persistence_alpha3.sql");
     let admission = old
         .split_once("CREATE TABLE writable_admissions (")

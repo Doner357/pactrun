@@ -178,7 +178,7 @@ fn render(help: &Help) -> String {
             text,
             "  {path} {}<command> [options]",
             if help.scope.is_empty() {
-                "[--format human|json|jsonl] "
+                "[--format human|json|jsonl] [--machine-version <version>] "
             } else {
                 ""
             }

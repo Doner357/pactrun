@@ -4,6 +4,13 @@ title: Snapshot Capture and Restore Execution
 
 # Snapshot Capture and Restore Execution
 
+The global Capture requirement, exact producer equality and bound-required
+Restore removal restriction below describe implemented Revision `1.0-alpha.1`.
+Revision `1.0-alpha.2` uses
+[operation requirements](../operations/input-authority.md) and
+[the same exact Revision restriction](./restore-compatibility.md). Other atomic
+publication and recovery obligations remain applicable.
+
 Capture and Restore share Run ownership and admission machinery, but have
 different access and commit rules. Capture publishes a new Snapshot; Restore
 replaces the target Instance's managed state after exact compatibility and

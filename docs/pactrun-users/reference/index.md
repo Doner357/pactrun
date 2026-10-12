@@ -21,7 +21,7 @@ If you are new, complete [installation](../../guides/installation.md) and the
 | Inspect or obtain an allowed service location | [Resource details](./resource-details.md) |
 | Delete, abandon, or resolve a deletion attempt | [Retirement and recovery](./retirement-details.md) |
 | Delete retained Runs, Artifacts, Snapshots, or Revisions | [Retained objects and GC](./object-lifecycle.md) |
-| Automate safely | [JSON/JSONL reference](./machine-output.md), [response schema](./cli-machine.schema.json), [event schema](./cli-events.schema.json) |
+| Automate safely | [Current JSON/JSONL reference](./operation-output.md), [legacy interface](./machine-output.md), [response schema](./cli-machine.schema.json), [event schema](./cli-events.schema.json) |
 
 The advanced references are synchronized views of the same product rules, not
 separately maintained alternatives. Their optional source panels are for tracing

@@ -19,6 +19,15 @@ pub(super) fn parse_source(bytes: &[u8]) -> Result<VersionedPackSourceCandidate,
     crate::domain::VersionDomain::PackSource
         .require(&version)
         .map_err(AuthoringError::new)?;
+    if version == crate::domain::OPERATION_SOURCE_FORMAT {
+        let candidate = super::operation::parse(bytes)?;
+        return Ok(VersionedPackSourceCandidate {
+            package_id: candidate.package_id,
+            revision: candidate.revision.into(),
+            runtime_sources: candidate.runtime_sources,
+            portable_metadata: candidate.portable_metadata,
+        });
+    }
     let mut root = closed_map(
         document,
         &["source_format", "package_id", "revision", "runtime_content"],
@@ -54,10 +63,14 @@ pub(super) fn parse_source(bytes: &[u8]) -> Result<VersionedPackSourceCandidate,
     })
 }
 
-fn hook_defaults(node: &mut Node) -> Result<(), AuthoringError> {
+fn hook_defaults(node: &mut Node, operation: bool) -> Result<(), AuthoringError> {
     let owner = mapping_mut(node, "Hook owner")?;
     if let Some(hook) = owner.get_mut("hook") {
         let hook = mapping_mut(hook, "Hook")?;
+        if operation {
+            hook.entry("protocol_version".into())
+                .or_insert_with(|| plain(crate::domain::OPERATION_HOOK_FORMAT));
+        }
         for key in ["service_access", "service_requires"] {
             hook.entry(key.into())
                 .or_insert_with(|| Node::Sequence(vec![]));
@@ -66,6 +79,37 @@ fn hook_defaults(node: &mut Node) -> Result<(), AuthoringError> {
     Ok(())
 }
 fn revision_v2_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
+    revision_json(source, node, false)
+}
+
+pub(super) fn operation_revision_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
+    revision_json(source, node, true)
+}
+
+fn input_defaults(node: &mut Node, key: &str) -> Result<(), AuthoringError> {
+    let owner = mapping_mut(node, "operation")?;
+    let uses = owner
+        .entry(key.into())
+        .or_insert_with(|| Node::Mapping(BTreeMap::new()));
+    let uses = mapping_mut(uses, "Input use")?;
+    for key in ["required", "optional"] {
+        uses.entry(key.into())
+            .or_insert_with(|| Node::Sequence(vec![]));
+    }
+    Ok(())
+}
+
+fn common_capability_defaults(node: &mut Node) -> Result<(), AuthoringError> {
+    let owner = mapping_mut(node, "operation")?;
+    for key in ["parameters", "outputs"] {
+        owner
+            .entry(key.into())
+            .or_insert_with(|| Node::Sequence(vec![]));
+    }
+    Ok(())
+}
+
+fn revision_json(source: &str, node: Node, operation: bool) -> Result<Value, AuthoringError> {
     let mut revision = closed_map(
         node,
         &[],
@@ -94,7 +138,9 @@ fn revision_v2_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
     if let Some(Node::Sequence(inputs)) = revision.get_mut("inputs") {
         for input in inputs {
             let o = mapping_mut(input, "Input")?;
-            o.entry("required".into()).or_insert_with(|| plain("false"));
+            if !operation {
+                o.entry("required".into()).or_insert_with(|| plain("false"));
+            }
             o.entry("protection".into())
                 .or_insert_with(|| plain("normal"));
         }
@@ -111,23 +157,41 @@ fn revision_v2_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
     }
     if let Some(Node::Sequence(actions)) = revision.get_mut("actions") {
         for a in actions {
-            hook_defaults(a)?;
+            hook_defaults(a, operation)?;
+            if operation {
+                input_defaults(a, "inputs")?;
+            }
         }
     }
     if let Some(snapshot) = revision.get_mut("snapshot") {
         let s = mapping_mut(snapshot, "Snapshot capability")?;
         for key in ["capture", "restore"] {
             if let Some(op) = s.get_mut(key) {
-                hook_defaults(op)?;
+                hook_defaults(op, operation)?;
+                if operation {
+                    input_defaults(op, "inputs")?;
+                    mapping_mut(op, "Snapshot operation")?
+                        .entry("outputs".into())
+                        .or_insert_with(|| Node::Sequence(vec![]));
+                }
             }
         }
     }
     if let Some(cleanup) = revision.get_mut("cleanup") {
-        hook_defaults(cleanup)?;
+        hook_defaults(cleanup, operation)?;
+        if operation {
+            input_defaults(cleanup, "inputs")?;
+            common_capability_defaults(cleanup)?;
+        }
     }
     if let Some(Node::Sequence(migrations)) = revision.get_mut("migrations") {
         for m in migrations {
-            hook_defaults(m)?;
+            hook_defaults(m, operation)?;
+            if operation {
+                input_defaults(m, "source_inputs")?;
+                input_defaults(m, "target_inputs")?;
+                common_capability_defaults(m)?;
+            }
             let o = mapping_mut(m, "Migration")?;
             for key in ["storage_transitions", "resource_transitions"] {
                 o.entry(key.into())
@@ -138,7 +202,14 @@ fn revision_v2_json(source: &str, node: Node) -> Result<Value, AuthoringError> {
     let mut json = Map::new();
     json.insert(
         "format_version".into(),
-        Value::String(crate::domain::VersionDomain::Revision.current_text().into()),
+        Value::String(
+            if operation {
+                crate::domain::OPERATION_CORE_FORMAT
+            } else {
+                "1.0-alpha.1"
+            }
+            .into(),
+        ),
     );
     for (key, node) in revision {
         json.insert(key, node_to_json(source, node, None)?);
@@ -159,7 +230,7 @@ mod tests {
         let candidate = super::super::parse_pack_source_yaml(text.as_bytes()).unwrap();
         assert_eq!(
             candidate.revision.version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
         assert!(matches!(
             candidate.revision.actions()[0].hook.launch,
@@ -197,7 +268,7 @@ mod tests {
     #[test]
     fn baseline_defaults_are_typed_and_development_sources_are_refused() {
         let candidate = parse_pack_source_yaml(BASIC.as_bytes()).unwrap();
-        let r = &candidate.revision.0.resources()[0];
+        let r = &candidate.revision.service_core().unwrap().resources()[0];
         assert_eq!(r.read_exposure, ServiceReadExposure::Hidden);
         assert_eq!(r.user_mutation, ServiceUserMutation::Unavailable);
         assert_eq!(r.locator.as_str(), "Config.json");
@@ -208,7 +279,7 @@ mod tests {
             "3",
             "\"1.0\"",
             "\"1.0-alpha.1\"",
-            "\"1.0-alpha.3\"",
+            "\"1.0-alpha.4\"",
         ] {
             assert!(
                 parse_pack_source_yaml(
@@ -224,7 +295,8 @@ mod tests {
         }
         assert_eq!(
             serde_json::from_slice::<Value>(
-                &encode_canonical_service_revision(&candidate.revision.0).unwrap()
+                &encode_canonical_service_revision(candidate.revision.service_core().unwrap())
+                    .unwrap()
             )
             .unwrap()["format_version"],
             "1.0-alpha.1"
@@ -247,14 +319,14 @@ mod tests {
                 .unwrap()
                 .revision
                 .version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
         assert_eq!(
             super::parse_pack_source_yaml(BASIC.as_bytes())
                 .unwrap()
                 .revision
                 .version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
         let bytes = crate::revision_content::encode_canonical_revision_core(&v1.revision).unwrap();
         assert_eq!(
@@ -273,7 +345,14 @@ mod tests {
             &format!("{actions}  service_storages:"),
         );
         let candidate = parse_pack_source_yaml(source.as_bytes()).unwrap();
-        let h = candidate.revision.0.hooks().values().next().unwrap();
+        let h = candidate
+            .revision
+            .service_core()
+            .unwrap()
+            .hooks()
+            .values()
+            .next()
+            .unwrap();
         assert!(h.access.is_empty() && h.requires.is_empty());
         assert_eq!(
             candidate.revision.common().actions()[0].parameters[0].default,
@@ -306,11 +385,12 @@ mod tests {
     // Verifies: PR-REQ-0331
     #[test]
     fn unsupported_source_header_is_selected_before_interpreting_future_body_fields() {
-        let error = super::parse_source(b"source_format: 1.0-alpha.3\nfuture_body: {}\n")
+        let error = super::parse_source(b"source_format: 1.0-alpha.4\nfuture_body: {}\n")
             .unwrap_err()
             .to_string();
         for part in [
             "pack_source",
+            "1.0-alpha.4",
             "1.0-alpha.3",
             "1.0-alpha.2",
             "supporting release",

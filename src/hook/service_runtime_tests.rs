@@ -149,7 +149,7 @@ fn real_core_v1_action_selects_v2_with_unchanged_common_authority_and_durable_ri
     assert_eq!(running_risk(&fixture.storage, run), RecoveryRiskState::Clear);
     assert!(fixture.application.advance_owner_continuation(run).unwrap());
     assert!(matches!(load_run(&fixture.storage, run).state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded));
-    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::VersionDomain::Revision.current());
+    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::FormatVersion::BASELINE);
     assert!(!fixture.storage.join("service-storage").exists());
 }
 
@@ -165,6 +165,6 @@ fn installed_core_v2_can_execute_unchanged_v1_hook_without_service_authority() {
     fixture.application.execute_admitted_action(admitted, policy(None, None, None), ActionCancellation::default());
     assert!(fixture.application.advance_owner_continuation(run).unwrap());
     assert!(matches!(load_run(&fixture.storage, run).state, RunState::Finished(outcome) if outcome.outcome == RunOutcome::Succeeded));
-    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::VersionDomain::Revision.current());
+    assert_eq!(persistence(&fixture.storage).load_revision(&fixture.instance.active_revision).unwrap().unwrap().content.core.version(), crate::domain::FormatVersion::BASELINE);
     assert!(!fixture.storage.join("service-storage").exists());
 }

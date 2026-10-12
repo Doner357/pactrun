@@ -221,7 +221,7 @@ fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_out
                 "succeeded"
             );
             assert_eq!(
-                value["result"]["current_instance"]["required_inputs_satisfied"],
+                value["result"]["current_instance"]["legacy_required_inputs"]["satisfied"],
                 false
             );
             assert!(value["result"]["current_instance"]["recovery_guard"].is_null());
@@ -238,7 +238,11 @@ fn incomplete_migration_is_success_with_readiness_reported_in_human_and_json_out
             after["result"]["instance_id"],
             before["result"]["instance_id"]
         );
-        assert_eq!(after["result"]["required_inputs_satisfied"], false);
+        assert!(after["result"].get("required_inputs_satisfied").is_none());
+        assert_eq!(
+            after["result"]["legacy_required_inputs"]["satisfied"],
+            false
+        );
         assert!(after["result"]["recovery_guard"].is_null());
     }
 }
@@ -587,7 +591,7 @@ fn native_operator_file_paths_and_empty_values_survive_a_chained_migration() {
             ],
         );
         assert_eq!(
-            result["current_instance"]["required_inputs_satisfied"],
+            result["current_instance"]["legacy_required_inputs"]["satisfied"],
             true
         );
         assert!(!result.to_string().contains("operator secret value"));
@@ -782,7 +786,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 // Test-ID: PR-TEST-0290
@@ -1088,7 +1092,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
         f.source.join("pactrun.yaml"),
         manifest.replace(
             "protocol_version: 1.0-alpha.1",
-            "protocol_version: 1.0-alpha.2",
+            "protocol_version: 1.0-alpha.3",
         ),
     )
     .unwrap();
@@ -1106,7 +1110,7 @@ fn unsupported_hook_protocol_suffix_does_not_execute_a_declarative_prefix() {
     );
     assert_eq!(refused.status.code(), Some(1));
     let diagnostic = String::from_utf8(refused.stderr).unwrap();
-    for expected in ["hook_protocol", "1.0-alpha.2", "1.0-alpha.1"] {
+    for expected in ["hook_protocol", "1.0-alpha.3", "1.0-alpha.2", "1.0-alpha.1"] {
         assert!(diagnostic.contains(expected), "{diagnostic}");
     }
     assert_no_execution(&f.root, &before);

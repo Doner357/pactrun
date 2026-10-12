@@ -8,8 +8,10 @@ Use the Hook protocol, shell adapter, CLI, and structured outputs without confla
 
 - [Hook Execution and Authority](./hooks.md)
 - [Hook Protocol](./hook-protocol.md)
+- [Operation-scoped Hook Protocol (specified, not implemented)](./operation-hook-protocol.md)
 - [Shell Loader](./shell-loader.md)
 - [Command and Output Reference](./commands.md)
 - [Object ID Selectors](./id-selectors.md)
 - [CLI Machine Interface](./machine-output.md)
+- [Operation-scoped Machine Output (specified, not implemented)](./operation-machine-output.md)
 - [Error Taxonomy](./errors.md)

@@ -84,6 +84,7 @@ impl PactrunApplication {
             instance,
             expected: expected.unwrap_or(view.state_version),
             mode,
+            parameters: Vec::new(),
         })
     }
 
@@ -98,6 +99,41 @@ impl PactrunApplication {
             &crate::workflow::PlatformHostLauncherLookup,
             search,
         )
+    }
+
+    pub(crate) fn deletion_parameter_context(
+        &self,
+        intent: &DeleteInstance,
+    ) -> Result<(Vec<ParameterV1>, TerminalContractV1, Option<FormatVersion>), ApplicationError>
+    {
+        let observation = self.persistence.observe_deletion(intent)?;
+        if observation.instance.state_version != intent.expected {
+            return Err(ApplicationError::DeletionCompilation(
+                DeletionPlanError::ChangedObservation,
+            ));
+        }
+        if intent.mode == DeletionMode::AbandonManagement {
+            return Ok((Vec::new(), TerminalContractV1::None, None));
+        }
+        if let Some(obligation) = observation.obligation {
+            if obligation.phase != DeletionPhase::FinalizationAuthorized {
+                return Err(ApplicationError::DeletionCompilation(
+                    DeletionPlanError::UnresolvedAttempt(obligation.attempt),
+                ));
+            }
+            return Ok((Vec::new(), TerminalContractV1::None, None));
+        }
+        let core = &observation.revision.core;
+        Ok(match core.cleanup() {
+            Some(cleanup) => (
+                core.parameters(&ServiceHookSite::Cleanup)
+                    .unwrap_or_default()
+                    .to_vec(),
+                cleanup.hook.io.terminal,
+                Some(cleanup.hook.protocol_version),
+            ),
+            None => (Vec::new(), TerminalContractV1::None, None),
+        })
     }
 
     #[cfg(test)]

@@ -16,6 +16,8 @@ use std::collections::BTreeSet;
 mod hook;
 
 pub(crate) struct MigrationEdgePublication<'a, 'b> {
+    pub(crate) submitted_outputs: &'a [ManagedOutputIdentity],
+    pub(crate) artifacts: &'a mut [super::RunArtifactWrite<'b>],
     pub(crate) target: Option<&'a crate::hook::TargetCommitPermit>,
     pub(crate) operator_inputs: &'a mut [super::ManagedInputWrite<'b>],
     pub(crate) hook_outputs: &'a mut [super::ManagedInputWrite<'b>],
@@ -587,12 +589,43 @@ impl PactrunPersistence {
                             "Migration interpreter selection changed".to_owned(),
                         )));
                     }
-                    let declaration = stored.content.core.migrations().iter().find(|e| {
-                        e.source_revision_digest.to_bytes()
-                            == *invocation.path()[index - 1].content_digest.as_bytes()
-                    });
-                    if declaration != Some(compiled.bindings.declaration())
+                    let source_digest = Sha256Digest::from_bytes(
+                        *invocation.path()[index - 1].content_digest.as_bytes(),
+                    );
+                    let site = ServiceHookSite::Migration(source_digest.clone());
+                    let declaration = stored.content.core.migration_declaration(&source_digest);
+                    let (source_inputs, target_inputs) =
+                        if let Some(operation) = stored.content.core.operation() {
+                            match operation.input_use(&site) {
+                                Some(OperationInputUse::Migration { source, target }) => {
+                                    (Some(source), Some(target))
+                                }
+                                _ => {
+                                    return Ok(Some(AdmissionRefusal::PlanInvalidated(
+                                        "Migration Input declaration is unavailable".to_owned(),
+                                    )));
+                                }
+                            }
+                        } else {
+                            (None, None)
+                        };
+                    let outputs: Vec<_> = stored
+                        .content
+                        .core
+                        .ordinary_outputs(&site)
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|output| output.id.clone())
+                        .collect();
+                    if declaration.as_ref() != Some(compiled.bindings.declaration())
                         || stored.content.runtime_content.files() != compiled.runtime
+                        || !bound_parameters_match(
+                            stored.content.core.parameters(&site).unwrap_or_default(),
+                            &compiled.parameters,
+                        )
+                        || outputs != compiled.outputs
+                        || source_inputs != compiled.source_inputs
+                        || target_inputs != compiled.target_inputs
                     {
                         return Ok(Some(AdmissionRefusal::PlanInvalidated(
                             "Migration declaration changed".to_owned(),
@@ -723,6 +756,8 @@ impl PactrunPersistence {
             owner,
             edge_index,
             &mut MigrationEdgePublication {
+                submitted_outputs: &[],
+                artifacts: &mut [],
                 target: None,
                 operator_inputs: inputs,
                 hook_outputs: &mut [],
@@ -775,13 +810,19 @@ impl PactrunPersistence {
             || current != progress.boundary_state_version
             || (execution.risk_state != RecoveryRiskState::Clear && !target_permitted)
         {
-            finish_migration_in_transaction(
+            let mut refusal = invalidated(RunFailedStep::MigrationPlan(
+                MigrationPlanStep::PublishManagedResult,
+            ));
+            refusal.hook_completion = publication.completion.clone();
+            finish_migration_in_transaction(&tx, run, owner, &refusal, false)?;
+            super::sqlite_runs::insert_scoped_artifacts(
                 &tx,
                 run,
-                owner,
-                &invalidated(RunFailedStep::MigrationPlan(
-                    MigrationPlanStep::PublishManagedResult,
-                )),
+                edge_index as i64,
+                super::RunArtifactSubmission {
+                    submitted: publication.submitted_outputs,
+                    artifacts: &mut *publication.artifacts,
+                },
                 false,
             )?;
             tx.commit()
@@ -993,6 +1034,16 @@ impl PactrunPersistence {
         for (_, payload) in registry_refs(&bindings)? {
             reclaim_payload_if_unreferenced(&tx, view.instance, payload)?;
         }
+        super::sqlite_runs::insert_scoped_artifacts(
+            &tx,
+            run,
+            edge_index as i64,
+            super::RunArtifactSubmission {
+                submitted: publication.submitted_outputs,
+                artifacts: &mut *publication.artifacts,
+            },
+            true,
+        )?;
         load_managed_run_from(&tx, run)?;
         let result = progress_view(&tx, run)?.ok_or_else(corrupt)?;
         edge_fault(FaultPoint::BeforeMigrationEdgeCommit, edge_index);

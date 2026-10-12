@@ -4,6 +4,11 @@ title: Migration Execution
 
 # Migration Execution
 
+The `requires_source` and `requires_target` spellings and global readiness
+observations below belong to Revision `1.0-alpha.1`. Revision `1.0-alpha.2` uses
+[operation Input contracts](../operations/input-authority.md). Chain preflight,
+single-writer, atomic publication and recovery rules remain applicable.
+
 This supplements the [Migration contract](./definition.md), shared
 [execution](../operations/execution.md), and
 [recovery](../lifecycle/recovery.md) rules. Frozen representations are

@@ -679,7 +679,7 @@ fn version_reports_the_eight_explicit_supported_contracts_without_storage_access
     for domain in crate::domain::VersionDomain::ALL {
         assert_eq!(
             formats[domain.name()],
-            serde_json::json!([domain.current_text()])
+            serde_json::json!(domain.supported_texts())
         );
     }
     assert_eq!(
@@ -713,7 +713,7 @@ fn unsupported_pack_contract_refuses_public_install_without_changing_existing_ob
     let revisions = json_ok(&root, &["revision", "list"]);
     let service = temp.path().join("service-sentinel");
     fs::write(&service, b"not managed by installation").unwrap();
-    for token in ["1.0-alpha.3", "2.0", "1", "1.0-alpha.01"] {
+    for token in ["1.0-alpha.4", "2.0", "1", "1.0-alpha.01"] {
         fs::write(
             source.join("pactrun.yaml"),
             format!("source_format: {token}\nfuture_body: {{}}\n"),
@@ -726,10 +726,11 @@ fn unsupported_pack_contract_refuses_public_install_without_changing_existing_ob
         assert_eq!(code, 1, "{response}");
         assert_eq!(response["status"], "failure");
         assert!(stderr.is_empty());
-        if token == "1.0-alpha.3" {
+        if token == "1.0-alpha.4" {
             let diagnostic = response["error"].to_string();
             assert!(diagnostic.contains("1.0-alpha.2"), "{diagnostic}");
             assert!(diagnostic.contains("1.0-alpha.3"), "{diagnostic}");
+            assert!(diagnostic.contains("1.0-alpha.4"), "{diagnostic}");
             assert!(!diagnostic.contains("minimum product"));
         }
         assert_eq!(json_ok(&root, &["instance", "show", "kept"]), before);

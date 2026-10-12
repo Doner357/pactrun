@@ -68,7 +68,9 @@ fn missing_input_cause_survives_reopening_and_later_binding_changes() {
     let revision = json_install(&root, &source);
     let instance = json_ok(&root, &["instance", "create", "missing", "--revision", &revision]);
     let plan = json_ok(&root, &["invoke", "missing", "inspect", "--param", "value=x", "--plan"]);
-    assert_eq!(plan["missing_input_ids"], serde_json::json!(["config"]));
+    assert!(plan.get("missing_input_ids").is_none());
+    assert_eq!(plan["input_requirements"][0]["state"],"missing");
+    assert_eq!(plan["input_requirements"][0]["missing"],serde_json::json!([{"context":"current","role":"active","input_id":"config"}]));
     let (code, failed, _) = json_invoke(&root, ["invoke", "missing", "inspect", "--param", "value=x"].map(Into::into).to_vec());
     assert_eq!(code, 1);
     let failed_run = &failed["result"]["run"];
@@ -101,7 +103,8 @@ fn missing_input_cause_survives_reopening_and_later_binding_changes() {
     assert_eq!(queried["run"]["state"], failed_run["state"]);
     assert!(!queried.to_string().contains("NEVER_DISCLOSE_INPUT_VALUE_0686"));
     let current = json_ok(&root, &["instance", "show", "missing"]);
-    assert_eq!(current["required_inputs_satisfied"], true);
+    assert!(current.get("required_inputs_satisfied").is_none());
+    assert_eq!(current["legacy_required_inputs"]["satisfied"], true);
     let (code, _, _) = json_invoke(&root, ["input", "delete", "missing", "config"].map(Into::into).to_vec());
     assert_eq!(code, 1, "required active Input deletion remains forbidden");
     json_ok(&root, &["input", "set", "missing", "spare", "--file", secret.to_str().unwrap()]);

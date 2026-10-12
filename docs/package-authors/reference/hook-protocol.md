@@ -12,6 +12,10 @@ Start with the [Pack field guide](./pack-fields.md) for task-oriented explanatio
 
 ## Protocol selection {#reading-map-informative}
 
+The separate [operation-scoped Hook contract](./operation-hooks.md)
+defines `1.0-alpha.2`. This page continues to define
+`1.0-alpha.1`, including its full operation binding visibility.
+
 One owner-selected protocol baseline includes ordinary operations, persistent
 service authority and Migration target proposals. Every direction starts with
 `ASCII("pactrun.hook-protocol\0") || U16BE(version_byte_length) || ASCII(version)`.

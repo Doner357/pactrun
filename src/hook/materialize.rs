@@ -81,6 +81,32 @@ struct MaterializedOutputSlot {
     path: PathBuf,
 }
 
+fn materialize_outputs(
+    directory: &ExecutionDirectory,
+    ids: &[ManagedOutputIdentity],
+    leaf: &str,
+) -> Result<(Vec<MaterializedOutputSlot>, Vec<Value>), MaterializationError> {
+    directory.create_directory(Path::new(leaf))?;
+    let mut ids = ids.to_vec();
+    ids.sort();
+    let mut outputs = Vec::new();
+    let mut authorities = Vec::new();
+    for output in ids {
+        let (path, file) = directory.create_file(&Path::new(leaf).join(output.as_str()))?;
+        drop(file);
+        let handle = random_handle()?;
+        authorities.push(
+            json!({"handle":handle, "output_id":output.as_str(), "staged_path":host_path(&path)?}),
+        );
+        outputs.push(MaterializedOutputSlot {
+            output,
+            handle,
+            path,
+        });
+    }
+    Ok((outputs, authorities))
+}
+
 impl MaterializedAction {
     pub(super) fn create_restore(
         p: &PactrunPersistence,
@@ -110,7 +136,9 @@ impl MaterializedAction {
             }
             let mut bindings = Vec::new();
             for binding in manifest.managed_bindings() {
-                if binding.role != SnapshotBindingRole::Active {
+                if binding.role != SnapshotBindingRole::Active
+                    || !plan.allows_input(&binding.input_id)
+                {
                     continue;
                 }
                 let SnapshotBindingState::Bound(digest) = &binding.state else {
@@ -153,13 +181,18 @@ impl MaterializedAction {
             let session = json!({"type":"session_start","protocol_version":"1.0-alpha.1","session_id":session_id,"run_id":run.to_string(),"revision":{"package_id":manifest.producer().package_id.to_string(),"revision_content_digest":manifest.producer().content_digest.to_string()},"parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},"io":{"terminal":terminal_name(plan.hook().io.terminal)},"operation":{"kind":"snapshot_restore","snapshot_id":manifest.snapshot_id().to_string(),"bindings":bindings,"snapshot_content":{"handle":random_handle()?,"readonly_root_path":host_path(&content)?,"logical_descriptors":descriptors}}});
             let mut session = session;
             session["protocol_version"] = json!(plan.hook().protocol_version);
+            let (outputs, authorities) =
+                materialize_outputs(&directory, plan.outputs(), "outputs")?;
+            if plan.hook().protocol_version == crate::domain::operation_hook_version() {
+                session["operation"]["outputs"] = json!(authorities);
+            }
             super::protocol::validate_session_frame(&session)?;
-            Ok((program, arguments, session_id, session))
+            Ok((program, arguments, session_id, session, outputs))
         })();
         match result {
-            Ok((program, arguments, session_id, session)) => Self {
+            Ok((program, arguments, session_id, session, outputs)) => Self {
                 directory,
-                outputs: Vec::new(),
+                outputs,
                 program,
                 arguments,
                 session_id,
@@ -194,7 +227,6 @@ impl MaterializedAction {
         let runtime = directory.create_directory(Path::new("runtime"))?;
         let workspace = directory.create_directory(Path::new("workspace"))?;
         directory.create_directory(Path::new("bindings"))?;
-        directory.create_directory(Path::new("outputs"))?;
         for file in admitted.plan().runtime_content() {
             materialize_runtime_file(persistence, admitted.run(), &directory, file)?;
         }
@@ -223,26 +255,8 @@ impl MaterializedAction {
             }));
         }
 
-        let mut output_ids = admitted.plan().outputs().to_vec();
-        output_ids.sort();
-        let mut outputs = Vec::new();
-        let mut output_authorities = Vec::new();
-        for output in output_ids {
-            let relative = Path::new("outputs").join(output.as_str());
-            let (path, file) = directory.create_file(&relative)?;
-            drop(file);
-            let handle = random_handle()?;
-            output_authorities.push(json!({
-                "handle": handle,
-                "output_id": output.as_str(),
-                "staged_path": host_path(&path)?,
-            }));
-            outputs.push(MaterializedOutputSlot {
-                output,
-                handle,
-                path,
-            });
-        }
+        let (outputs, output_authorities) =
+            materialize_outputs(&directory, admitted.plan().outputs(), "outputs")?;
 
         let (program, mut arguments) = launch_command(
             admitted.plan().launch(),
@@ -343,6 +357,9 @@ impl MaterializedAction {
             }
             let mut bindings = Vec::new();
             for binding in preparation.active() {
+                if !plan.allows_input(&binding.input) {
+                    continue;
+                }
                 let (path, mut file) =
                     directory.create_file(&Path::new("bindings").join(binding.input.as_str()))?;
                 preparation
@@ -372,13 +389,25 @@ impl MaterializedAction {
                 "operation":{"kind":"snapshot_capture","access":access_name(plan.access()),"bindings":bindings,"candidate":{"handle":random_handle()?,"root_path":host_path(&candidate)?}}});
             let mut session = session;
             session["protocol_version"] = json!(plan.hook().protocol_version);
+            let (outputs, authorities) =
+                materialize_outputs(&directory, plan.outputs(), "outputs")?;
+            if plan.hook().protocol_version == crate::domain::operation_hook_version() {
+                session["operation"]["outputs"] = json!(authorities);
+            }
             super::protocol::validate_session_frame(&session)?;
-            Ok((preparation, program, arguments, session_id, session))
+            Ok((
+                preparation,
+                program,
+                arguments,
+                session_id,
+                session,
+                outputs,
+            ))
         })();
         match result {
-            Ok((capture, program, arguments, session_id, session)) => Self {
+            Ok((capture, program, arguments, session_id, session, outputs)) => Self {
                 directory,
-                outputs: Vec::new(),
+                outputs,
                 program,
                 arguments,
                 session_id,

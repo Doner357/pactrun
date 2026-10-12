@@ -67,6 +67,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "launch": {
           "$ref": "#/$defs/Launch"
         },
@@ -113,10 +123,41 @@
       ],
       "type": "object"
     },
+    "ActiveInputs": {
+      "properties": {
+        "optional": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "required",
+        "optional"
+      ],
+      "type": "object"
+    },
     "Artifact": {
       "properties": {
         "byte_length": {
           "type": "string"
+        },
+        "edge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactEdge"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "output_id": {
           "type": "string"
@@ -128,8 +169,33 @@
       ],
       "type": "object"
     },
+    "ArtifactEdge": {
+      "properties": {
+        "source_revision_digest": {
+          "type": "string"
+        },
+        "target_revision_digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_revision_digest",
+        "target_revision_digest"
+      ],
+      "type": "object"
+    },
     "ArtifactResult": {
       "properties": {
+        "edge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactEdge"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "outcome": {
           "type": "string"
         },
@@ -144,6 +210,57 @@
         "run_id",
         "output_id",
         "outcome"
+      ],
+      "type": "object"
+    },
+    "Assessment": {
+      "properties": {
+        "missing": {
+          "items": {
+            "$ref": "#/$defs/MissingInput"
+          },
+          "type": "array"
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "state": {
+          "$ref": "#/$defs/AssessmentState"
+        }
+      },
+      "required": [
+        "operation",
+        "state",
+        "missing"
+      ],
+      "type": "object"
+    },
+    "AssessmentState": {
+      "enum": [
+        "satisfied",
+        "missing",
+        "not_evaluated"
+      ],
+      "type": "string"
+    },
+    "BindingInputs": {
+      "properties": {
+        "optional": {
+          "items": {
+            "$ref": "#/$defs/InputReference"
+          },
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "$ref": "#/$defs/InputReference"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "required",
+        "optional"
       ],
       "type": "object"
     },
@@ -283,8 +400,27 @@
         "hook": {
           "$ref": "#/$defs/Hook"
         },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "metadata": {
           "$ref": "#/$defs/Text"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "parameters": {
           "items": {
@@ -313,18 +449,48 @@
         "hook": {
           "$ref": "#/$defs/Hook"
         },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "metadata": {
           "$ref": "#/$defs/Text"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter2"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "requires": {
           "items": {
             "$ref": "#/$defs/InputRef"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
-        "requires",
         "hook",
         "metadata"
       ],
@@ -976,6 +1142,15 @@
         "hook_present": {
           "type": "boolean"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "mandatory_hook_outputs": {
           "items": {
             "type": "string"
@@ -988,20 +1163,47 @@
           },
           "type": "array"
         },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlanParameter"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "predicted_required_inputs_satisfied": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "requires_source": {
           "items": {
-            "$ref": "#/$defs/InputReference"
+            "$ref": "#/$defs/InputReference2"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "requires_target": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "service": {
           "anyOf": [
@@ -1016,8 +1218,28 @@
         "source": {
           "$ref": "#/$defs/Revision"
         },
+        "source_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "target": {
           "$ref": "#/$defs/Revision"
+        },
+        "target_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "transitions": {
           "items": {
@@ -1031,12 +1253,9 @@
         "target",
         "service",
         "operator_inputs",
-        "requires_source",
-        "requires_target",
         "transitions",
         "mandatory_hook_outputs",
-        "hook_present",
-        "predicted_required_inputs_satisfied"
+        "hook_present"
       ],
       "type": "object"
     },
@@ -1587,7 +1806,6 @@
       "required": [
         "input_id",
         "role",
-        "required",
         "present",
         "protection"
       ],
@@ -1605,16 +1823,27 @@
           "type": "string"
         },
         "required": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [
         "input_id",
-        "required",
         "protection",
         "metadata"
       ],
       "type": "object"
+    },
+    "InputContext": {
+      "enum": [
+        "current",
+        "snapshot",
+        "source",
+        "target"
+      ],
+      "type": "string"
     },
     "InputDeclaration": {
       "properties": {
@@ -1625,12 +1854,14 @@
           "type": "string"
         },
         "required": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [
         "input_id",
-        "required",
         "protection"
       ],
       "type": "object"
@@ -1688,6 +1919,21 @@
           "type": "string"
         },
         "role": {
+          "$ref": "#/$defs/InputRole"
+        }
+      },
+      "required": [
+        "role",
+        "input_id"
+      ],
+      "type": "object"
+    },
+    "InputReference2": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "role": {
           "type": "string"
         }
       },
@@ -1696,6 +1942,13 @@
         "input_id"
       ],
       "type": "object"
+    },
+    "InputRole": {
+      "enum": [
+        "active",
+        "retained"
+      ],
+      "type": "string"
     },
     "InspectedRun": {
       "properties": {
@@ -1717,7 +1970,7 @@
           "type": "integer"
         },
         "operation": {
-          "$ref": "#/$defs/Operation"
+          "$ref": "#/$defs/Operation2"
         },
         "revision": {
           "$ref": "#/$defs/Revision"
@@ -1786,6 +2039,15 @@
             }
           ]
         },
+        "published_artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "run": {
           "$ref": "#/$defs/Run"
         }
@@ -1804,6 +2066,15 @@
         "active_revision": {
           "$ref": "#/$defs/Revision"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "inputs": {
           "items": {
             "$ref": "#/$defs/Input"
@@ -1812,6 +2083,16 @@
         },
         "instance_id": {
           "type": "string"
+        },
+        "legacy_required_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyRequiredInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "name": {
           "type": "string"
@@ -1827,7 +2108,10 @@
           ]
         },
         "required_inputs_satisfied": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "state_version": {
           "type": "string"
@@ -1838,7 +2122,6 @@
         "name",
         "active_revision",
         "state_version",
-        "required_inputs_satisfied",
         "recovery_guard",
         "inputs"
       ],
@@ -1939,6 +2222,23 @@
           "type": "object"
         }
       ]
+    },
+    "LegacyRequiredInputs": {
+      "properties": {
+        "missing_input_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "satisfied": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "satisfied"
+      ],
+      "type": "object"
     },
     "Local": {
       "properties": {
@@ -2163,6 +2463,24 @@
         "metadata": {
           "$ref": "#/$defs/Text"
         },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/Output"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/Parameter2"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "produces_target": {
           "items": {
             "type": "string"
@@ -2173,19 +2491,35 @@
           "items": {
             "$ref": "#/$defs/InputRef"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "requires_target": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "resource_transitions": {
           "items": {
             "$ref": "#/$defs/ServiceTransition"
           },
           "type": "array"
+        },
+        "source_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "source_revision_digest": {
           "type": "string"
@@ -2195,6 +2529,16 @@
             "$ref": "#/$defs/ServiceTransition"
           },
           "type": "array"
+        },
+        "target_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "transitions": {
           "items": {
@@ -2206,8 +2550,6 @@
       "required": [
         "source_revision_digest",
         "transitions",
-        "requires_source",
-        "requires_target",
         "produces_target",
         "hook",
         "storage_transitions",
@@ -2234,6 +2576,25 @@
         "committed_edges",
         "boundary_revision",
         "boundary_state_version"
+      ],
+      "type": "object"
+    },
+    "MissingInput": {
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/InputContext"
+        },
+        "input_id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/InputRole"
+        }
+      },
+      "required": [
+        "context",
+        "role",
+        "input_id"
       ],
       "type": "object"
     },
@@ -2511,6 +2872,89 @@
       ]
     },
     "Operation": {
+      "oneOf": [
+        {
+          "properties": {
+            "action_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_capture",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "snapshot_restore",
+              "type": "string"
+            },
+            "snapshot_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "snapshot_id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "migration",
+              "type": "string"
+            },
+            "source_revision": {
+              "$ref": "#/$defs/Revision"
+            },
+            "target_revision": {
+              "$ref": "#/$defs/Revision"
+            }
+          },
+          "required": [
+            "kind",
+            "source_revision",
+            "target_revision"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "cleanup",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Operation2": {
       "oneOf": [
         {
           "properties": {
@@ -2952,6 +3396,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "launch": {
           "$ref": "#/$defs/Launch"
         },
@@ -3027,6 +3481,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "instance_id": {
           "type": "string"
         },
@@ -3037,7 +3500,10 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "output_ids": {
           "items": {
@@ -3067,7 +3533,10 @@
           "type": "boolean"
         },
         "required_inputs_satisfied": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "revision": {
           "$ref": "#/$defs/Revision"
@@ -3097,7 +3566,6 @@
         "revision",
         "expected_state_version",
         "access",
-        "required_inputs_satisfied",
         "terminal",
         "protocol_version",
         "parameters",
@@ -3174,8 +3642,35 @@
         "expected_state_version": {
           "type": "string"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "instance_id": {
           "type": "string"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlanParameter"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "presentation": {
           "items": {
@@ -3217,11 +3712,29 @@
         "expected_state_version": {
           "type": "string"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "instance_id": {
           "type": "string"
         },
         "operation": {
-          "$ref": "#/$defs/Operation"
+          "$ref": "#/$defs/Operation2"
+        },
+        "output_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "parameters": {
           "items": {
@@ -3639,7 +4152,7 @@
           "const": "pactrun.cli"
         },
         "format_version": {
-          "const": "1.0-alpha.3"
+          "const": "1.0-alpha.4"
         },
         "received_at_unix_ms": {
           "type": [
@@ -3723,6 +4236,15 @@
             }
           ]
         },
+        "published_artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "run": {
           "$ref": "#/$defs/Run"
         },
@@ -3745,6 +4267,15 @@
         "active_revision": {
           "$ref": "#/$defs/Revision"
         },
+        "input_requirements": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "inputs": {
           "items": {
             "$ref": "#/$defs/Input"
@@ -3753,6 +4284,16 @@
         },
         "instance_id": {
           "type": "string"
+        },
+        "legacy_required_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyRequiredInputs"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "name": {
           "type": "string"
@@ -3774,7 +4315,10 @@
           "type": "array"
         },
         "required_inputs_satisfied": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "state_version": {
           "type": "string"
@@ -3791,7 +4335,6 @@
         "name",
         "active_revision",
         "state_version",
-        "required_inputs_satisfied",
         "recovery_guard",
         "inputs",
         "related_revisions",
@@ -3899,6 +4442,15 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "published_artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": [
+            "array",
+            "null"
           ]
         },
         "related_revisions": {
@@ -4399,7 +4951,7 @@
           "type": "integer"
         },
         "operation": {
-          "$ref": "#/$defs/Operation"
+          "$ref": "#/$defs/Operation2"
         },
         "revision": {
           "$ref": "#/$defs/Revision"
@@ -4674,12 +5226,14 @@
               "type": "string"
             },
             "required_inputs_satisfied": {
-              "type": "boolean"
+              "type": [
+                "boolean",
+                "null"
+              ]
             }
           },
           "required": [
-            "kind",
-            "required_inputs_satisfied"
+            "kind"
           ],
           "type": "object"
         },
@@ -5149,7 +5703,7 @@
           "type": "string"
         },
         "source": {
-          "$ref": "#/$defs/InputReference"
+          "$ref": "#/$defs/InputReference2"
         },
         "target_input_id": {
           "type": [
@@ -8922,7 +9476,7 @@
       "const": "pactrun.cli"
     },
     "format_version": {
-      "const": "1.0-alpha.3"
+      "const": "1.0-alpha.4"
     },
     "result": {
       "type": [
@@ -8945,6 +9499,6 @@
     "result",
     "error"
   ],
-  "title": "Pactrun CLI machine interface 1.0-alpha.3",
+  "title": "Pactrun CLI machine interface 1.0-alpha.4",
   "type": "object"
 }

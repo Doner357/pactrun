@@ -12,16 +12,21 @@ export const references = [
   ['Users', 'resource-details', 'Resource command details', 'spec/instances/resource-commands.md'],
   ['Users', 'retirement-details', 'Retirement and recovery details', 'spec/lifecycle/retirement.md'],
   ['Users', 'object-lifecycle', 'Retained objects and garbage collection', 'spec/lifecycle/objects-gc.md'],
-  ['Users', 'machine-output', 'JSON and JSONL reference', 'spec/interfaces/machine-output.md'],
+  ['Users', 'machine-output', 'Legacy JSON and JSONL reference', 'spec/interfaces/machine-output.md'],
+  ['Users', 'operation-output', 'Current JSON and JSONL reference', 'spec/interfaces/operation-machine-output.md'],
   ['Users', 'snapshot-limits', 'Snapshot limits and compatibility', 'spec/snapshots/limits.md'],
   ['Authors', 'source-format', 'Complete Pack source reference', 'spec/packages/source-format.md'],
   ['Authors', 'revision-format', 'Declaration types and identity', 'spec/packages/revision-format.md'],
   ['Authors', 'hook-protocol', 'Direct Hook message reference', 'spec/interfaces/hook-protocol.md'],
   ['Authors', 'shell-loader', 'Shell helper reference', 'spec/interfaces/shell-loader.md'],
   ['Authors', 'snapshot-limits', 'Snapshot authoring limits', 'spec/snapshots/limits.md'],
+  ['Authors', 'operation-format', 'Operation-scoped Source and Revision fields', 'spec/packages/operation-format.md'],
+  ['Authors', 'operation-inputs', 'Operation Input requirements and read scope', 'spec/operations/input-authority.md'],
+  ['Authors', 'operation-hooks', 'Operation-scoped Hook messages', 'spec/interfaces/operation-hook-protocol.md'],
+  ['Authors', 'operation-capabilities', 'Common parameters and reports', 'spec/operations/common-capabilities.md'],
 ].map(([audience, slug, title, source]) => ({audience, title, source,
   output: `${audience === 'Users' ? 'pactrun-users' : 'package-authors'}/reference/${slug}.md`}));
-export const schemaCopies = ['cli-machine.schema.json', 'cli-events.schema.json'].map(name => ({
+export const schemaCopies = ['cli-machine.schema.json', 'cli-events.schema.json','cli-machine-alpha3.schema.json','cli-events-alpha3.schema.json'].map(name => ({
   source: 'spec/interfaces/' + name, output: 'pactrun-users/reference/' + name,
 }));
 const relative = (from, to) => {

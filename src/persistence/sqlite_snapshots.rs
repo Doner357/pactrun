@@ -328,8 +328,17 @@ pub(super) fn qualify_restore_snapshot(
     target: &InstanceView,
     id: SnapshotId,
 ) -> Result<SnapshotManifest, PersistenceError> {
+    qualify_restore_source(db, content, &target.active_revision, &target.bindings, id)
+}
+pub(super) fn qualify_restore_source(
+    db: &Connection,
+    content: &RuntimeContentStore,
+    revision: &crate::domain::RevisionIdentity,
+    bindings: &[crate::domain::ManagedInputBindingView],
+    id: SnapshotId,
+) -> Result<SnapshotManifest, PersistenceError> {
     let snapshot = load_snapshot(db, id)?;
-    if snapshot.manifest.manifest().producer() != &target.active_revision {
+    if snapshot.manifest.manifest().producer() != revision {
         return Err(PersistenceError::InvalidRunTransition(
             "Restore requires the exact producer Revision".to_owned(),
         ));
@@ -340,12 +349,27 @@ pub(super) fn qualify_restore_snapshot(
             "Restore producer validation is unavailable".to_owned(),
         ));
     }
-    validate_restore_transition(&target.bindings, snapshot.manifest.manifest())
+    validate_restore_transition(bindings, snapshot.manifest.manifest())
+        .map_err(|error| PersistenceError::InvalidRunTransition(error.to_string()))?;
+    let contract = super::sqlite_instances::load_revision_contract(db, revision)?;
+    crate::domain::validate_restore_requirements(&contract, snapshot.manifest.manifest())
         .map_err(|error| PersistenceError::InvalidRunTransition(error.to_string()))?;
     Ok(snapshot.manifest.manifest().clone())
 }
 
 impl PactrunPersistence {
+    pub(crate) fn qualify_snapshot_for_creation(
+        &self,
+        revision: &crate::domain::RevisionIdentity,
+        snapshot: SnapshotId,
+    ) -> Result<(), PersistenceError> {
+        let mut db = self.open_read_connection()?;
+        let tx = db
+            .transaction_with_behavior(TransactionBehavior::Deferred)
+            .map_err(|e| PersistenceError::sqlite("qualify Snapshot initialization", e))?;
+        qualify_restore_source(&tx, &self.runtime_content, revision, &[], snapshot)?;
+        Ok(())
+    }
     pub(crate) fn admitted_restore_manifest(
         &self,
         run: RunId,

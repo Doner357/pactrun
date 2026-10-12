@@ -54,7 +54,7 @@ fn start(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, cancel: Acti
 fn start_with_policy(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, cancel: ActionCancellation, policy: HookRuntimePolicy) -> RunId {
     let key = MigrationTargetInput {revision:path[2].content_digest, input:InputIdentity::parse("request").unwrap()};
     let plan = crate::workflow::compile_migration(&f.application, &crate::workflow::PlatformHostLauncherLookup,
-        &TransitionRevision {instance:f.instance.id, expected_state_version:f.instance.state_version,
+        &TransitionRevision { parameters: Vec::new(),instance:f.instance.id, expected_state_version:f.instance.state_version,
             source:path[0].clone(), target:path.last().unwrap().clone(), path:MigrationPathSelection::Exact(path.to_vec()),
             operator_inputs:vec![key.clone()], authorize_declassification:false}, &[]).unwrap();
     let request = f.marker("request.json");
@@ -139,7 +139,7 @@ fn retained_bindings_reactivate_discard_and_delete_without_reinterpreting_source
     for (index, pair) in [a,b,c,d,e].windows(2).enumerate() {
         let current = f.application.load_instance(f.instance.id).unwrap().unwrap();
         let plan = crate::workflow::compile_migration(&f.application, &crate::workflow::PlatformHostLauncherLookup,
-            &TransitionRevision {instance:current.id, expected_state_version:current.state_version,
+            &TransitionRevision { parameters: Vec::new(),instance:current.id, expected_state_version:current.state_version,
                 source:pair[0].clone(), target:pair[1].clone(), path:MigrationPathSelection::Exact(pair.to_vec()),
                 operator_inputs:vec![], authorize_declassification:false}, &[]).unwrap();
         assert!(plan.edges().iter().all(|edge| edge.launch.is_none()));
@@ -376,7 +376,7 @@ fn migration_owner_worker() {
     let target = RevisionIdentity::new(observation.active_revision.package_id, env::var("PACTRUN_MIGRATION_TEST_TARGET").unwrap().parse().unwrap());
     let key = MigrationTargetInput {revision: env::var("PACTRUN_MIGRATION_TEST_INPUT_TARGET").unwrap().parse().unwrap(), input:InputIdentity::parse("request").unwrap()};
     let plan = crate::workflow::compile_migration(&app, &crate::workflow::PlatformHostLauncherLookup,
-        &TransitionRevision {instance, expected_state_version:observation.state_version,
+        &TransitionRevision { parameters: Vec::new(),instance, expected_state_version:observation.state_version,
             source:observation.active_revision, target, path:MigrationPathSelection::Automatic,
             operator_inputs:vec![key.clone()], authorize_declassification:false}, &[]).unwrap();
     let run = app.accept_migration_inputs(plan, false, ActionCancellation::default(),

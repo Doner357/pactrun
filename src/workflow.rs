@@ -94,32 +94,33 @@ pub(crate) fn compile_action<R: ActionCompilationRepository, L: HostLauncherLook
         .runtime_content
         .files()
         .to_vec();
+    if crate::domain::VersionDomain::Hook.supports(action.hook.protocol_version)
+        && !observation
+            .revision_content
+            .core
+            .hook_protocol_matches(action.hook.protocol_version)
+    {
+        return Err(PlanCompilationError::HookContractMismatch.into());
+    }
     let launch = compile_hook_launch(
         launcher_lookup,
         &action.hook,
         &runtime_content,
         launcher_search_directories,
     )?;
+    let inputs = crate::domain::select_action_inputs(
+        &observation.revision_content.core,
+        &intent.action,
+        &observation.active_bindings,
+        observation.required_inputs_satisfied,
+    )?;
     let facts = CompilationFacts {
-        missing_input_ids: observation
-            .revision_content
-            .core
-            .inputs()
-            .iter()
-            .filter(|input| {
-                input.required
-                    && !observation
-                        .active_bindings
-                        .iter()
-                        .any(|binding| binding.input == input.id)
-            })
-            .map(|input| input.id.clone())
-            .collect(),
+        missing_input_ids: inputs.missing,
         instance: observation.instance,
         observed_state_version: observation.state_version,
         active_revision: observation.active_revision,
-        active_bindings: observation.active_bindings,
-        required_inputs_satisfied: observation.required_inputs_satisfied,
+        active_bindings: inputs.bindings,
+        required_inputs_satisfied: inputs.satisfied,
         action,
         parameters: intent.parameters.clone(),
         runtime_content,
@@ -312,6 +313,11 @@ pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLaunch
         return Err(MigrationError::InvalidObservation.into());
     }
     let bindings = build_migration_binding_plan(intent, &observed.revisions, &observed.bindings)?;
+    let parameter_path: Vec<_> = std::iter::once(observed.active_revision.clone())
+        .chain(bindings.edges().iter().map(|edge| edge.target().clone()))
+        .collect();
+    let mut parameters =
+        bind_migration_parameters(&parameter_path, &observed.revisions, &intent.parameters)?;
     if observed.service_state.as_ref().is_some_and(|s| {
         s.instance != intent.instance
             || s.state_version != intent.expected_state_version
@@ -361,6 +367,18 @@ pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLaunch
             None
         };
         let runtime = revision.content.runtime_content.files().to_vec();
+        let site = ServiceHookSite::Migration(edge.declaration().source_revision_digest.clone());
+        let (source_inputs, target_inputs) =
+            if let Some(operation) = revision.content.core.operation() {
+                match operation.input_use(&site) {
+                    Some(OperationInputUse::Migration { source, target }) => {
+                        (Some(source), Some(target))
+                    }
+                    _ => return Err(MigrationError::InvalidEdge.into()),
+                }
+            } else {
+                (None, None)
+            };
         repository.verify_migration_runtime(&revision.identity)?;
         let launch = edge
             .declaration()
@@ -369,6 +387,22 @@ pub(crate) fn compile_migration<R: MigrationCompilationRepository, L: HostLaunch
             .map(|hook| compile_hook_launch(launcher, hook, &runtime, directories))
             .transpose()?;
         compiled.push(MigrationCompiledEdge {
+            parameters: parameters
+                .remove(&MigrationEdgeIdentity {
+                    source: edge.source().content_digest,
+                    target: edge.target().content_digest,
+                })
+                .expect("preflighted edge parameters"),
+            outputs: revision
+                .content
+                .core
+                .ordinary_outputs(&site)
+                .unwrap_or_default()
+                .iter()
+                .map(|output| output.id.clone())
+                .collect(),
+            source_inputs,
+            target_inputs,
             service,
             bindings: edge.clone(),
             runtime,
@@ -498,6 +532,77 @@ mod tests {
         (intent, repository)
     }
 
+    // Test-ID: PR-TEST-0708
+    // Verifies: PR-REQ-0381, PR-REQ-0383
+    #[test]
+    fn operation_action_input_selection_uses_only_its_own_requirements_and_grants() {
+        use serde_json::json;
+        let (intent, mut repository) = setup(false);
+        let mut core: serde_json::Value = serde_json::from_slice(
+            &crate::revision_content::encode_canonical_revision_core(
+                &repository.0.revision_content.core,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        core["format_version"] = json!(OPERATION_CORE_FORMAT);
+        core["inputs"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("required");
+        core["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":"later", "protection":"normal"}));
+        core["actions"][0]["inputs"] = json!({"required":[], "optional":[]});
+        core["actions"][0]["hook"]["protocol_version"] = json!(OPERATION_HOOK_FORMAT);
+        let launcher = FakeLauncherLookup(PathBuf::from("unused"));
+        repository.0.required_inputs_satisfied = false;
+        repository.0.revision_content.core =
+            crate::revision_canonical::operation::project(&serde_json::to_vec(&core).unwrap())
+                .unwrap()
+                .into();
+        let select = |repository: &FactsRepository| {
+            select_action_inputs(
+                &repository.0.revision_content.core,
+                &intent.action,
+                &repository.0.active_bindings,
+                repository.0.required_inputs_satisfied,
+            )
+            .unwrap()
+        };
+        let selected = select(&repository);
+        assert!(selected.satisfied);
+        assert!(selected.missing.is_empty());
+        assert!(selected.bindings.is_empty());
+        let plan = compile_action(&repository, &launcher, &intent, &[]).unwrap();
+        assert!(plan.required_inputs_satisfied());
+        assert!(plan.active_bindings().is_empty());
+
+        core["actions"][0]["inputs"] = json!({"required":[], "optional":["config", "later"]});
+        repository.0.revision_content.core =
+            crate::revision_canonical::operation::project(&serde_json::to_vec(&core).unwrap())
+                .unwrap()
+                .into();
+        let selected = select(&repository);
+        assert!(selected.satisfied);
+        assert_eq!(selected.bindings, repository.0.active_bindings);
+
+        core["actions"][0]["inputs"] = json!({"required":["config"], "optional":["later"]});
+        repository.0.revision_content.core =
+            crate::revision_canonical::operation::project(&serde_json::to_vec(&core).unwrap())
+                .unwrap()
+                .into();
+        repository.0.active_bindings.clear();
+        let selected = select(&repository);
+        assert!(!selected.satisfied);
+        assert_eq!(
+            selected.missing,
+            vec![InputIdentity::parse("config").unwrap()]
+        );
+        assert!(selected.bindings.is_empty());
+    }
+
     // Test-ID: PR-TEST-0596
     // Verifies: PR-REQ-0038, PR-REQ-0040
     #[test]
@@ -597,7 +702,7 @@ mod tests {
         assert_eq!(plan.service_hook(), &expected);
         assert_eq!(
             plan.protocol_version(),
-            crate::domain::VersionDomain::Hook.current()
+            crate::domain::FormatVersion::BASELINE
         );
         assert_eq!(plan.service_hook().requires.len(), 1);
         assert_eq!(plan.service_bindings().grants[0].1.allocation(), allocation);
@@ -619,7 +724,7 @@ mod tests {
     // Test-ID: PR-TEST-0367
     // Verifies: PR-REQ-0317, PR-REQ-0326
     #[test]
-    fn future_hook_versions_remain_format_representable_but_fail_action_compilation() {
+    fn different_hook_contracts_remain_representable_but_cannot_cross_revision_formats() {
         let (mut intent, mut repository) = setup(false);
         let mut source = serde_json::to_value(repository.0.revision_content.core.common()).unwrap();
         source["format_version"] = serde_json::json!("1.0-alpha.1");
@@ -641,10 +746,17 @@ mod tests {
             crate::revision_declarations::calculate_service_free_digest(&content).unwrap();
         repository.0.active_revision = intent.active_revision.clone();
         repository.0.revision_content = content.into();
-        assert!(
-            matches!(compile_action(&repository, &FakeLauncherLookup(PathBuf::from("unused")), &intent, &[]),
-            Err(crate::application::ApplicationError::PlanCompilation(PlanCompilationError::UnsupportedHookProtocol(version))) if version.to_string() == "1.0-alpha.2")
-        );
+        assert!(matches!(
+            compile_action(
+                &repository,
+                &FakeLauncherLookup(PathBuf::from("unused")),
+                &intent,
+                &[]
+            ),
+            Err(crate::application::ApplicationError::PlanCompilation(
+                PlanCompilationError::HookContractMismatch
+            ))
+        ));
     }
 
     #[test]

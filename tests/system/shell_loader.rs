@@ -365,7 +365,11 @@ fn suggested_input_commands_roundtrip_shell_sensitive_names() {
         let detail = execute(&scenario, &["--format", "json", "instance", "show", name]);
         assert_success(&detail);
         let detail: serde_json::Value = serde_json::from_slice(&detail.stdout).unwrap();
-        assert_eq!(detail["result"]["required_inputs_satisfied"], true);
+        assert!(detail["result"].get("required_inputs_satisfied").is_none());
+        assert_eq!(
+            detail["result"]["legacy_required_inputs"]["satisfied"],
+            true
+        );
         let history = execute(&scenario, &["run", "show", run]);
         assert_success(&history);
         let history = String::from_utf8(history.stdout).unwrap();

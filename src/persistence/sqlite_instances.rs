@@ -45,6 +45,23 @@ impl PactrunPersistence {
         active_revision: RevisionIdentity,
         initial: &mut [ManagedInputWrite<'_>],
     ) -> Result<InstanceView, PersistenceError> {
+        self.create_instance_selected(name, active_revision, initial, None)
+    }
+    pub(crate) fn create_instance_for_restore(
+        &self,
+        name: InstanceName,
+        active_revision: RevisionIdentity,
+        snapshot: crate::domain::SnapshotId,
+    ) -> Result<InstanceView, PersistenceError> {
+        self.create_instance_selected(name, active_revision, &mut [], Some(snapshot))
+    }
+    fn create_instance_selected(
+        &self,
+        name: InstanceName,
+        active_revision: RevisionIdentity,
+        initial: &mut [ManagedInputWrite<'_>],
+        restore: Option<crate::domain::SnapshotId>,
+    ) -> Result<InstanceView, PersistenceError> {
         initial.sort_by(|left, right| left.input_id.cmp(&right.input_id));
         if initial
             .windows(2)
@@ -88,6 +105,17 @@ impl PactrunPersistence {
             .map_err(|error| PersistenceError::sqlite("begin Instance creation", error))?;
         self.check_write_admission(&transaction)?;
         let core = load_revision_core(&transaction, &active_revision)?;
+        if let Some(snapshot) = restore
+            && selected.content.core.operation().is_some()
+        {
+            super::sqlite_snapshots::qualify_restore_source(
+                &transaction,
+                &self.runtime_content,
+                &active_revision,
+                &[],
+                snapshot,
+            )?;
+        }
         for input in initial.iter() {
             if input_declaration(&core, &input.input_id).is_none() {
                 return Err(PersistenceError::InvalidManagedInput(format!(
@@ -706,6 +734,13 @@ pub(super) fn load_revision_core(
     database: &Connection,
     identity: &RevisionIdentity,
 ) -> Result<RevisionDeclarations, PersistenceError> {
+    load_revision_contract(database, identity).map(|core| core.common().clone())
+}
+
+pub(super) fn load_revision_contract(
+    database: &Connection,
+    identity: &RevisionIdentity,
+) -> Result<crate::domain::RevisionCore, PersistenceError> {
     let bytes = database
         .query_row(
             "SELECT core_jcs FROM revisions WHERE package_id=?1 AND revision_content_digest=?2",
@@ -720,7 +755,6 @@ pub(super) fn load_revision_core(
         .ok_or_else(|| PersistenceError::MissingRevision(identity.clone()))?;
     super::sqlite_revision_store::validate_core_storage_version(database, &bytes)?;
     decode_canonical_revision_core(&bytes)
-        .map(|core| core.common().clone())
         .map_err(|error| PersistenceError::CorruptRevision(error.to_string()))
 }
 

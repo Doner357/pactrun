@@ -27,8 +27,49 @@ use super::platform::ProtocolStream;
 #[path = "protocol_authority.rs"]
 pub(super) mod authority;
 
+#[cfg(test)]
+#[path = "operation_protocol_tests.rs"]
+mod operation_tests;
+
 pub(super) const PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.1";
+pub(super) const OPERATION_PREAMBLE: &[u8] = b"pactrun.hook-protocol\0\0\x0b1.0-alpha.2";
+pub(super) fn preamble_for_version(
+    version: crate::domain::FormatVersion,
+) -> io::Result<&'static [u8]> {
+    if version == crate::domain::FormatVersion::BASELINE {
+        Ok(PREAMBLE)
+    } else if version == crate::domain::operation_hook_version() {
+        Ok(OPERATION_PREAMBLE)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unsupported owner-selected Hook version",
+        ))
+    }
+}
+
+fn session_version(session: &Value) -> io::Result<crate::domain::FormatVersion> {
+    let version = session["protocol_version"]
+        .as_str()
+        .and_then(|v| v.parse().ok())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid Session protocol version",
+            )
+        })?;
+    preamble_for_version(version)?;
+    Ok(version)
+}
+
 pub(super) fn read_preamble(reader: &mut impl Read) -> io::Result<bool> {
+    read_preamble_for_version(reader, crate::domain::FormatVersion::BASELINE)
+}
+pub(super) fn read_preamble_for_version(
+    reader: &mut impl Read,
+    version: crate::domain::FormatVersion,
+) -> io::Result<bool> {
+    preamble_for_version(version)?;
     const PREFIX: &[u8] = b"pactrun.hook-protocol\0";
     let mut prefix = [0; PREFIX.len()];
     if !matches!(read_fully(reader, &mut prefix)?, ReadOutcome::Complete) || prefix != PREFIX {
@@ -49,7 +90,7 @@ pub(super) fn read_preamble(reader: &mut impl Read) -> io::Result<bool> {
     ) {
         return Ok(false);
     }
-    Ok(&text[..size] == crate::domain::VersionDomain::Hook.current_text().as_bytes())
+    Ok(&text[..size] == version.to_string().as_bytes())
 }
 pub(super) const MAX_PAYLOAD: usize = 16 * 1024 * 1024;
 
@@ -130,12 +171,13 @@ impl ConnectedProtocol {
         }
         // Reject an oversized Session before emitting even its preamble.
         let payload = encode_payload(session)?;
+        let version = session_version(session)?;
         let reader = stream.try_clone()?;
         let mut writer = ProtocolWriter { stream };
-        writer.write_preamble()?;
+        writer.write_preamble_for_version(version)?;
         writer.write_payload(&payload)?;
         let (sender, receiver) = mpsc::sync_channel(2);
-        thread::spawn(move || read_hook_messages(reader, &sender, operation));
+        thread::spawn(move || read_hook_messages(reader, &sender, operation, version));
         Ok(Self { writer, receiver })
     }
 }
@@ -146,7 +188,13 @@ pub(super) struct ProtocolWriter {
 
 impl ProtocolWriter {
     fn write_preamble(&mut self) -> io::Result<()> {
-        self.stream.write_all(PREAMBLE)?;
+        self.write_preamble_for_version(crate::domain::FormatVersion::BASELINE)
+    }
+    fn write_preamble_for_version(
+        &mut self,
+        version: crate::domain::FormatVersion,
+    ) -> io::Result<()> {
+        self.stream.write_all(preamble_for_version(version)?)?;
         self.stream.flush()
     }
 
@@ -244,8 +292,11 @@ fn read_hook_messages(
     mut stream: ProtocolStream,
     sender: &mpsc::SyncSender<WireEvent>,
     operation: SessionOperation,
+    version: crate::domain::FormatVersion,
 ) {
-    read_wire_events_for(&mut stream, operation, |event| sender.send(event).is_ok());
+    read_wire_events_for_contract(&mut stream, operation, version, |event| {
+        sender.send(event).is_ok()
+    });
 }
 
 /// Decodes the Hook direction of a Frozen V1 stream until the first fault,
@@ -258,9 +309,23 @@ pub(super) fn read_wire_events(reader: &mut impl Read, deliver: impl FnMut(WireE
 pub(super) fn read_wire_events_for(
     reader: &mut impl Read,
     operation: SessionOperation,
+    deliver: impl FnMut(WireEvent) -> bool,
+) {
+    read_wire_events_for_contract(
+        reader,
+        operation,
+        crate::domain::FormatVersion::BASELINE,
+        deliver,
+    )
+}
+
+pub(super) fn read_wire_events_for_contract(
+    reader: &mut impl Read,
+    operation: SessionOperation,
+    version: crate::domain::FormatVersion,
     mut deliver: impl FnMut(WireEvent) -> bool,
 ) {
-    match read_preamble(reader) {
+    match read_preamble_for_version(reader, version) {
         Ok(true) => {}
         Ok(false) => {
             deliver(WireEvent::Failure(invalid_preamble()));
@@ -308,7 +373,7 @@ pub(super) fn read_wire_events_for(
                 return;
             }
         }
-        match parse_hook_message_for(&payload, operation) {
+        match parse_hook_message_for_contract(&payload, operation, version) {
             Ok(message) => {
                 if !deliver(WireEvent::Message(message)) {
                     return;
@@ -391,6 +456,7 @@ pub(super) struct HookCompletion {
     pub(super) code: Option<HookCodeV1>,
     pub(super) message: Option<String>,
     pub(super) produced_outputs: Vec<String>,
+    pub(super) produced_target_outputs: Vec<String>,
     pub(super) service_content: Vec<CaptureServiceContentSubmission>,
     pub(super) operation: SessionOperation,
 }
@@ -407,6 +473,22 @@ pub(super) fn parse_hook_message_for(
     payload: &[u8],
     operation: SessionOperation,
 ) -> Result<HookMessage, ProtocolFailure> {
+    parse_hook_message_for_contract(payload, operation, crate::domain::FormatVersion::BASELINE)
+}
+
+pub(super) fn parse_hook_message_for_contract(
+    payload: &[u8],
+    operation: SessionOperation,
+    version: crate::domain::FormatVersion,
+) -> Result<HookMessage, ProtocolFailure> {
+    if version != crate::domain::FormatVersion::BASELINE
+        && version != crate::domain::operation_hook_version()
+    {
+        return Err(ProtocolFailure::new(
+            "unsupported_protocol_version",
+            "unsupported owner-selected Hook contract",
+        ));
+    }
     let raw = parse_json(payload, MAX_PAYLOAD).map_err(|error| {
         let code = match error.kind() {
             StrictJsonErrorKind::InvalidUtf8 => "invalid_utf8",
@@ -423,7 +505,7 @@ pub(super) fn parse_hook_message_for(
         "diagnostic" => parse_diagnostic(object),
         "request" => parse_request(object),
         "cancel_ack" => parse_cancel_ack(object),
-        "complete" => parse_completion(object, operation),
+        "complete" => parse_completion(object, operation, version),
         "protocol_error" => parse_hook_protocol_error(object),
         _ => Err(ProtocolFailure::new(
             "unexpected_message",
@@ -493,28 +575,28 @@ fn parse_cancel_ack(mut object: Fields) -> Result<HookMessage, ProtocolFailure> 
 fn parse_completion(
     mut object: Fields,
     operation: SessionOperation,
+    version: crate::domain::FormatVersion,
 ) -> Result<HookMessage, ProtocolFailure> {
-    closed(
-        &object,
-        match operation {
-            SessionOperation::Action => {
-                &["operation", "status", "produced_outputs", "code", "message"]
-            }
-            SessionOperation::Capture => {
-                &["operation", "status", "service_content", "code", "message"]
-            }
-            SessionOperation::Restore | SessionOperation::Cleanup => {
-                &["operation", "status", "code", "message"]
-            }
-            SessionOperation::Migration => &[
-                "operation",
-                "status",
-                "produced_target_outputs",
-                "code",
-                "message",
-            ],
-        },
-    )?;
+    let common_outputs = version == crate::domain::operation_hook_version();
+    let fields: &[&str] = match operation {
+        SessionOperation::Action => &["operation", "status", "produced_outputs", "code", "message"],
+        SessionOperation::Capture => &["operation", "status", "service_content", "code", "message"],
+        SessionOperation::Restore | SessionOperation::Cleanup => {
+            &["operation", "status", "code", "message"]
+        }
+        SessionOperation::Migration => &[
+            "operation",
+            "status",
+            "produced_target_outputs",
+            "code",
+            "message",
+        ],
+    };
+    let mut fields = fields.to_vec();
+    if common_outputs && operation != SessionOperation::Action {
+        fields.push("produced_outputs");
+    }
+    closed(&object, &fields)?;
     if take_string(&mut object, "operation")? != operation.wire_name() {
         return Err(ProtocolFailure::new(
             "invalid_completion",
@@ -538,27 +620,13 @@ fn parse_completion(
         Some(RawJsonValue::String(value)) => Some(value),
         Some(_) => return Err(invalid_message()),
     };
-    let produced_outputs = if matches!(
-        operation,
-        SessionOperation::Action | SessionOperation::Migration
-    ) {
-        take_array(
-            &mut object,
-            if operation == SessionOperation::Migration {
-                "produced_target_outputs"
-            } else {
-                "produced_outputs"
-            },
-        )?
-        .into_iter()
-        .map(|value| match value {
-            RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
-            _ => Err(ProtocolFailure::new(
-                "invalid_authority",
-                "output authority handle is not an AuthorityHandleV1",
-            )),
-        })
-        .collect::<Result<Vec<_>, _>>()?
+    let produced_outputs = if common_outputs || operation == SessionOperation::Action {
+        output_handles(&mut object, "produced_outputs")?
+    } else {
+        Vec::new()
+    };
+    let produced_target_outputs = if operation == SessionOperation::Migration {
+        output_handles(&mut object, "produced_target_outputs")?
     } else {
         Vec::new()
     };
@@ -578,9 +646,23 @@ fn parse_completion(
         code,
         message,
         produced_outputs,
+        produced_target_outputs,
         service_content,
         operation,
     }))
+}
+
+fn output_handles(object: &mut Fields, key: &str) -> Result<Vec<String>, ProtocolFailure> {
+    take_array(object, key)?
+        .into_iter()
+        .map(|value| match value {
+            RawJsonValue::String(value) if is_machine_id(&value) => Ok(value),
+            _ => Err(ProtocolFailure::new(
+                "invalid_authority",
+                "output authority handle is not an AuthorityHandleV1",
+            )),
+        })
+        .collect()
 }
 
 fn parse_capture_content(
@@ -746,8 +828,10 @@ const fn unexpected_message() -> ProtocolFailure {
 #[derive(Debug)]
 pub(super) struct ProtocolState {
     operation: SessionOperation,
+    protocol_version: crate::domain::FormatVersion,
     session_id: String,
     declared_outputs: BTreeSet<String>,
+    declared_target_outputs: BTreeSet<String>,
     phase: Phase,
     risk: RecoveryRiskState,
     pending_request: Option<u64>,
@@ -782,7 +866,9 @@ impl ProtocolState {
         Self {
             session_id,
             operation: SessionOperation::Action,
+            protocol_version: crate::domain::FormatVersion::BASELINE,
             declared_outputs,
+            declared_target_outputs: BTreeSet::new(),
             phase: Phase::AwaitReady,
             risk: RecoveryRiskState::Clear,
             pending_request: None,
@@ -814,8 +900,36 @@ impl ProtocolState {
     pub(super) fn new_migration(session_id: String, outputs: BTreeSet<String>) -> Self {
         Self {
             operation: SessionOperation::Migration,
-            ..Self::new(session_id, outputs)
+            declared_target_outputs: outputs,
+            ..Self::new(session_id, BTreeSet::new())
         }
+    }
+
+    pub(super) fn new_operation_contract(
+        session_id: String,
+        operation: SessionOperation,
+        outputs: BTreeSet<String>,
+        target_outputs: BTreeSet<String>,
+    ) -> Result<Self, ProtocolFailure> {
+        if !outputs.is_disjoint(&target_outputs)
+            || (operation != SessionOperation::Migration && !target_outputs.is_empty())
+            || outputs
+                .iter()
+                .chain(&target_outputs)
+                .any(|id| !is_machine_id(id))
+            || !is_machine_id(&session_id)
+        {
+            return Err(ProtocolFailure::new(
+                "invalid_authority",
+                "invalid operation output authority sets",
+            ));
+        }
+        Ok(Self {
+            operation,
+            protocol_version: crate::domain::operation_hook_version(),
+            declared_target_outputs: target_outputs,
+            ..Self::new(session_id, outputs)
+        })
     }
 
     #[cfg(test)]
@@ -847,10 +961,10 @@ impl ProtocolState {
                 if self.phase != Phase::AwaitReady {
                     return Err(unexpected_message());
                 }
-                if !crate::domain::VersionDomain::Hook.supports(protocol_version) {
+                if protocol_version != self.protocol_version {
                     return Err(ProtocolFailure::new(
                         "unsupported_protocol_version",
-                        "Hook must confirm exact protocol version 1",
+                        "Hook must confirm the owner-selected protocol version",
                     ));
                 }
                 if session_id != self.session_id {
@@ -942,11 +1056,26 @@ impl ProtocolState {
                         ));
                     }
                 }
+                let mut submitted_targets = BTreeSet::new();
+                for handle in &completion.produced_target_outputs {
+                    if !submitted_targets.insert(handle.as_str()) {
+                        return Err(ProtocolFailure::new(
+                            "duplicate_semantic_key",
+                            "duplicate submitted target handle",
+                        ));
+                    }
+                    if !self.declared_target_outputs.contains(handle) {
+                        return Err(ProtocolFailure::new(
+                            "invalid_authority",
+                            "Hook submitted an unallocated target output handle",
+                        ));
+                    }
+                }
                 if self.operation == SessionOperation::Migration
                     && ((completion.status == HookCompletionStatus::Success
-                        && submitted.len() != self.declared_outputs.len())
+                        && submitted_targets.len() != self.declared_target_outputs.len())
                         || (completion.status == HookCompletionStatus::Failure
-                            && !submitted.is_empty()))
+                            && !submitted_targets.is_empty()))
                 {
                     return Err(ProtocolFailure::new(
                         "invalid_completion",

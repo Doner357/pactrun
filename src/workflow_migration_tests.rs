@@ -86,6 +86,7 @@ fn setup(with_hook: bool) -> (TransitionRevision, Repository) {
     let b = revision(2, Some(1), false);
     let c = revision(3, Some(2), with_hook);
     let intent = TransitionRevision {
+        parameters: Vec::new(),
         instance: InstanceId::from_bytes([1; 16]),
         expected_state_version: InstanceStateVersion::from_bytes([2; 16]),
         source: a.identity.clone(),

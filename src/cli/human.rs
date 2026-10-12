@@ -308,7 +308,10 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
     }
     if details {
         write(out, format!("Phase: {}", text(state, "phase")))?;
-        if let Some(artifacts) = state["artifacts"].as_array() {
+        if let Some(artifacts) = value["published_artifacts"]
+            .as_array()
+            .or_else(|| state["artifacts"].as_array())
+        {
             for artifact in artifacts {
                 write(
                     out,
@@ -318,6 +321,16 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                         text(artifact, "byte_length")
                     ),
                 )?;
+                if artifact["edge"].is_object() {
+                    write(
+                        out,
+                        format!(
+                            "  Edge: {}/{}",
+                            text(&artifact["edge"], "source_revision_digest"),
+                            text(&artifact["edge"], "target_revision_digest")
+                        ),
+                    )?;
+                }
             }
         }
         if value["current_recovery_guard"].is_null() {
@@ -511,19 +524,74 @@ fn page_footer(
     }
     Ok(())
 }
+fn input_status(value: &Value) -> &'static str {
+    match value["required_inputs_satisfied"]
+        .as_bool()
+        .or_else(|| value["legacy_required_inputs"]["satisfied"].as_bool())
+    {
+        Some(true) => "Satisfied",
+        Some(false) => "Missing",
+        None if value["input_requirements"].is_array() => "Per operation",
+        None => "Not evaluated",
+    }
+}
+fn operation_requirements(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
+    let Some(items) = value["input_requirements"].as_array() else {
+        return Ok(());
+    };
+    if items.is_empty() {
+        return Ok(());
+    }
+    write(out, "\nInput requirements by operation")?;
+    table(
+        &["OPERATION", "INPUTS", "MISSING"],
+        items
+            .iter()
+            .map(|item| {
+                let operation = &item["operation"];
+                let label = if operation["kind"] == "action" {
+                    format!("action {}", text(operation, "action_id"))
+                } else {
+                    text(operation, "kind").replace('_', " ")
+                };
+                let missing = item["missing"]
+                    .as_array()
+                    .map(|refs| {
+                        refs.iter()
+                            .map(|r| {
+                                if r["role"] == "retained" {
+                                    format!("retained/{}", text(r, "input_id"))
+                                } else {
+                                    text(r, "input_id")
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .unwrap_or_default();
+                vec![
+                    label,
+                    match item["state"].as_str() {
+                        Some("satisfied") => "Satisfied",
+                        Some("missing") => "Missing",
+                        _ => "Not evaluated",
+                    }
+                    .into(),
+                    if missing.is_empty() {
+                        "-".into()
+                    } else {
+                        missing
+                    },
+                ]
+            })
+            .collect(),
+        out,
+    )
+}
 fn instance(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
     write(out, format!("Instance: {}", text(value, "name")))?;
-    write(
-        out,
-        format!(
-            "\nRequired inputs: {}",
-            if value["required_inputs_satisfied"].as_bool() == Some(true) {
-                "Satisfied"
-            } else {
-                "Missing"
-            }
-        ),
-    )?;
+    write(out, format!("\nRequired inputs: {}", input_status(value)))?;
+    operation_requirements(value, out)?;
     write(
         out,
         format!(
@@ -549,7 +617,9 @@ fn instance(value: &Value, out: &mut dyn Write) -> Result<(), CliError> {
                     vec![
                         text(input, "input_id"),
                         text(input, "role"),
-                        if input["required"] == true {
+                        if input.get("required").is_none() && input["role"] == "active" {
+                            "Per operation"
+                        } else if input["required"] == true {
                             "Yes"
                         } else {
                             "No"
@@ -792,12 +862,7 @@ pub(super) fn render(
                     .map(|item| {
                         vec![
                             text(item, "name"),
-                            if item["required_inputs_satisfied"].as_bool() == Some(true) {
-                                "Satisfied"
-                            } else {
-                                "Missing"
-                            }
-                            .into(),
+                            input_status(item).into(),
                             if item["recovery_guard"].is_null() {
                                 "None"
                             } else {
@@ -827,6 +892,7 @@ pub(super) fn render(
                             match item["required"].as_bool() {
                                 Some(true) => "Active (required)",
                                 Some(false) => "Active (optional)",
+                                None if item["role"] == "active" => "Active (per operation)",
                                 None => "Retained",
                             }
                             .into(),
@@ -1096,7 +1162,13 @@ pub(super) fn render(
                     text(value, "expected_state_version")
                 ),
             )?;
-            if let Some(missing) = value["missing_input_ids"]
+            if value["input_requirements"].is_array() {
+                operation_requirements(value, out)?;
+                write(
+                    out,
+                    "Input requirements are checked again at admission; other execution checks still apply.",
+                )?;
+            } else if let Some(missing) = value["missing_input_ids"]
                 .as_array()
                 .filter(|ids| !ids.is_empty())
             {

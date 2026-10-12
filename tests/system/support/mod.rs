@@ -465,7 +465,7 @@ pub(crate) fn assert_empty_json_result(output: &Output, field: &str) {
     assert_success(output);
     let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.3");
+    assert_eq!(response["format_version"], "1.0-alpha.4");
     assert_eq!(response["status"], "success");
     assert!(response["error"].is_null());
     assert!(
@@ -531,7 +531,7 @@ pub(crate) fn instance_projection(output: &Output) -> InstanceProjection {
 pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProjection> {
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["format"], "pactrun.cli");
-    assert_eq!(response["format_version"], "1.0-alpha.3");
+    assert_eq!(response["format_version"], "1.0-alpha.4");
     assert_eq!(response["status"], "success");
     response["result"]["items"]
         .as_array()
@@ -541,7 +541,8 @@ pub(crate) fn instance_list_projections(output: &Output) -> Vec<InstanceListProj
             assert!(row["instance_id"].is_string());
             assert!(row["active_revision"].is_object());
             assert!(row["state_version"].is_string());
-            assert!(row["required_inputs_satisfied"].is_boolean());
+            assert!(row.get("required_inputs_satisfied").is_none());
+            assert!(row["legacy_required_inputs"]["satisfied"].is_boolean());
             assert!(
                 row.get("recovery_guard")
                     .is_some_and(|g| g.is_null() || g.is_object())

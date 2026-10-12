@@ -7,6 +7,11 @@ use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum MigrationError {
+    InvalidParameterTarget,
+    Parameters {
+        edge: MigrationEdgeIdentity,
+        error: ActionResolutionError,
+    },
     CrossLineage,
     ZeroEdges,
     RepeatedRevision,
@@ -34,6 +39,8 @@ pub(crate) enum MigrationError {
 impl fmt::Display for MigrationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidParameterTarget => f.write_str("Migration parameters must name an exact edge on the selected path"),
+            Self::Parameters { edge, error } => write!(f, "Migration edge {} -> {}: {error}", edge.source, edge.target),
             Self::CrossLineage => f.write_str("Migration must stay within one Package lineage"),
             Self::ZeroEdges => f.write_str("Migration needs at least one edge"),
             Self::RepeatedRevision => f.write_str("Migration path repeats a Revision"),
@@ -79,6 +86,10 @@ pub(crate) struct MigrationCompilationObservation {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MigrationCompiledEdge {
+    pub(crate) parameters: Vec<ParameterBinding>,
+    pub(crate) outputs: Vec<ManagedOutputIdentity>,
+    pub(crate) source_inputs: Option<BindingInputUse>,
+    pub(crate) target_inputs: Option<ActiveInputUse>,
     pub(crate) bindings: MigrationEdgePlan,
     pub(crate) runtime: Vec<RuntimeFileV1>,
     pub(crate) launch: Option<CompiledHookLaunch>,
@@ -226,6 +237,7 @@ pub(crate) enum MigrationPathSelection {
 /// Typed intent, never a raw CLI path ID. Exact paths include both endpoints.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TransitionRevision {
+    pub(crate) parameters: Vec<MigrationParameterInput>,
     pub(crate) instance: InstanceId,
     pub(crate) expected_state_version: InstanceStateVersion,
     pub(crate) source: RevisionIdentity,
@@ -233,6 +245,71 @@ pub(crate) struct TransitionRevision {
     pub(crate) path: MigrationPathSelection,
     pub(crate) operator_inputs: Vec<MigrationTargetInput>,
     pub(crate) authorize_declassification: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct MigrationEdgeIdentity {
+    pub(crate) source: RevisionContentDigest,
+    pub(crate) target: RevisionContentDigest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct MigrationParameterInput {
+    pub(crate) edge: MigrationEdgeIdentity,
+    pub(crate) parameter: RawParameterInput,
+}
+
+pub(crate) fn bind_migration_parameters(
+    path: &[RevisionIdentity],
+    revisions: &[MigrationRevision],
+    supplied: &[MigrationParameterInput],
+) -> Result<BTreeMap<MigrationEdgeIdentity, Vec<ParameterBinding>>, MigrationError> {
+    MigrationPathId::for_path(path)?;
+    let mut scopes = BTreeMap::new();
+    for pair in path.windows(2) {
+        scopes.insert(
+            MigrationEdgeIdentity {
+                source: pair[0].content_digest,
+                target: pair[1].content_digest,
+            },
+            Vec::new(),
+        );
+    }
+    for input in supplied {
+        scopes
+            .get_mut(&input.edge)
+            .ok_or(MigrationError::InvalidParameterTarget)?
+            .push(input.parameter.clone());
+    }
+    let mut bound = BTreeMap::new();
+    for pair in path.windows(2) {
+        let scope = MigrationEdgeIdentity {
+            source: pair[0].content_digest,
+            target: pair[1].content_digest,
+        };
+        let target = revisions
+            .iter()
+            .find(|r| r.identity == pair[1])
+            .ok_or(MigrationError::MissingRevision)?;
+        let site = ServiceHookSite::Migration(Sha256Digest::from_bytes(
+            *pair[0].content_digest.as_bytes(),
+        ));
+        let parameters = target
+            .content
+            .core
+            .parameters(&site)
+            .ok_or(MigrationError::InvalidEdge)?;
+        let values = bind_operation_parameters(
+            parameters,
+            scopes.remove(&scope).expect("selected edge scope"),
+        )
+        .map_err(|error| MigrationError::Parameters {
+            edge: scope.clone(),
+            error,
+        })?;
+        bound.insert(scope, values);
+    }
+    Ok(bound)
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -527,16 +604,14 @@ pub(crate) fn build_migration_binding_plan(
         let declaration = target
             .content
             .core
-            .migrations()
-            .iter()
-            .find(|edge| {
-                edge.source_revision_digest.to_bytes() == *source.identity.content_digest.as_bytes()
-            })
+            .migration_declaration(&Sha256Digest::from_bytes(
+                *source.identity.content_digest.as_bytes(),
+            ))
             .ok_or(MigrationError::InvalidEdge)?;
         let edge = evaluate_edge(
             source,
             target,
-            declaration,
+            &declaration,
             &bindings,
             &operators,
             intent.authorize_declassification,
@@ -568,9 +643,9 @@ pub(crate) fn evaluate_migration_edge(
     let edge = target
         .content
         .core
-        .migrations()
-        .iter()
-        .find(|e| e.source_revision_digest.to_bytes() == *source.identity.content_digest.as_bytes())
+        .migration_declaration(&Sha256Digest::from_bytes(
+            *source.identity.content_digest.as_bytes(),
+        ))
         .ok_or(MigrationError::InvalidEdge)?;
     for input in operators {
         if input.revision != target.identity.content_digest
@@ -591,7 +666,7 @@ pub(crate) fn evaluate_migration_edge(
         }
     }
     promote_declared_protection(&mut registry, source.content.core.inputs());
-    evaluate_edge(source, target, edge, &registry, operators, authorize)
+    evaluate_edge(source, target, &edge, &registry, operators, authorize)
 }
 
 fn declared_protection(input: &InputDeclarationV1) -> ManagedInputProtection {
@@ -637,6 +712,14 @@ fn evaluate_edge(
         && !VersionDomain::Hook.supports(hook.protocol_version)
     {
         return Err(MigrationError::UnsupportedProtocol(hook.protocol_version));
+    }
+    if edge.hook.as_ref().is_some_and(|hook| {
+        !target
+            .content
+            .core
+            .hook_protocol_matches(hook.protocol_version)
+    }) {
+        return Err(MigrationError::InvalidEdge);
     }
     if !edge.produces_target.is_empty() && edge.hook.is_none() {
         return Err(MigrationError::OutputsWithoutHook);

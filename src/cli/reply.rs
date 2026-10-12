@@ -14,6 +14,18 @@ pub(super) struct InputBindingAdvice {
 #[derive(Clone, Copy)]
 pub(super) struct OutputContext<'a>(pub(super) &'a Capture);
 impl OutputContext<'_> {
+    pub(super) fn version(self) -> machine::Version {
+        self.0.version
+    }
+    pub(super) fn require_revisions(
+        self,
+        rows: &[crate::domain::RevisionCatalogEntry],
+    ) -> Result<(), CliError> {
+        for row in rows {
+            self.version().require_core(&row.core)?;
+        }
+        Ok(())
+    }
     pub(super) fn requires_noninteractive(self) -> bool {
         !self.0.interactive
     }
@@ -65,6 +77,7 @@ pub(super) struct Capture {
     pub(super) interactive: bool,
     value: Mutex<Option<Box<dyn Prepared>>>,
     display: DisplayOptions,
+    version: machine::Version,
 }
 impl std::fmt::Debug for Capture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -78,7 +91,12 @@ impl Capture {
             interactive,
             value: Mutex::new(None),
             display,
+            version: machine::Version::default(),
         }
+    }
+    pub(super) fn with_version(mut self, version: machine::Version) -> Self {
+        self.version = version;
+        self
     }
     pub(super) fn publish<T: Serialize + Send + 'static>(
         &self,
@@ -117,6 +135,7 @@ impl Capture {
             error,
             raw,
             display: self.display,
+            version: self.version,
         }
     }
 }
@@ -127,6 +146,7 @@ pub(super) struct Reply {
     pub(super) error: Option<CliError>,
     raw: bool,
     display: DisplayOptions,
+    version: machine::Version,
 }
 impl Reply {
     pub(super) fn unavailable(command: &'static str, run: Option<String>) -> Self {
@@ -139,7 +159,12 @@ impl Reply {
             error: Some(error),
             raw: false,
             display: DisplayOptions::default(),
+            version: machine::Version::default(),
         }
+    }
+    pub(super) fn with_version(mut self, version: machine::Version) -> Self {
+        self.version = version;
+        self
     }
     pub(super) fn exit_code(&self) -> i32 {
         self.error
@@ -153,6 +178,7 @@ impl Reply {
         sequence: Option<&str>,
     ) -> Result<(), CliError> {
         let envelope = presentation::Envelope {
+            version: self.version,
             command: self.command,
             error: self.error.as_ref(),
             delivery,
@@ -209,7 +235,10 @@ impl Reply {
                         let _ = human::partial(&view, stderr);
                     }
                     return report_cli_failure(
-                        format,
+                        machine::Selection {
+                            format,
+                            version: self.version,
+                        },
                         Some(self.command),
                         self.raw,
                         error,

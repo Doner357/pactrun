@@ -202,8 +202,33 @@ impl Failure {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Artifact {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    edge: Option<ArtifactEdge>,
     output_id: String,
     byte_length: String,
+}
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+pub(super) struct ArtifactEdge {
+    source_revision_digest: String,
+    target_revision_digest: String,
+}
+impl From<&crate::domain::MigrationEdgeIdentity> for ArtifactEdge {
+    fn from(edge: &crate::domain::MigrationEdgeIdentity) -> Self {
+        Self {
+            source_revision_digest: edge.source.to_string(),
+            target_revision_digest: edge.target.to_string(),
+        }
+    }
+}
+impl From<&crate::domain::RunArtifactSummary> for Artifact {
+    fn from(artifact: &crate::domain::RunArtifactSummary) -> Self {
+        Self {
+            edge: artifact.edge.as_ref().map(Into::into),
+            output_id: artifact.output.as_str().into(),
+            byte_length: artifact.byte_length.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -260,14 +285,7 @@ impl From<&RunState> for State {
                     .as_ref()
                     .map(|c| format_hook_status(c.status)),
                 legacy_hook_completion_text: "withheld",
-                artifacts: v
-                    .artifacts
-                    .iter()
-                    .map(|a| Artifact {
-                        output_id: a.output.as_str().into(),
-                        byte_length: a.byte_length.to_string(),
-                    })
-                    .collect(),
+                artifacts: v.artifacts.iter().map(Into::into).collect(),
             },
         }
     }
@@ -464,6 +482,8 @@ struct MigrationProgress {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Inspection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    published_artifacts: Option<Vec<Artifact>>,
     run: Run,
     current_recovery_guard: Option<presentation::Guard>,
     capture_result: Option<String>,
@@ -483,6 +503,7 @@ pub(super) struct RefusedExecution {
 impl From<&crate::domain::ManagedRunInspectionData> for Inspection {
     fn from(view: &crate::domain::ManagedRunInspectionData) -> Self {
         Self {
+            published_artifacts: None,
             run: (&view.run).into(),
             current_recovery_guard: view.current_recovery_guard.as_ref().map(Into::into),
             capture_result: view.capture_result.map(|id| id.to_string()),
@@ -495,6 +516,32 @@ impl From<&crate::domain::ManagedRunInspectionData> for Inspection {
         }
     }
 }
+impl Inspection {
+    pub(super) fn for_version(
+        view: &crate::domain::ManagedRunInspectionData,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        version.require_run(&view.run)?;
+        version.require_artifacts(&view.published_artifacts)?;
+        if version == machine::Version::Legacy
+            && !matches!(
+                view.run.operation,
+                crate::domain::ManagedRunIdentity::Action(_)
+            )
+            && !view.published_artifacts.is_empty()
+        {
+            return Err(CliError::operation(
+                "machine interface 1.0-alpha.3 cannot represent this operation's artifacts; select --machine-version 1.0-alpha.4",
+            ));
+        }
+        let mut result = Self::from(view);
+        if version == machine::Version::Operations {
+            result.published_artifacts =
+                Some(view.published_artifacts.iter().map(Into::into).collect());
+        }
+        Ok(result)
+    }
+}
 
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
@@ -505,6 +552,8 @@ pub(super) struct Reconciled {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Action {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inputs: Option<machine::ActiveInputs>,
     action_id: String,
     access: &'static str,
     terminal: &'static str,
@@ -552,6 +601,7 @@ struct Parameter {
 impl From<&ActionV1> for Action {
     fn from(action: &ActionV1) -> Self {
         Self {
+            inputs: None,
             metadata: definitions::Text::default(),
             outputs: action
                 .outputs
@@ -626,6 +676,8 @@ impl Action {
     pub(super) fn defined(action: &ActionV1, row: &crate::domain::RevisionCatalogEntry) -> Self {
         use crate::domain::{PresentationTargetV1 as T, ServiceHookSite};
         let mut result = Self::from(action);
+        result.inputs =
+            definitions::active_inputs(&row.core, ServiceHookSite::Action(action.id.clone()));
         result.metadata = definitions::Text::new(&row.metadata, T::Action(action.id.clone()));
         for (parameter, source) in result.parameters.iter_mut().zip(&action.parameters) {
             parameter.metadata = definitions::Text::new(
@@ -749,8 +801,12 @@ pub(super) struct Plan {
     revision: presentation::Revision,
     expected_state_version: String,
     access: &'static str,
-    required_inputs_satisfied: bool,
-    missing_input_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    required_inputs_satisfied: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_input_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_requirements: Option<Vec<machine::Assessment>>,
     terminal: &'static str,
     protocol_version: String,
     parameters: Vec<PlanParameter>,
@@ -766,6 +822,19 @@ pub(super) struct Plan {
 }
 
 impl Plan {
+    pub(super) fn with_version(
+        mut self,
+        plan: &ActionExecutionPlan,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        version.require_hook(plan.protocol_version())?;
+        if version == machine::Version::Operations {
+            self.required_inputs_satisfied = None;
+            self.missing_input_ids = None;
+            self.input_requirements = Some(vec![machine::Assessment::action(plan)]);
+        }
+        Ok(self)
+    }
     pub(super) fn new(
         plan: &ActionExecutionPlan,
         recovery_override: bool,
@@ -779,12 +848,14 @@ impl Plan {
             revision: plan.active_revision().into(),
             expected_state_version: plan.expected_state_version().to_string(),
             access: access_name(plan.access()),
-            required_inputs_satisfied: plan.required_inputs_satisfied(),
-            missing_input_ids: plan
-                .missing_input_ids()
-                .iter()
-                .map(|id| id.as_str().to_owned())
-                .collect(),
+            required_inputs_satisfied: Some(plan.required_inputs_satisfied()),
+            missing_input_ids: Some(
+                plan.missing_input_ids()
+                    .iter()
+                    .map(|id| id.as_str().to_owned())
+                    .collect(),
+            ),
+            input_requirements: None,
             terminal: terminal_name(plan.terminal()),
             protocol_version: plan.protocol_version().to_string(),
             parameters: plan
