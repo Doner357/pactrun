@@ -49,10 +49,12 @@ def install(name, manifest, script=None):
         filename, content = script
         (pack / filename).write_text(content, encoding='utf-8')
     (pack / 'pactrun.yaml').write_text(manifest, encoding='utf-8')
-    output = run('pack', 'install', str(pack))
-    reference = re.search(r'exact:[0-9a-f]{32}/sha256:[0-9a-f]{64}', output)
-    assert reference, output
-    return reference.group()
+    output = json.loads(run('--format', 'json', 'pack', 'install', str(pack)))
+    assert output['status'] == 'success', output
+    revision = output['result']['revision']
+    assert re.fullmatch('[0-9a-f]{32}', revision['package_id']), revision
+    assert re.fullmatch('sha256:[0-9a-f]{64}', revision['content_digest']), revision
+    return revision['package_id'] + ':' + revision['content_digest'].removeprefix('sha256:')
 
 version = run('--version').strip()
 reference = install('minimal', block('docs/introduction.md', 'yaml'))

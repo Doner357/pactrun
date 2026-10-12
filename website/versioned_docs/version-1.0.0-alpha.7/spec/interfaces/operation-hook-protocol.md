@@ -1,0 +1,90 @@
+---
+title: Operation-scoped Hook Protocol
+---
+
+# Operation-scoped Hook Protocol
+
+## Applicability
+
+Hook Protocol `1.0-alpha.2` is selected
+only by [Revision `1.0-alpha.2`](../packages/operation-format.md). The existing
+[Hook Protocol `1.0-alpha.1`](./hook-protocol.md) keeps its exact Session schema,
+full operation context and meaning. Identical framing does not imply identical
+Input authority.
+
+### PR-REQ-0387 - Operation-scoped Session contract
+
+The new protocol MUST use the existing dedicated transport, bounds, strict JSON,
+request identifiers, lifecycle, completion, recovery, cancellation and failure
+rules, with the exact preamble and Session-confirmed version `1.0-alpha.2`.
+There is no negotiation or fallback to `1.0-alpha.1`. All unchanged message
+shapes remain closed under the old protocol's definitions.
+
+The binding arrays in every operation Session MUST contain exactly the present
+bindings in the union of that operation's required and optional read grants,
+using [operation Input authority](../operations/input-authority.md). Action,
+Capture and Restore bindings remain active-only. Migration source/target and
+Cleanup role distinctions remain explicit. No undeclared binding descriptor,
+handle, path or materialized Input payload may be supplied to the Hook.
+
+`BindingAuthorityV1` retains its existing shape and semantic ordering. An
+authorized absent optional binding has no descriptor and no empty-file
+substitute. Requirements remain in the identity-bearing Revision, not a new
+Hook-controlled request to expand authority. The Hook cannot ask Pactrun to
+upgrade optional to required or grant undeclared inputs during a Session.
+
+Restore retains exact producer/target Revision equality and does not add a
+separate producer field to its Session. All operations additionally expose the
+common parameters and ordinary output authorities specified by
+[common operation capabilities](../operations/common-capabilities.md), without
+conflating them with specialized Snapshot or Migration outputs. The root
+Session `parameters` array uses the existing parameter-value representation
+for every operation, including Migration and Cleanup.
+
+Each Capture, Restore, Migration and Cleanup operation object adds the required
+`outputs: ActionOutputAuthorityV1[]` field; Action retains that field unchanged.
+Each allocated slot belongs only to this Session. Migration `target_outputs`
+remain a separate array of Input output authorities, not ordinary artifact slots.
+
+Every new-protocol completion MUST include `produced_outputs: AuthorityHandleV1[]`,
+including an empty array when no ordinary outputs are submitted. Other completion
+fields retain their operation-specific meanings. In particular Migration retains
+the separate required `produced_target_outputs` array, and Capture retains
+`service_content`. Duplicate, unallocated and cross-category handles are invalid.
+Failed completions may submit ordinary outputs, but MUST NOT submit Migration
+target Input outputs or Capture service content. Old-protocol completion fields
+and closed-schema rejection rules remain unchanged.
+
+For service-transform Migration, `target_ready` remains the specialized success
+proposal rather than a successful `complete`. In the new protocol it additionally
+requires `produced_outputs: AuthorityHandleV1[]` for ordinary artifacts. Target
+Input handles remain in `produced_target_outputs`. All submitted ordinary handles
+must be allocated to that Session and unique. The receipt still does not prove
+managed publication or clear recovery risk; ordinary output acquisition must
+succeed before the owner can commit the edge. A failed `complete` may submit
+ordinary diagnostics without authorizing any target-state publication.
+Ordinary handles in a protocol-accepted target proposal remain eligible for
+diagnostic retention if execution subsequently fails; this eligibility MUST NOT
+be recorded as successful Hook completion, risk clearance, or target commit.
+
+Shell helpers `output` and `output-register` accept `--scope ordinary|target`.
+The default remains target Input output for Migration and ordinary output for
+other operations. Explicit ordinary scope selects Migration reports; target
+scope is unavailable outside Migration. Same-name target Inputs and reports
+remain distinct, and handles cannot be shared between the two authority sets.
+Failure completion submits registered ordinary reports but no target Input
+outputs. Existing unqualified Migration helper calls retain their meaning.
+
+Pactrun MUST authorize every Input access/resolution against the same admitted
+grant set. Undeclared guessed references MUST be rejected without disclosing
+presence or protection; they are invalid authorities under the existing protocol
+violation rules, not a new fallback lookup or an empty read. Requiredness does
+not grant any write authority. Output submissions and ServiceStorage access keep
+their separate declared authority and validation.
+
+The complete internally pinned binding state MUST remain available to Pactrun
+for Capture and Restore publication. Filtered Session arrays MUST NOT become
+the source of complete Snapshot state. Protocol acceptance is still not a
+managed publication boundary. These rules do not sandbox the native process.
+
+**Verification: PR-TEST-0709, PR-TEST-0710, PR-TEST-0711, PR-TEST-0712, PR-TEST-0713, PR-TEST-0720, PR-TEST-0723, PR-TEST-0733.**

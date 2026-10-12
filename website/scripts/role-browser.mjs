@@ -78,8 +78,9 @@ try {
   assert.ok(response.ok());
   const responseSchema = await response.json();
   assert.equal(responseSchema.properties.format.const, 'pactrun.cli');
-  await article().getByRole('link', {name: 'JSON/JSONL reference', exact: true}).click();
-  await article().getByRole('heading', {name: 'JSON and JSONL reference', exact: true}).waitFor();
+  const operationInterface = responseSchema.properties.format_version.const === '1.0-alpha.4';
+  await article().getByRole('link', {name: operationInterface ? 'Current JSON/JSONL reference' : 'JSON/JSONL reference', exact: true}).click();
+  await article().getByRole('heading', {name: operationInterface ? 'Current JSON and JSONL reference' : 'JSON and JSONL reference', exact: true}).waitFor();
   assert.ok((await article().innerText()).includes('format_version'));
   assert.ok((await article().innerText()).includes(responseSchema.properties.format_version.const));
   checks.push('user vocabulary, machine-output meanings and schema stay in Users');

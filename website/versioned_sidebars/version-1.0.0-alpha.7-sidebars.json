@@ -1,0 +1,232 @@
+{
+  "docsSidebar": [
+    "index",
+    {
+      "type": "category",
+      "label": "Users",
+      "collapsed": true,
+      "items": [
+        "guides/index",
+        "guides/installation",
+        "introduction",
+        "guides/use-pack",
+        {
+          "type": "category",
+          "label": "Choose a task",
+          "collapsed": false,
+          "items": [
+            "guides/configure-inputs",
+            "guides/run-and-diagnose",
+            "guides/service-resources",
+            "pactrun-users/operations/snapshots-migrations-and-recovery",
+            "guides/pack-management",
+            "guides/recovery",
+            "guides/retirement",
+            "guides/data-location"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Concepts",
+          "items": [
+            "pactrun-users/concepts/packages-revisions-and-instances",
+            "pactrun-users/concepts/inputs-secrets-and-readiness",
+            "pactrun-users/concepts/actions-plans-and-runs"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Reference",
+          "collapsed": false,
+          "items": [
+            "pactrun-users/reference/index",
+            "pactrun-users/reference/vocabulary",
+            "pactrun-users/operations/command-and-output-reference",
+            "pactrun-users/operations/invoke-reference",
+            "pactrun-users/reference/command-details",
+            "pactrun-users/reference/snapshot-details",
+            "pactrun-users/reference/migration-details",
+            "pactrun-users/reference/resource-details",
+            "pactrun-users/reference/retirement-details",
+            "pactrun-users/reference/object-lifecycle",
+            "pactrun-users/reference/machine-output",
+            "pactrun-users/reference/snapshot-limits",
+            "pactrun-users/reference/operation-output"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "category",
+      "label": "Pack authors",
+      "items": [
+        "package-authors/index",
+        "package-authors/setup",
+        "package-authors/fundamentals/authoring-model",
+        "package-authors/fundamentals/actions-inputs-and-parameters",
+        "package-authors/fundamentals/recipes-and-runtime-content",
+        "package-authors/managed-capabilities/hooks-recovery-and-cleanup",
+        {
+          "type": "category",
+          "label": "Optional capability tutorials",
+          "items": [
+            "package-authors/managed-capabilities/snapshots-and-managed-data",
+            "package-authors/managed-capabilities/migrations"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Reference",
+          "collapsed": false,
+          "items": [
+            "package-authors/reference/pack-fields",
+            "package-authors/reference/service-fields",
+            "package-authors/reference/shell-loader",
+            "package-authors/reference/hook-protocol",
+            "package-authors/reference/source-format",
+            "package-authors/reference/revision-format",
+            "package-authors/reference/snapshot-limits",
+            "package-authors/reference/operation-format",
+            "package-authors/reference/operation-inputs",
+            "package-authors/reference/operation-hooks",
+            "package-authors/reference/operation-capabilities"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "category",
+      "label": "Pactrun Spec",
+      "collapsed": true,
+      "items": [
+        "spec/index",
+        "spec/catalog",
+        {
+          "type": "category",
+          "label": "System and Core Concepts",
+          "items": [
+            "spec/core/index",
+            "spec/core/system-model",
+            "spec/core/objects",
+            "spec/core/vocabulary"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Packages and Revisions",
+          "items": [
+            "spec/packages/index",
+            "spec/packages/authoring",
+            "spec/packages/source-format",
+            "spec/packages/identity",
+            "spec/packages/local-names",
+            "spec/packages/revision-format",
+            "spec/packages/operation-format",
+            "spec/packages/runtime-content",
+            "spec/packages/metadata",
+            "spec/packages/distribution",
+            "spec/packages/import-identity"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Instances and Data",
+          "items": [
+            "spec/instances/index",
+            "spec/instances/identity-state",
+            "spec/instances/input-declarations",
+            "spec/instances/bindings",
+            "spec/instances/inputs-secrets",
+            "spec/instances/service-resources",
+            "spec/instances/service-storage",
+            "spec/instances/resource-commands"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Operations and Execution",
+          "items": [
+            "spec/operations/index",
+            "spec/operations/action-definitions",
+            "spec/operations/parameters",
+            "spec/operations/actions-plans-runs",
+            "spec/operations/execution",
+            "spec/operations/diagnostics",
+            "spec/operations/input-authority",
+            "spec/operations/common-capabilities"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Snapshots and Restore",
+          "items": [
+            "spec/snapshots/index",
+            "spec/snapshots/behavior",
+            "spec/snapshots/definition",
+            "spec/snapshots/limits",
+            "spec/snapshots/execution",
+            "spec/snapshots/restore-compatibility",
+            "spec/snapshots/commands",
+            "spec/snapshots/integrity",
+            "spec/snapshots/bundles",
+            "spec/snapshots/import-identity"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Migration",
+          "items": [
+            "spec/migrations/index",
+            "spec/migrations/behavior",
+            "spec/migrations/definition",
+            "spec/migrations/execution",
+            "spec/migrations/commands"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Lifecycle and Recovery",
+          "items": [
+            "spec/lifecycle/index",
+            "spec/lifecycle/resource-lifetimes",
+            "spec/lifecycle/objects-gc",
+            "spec/lifecycle/failure",
+            "spec/lifecycle/recovery",
+            "spec/lifecycle/deletion",
+            "spec/lifecycle/retirement"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Hooks and Integration Interfaces",
+          "items": [
+            "spec/interfaces/index",
+            "spec/interfaces/hooks",
+            "spec/interfaces/hook-protocol",
+            "spec/interfaces/operation-hook-protocol",
+            "spec/interfaces/shell-loader",
+            "spec/interfaces/commands",
+            "spec/interfaces/id-selectors",
+            "spec/interfaces/machine-output",
+            "spec/interfaces/operation-machine-output",
+            "spec/interfaces/errors"
+          ]
+        },
+        {
+          "type": "category",
+          "label": "Compatibility and Storage",
+          "items": [
+            "spec/storage/index",
+            "spec/storage/compatibility",
+            "spec/storage/format-domains",
+            "spec/storage/store-opening",
+            "spec/storage/runtime-content",
+            "spec/storage/revision-records",
+            "spec/persistence/persistence-baseline",
+            "spec/persistence/operation-artifacts"
+          ]
+        }
+      ]
+    }
+  ]
+}

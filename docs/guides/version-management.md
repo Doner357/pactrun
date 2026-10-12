@@ -45,24 +45,24 @@ manager's hold/pin state. To resume updates, use `scoop unhold pactrun-preview` 
 
 ## Install an exact published version
 
-Exact entries do not move when a new Preview is published. For alpha.6:
+Exact entries do not move when a new Preview is published. For alpha.7:
 
 ```powershell
 scoop uninstall pactrun-preview
-scoop install pactrun/pactrun-exact-1-0-0-alpha-6
+scoop install pactrun/pactrun-exact-1-0-0-alpha-7
 pactrun --version
 ```
 
 ```sh
 brew uninstall doner357/pactrun/pactrun-preview
-brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-6
+brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-7
 pactrun --version
 ```
 
-The alpha.1 through alpha.5 exact entries remain available as
+The alpha.1 through alpha.6 exact entries remain available as
 `pactrun-exact-1-0-0-alpha-1`, `pactrun-exact-1-0-0-alpha-2` and
 `pactrun-exact-1-0-0-alpha-3`, `pactrun-exact-1-0-0-alpha-4` and
-`pactrun-exact-1-0-0-alpha-5`; publishing alpha.6
+`pactrun-exact-1-0-0-alpha-5`, and `pactrun-exact-1-0-0-alpha-6`; publishing alpha.7
 does not rewrite their assets. The alpha.1 through alpha.3 Linux builds retain
 their glibc 2.39 requirement; selecting one of those older
 exact version is not a workaround for Debian 12 compatibility.
@@ -76,7 +76,7 @@ trying to remove or relabel that data.
 
 ## Updating from alpha.4
 
-Opening an alpha.4 Store with alpha.5 or later upgrades its management schema to
+Opening an alpha.4 Store with alpha.5 or alpha.6 upgrades its management schema to
 Persistence `1.0-alpha.4`, preserving existing Revision and Instance identities.
 Installing the executable alone does not upgrade the Store. An older executable
 cannot reopen the upgraded Store; reinstalling it is not a data rollback.
@@ -84,6 +84,25 @@ cannot reopen the upgraded Store; reinstalling it is not a data rollback.
 Old Revision aliases convert to local names only without information loss.
 Multiple aliases on one Revision or names outside the supported grammar block
 the upgrade and must be corrected with the older version first.
+
+## Updating to alpha.7
+
+Opening a supported older Store with alpha.7 upgrades it to Persistence
+`1.0-alpha.5`. Existing Revision identities, canonical bytes, bindings and
+retained Run artifacts are preserved. The upgrade adds storage for artifacts
+produced by Capture, Restore, Migration and Cleanup. Older executables cannot
+reopen this Store; preserve a backup before upgrading if rollback is needed.
+
+Existing Packs retain their original Input and Hook behavior. New operation-level
+Input declarations use Source `1.0-alpha.3`, Core `1.0-alpha.2` and Hook Protocol
+`1.0-alpha.2`; changing a Pack to this model creates a new Revision rather than
+relabeling the installed one. Restore still requires the Snapshot's exact
+producer Revision.
+
+The default machine interface is now `1.0-alpha.4`. Existing automation may select
+`--format json --machine-version 1.0-alpha.3` before the command for supported
+legacy views. Operations or results that cannot be represented by that interface
+are refused rather than silently dropping information.
 
 ## Stable and Preview switching
 

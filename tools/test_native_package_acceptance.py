@@ -63,7 +63,8 @@ class NativePackageAcceptance(unittest.TestCase):
     def test_install_reference_uses_machine_format_not_human_text_or_product_version(self):
         for fmt, expected in [('1.0-alpha.1', 'exact:'+PACKAGE+'/'+DIGEST),
                               ('1.0-alpha.2', PACKAGE+':'+DIGEST[7:]),
-                              ('1.0-alpha.3', PACKAGE+':'+DIGEST[7:])]:
+                              ('1.0-alpha.3', PACKAGE+':'+DIGEST[7:]),
+                              ('1.0-alpha.4', PACKAGE+':'+DIGEST[7:])]:
             with self.subTest(format=fmt):
                 result = dict(revision=dict(package_id=PACKAGE, content_digest=DIGEST),
                               reference='a-name:another-name', newly_installed=True)
@@ -123,6 +124,18 @@ class NativePackageAcceptance(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Persistence'):
             self.tool.upgrade_fixture_source_format([release('baseline'),release('candidate')],['baseline','candidate'])
 
+    def test_operation_release_upgrade_requires_legacy_source_support(self):
+        baseline=release('baseline','1.0-alpha.2','1.0-alpha.3','1.0-alpha.4')
+        candidate=release('candidate','1.0-alpha.3','1.0-alpha.4','1.0-alpha.5')
+        candidate['supported_formats']['pack_source'].append('1.0-alpha.2')
+        records=[baseline,candidate]
+        self.assertEqual(self.tool.upgrade_fixture_source_format(records,['baseline','candidate']),'1.0-alpha.2')
+        with self.assertRaisesRegex(ValueError,'Persistence'):
+            self.tool.upgrade_fixture_source_format(records,['candidate','baseline'])
+        candidate['supported_formats']['pack_source'].remove('1.0-alpha.2')
+        with self.assertRaisesRegex(ValueError,'common Pack source'):
+            self.tool.upgrade_fixture_source_format(records,['baseline','candidate'])
+
     def test_upgrade_checks_reject_identity_changes_and_old_reader_success(self):
         data=self.root/'data'
         (data/'pactrun/database').mkdir(parents=True)
@@ -155,6 +168,40 @@ class NativePackageAcceptance(unittest.TestCase):
                  patch.object(self.tool,'binary',return_value=self.root/'fake'), \
                  self.assertRaises(AssertionError):
                 self.tool.upgraded_store_scenarios(before,{'blob':'hash'},'test')
+
+    def test_operation_upgrade_reinstalls_legacy_source_without_relabeling_core(self):
+        data=self.root/'data'
+        (data/'pactrun/database').mkdir(parents=True)
+        (data/'pack').mkdir()
+        source=data/'pack/pactrun.yaml'
+        original="source_format: '1.0-alpha.2'\n"
+        source.write_text(original)
+        with sqlite3.connect(data/'pactrun/database/pactrun.sqlite3') as db:
+            db.execute('CREATE TABLE pactrun_metadata (format_version TEXT)')
+            db.execute("INSERT INTO pactrun_metadata VALUES ('1.0-alpha.5')")
+        db.close()
+        before=[['instance'],['revision'],['old-header']]
+        after=[['instance'],['revision'],['new-header']]
+        candidate=release('candidate','1.0-alpha.3','1.0-alpha.4','1.0-alpha.5')
+        candidate['supported_formats']['pack_source'].append('1.0-alpha.2')
+        records={'baseline':release('baseline','1.0-alpha.2','1.0-alpha.3','1.0-alpha.4'),'candidate':candidate}
+        states=iter([before])
+        def run(cmd,label,**kwargs):
+            if label=='same-revision-supported-source':
+                self.assertEqual(source.read_text(),original)
+            if label=='old-binary-refuses-upgraded-store':
+                return 1,json.dumps({'status':'failure','error':{'kind':'operation'}})
+            return 0,''
+        with self.runtime(DATA=data,RELEASES=records,VERSIONS=['baseline','candidate'],SOURCE_FORMAT='1.0-alpha.2'), \
+             patch.object(self.tool,'immutable_state',side_effect=lambda:next(states,after)), \
+             patch.object(self.tool,'runtime_bytes',return_value={'blob':'hash'}), \
+             patch.object(self.tool,'store_dump',side_effect=lambda flavor='normal':flavor), \
+             patch.object(self.tool,'run',side_effect=run), \
+             patch.object(self.tool,'binary',return_value=self.root/'fake'), \
+             patch.object(self.tool,'live'), patch.object(self.tool,'pm'), \
+             patch.object(self.tool,'observed',return_value='candidate'):
+            self.tool.upgraded_store_scenarios(before,{'blob':'hash'},'test')
+        self.assertEqual(source.read_text(),original)
 
     def test_observed_uses_separate_json_output(self):
         with patch.object(self.tool,'binary',return_value='pactrun'), \
