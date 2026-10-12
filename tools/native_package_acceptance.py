@@ -10,7 +10,7 @@ from pathlib import Path
 import re, shutil, signal, sqlite3, subprocess, tempfile, threading, time
 from contextlib import closing
 
-MACHINE_FORMATS = ('1.0-alpha.1', '1.0-alpha.2', '1.0-alpha.3')
+MACHINE_FORMATS = ('1.0-alpha.1', '1.0-alpha.2', '1.0-alpha.3', '1.0-alpha.4')
 SOURCE_FORMATS = ('1.0-alpha.1', '1.0-alpha.2')
 
 def cli_result(output, command):
@@ -78,8 +78,13 @@ def upgrade_fixture_source_format(records, versions):
     source = fixture_source_format(records, [versions[0]])
     fixture_source_format(records, [versions[1]])
     defaults = [next(r['default_formats'] for r in records if r['product_version'] == v) for v in versions]
-    if [d['persistence'] for d in defaults] != ['1.0-alpha.1', '1.0-alpha.4']:
-        raise ValueError('Store-upgrade rehearsal requires Persistence alpha.1 to alpha.4')
+    transition = tuple(d['persistence'] for d in defaults)
+    if transition not in {('1.0-alpha.1', '1.0-alpha.4'), ('1.0-alpha.4', '1.0-alpha.5')}:
+        raise ValueError('Store-upgrade rehearsal requires Persistence alpha.1 to alpha.4 or alpha.4 to alpha.5')
+    if transition == ('1.0-alpha.4', '1.0-alpha.5'):
+        candidate = next(r for r in records if r['product_version'] == versions[1])
+        if source not in candidate['supported_formats']['pack_source']:
+            raise ValueError('Candidate must retain the baseline Pack source format')
     return source
 
 def save():
@@ -319,13 +324,15 @@ def upgraded_store_scenarios(before, content_before, test_before):
     check('schema upgrade preserves runtime content bytes',runtime_bytes()==content_before)
     check('separate baseline test Store remains unchanged',store_dump('test')==test_before)
 
-    # Source decoding changed, while the installed Revision identity did not.
+    # Only the legacy alpha.1-to-alpha.2 Source transition preserves Core identity
+    # by relabeling. Operation Source alpha.3 selects a different Core: retain the
+    # supported legacy Source when verifying the installed baseline Revision.
     source=DATA/'pack/pactrun.yaml'
     text=source.read_text(encoding='utf-8')
-    target=RELEASES[VERSIONS[1]]['default_formats']['pack_source']
+    target=SOURCE_FORMAT if SOURCE_FORMAT in RELEASES[VERSIONS[1]]['supported_formats']['pack_source'] else RELEASES[VERSIONS[1]]['default_formats']['pack_source']
     source.write_text(text.replace("source_format: '"+SOURCE_FORMAT+"'", "source_format: '"+target+"'", 1),encoding='utf-8')
-    run([binary(),'--format','json','pack','install',source.parent],'same-revision-current-source',json_output=True)
-    check('current source format reinstalls the same immutable Revision',immutable_state()==after and runtime_bytes()==content_before)
+    run([binary(),'--format','json','pack','install',source.parent],'same-revision-supported-source',json_output=True)
+    check('supported source format reinstalls the same immutable Revision',immutable_state()==after and runtime_bytes()==content_before)
 
     dump=store_dump()
     e=dict(ENV,PACTRUN_STORAGE_ROOT=str(DATA/'pactrun'))
@@ -444,7 +451,7 @@ def main(argv=None):
     parser.add_argument('--xtask', type=Path, required=True)
     parser.add_argument('--parts', type=Path, nargs=4, required=True)
     parser.add_argument('--allow-user-path-change', action='store_true')
-    parser.add_argument('--store-upgrade', action='store_true', help='Rehearse Persistence alpha.1 to alpha.4 upgrade and old-reader refusal instead of unchanged-format continuity')
+    parser.add_argument('--store-upgrade', action='store_true', help='Rehearse a supported Persistence upgrade and old-reader refusal instead of unchanged-format continuity')
     parser.add_argument('--public-source', help='Verify actual published acquisition instead of the isolated upgrade fixture')
     parser.add_argument('--versions', nargs=2, default=['1.0.0-alpha.1','1.0.0-alpha.2'],
                         metavar=('BASELINE', 'CANDIDATE'), help='Explicit baseline and candidate artifact versions')

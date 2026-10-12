@@ -5,7 +5,7 @@ title: Install Pactrun
 # Install Pactrun
 
 Install through **Scoop on Windows** or **Homebrew on Linux**. The current product
-is `1.0.0-alpha.6`, available through the Preview entry. There is no Stable release
+is `1.0.0-alpha.7`, available through the Preview entry. There is no Stable release
 yet: `pactrun` is reserved for Major 1 stable and does not silently install alpha.
 The package you install is named `pactrun-preview`; the command you run is `pactrun`.
 
@@ -72,7 +72,7 @@ that executable; use the standalone archive for a separate unmanaged copy.
 ## Verify and continue
 
 Both version and help commands must succeed. Expect the installed package's
-version, currently `1.0.0-alpha.6`. These checks do not require a managed store.
+version, currently `1.0.0-alpha.7`. These checks do not require a managed store.
 If command resolution, download, checksum or launch fails, stop and inspect the
 error; do not delete service data or disable checksum verification to proceed.
 
