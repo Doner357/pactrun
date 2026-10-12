@@ -101,6 +101,14 @@ fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
         workspace_root,
         "node",
         &[
+            "tests/oracles/revision_canonical_operations.mjs",
+            "tests/vectors/revision_canonical/operations.json",
+        ],
+    )?;
+    run(
+        workspace_root,
+        "node",
+        &[
             "tests/oracles/revision_canonical_services.mjs",
             "tests/vectors/revision_canonical/services.json",
         ],

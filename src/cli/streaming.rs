@@ -32,6 +32,7 @@ pub(super) struct ResultWriter<'a> {
     command: Option<&'a str>,
     started: bool,
     failed: bool,
+    version: machine::Version,
 }
 impl<'a> ResultWriter<'a> {
     pub(super) fn new(out: &'a mut dyn Write, command: Option<&'a str>) -> Self {
@@ -40,7 +41,12 @@ impl<'a> ResultWriter<'a> {
             command,
             started: false,
             failed: false,
+            version: machine::Version::default(),
         }
+    }
+    pub(super) fn with_version(mut self, version: machine::Version) -> Self {
+        self.version = version;
+        self
     }
     pub(super) fn finish(&mut self) -> io::Result<()> {
         if self.failed {
@@ -58,7 +64,7 @@ impl Write for ResultWriter<'_> {
         let result = (|| {
             if !self.started {
                 let mut header = serde_json::to_vec(
-                    &serde_json::json!({"format":"pactrun.cli","format_version":presentation::FORMAT_VERSION,"sequence":"1","received_at_unix_ms":delivery::now(),"command":self.command,"type":"result"}),
+                    &serde_json::json!({"format":"pactrun.cli","format_version":self.version.text(),"sequence":"1","received_at_unix_ms":delivery::now(),"command":self.command,"type":"result"}),
                 )?;
                 header.pop();
                 header.extend_from_slice(b",\"response\":");
@@ -113,14 +119,15 @@ pub(super) fn execute_stream(
     stdout: &mut dyn Write,
     stderr: &mut (dyn Write + Send),
     cancellation: &ActionCancellation,
-    format: presentation::Format,
+    selected: machine::Selection,
     cancel_on_close: bool,
 ) -> i32 {
+    let format = selected.format;
     let name = presentation::command_name(&command);
     let Some(root) = storage_root.as_ref().map(PathBuf::from) else {
         // Preserve ordinary missing-storage diagnostics without creating a spool.
         if format == presentation::Format::Jsonl {
-            let mut writer = ResultWriter::new(stdout, Some(name));
+            let mut writer = ResultWriter::new(stdout, Some(name)).with_version(selected.version);
             let code = run_selected(
                 command,
                 storage_root,
@@ -128,7 +135,7 @@ pub(super) fn execute_stream(
                 &mut writer,
                 stderr,
                 cancellation,
-                presentation::Format::Json,
+                selected.with_format(presentation::Format::Json),
             );
             return if writer.finish().is_err() { 1 } else { code };
         }
@@ -139,12 +146,21 @@ pub(super) fn execute_stream(
             stdout,
             stderr,
             cancellation,
-            format,
+            selected,
         );
     };
     let prepared = (|| {
         let _store = PactrunApplication::open_read_only(&root).map_err(app_error)?;
-        Delivery::start(&root, name).map_err(|_| {
+        Delivery::start_with_version(
+            &root,
+            name,
+            selected
+                .version
+                .text()
+                .parse()
+                .expect("selected machine version"),
+        )
+        .map_err(|_| {
             CliError::operation(
                 "Unable to prepare output delivery; check storage access and free space",
             )
@@ -152,7 +168,9 @@ pub(super) fn execute_stream(
     })();
     let delivery = match prepared {
         Ok(d) => d,
-        Err(error) => return report_cli_failure(format, Some(name), false, error, stdout, stderr),
+        Err(error) => {
+            return report_cli_failure(selected, Some(name), false, error, stdout, stderr);
+        }
     };
     cancellation.delivery.set(delivery.clone());
     cancellation.diagnostics.disable_live();
@@ -194,7 +212,7 @@ pub(super) fn execute_stream(
                 &mut io::sink(),
                 &mut io::sink(),
                 cancellation,
-                human,
+                selected,
             );
             delivery.finish();
             response
@@ -235,7 +253,7 @@ pub(super) fn execute_stream(
         worker.join().unwrap_or_else(|_| {
             delivery.fail("execution_response_unavailable");
             delivery.finish();
-            reply::Reply::unavailable(name, delivery.known_run())
+            reply::Reply::unavailable(name, delivery.known_run()).with_version(selected.version)
         })
     });
     if output_failed {

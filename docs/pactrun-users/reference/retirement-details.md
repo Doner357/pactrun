@@ -130,7 +130,11 @@ pactrun service-storage detached discard <allocation-id> --confirm-discard
 Execution options are `--authorize-recovery-override`, `--startup-timeout-ms`,
 `--execution-timeout-ms`, and `--termination-grace-ms`. Omitted startup/execution
 timeouts are unlimited; termination grace defaults to 5000 ms. They do not create
-a Hook for Abandon or finalization-only work. Cleanup accepts no parameters.
+a Hook for Abandon or finalization-only work. Legacy Core Cleanup accepts no
+parameters. Operation-scoped Cleanup accepts its declared `--param`,
+`--param-file` and `--param-stdin` sources under
+common operation capabilities; Abandon
+and finalization-only do not accept Hook parameters.
 Duplicate, unknown, malformed and unsupported flags MUST fail before execution.
 No generic force flag, replayable Plan or path-based discard exists. Versioned
 JSON/JSONL presentation follows the [CLI machine contract](./machine-output.md)
@@ -166,5 +170,6 @@ reconcile confirmed owner loss, then externally verify/confirm or abandon.
 <summary>Maintainer sources (optional)</summary>
 
 - [Retirement and recovery details](../../spec/lifecycle/retirement.md)
+- [common operation capabilities](../../spec/operations/common-capabilities.md)
 
 </details>

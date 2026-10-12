@@ -356,6 +356,7 @@ pub(crate) fn validate_running_action_state(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RunArtifactSummary {
+    pub(crate) edge: Option<super::MigrationEdgeIdentity>,
     pub(crate) output: ManagedOutputIdentity,
     pub(crate) byte_length: u64,
 }
@@ -414,6 +415,7 @@ pub(crate) struct ManagedRunView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ManagedRunInspectionData {
+    pub(crate) published_artifacts: Vec<RunArtifactSummary>,
     pub(crate) diagnostics: Option<super::DiagnosticInspection>,
     pub(crate) run: ManagedRunView,
     pub(crate) current_recovery_guard: Option<RecoveryGuardView>,

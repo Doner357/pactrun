@@ -11,6 +11,7 @@ Define, install, identify, and distribute immutable Pack Revisions. Descriptive 
 - [Package and Revision Identity](./identity.md)
 - [Local Names and References](./local-names.md)
 - [Revision Format and Identity Encoding](./revision-format.md)
+- [Operation-scoped Revision Format (specified, not implemented)](./operation-format.md)
 - [Runtime Content](./runtime-content.md)
 - [Descriptions and Provenance](./metadata.md)
 - [Pack Distribution Format](./distribution.md)

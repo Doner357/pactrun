@@ -1,14 +1,41 @@
 use super::*;
-use crate::domain::ManagedOutputIdentity;
+use crate::domain::{ManagedOutputIdentity, ManagedRunIdentity, MigrationEdgeIdentity};
+
+pub(super) struct EdgeSelector {
+    source: Selector<RevisionContentDigest>,
+    target: Selector<RevisionContentDigest>,
+}
+impl EdgeSelector {
+    fn full(self) -> MigrationEdgeIdentity {
+        MigrationEdgeIdentity {
+            source: self.source.full(),
+            target: self.target.full(),
+        }
+    }
+    fn matches(&self, source: RevisionContentDigest, target: RevisionContentDigest) -> bool {
+        let matches = |selector: &Selector<RevisionContentDigest>, value: RevisionContentDigest| {
+            match selector {
+                Selector::Full(id) => *id == value,
+                Selector::Prefix(prefix) => value
+                    .to_string()
+                    .trim_start_matches("sha256:")
+                    .starts_with(prefix),
+            }
+        };
+        matches(&self.source, source) && matches(&self.target, target)
+    }
+}
 
 pub(super) enum ArtifactCommand {
     Export {
+        edge: Option<EdgeSelector>,
         run: Selector<RunId>,
         output: ManagedOutputIdentity,
         destination: PathBuf,
         authorized: bool,
     },
     Delete {
+        edge: Option<EdgeSelector>,
         run: Selector<RunId>,
         output: ManagedOutputIdentity,
     },
@@ -16,9 +43,33 @@ pub(super) enum ArtifactCommand {
 
 impl ArtifactCommand {
     pub(super) fn resolve_ids(&mut self, r: &mut short_ids::Resolver<'_>) -> Result<(), CliError> {
-        match self {
-            Self::Export { run, .. } | Self::Delete { run, .. } => run.resolve(r),
+        let (run, edge) = match self {
+            Self::Export { run, edge, .. } | Self::Delete { run, edge, .. } => (run, edge),
+        };
+        run.resolve(r)?;
+        if let Some(edge) = edge {
+            let inspection = r
+                .app()?
+                .managed_run_inspection(run.clone().full())
+                .map_err(app_error)?
+                .ok_or_else(|| CliError::operation("parent Run is not persisted"))?;
+            let ManagedRunIdentity::Migration(invocation) = inspection.run.operation else {
+                return Err(CliError::operation("--edge requires a Migration Run"));
+            };
+            let matching: Vec<_> = invocation
+                .path()
+                .windows(2)
+                .filter(|pair| edge.matches(pair[0].content_digest, pair[1].content_digest))
+                .collect();
+            if matching.len() != 1 {
+                return Err(CliError::operation(
+                    "artifact edge is absent or ambiguous on this Run; provide exact source and target digests",
+                ));
+            }
+            edge.source = Selector::Full(matching[0][0].content_digest);
+            edge.target = Selector::Full(matching[0][1].content_digest);
         }
+        Ok(())
     }
 }
 
@@ -30,15 +81,26 @@ pub(super) fn parse(parser: &mut Parser) -> Result<ArtifactCommand, CliError> {
     let run = parse_run_id(&value_string(parser, "RunId")?)?;
     let output = ManagedOutputIdentity::parse(required_value_string(parser, "output identity")?)
         .map_err(|_| CliError::usage("invalid output identity"))?;
-    if operation == "delete" {
-        require_end(parser)?;
-        return Ok(ArtifactCommand::Delete { run, output });
-    }
+    let mut edge = None;
     let mut destination = None;
     let mut authorized = false;
     while let Some(argument) = parser.next().map_err(lex_error)? {
         match argument {
-            Arg::Long("output") => {
+            Arg::Long("edge") => {
+                let value = value_string(parser, "source/target Revision digests")?;
+                let (source, target) = value.split_once('/').ok_or_else(|| {
+                    CliError::usage("--edge requires <source-digest>/<target-digest>")
+                })?;
+                set_once(
+                    &mut edge,
+                    EdgeSelector {
+                        source: source.parse()?,
+                        target: target.parse()?,
+                    },
+                    "--edge",
+                )?;
+            }
+            Arg::Long("output") if operation == "export" => {
                 let path = required_parser_value(parser, "output path")?;
                 if path == "-" {
                     return Err(CliError::usage(
@@ -47,11 +109,17 @@ pub(super) fn parse(parser: &mut Parser) -> Result<ArtifactCommand, CliError> {
                 }
                 set_once(&mut destination, PathBuf::from(path), "--output")?;
             }
-            Arg::Long("authorize-sensitive-export") if !authorized => authorized = true,
+            Arg::Long("authorize-sensitive-export") if operation == "export" && !authorized => {
+                authorized = true
+            }
             _ => return Err(CliError::usage("unsupported or duplicate Artifact option")),
         }
     }
+    if operation == "delete" {
+        return Ok(ArtifactCommand::Delete { run, output, edge });
+    }
     Ok(ArtifactCommand::Export {
+        edge,
         run,
         output,
         destination: destination.ok_or_else(|| CliError::usage("missing --output"))?,
@@ -68,6 +136,16 @@ pub(super) fn execute(
     root: &Path,
     format: reply::OutputContext,
 ) -> Result<(), CliError> {
+    let scoped = match &command {
+        ArtifactCommand::Export { edge, .. } | ArtifactCommand::Delete { edge, .. } => {
+            edge.is_some()
+        }
+    };
+    if scoped && format.version() == machine::Version::Legacy {
+        return Err(CliError::operation(
+            "machine interface 1.0-alpha.3 cannot represent edge-scoped artifacts; select --machine-version 1.0-alpha.4",
+        ));
+    }
     if matches!(
         command,
         ArtifactCommand::Export {
@@ -82,22 +160,28 @@ pub(super) fn execute(
     let application = PactrunApplication::open(root).map_err(app_error)?;
     match command {
         ArtifactCommand::Export {
+            edge,
             run,
             output,
             destination,
             authorized,
         } => {
             let run = run.full();
-            let staged = application
-                .export_run_artifact(run, &output, authorized)
-                .map_err(|error| match error {
-                    ApplicationError::Persistence(
-                        crate::persistence::PersistenceError::MissingRun(_),
-                    ) => CliError::operation("parent Run is not persisted"),
-                    _ => CliError::operation(
-                        "Artifact export failed; check the Run, published output and storage",
-                    ),
-                })?;
+            let edge = edge.map(EdgeSelector::full);
+            let exported = match edge.as_ref() {
+                Some(edge) => {
+                    application.export_run_artifact_at(run, &output, Some(edge), authorized)
+                }
+                None => application.export_run_artifact(run, &output, authorized),
+            };
+            let staged = exported.map_err(|error| match error {
+                ApplicationError::Persistence(
+                    crate::persistence::PersistenceError::MissingRun(_),
+                ) => CliError::operation("parent Run is not persisted"),
+                _ => CliError::operation(
+                    "Artifact export failed; check the Run, published output and storage",
+                ),
+            })?;
             crate::output_publication::publish_reported(&staged, &destination)
                 .map_err(|error| {
                     let message = if error.destination_published {
@@ -115,29 +199,31 @@ pub(super) fn execute(
                 format,
                 "run artifact export",
                 &presentation::ArtifactResult {
+                    edge: edge.as_ref().map(Into::into),
                     run_id: run.to_string(),
                     output_id: output.as_str().into(),
                     outcome: "exported",
                 },
             )
         }
-        ArtifactCommand::Delete { run, output } => {
+        ArtifactCommand::Delete { run, output, edge } => {
             let run = run.full();
-            let deleted =
-                application
-                    .delete_run_artifact(run, &output)
-                    .map_err(|error| match error {
-                        ApplicationError::Persistence(
-                            crate::persistence::PersistenceError::MissingRun(_),
-                        ) => CliError::operation("parent Run is not persisted"),
-                        _ => CliError::operation(
-                            "Artifact deletion failed; check that storage is writable",
-                        ),
-                    })?;
+            let edge = edge.map(EdgeSelector::full);
+            let deleted = application
+                .delete_run_artifact_at(run, &output, edge.as_ref())
+                .map_err(|error| match error {
+                    ApplicationError::Persistence(
+                        crate::persistence::PersistenceError::MissingRun(_),
+                    ) => CliError::operation("parent Run is not persisted"),
+                    _ => CliError::operation(
+                        "Artifact deletion failed; check that storage is writable",
+                    ),
+                })?;
             presentation::emit_result(
                 format,
                 "run artifact delete",
                 &presentation::ArtifactResult {
+                    edge: edge.as_ref().map(Into::into),
                     run_id: run.to_string(),
                     output_id: output.as_str().into(),
                     outcome: if deleted { "deleted" } else { "already_absent" },

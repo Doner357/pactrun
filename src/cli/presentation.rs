@@ -3,6 +3,7 @@ use super::*;
 use serde::Serialize;
 
 pub(super) const FORMAT_KIND: &str = "pactrun.cli";
+#[cfg(test)]
 pub(super) const FORMAT_VERSION: &str = crate::domain::VersionDomain::Machine.current_text();
 
 pub(super) fn command_name(command: &Command) -> &'static str {
@@ -102,28 +103,20 @@ impl Format {
 
 /// Inspect only the prefix. Never scan operands (which may themselves be flags).
 pub(super) fn recognize(args: &[OsString]) -> Format {
-    if args.first().is_some_and(|arg| arg == "--format")
-        && args.get(1).is_some_and(|arg| arg == "jsonl")
-    {
-        return Format::Jsonl;
-    }
-    if args.first().is_some_and(|arg| arg == "--format")
-        && args.get(1).is_some_and(|arg| arg == "json")
-    {
-        Format::Json
-    } else {
-        Format::Human
-    }
+    machine::recognize(args).format
 }
 
 /// Preserve the payload channel even when a later option is invalid. Only the
 /// fixed Input-export grammar is inspected; arbitrary operands are not formats.
 pub(super) fn raw_input_request(args: &[OsString]) -> bool {
-    let args = if args.first().is_some_and(|a| a == "--format") && args.len() >= 2 {
-        &args[2..]
-    } else {
-        args
-    };
+    let mut args = args;
+    while args
+        .first()
+        .is_some_and(|a| a == "--format" || a == "--machine-version")
+        && args.len() >= 2
+    {
+        args = &args[2..];
+    }
     args.first().is_some_and(|a| a == "input")
         && args.get(1).is_some_and(|a| a == "export")
         && args.get(4..).is_some_and(|tail| {
@@ -132,25 +125,8 @@ pub(super) fn raw_input_request(args: &[OsString]) -> bool {
         })
 }
 
-pub(super) fn select(mut args: Vec<OsString>) -> Result<(Format, Vec<OsString>), CliError> {
-    if !args.first().is_some_and(|arg| arg == "--format") {
-        return Ok((Format::Human, args));
-    }
-    let format = match args.get(1).and_then(|arg| arg.to_str()) {
-        Some("human") => Format::Human,
-        Some("json") => Format::Json,
-        Some("jsonl") => Format::Jsonl,
-        _ => {
-            return Err(CliError::usage(
-                "--format requires human, json or jsonl before the command",
-            ));
-        }
-    };
-    args.drain(..2);
-    if args.first().is_some_and(|arg| arg == "--format") {
-        return Err(CliError::usage("duplicate --format selector"));
-    }
-    Ok((format, args))
+pub(super) fn select(args: Vec<OsString>) -> Result<(Format, Vec<OsString>), CliError> {
+    machine::select(args).map(|(selection, args)| (selection.format, args))
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -247,6 +223,7 @@ pub(super) fn output_error(error: io::Error) -> CliError {
 }
 
 pub(super) struct Envelope<'a> {
+    pub(super) version: machine::Version,
     pub(super) command: &'a str,
     pub(super) error: Option<&'a CliError>,
     pub(super) delivery: Option<&'a streaming::DeliveryResult>,
@@ -280,7 +257,7 @@ pub(super) fn write_reply<T: Serialize>(
     }
     let response = Response {
         format: FORMAT_KIND,
-        format_version: FORMAT_VERSION,
+        format_version: envelope.version.text(),
         command: Some(envelope.command),
         status: if error.is_some() {
             "failure"
@@ -329,7 +306,7 @@ pub(super) fn write_reply<T: Serialize>(
         encode(
             &Event {
                 format: FORMAT_KIND,
-                format_version: FORMAT_VERSION,
+                format_version: envelope.version.text(),
                 sequence,
                 received_at_unix_ms: crate::hook::delivery::now(),
                 command: envelope.command,
@@ -381,7 +358,17 @@ pub(super) fn render<T: Serialize + Clone + Send + 'static>(
     }
 }
 
+#[cfg(test)]
 pub(super) fn failure<T: Serialize>(
+    command: Option<&str>,
+    partial: Option<&T>,
+    error: &CliError,
+    output: &mut dyn Write,
+) -> Result<(), CliError> {
+    failure_versioned(machine::Version::default(), command, partial, error, output)
+}
+pub(super) fn failure_versioned<T: Serialize>(
+    version: machine::Version,
     command: Option<&str>,
     partial: Option<&T>,
     error: &CliError,
@@ -391,7 +378,7 @@ pub(super) fn failure<T: Serialize>(
         output,
         &Response {
             format: FORMAT_KIND,
-            format_version: FORMAT_VERSION,
+            format_version: version.text(),
             command,
             status: "failure",
             result: partial,
@@ -548,6 +535,8 @@ pub(super) struct Deletion {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct ArtifactResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) edge: Option<execution_presentation::ArtifactEdge>,
     pub(super) run_id: String,
     pub(super) output_id: String,
     pub(super) outcome: &'static str,
@@ -574,7 +563,8 @@ impl From<&RevisionIdentity> for Revision {
 pub(super) struct Input {
     input_id: String,
     role: &'static str,
-    required: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    required: Option<Option<bool>>,
     present: bool,
     protection: &'static str,
 }
@@ -588,7 +578,7 @@ impl From<&crate::domain::ManagedInputBindingView> for Input {
         Self {
             input_id: binding.input_id.as_str().into(),
             role,
-            required,
+            required: Some(required),
             present: binding.present,
             protection: match binding.protection {
                 ManagedInputProtection::Normal => "normal",
@@ -623,9 +613,14 @@ pub(super) struct Instance {
     name: String,
     active_revision: Revision,
     state_version: String,
-    required_inputs_satisfied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    required_inputs_satisfied: Option<bool>,
     recovery_guard: Option<Guard>,
     inputs: Vec<Input>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_requirements: Option<Vec<machine::Assessment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_required_inputs: Option<machine::LegacyRequiredInputs>,
 }
 
 impl From<&crate::domain::InstanceView> for Instance {
@@ -635,10 +630,33 @@ impl From<&crate::domain::InstanceView> for Instance {
             name: view.name.as_str().into(),
             active_revision: (&view.active_revision).into(),
             state_version: view.state_version.to_string(),
-            required_inputs_satisfied: view.required_inputs_satisfied,
+            required_inputs_satisfied: Some(view.required_inputs_satisfied),
             recovery_guard: view.recovery_guard.as_ref().map(Into::into),
             inputs: view.bindings.iter().map(Into::into).collect(),
+            input_requirements: None,
+            legacy_required_inputs: None,
         }
+    }
+}
+impl Instance {
+    pub(super) fn for_version(
+        view: &crate::domain::InstanceView,
+        core: &crate::domain::RevisionCore,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        version.require_core(core)?;
+        let mut result = Self::from(view);
+        if version == machine::Version::Operations {
+            result.required_inputs_satisfied = None;
+            result.input_requirements = Some(machine::requirements(view, core));
+            result.legacy_required_inputs = machine::legacy_required(view, core);
+            if core.operation().is_some() {
+                for input in &mut result.inputs {
+                    input.required = None;
+                }
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -651,6 +669,20 @@ pub(super) struct Inputs {
 }
 
 impl Inputs {
+    pub(super) fn for_version(
+        view: &crate::domain::InstanceView,
+        core: &crate::domain::RevisionCore,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        version.require_core(core)?;
+        let mut result = Self::from_view(view);
+        if core.operation().is_some() {
+            for input in &mut result.items {
+                input.required = None;
+            }
+        }
+        Ok(result)
+    }
     pub(super) fn from_view(view: &crate::domain::InstanceView) -> Self {
         Self {
             instance_id: view.id.to_string(),

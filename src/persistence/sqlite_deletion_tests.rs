@@ -96,6 +96,7 @@ fn compile(p: &PactrunPersistence, instance: &InstanceView, mode: DeletionMode) 
         instance: instance.id,
         expected: instance.state_version,
         mode,
+        parameters: Vec::new(),
     };
     crate::workflow::compile_deletion(
         &intent,

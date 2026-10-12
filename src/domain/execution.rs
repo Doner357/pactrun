@@ -14,7 +14,7 @@ pub(crate) enum ParameterTextSource {
     Protected,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub(crate) struct RawParameterInput {
     pub(crate) id: ParameterIdentity,
     pub(crate) text: String,
@@ -210,6 +210,91 @@ pub(crate) struct CompilationFacts {
     pub(crate) service_bindings: super::ServiceHookBindings,
 }
 
+pub(crate) struct ActionInputSelection {
+    pub(crate) bindings: Vec<ActiveInstanceBindingReference>,
+    pub(crate) satisfied: bool,
+    pub(crate) missing: Vec<super::InputIdentity>,
+}
+
+pub(crate) fn select_action_inputs(
+    core: &super::RevisionCore,
+    action: &ActionIdentity,
+    bindings: &[ActiveInstanceBindingReference],
+    legacy_satisfied: bool,
+) -> Result<ActionInputSelection, ActionResolutionError> {
+    let scoped = if let Some(operation) = core.operation() {
+        match operation.input_use(&super::ServiceHookSite::Action(action.clone())) {
+            Some(super::OperationInputUse::Active(inputs)) => Some(inputs),
+            _ => return Err(ActionResolutionError::ActionNotFound),
+        }
+    } else {
+        if !core.actions().iter().any(|a| &a.id == action) {
+            return Err(ActionResolutionError::ActionNotFound);
+        }
+        None
+    };
+    let required = scoped
+        .as_ref()
+        .map(|inputs| inputs.required.clone())
+        .unwrap_or_else(|| {
+            core.inputs()
+                .iter()
+                .filter(|input| input.required)
+                .map(|input| input.id.clone())
+                .collect()
+        });
+    let missing: Vec<_> = required
+        .into_iter()
+        .filter(|id| !bindings.iter().any(|binding| &binding.input == id))
+        .collect();
+    let satisfied = if scoped.is_some() {
+        missing.is_empty()
+    } else {
+        legacy_satisfied
+    };
+    let allowed = scoped.map(|inputs| inputs.all());
+    let bindings = bindings
+        .iter()
+        .filter(|binding| {
+            allowed
+                .as_ref()
+                .is_none_or(|ids| ids.binary_search(&binding.input).is_ok())
+        })
+        .cloned()
+        .collect();
+    Ok(ActionInputSelection {
+        bindings,
+        satisfied,
+        missing,
+    })
+}
+
+pub(crate) fn bound_parameters_match(
+    declarations: &[super::ParameterV1],
+    bindings: &[ParameterBinding],
+) -> bool {
+    declarations.len() == bindings.len()
+        && declarations
+            .iter()
+            .zip(bindings)
+            .all(|(declaration, binding)| {
+                declaration.id == binding.id
+                    && (!declaration.sensitive || binding.effective_redaction)
+                    && matches!(
+                        (declaration.parameter_type, binding.value()),
+                        (
+                            ParameterTypeV1::Integer,
+                            InvocationParameterValue::Integer(_)
+                        ) | (ParameterTypeV1::Float, InvocationParameterValue::Float(_))
+                            | (
+                                ParameterTypeV1::Boolean,
+                                InvocationParameterValue::Boolean(_)
+                            )
+                            | (ParameterTypeV1::String, InvocationParameterValue::String(_))
+                    )
+            })
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ActionPlanStep {
     EstablishSession,
@@ -355,6 +440,7 @@ impl std::error::Error for ActionResolutionError {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PlanCompilationError {
+    HookContractMismatch,
     UnsupportedShell,
     InconsistentFacts,
     UnsupportedHookProtocol(FormatVersion),
@@ -366,6 +452,9 @@ pub(crate) enum PlanCompilationError {
 impl fmt::Display for PlanCompilationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::HookContractMismatch => {
+                formatter.write_str("Hook protocol does not match the owning Revision format")
+            }
             Self::UnsupportedShell => formatter.write_str("shell kind is unsupported on this host"),
             Self::InconsistentFacts => {
                 formatter.write_str("compilation facts do not match the resolved intent")

@@ -33,6 +33,7 @@ pub(in crate::hook) struct PreparedSession {
 pub(in crate::hook) struct PreparedTransport {
     payload: Vec<u8>,
     operation: SessionOperation,
+    version: crate::domain::FormatVersion,
 }
 impl PreparedSession {
     pub(in crate::hook) fn into_parts(self) -> (PreparedTransport, State) {
@@ -40,6 +41,7 @@ impl PreparedSession {
             PreparedTransport {
                 payload: self.payload,
                 operation: self.operation,
+                version: self.state.common.protocol_version,
             },
             self.state,
         )
@@ -55,6 +57,7 @@ impl PreparedSession {
         let object = common
             .as_object()
             .ok_or_else(|| Failure::new("invalid_frame"))?;
+        let version = session_version(&common).map_err(|_| Failure::new("invalid_frame"))?;
         let keys = [
             "type",
             "protocol_version",
@@ -69,7 +72,6 @@ impl PreparedSession {
         if object.len() != keys.len()
             || keys.iter().any(|key| !object.contains_key(*key))
             || common["type"] != "session_start"
-            || common["protocol_version"] != crate::domain::VersionDomain::Hook.current_text()
             || common["operation"]["kind"] != operation.wire_name()
             || requires_target_commit != target_commit.is_some()
             || (requires_target_commit && operation != SessionOperation::Migration)
@@ -104,6 +106,13 @@ impl PreparedSession {
                 outputs = array_handles(&mut handles, &op["target_outputs"])?;
             }
         }
+        let ordinary_outputs = if version == crate::domain::operation_hook_version()
+            && operation != SessionOperation::Action
+        {
+            array_handles(&mut handles, &op["outputs"])?
+        } else {
+            BTreeSet::new()
+        };
         let mut declarations = BTreeMap::new();
         for declaration in expected {
             validate_declaration_shape(declaration)?;
@@ -170,7 +179,18 @@ impl PreparedSession {
             insert_handle(&mut handles, &Value::String(handle.clone()))?;
             common["target_commit"] = serde_json::json!({"handle":handle});
         }
-        let state = State::new(session_id, operation, outputs, target_commit)?;
+        let state = if version == crate::domain::operation_hook_version() {
+            let (ordinary, targets) = if operation == SessionOperation::Migration {
+                (ordinary_outputs, outputs)
+            } else if operation == SessionOperation::Action {
+                (outputs, BTreeSet::new())
+            } else {
+                (ordinary_outputs, BTreeSet::new())
+            };
+            State::new_operation_contract(session_id, operation, ordinary, targets, target_commit)?
+        } else {
+            State::new(session_id, operation, outputs, target_commit)?
+        };
         let payload = encode_payload(&common).map_err(|_| Failure::new("invalid_frame"))?;
         Ok(Self {
             payload,
@@ -235,14 +255,20 @@ impl Connected {
         stream: ProtocolStream,
         transport: PreparedTransport,
     ) -> io::Result<Self> {
-        let PreparedTransport { payload, operation } = transport;
+        let PreparedTransport {
+            payload,
+            operation,
+            version,
+        } = transport;
         let mut reader = stream.try_clone()?;
         let mut writer = ProtocolWriter { stream };
-        writer.stream.write_all(PREAMBLE_V2)?;
+        writer.write_preamble_for_version(version)?;
         writer.write_payload(&payload)?;
         let (sender, receiver) = mpsc::sync_channel(2);
         thread::spawn(move || {
-            read_events(&mut reader, operation, |event| sender.send(event).is_ok())
+            read_events_for_contract(&mut reader, operation, version, |event| {
+                sender.send(event).is_ok()
+            })
         });
         Ok(Self { writer, receiver })
     }
@@ -284,6 +310,7 @@ impl std::error::Error for Failure {}
 pub(in crate::hook) struct TargetProposal {
     commit_handle: String,
     outputs: Vec<String>,
+    ordinary_outputs: Vec<String>,
 }
 
 /// Constructed only by the owner-selected messaging state after acknowledged
@@ -297,6 +324,9 @@ impl AcceptedTargetProposal {
     pub(in crate::hook) fn outputs(&self) -> &[String] {
         &self.0.outputs
     }
+    pub(in crate::hook) fn ordinary_outputs(&self) -> &[String] {
+        &self.0.ordinary_outputs
+    }
 }
 
 #[derive(Debug)]
@@ -309,11 +339,39 @@ pub(in crate::hook) fn parse_message(
     payload: &[u8],
     operation: SessionOperation,
 ) -> Result<Message, Failure> {
+    parse_message_for_contract(payload, operation, crate::domain::FormatVersion::BASELINE)
+}
+
+pub(in crate::hook) fn parse_message_for_contract(
+    payload: &[u8],
+    operation: SessionOperation,
+    version: crate::domain::FormatVersion,
+) -> Result<Message, Failure> {
+    if version != crate::domain::FormatVersion::BASELINE
+        && version != crate::domain::operation_hook_version()
+    {
+        return Err(Failure::new("unexpected_message"));
+    }
     let raw = parse_json(payload, MAX_PAYLOAD).map_err(|_| Failure::new("invalid_frame"))?;
     let mut object = raw_object(raw).map_err(Failure::common)?;
     let kind = take_string(&mut object, "type").map_err(Failure::common)?;
     if kind == "target_ready" {
-        closed(&object, &["commit_handle", "produced_target_outputs"]).map_err(Failure::common)?;
+        let operation_contract = version == crate::domain::operation_hook_version();
+        let fields: &[&str] = if operation_contract {
+            &[
+                "commit_handle",
+                "produced_target_outputs",
+                "produced_outputs",
+            ]
+        } else {
+            &["commit_handle", "produced_target_outputs"]
+        };
+        closed(&object, fields).map_err(Failure::common)?;
+        let ordinary_outputs = if operation_contract {
+            output_handles(&mut object, "produced_outputs").map_err(Failure::common)?
+        } else {
+            Vec::new()
+        };
         let commit_handle = take_machine_id(&mut object, "commit_handle")
             .map_err(|_| Failure::new("invalid_authority"))?;
         let values = take_array(&mut object, "produced_target_outputs").map_err(Failure::common)?;
@@ -336,6 +394,7 @@ pub(in crate::hook) fn parse_message(
         return Ok(Message::TargetReady(TargetProposal {
             commit_handle,
             outputs,
+            ordinary_outputs,
         }));
     }
     let message = match kind.as_str() {
@@ -343,7 +402,7 @@ pub(in crate::hook) fn parse_message(
         "diagnostic" => parse_diagnostic(object),
         "request" => parse_request(object),
         "cancel_ack" => parse_cancel_ack(object),
-        "complete" => parse_completion(object, operation),
+        "complete" => parse_completion(object, operation, version),
         "protocol_error" => parse_hook_protocol_error(object),
         _ => return Err(Failure::new("unexpected_message")),
     }
@@ -363,6 +422,30 @@ pub(in crate::hook) struct State {
     target_commit: Option<String>,
 }
 impl State {
+    pub(in crate::hook) fn new_operation_contract(
+        session_id: String,
+        operation: SessionOperation,
+        outputs: BTreeSet<String>,
+        target_outputs: BTreeSet<String>,
+        target_commit: Option<String>,
+    ) -> Result<Self, Failure> {
+        if target_commit.as_ref().is_some_and(|id| {
+            !is_machine_id(id) || outputs.contains(id) || target_outputs.contains(id)
+        }) || (target_commit.is_some() && operation != SessionOperation::Migration)
+        {
+            return Err(Failure::new("invalid_authority"));
+        }
+        Ok(Self {
+            common: ProtocolState::new_operation_contract(
+                session_id,
+                operation,
+                outputs,
+                target_outputs,
+            )
+            .map_err(Failure::common)?,
+            target_commit,
+        })
+    }
     pub(in crate::hook) fn new(
         session_id: String,
         operation: SessionOperation,
@@ -378,7 +461,11 @@ impl State {
         {
             return Err(Failure::new("invalid_authority"));
         }
-        let mut common = ProtocolState::new(session_id, outputs);
+        let mut common = if operation == SessionOperation::Migration {
+            ProtocolState::new_migration(session_id, outputs)
+        } else {
+            ProtocolState::new(session_id, outputs)
+        };
         common.operation = operation;
         Ok(Self {
             common,
@@ -398,7 +485,7 @@ impl State {
                 // No translation of a V1 handshake into V2 and no peer-selected
                 // fallback: this constructor's owner selected version 2.
                 if self.common.phase != Phase::AwaitReady
-                    || !crate::domain::VersionDomain::Hook.supports(protocol_version)
+                    || protocol_version != self.common.protocol_version
                     || session_id != self.common.session_id
                 {
                     return Err(Failure::new("unexpected_message"));
@@ -420,9 +507,19 @@ impl State {
                     return Err(Failure::new("invalid_authority"));
                 }
                 if proposal.outputs.iter().collect::<BTreeSet<_>>()
-                    != self.common.declared_outputs.iter().collect::<BTreeSet<_>>()
+                    != self
+                        .common
+                        .declared_target_outputs
+                        .iter()
+                        .collect::<BTreeSet<_>>()
                 {
                     return Err(Failure::new("invalid_target_proposal"));
+                }
+                let mut submitted = BTreeSet::new();
+                for handle in &proposal.ordinary_outputs {
+                    if !submitted.insert(handle) || !self.common.declared_outputs.contains(handle) {
+                        return Err(Failure::new("invalid_authority"));
+                    }
                 }
                 self.common.phase = Phase::Terminal; // Messaging only; risk stays Open.
                 Ok(Step::TargetProposed(AcceptedTargetProposal(proposal)))
@@ -475,9 +572,23 @@ pub(in crate::hook) enum Event {
 pub(in crate::hook) fn read_events(
     reader: &mut impl Read,
     operation: SessionOperation,
+    deliver: impl FnMut(Event) -> bool,
+) {
+    read_events_for_contract(
+        reader,
+        operation,
+        crate::domain::FormatVersion::BASELINE,
+        deliver,
+    )
+}
+
+pub(in crate::hook) fn read_events_for_contract(
+    reader: &mut impl Read,
+    operation: SessionOperation,
+    version: crate::domain::FormatVersion,
     mut deliver: impl FnMut(Event) -> bool,
 ) {
-    match read_preamble(reader) {
+    match read_preamble_for_version(reader, version) {
         Ok(true) => {}
         Ok(false) => {
             deliver(Event::Failure(Failure::new("invalid_frame")));
@@ -522,7 +633,7 @@ pub(in crate::hook) fn read_events(
                 return;
             }
         }
-        match parse_message(&payload, operation) {
+        match parse_message_for_contract(&payload, operation, version) {
             Ok(message) => {
                 if !deliver(Event::Message(message)) {
                     return;

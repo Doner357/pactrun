@@ -88,7 +88,8 @@ pub(super) struct Output {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Input {
     input_id: String,
-    required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    required: Option<bool>,
     protection: &'static str,
     metadata: Text,
 }
@@ -182,6 +183,10 @@ impl Hook {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Capability {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inputs: Option<machine::ActiveInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outputs: Option<Vec<Output>>,
     access: &'static str,
     parameters: Vec<Parameter>,
     hook: Hook,
@@ -230,8 +235,18 @@ struct ServiceTransition {
 struct Migration {
     source_revision_digest: String,
     transitions: Vec<Transition>,
-    requires_source: Vec<InputRef>,
-    requires_target: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires_source: Option<Vec<InputRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires_target: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_inputs: Option<machine::BindingInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target_inputs: Option<machine::ActiveInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<Vec<Parameter>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outputs: Option<Vec<Output>>,
     produces_target: Vec<String>,
     hook: Option<Hook>,
     storage_transitions: Vec<ServiceTransition>,
@@ -241,7 +256,14 @@ struct Migration {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct Cleanup {
-    requires: Vec<InputRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requires: Option<Vec<InputRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inputs: Option<machine::BindingInputs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<Vec<Parameter>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outputs: Option<Vec<Output>>,
     hook: Hook,
     metadata: Text,
 }
@@ -281,6 +303,8 @@ impl Capabilities {
             .snapshot()
             .and_then(|s| s.capture.as_ref())
             .map(|c| Capability {
+                inputs: active_inputs(core, ServiceHookSite::Capture),
+                outputs: ordinary_outputs(core, &ServiceHookSite::Capture),
                 access: access_name(c.access),
                 parameters: c
                     .parameters
@@ -299,6 +323,8 @@ impl Capabilities {
             .snapshot()
             .and_then(|s| s.restore.as_ref())
             .map(|c| Capability {
+                inputs: active_inputs(core, ServiceHookSite::Restore),
+                outputs: ordinary_outputs(core, &ServiceHookSite::Restore),
                 access: "mutate",
                 parameters: c
                     .parameters
@@ -317,10 +343,24 @@ impl Capabilities {
             .migrations()
             .iter()
             .map(|m| {
+                let site = ServiceHookSite::Migration(m.source_revision_digest.clone());
+                let (source_inputs, target_inputs) = match core
+                    .operation()
+                    .and_then(|operation| operation.input_use(&site))
+                {
+                    Some(OperationInputUse::Migration { source, target }) => {
+                        (Some((&source).into()), Some((&target).into()))
+                    }
+                    _ => (None, None),
+                };
                 let service = core
                     .service_core()
                     .and_then(|c| c.migrations().get(&m.source_revision_digest));
                 Migration {
+                    source_inputs,
+                    target_inputs,
+                    parameters: ordinary_parameters(core, &site),
+                    outputs: ordinary_outputs(core, &site),
                     source_revision_digest: m.source_revision_digest.as_str().into(),
                     transitions: m
                         .transitions
@@ -336,12 +376,16 @@ impl Capabilities {
                             target_input_id: t.target().map(|id| id.as_str().into()),
                         })
                         .collect(),
-                    requires_source: m.requires_source.iter().map(Into::into).collect(),
-                    requires_target: m
-                        .requires_target
-                        .iter()
-                        .map(|id| id.as_str().into())
-                        .collect(),
+                    requires_source: core
+                        .operation()
+                        .is_none()
+                        .then(|| m.requires_source.iter().map(Into::into).collect()),
+                    requires_target: core.operation().is_none().then(|| {
+                        m.requires_target
+                            .iter()
+                            .map(|id| id.as_str().into())
+                            .collect()
+                    }),
                     produces_target: m
                         .produces_target
                         .iter()
@@ -373,7 +417,7 @@ impl Capabilities {
                 .iter()
                 .map(|i| Input {
                     input_id: i.id.as_str().into(),
-                    required: i.required,
+                    required: core.operation().is_none().then_some(i.required),
                     protection: match i.protection {
                         InputProtectionV1::Normal => "normal",
                         InputProtectionV1::Secret => "secret",
@@ -385,7 +429,19 @@ impl Capabilities {
             restore,
             migrations,
             cleanup: core.cleanup().map(|c| Cleanup {
-                requires: c.requires.iter().map(Into::into).collect(),
+                requires: core
+                    .operation()
+                    .is_none()
+                    .then(|| c.requires.iter().map(Into::into).collect()),
+                inputs: match core
+                    .operation()
+                    .and_then(|operation| operation.input_use(&ServiceHookSite::Cleanup))
+                {
+                    Some(OperationInputUse::Binding(inputs)) => Some((&inputs).into()),
+                    _ => None,
+                },
+                parameters: ordinary_parameters(core, &ServiceHookSite::Cleanup),
+                outputs: ordinary_outputs(core, &ServiceHookSite::Cleanup),
                 hook: Hook::new(&c.hook, core, ServiceHookSite::Cleanup),
                 metadata: text(PresentationTargetV1::Cleanup),
             }),
@@ -424,6 +480,37 @@ impl Capabilities {
                 .unwrap_or_default(),
         }
     }
+}
+
+pub(super) fn active_inputs(
+    core: &RevisionCore,
+    site: ServiceHookSite,
+) -> Option<machine::ActiveInputs> {
+    match core.operation()?.input_use(&site)? {
+        OperationInputUse::Active(inputs) => Some((&inputs).into()),
+        _ => None,
+    }
+}
+fn ordinary_parameters(core: &RevisionCore, site: &ServiceHookSite) -> Option<Vec<Parameter>> {
+    core.operation()?;
+    Some(
+        core.parameters(site)?
+            .iter()
+            .map(|p| Parameter::new(p, Text::default()))
+            .collect(),
+    )
+}
+fn ordinary_outputs(core: &RevisionCore, site: &ServiceHookSite) -> Option<Vec<Output>> {
+    core.operation()?;
+    Some(
+        core.ordinary_outputs(site)?
+            .iter()
+            .map(|output| Output {
+                output_id: output.id.as_str().into(),
+                metadata: Text::default(),
+            })
+            .collect(),
+    )
 }
 fn storage_transition(t: &StorageTransitionV2) -> ServiceTransition {
     let (kind, source) = match t {

@@ -26,6 +26,8 @@ pub(crate) struct MigrationOwnerState {
     materialized: Option<super::materialize::MaterializedExecution>,
     hook_finish: Option<RunFinish>,
     hook_outputs: BTreeMap<InputIdentity, StagedFile>,
+    artifacts: super::artifacts::ArtifactPreparation,
+    artifact_submitted: Vec<ManagedOutputIdentity>,
     secondary_failures: Vec<RunFailureRecord>,
     service_prepared: Option<(usize, ServiceMigrationEdge)>,
     target_commit: Option<TargetCommitPermit>,
@@ -153,6 +155,8 @@ pub(crate) fn accept_migration_inputs(
         materialized: None,
         hook_finish: None,
         hook_outputs: BTreeMap::new(),
+        artifacts: Default::default(),
+        artifact_submitted: Vec::new(),
         secondary_failures: Vec::new(),
     };
     match result {
@@ -245,12 +249,44 @@ pub(super) fn advance(
             secondary_failures: state.secondary_failures.clone(),
             hook_completion: None,
         };
-        p.finish_run_owned(
+        let artifact_edge = match state.hook_edge {
+            Some(edge) => p
+                .managed_run_inspection(state.run)?
+                .and_then(|inspection| inspection.migration_progress)
+                .filter(|progress| progress.committed_edges == edge)
+                .map(|_| edge),
+            None => None,
+        };
+        let mut finish = state.failure.as_ref().unwrap_or(&cancelled).clone();
+        let mut readers = if artifact_edge.is_some() {
+            state.artifacts.readers()
+        } else {
+            Vec::new()
+        };
+        if artifact_edge.is_some() {
+            state.artifacts.apply_failure(
+                &mut finish,
+                RunFailedStep::MigrationPlan(MigrationPlanStep::PublishManagedResult),
+            );
+        }
+        let mut artifacts = if artifact_edge.is_some() {
+            state.artifacts.writes(&mut readers)
+        } else {
+            Vec::new()
+        };
+        p.finish_migration_with_outputs(
             &state.owner,
             state.run,
-            state.failure.as_ref().unwrap_or(&cancelled),
-            &[],
-            &mut [],
+            &finish,
+            artifact_edge,
+            crate::persistence::RunArtifactSubmission {
+                submitted: if artifact_edge.is_some() {
+                    &state.artifact_submitted
+                } else {
+                    &[]
+                },
+                artifacts: &mut artifacts,
+            },
         )?;
         drop(gate);
         guard.complete();
@@ -288,6 +324,8 @@ pub(super) fn advance(
     {
         state.hook_edge = None;
         state.hook_outputs.clear();
+        state.artifacts = Default::default();
+        state.artifact_submitted.clear();
         state.hook_finish = None;
         state.target_commit = None;
     }
@@ -449,11 +487,29 @@ pub(super) fn advance(
             },
         )
         .collect::<Vec<_>>();
+    let mut artifact_readers = state.artifacts.readers();
+    if state.artifacts.failed() {
+        let mut finish = state.hook_finish.clone().unwrap_or(RunFinish {
+            outcome: RunOutcome::Succeeded,
+            primary_failure: None,
+            secondary_failures: state.secondary_failures.clone(),
+            hook_completion: None,
+        });
+        state.artifacts.apply_failure(
+            &mut finish,
+            RunFailedStep::MigrationPlan(MigrationPlanStep::PublishManagedResult),
+        );
+        state.failure = Some(finish);
+        return Ok(false);
+    }
+    let mut artifact_writes = state.artifacts.writes(&mut artifact_readers);
     let result = p.publish_migration_edge(
         state.run,
         &state.owner,
         progress.committed_edges,
         &mut crate::persistence::MigrationEdgePublication {
+            submitted_outputs: &state.artifact_submitted,
+            artifacts: &mut artifact_writes,
             target: state.target_commit.as_ref(),
             operator_inputs: &mut writes,
             hook_outputs: &mut output_writes,
@@ -521,8 +577,16 @@ impl MigrationOwnerState {
             } else {
                 None
             };
+            self.artifact_submitted = facts.submitted_outputs.clone();
+            self.artifacts.prepare_submission(
+                staging,
+                valid,
+                &facts.submitted_outputs,
+                &facts.ordinary_outputs,
+            );
             let cleaned = facts.execution.cleanup().is_ok();
-            if let Some(outputs) = outputs.filter(|_| cleaned) {
+            let input_outputs_ready = outputs.is_some();
+            if let Some(outputs) = outputs.filter(|_| cleaned && !self.artifacts.failed()) {
                 self.hook_outputs = outputs;
                 self.target_commit = Some(TargetCommitPermit {
                     run: self.run,
@@ -530,7 +594,20 @@ impl MigrationOwnerState {
                     edge: edge.expect("validated edge"),
                 });
             } else {
-                let mut failure = migration_publication_failure();
+                let mut failure = if input_outputs_ready && cleaned {
+                    RunFinish {
+                        outcome: RunOutcome::Succeeded,
+                        primary_failure: None,
+                        secondary_failures: Vec::new(),
+                        hook_completion: None,
+                    }
+                } else {
+                    migration_publication_failure()
+                };
+                self.artifacts.apply_failure(
+                    &mut failure,
+                    RunFailedStep::MigrationPlan(MigrationPlanStep::PublishManagedResult),
+                );
                 if !cleaned {
                     failure.secondary_failures.push(safe_execution_failure(
                         "workspace_cleanup_failed",
@@ -546,6 +623,8 @@ impl MigrationOwnerState {
             return;
         };
         let facts = state.facts;
+        self.artifact_submitted = facts.submitted_outputs.clone();
+        self.artifacts.prepare(staging, &facts);
         let mut finish = RunFinish {
             outcome: facts.outcome,
             primary_failure: facts.primary_failure,
@@ -560,6 +639,10 @@ impl MigrationOwnerState {
                 RunFailedStep::for_operation(primary.step.rank(), ManagedExecutionKind::Migration)
                     .expect("known runtime step");
         }
+        self.artifacts.apply_failure(
+            &mut finish,
+            RunFailedStep::MigrationPlan(MigrationPlanStep::PublishManagedResult),
+        );
         if finish.outcome == RunOutcome::Succeeded {
             let outputs = facts
                 .migration_outputs

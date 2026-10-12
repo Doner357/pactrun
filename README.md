@@ -46,14 +46,16 @@ for Revision and Migration forms.
 
 - `--format json` returns one complete response.
 - `--format jsonl` streams events and ends with a result.
-- Both use `format: "pactrun.cli"` and `format_version: "1.0-alpha.3"`.
+- Both default to `format: "pactrun.cli"` and `format_version: "1.0-alpha.4"`.
+- For compatible legacy objects, add `--machine-version 1.0-alpha.3` before the
+  command to retain `format_version: "1.0-alpha.3"` and its original fields.
 - Noninteractive Hook output is delivered as Base64 byte chunks in machine modes.
   Human mode keeps the Hook's stdout and stderr streams.
 - `--cancel-on-output-close` requests cancellation when a JSONL execution's
   receiver disconnects. By default, Pactrun continues managing the operation.
 
 See the [user command reference](./docs/pactrun-users/reference/index.md)
-and [machine-output reference](./docs/pactrun-users/reference/machine-output.md).
+and [machine-output reference](./docs/pactrun-users/reference/operation-output.md).
 
 ## Documentation
 

@@ -469,7 +469,7 @@ pub(crate) fn encode(
         format_version: crate::domain::VersionDomain::PackDistribution
             .current_text()
             .into(),
-        revision_format: crate::domain::VersionDomain::Revision.current_text().into(),
+        revision_format: pack.content.core.version().to_string(),
         package_id: pack.identity.package_id.to_string(),
         revision_digest: pack.identity.content_digest.to_string(),
         portable_metadata: include_metadata

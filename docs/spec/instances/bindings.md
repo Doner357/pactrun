@@ -4,6 +4,11 @@ title: Input Bindings and Protection
 
 # Input Bindings and Protection
 
+The bound-required removal restriction below belongs to implemented Revision
+`1.0-alpha.1`. Revision `1.0-alpha.2` uses
+[operation-specific removal rules](../operations/input-authority.md).
+Registry ownership, atomic replacement and Secret continuity remain applicable.
+
 Each Instance has one binding registry. A binding is active or retained according to the active Revision; those roles do not create separate stores or historical values.
 
 ### PR-REQ-0028 - Stable Input identity and opaque bytes

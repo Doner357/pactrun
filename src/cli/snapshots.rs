@@ -113,6 +113,7 @@ pub(super) fn create_and_restore(
         let (declarations, hook) = app
             .create_restore_definition(&revision, snapshot)
             .map_err(safe_error)?;
+        format.version().require_hook(hook.protocol_version)?;
         if format.requires_noninteractive() {
             require_json_terminal_free(hook.io.terminal)?;
         }
@@ -129,8 +130,15 @@ pub(super) fn create_and_restore(
         ));
     }
     let app = PactrunApplication::open(root).map_err(safe_error)?;
+    let definitions = app
+        .inspect_revision_definitions(std::slice::from_ref(&revision))
+        .map_err(safe_error)?;
+    let definition = definitions
+        .first()
+        .ok_or_else(|| CliError::operation("Restore Revision definition is unavailable"))?;
+    format.version().require_core(&definition.core)?;
     let created = app
-        .create_instance(name, revision, Vec::new())
+        .create_instance_for_restore(name, revision, snapshot)
         .map_err(safe_error)?;
     #[cfg(test)]
     if let Some(callback) = AFTER_CREATE.with(|s| s.borrow_mut().take()) {
@@ -157,9 +165,16 @@ pub(super) fn create_and_restore(
         let restore = run
             .and_then(|id| app.managed_run_inspection(id).ok().flatten())
             .as_ref()
-            .map(execution_presentation::Inspection::from);
+            .map(|inspection| {
+                execution_presentation::Inspection::for_version(inspection, format.version())
+            })
+            .transpose()?;
         let projection = transport_presentation::CreatedRestore {
-            created_instance: (&created).into(),
+            created_instance: presentation::Instance::for_version(
+                &created,
+                &definition.core,
+                format.version(),
+            )?,
             restore_run_id: run.map(|id| id.to_string()),
             restore,
         };
@@ -335,6 +350,7 @@ pub(super) fn execute(
             let full = app
                 .inspect_snapshots_complete(name.as_ref(), None)
                 .map_err(safe_error)?;
+            format.require_revisions(&full.revisions)?;
             let value = transport_presentation::Snapshots {
                 items: full
                     .items
@@ -358,6 +374,7 @@ pub(super) fn execute(
                 let full = app
                     .inspect_snapshots_complete(None, Some(id))
                     .map_err(safe_error)?;
+                format.require_revisions(&full.revisions)?;
                 let value = transport_presentation::Snapshot::from(&full.items[0]);
                 presentation::emit_result(
                     format,
@@ -453,6 +470,7 @@ fn execute_managed(
     let (instance, declarations, hook) = app
         .snapshot_definition(name, operation)
         .map_err(safe_error)?;
+    io.format.version().require_hook(hook.protocol_version)?;
     if io.format.requires_noninteractive() && !options.plan {
         require_json_terminal_free(hook.io.terminal)?;
     }
@@ -533,6 +551,9 @@ fn execute_intent(
         &launcher_search_directories(),
     )
     .map_err(safe_error)?;
+    format
+        .version()
+        .require_hook(plan.hook().protocol_version)?;
     if plan.hook().io.terminal == crate::domain::TerminalContractV1::Interactive && parameter_stdin
     {
         return Err(CliError::usage(
@@ -561,7 +582,8 @@ fn execute_intent(
                     SnapshotOperation::Restore(_) => "snapshot restore",
                 },
                 &capability_presentation::Presented {
-                    value: transport_presentation::SnapshotPlan::new(&plan, &options),
+                    value: transport_presentation::SnapshotPlan::new(&plan, &options)
+                        .with_version(&plan, format.version())?,
                     presentation: author,
                 },
             );
@@ -604,7 +626,8 @@ fn execute_intent(
             .with_run_context(run)
         })?;
     {
-        let result = execution_presentation::Inspection::from(&inspection);
+        let result =
+            execution_presentation::Inspection::for_version(&inspection, format.version())?;
         if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
         {
             if !publish_result {

@@ -1429,6 +1429,7 @@ fn real_declarative_service_migrations_consume_renames_retain_unmapped_and_reatt
             &app,
             &crate::workflow::PlatformHostLauncherLookup,
             &TransitionRevision {
+                parameters: Vec::new(),
                 instance: instance.id,
                 expected_state_version: current.state_version,
                 source: current.active_revision.clone(),
@@ -1623,6 +1624,7 @@ fn new_target_storage_is_protected_before_publication_and_retry_keeps_its_select
         &app,
         &crate::workflow::PlatformHostLauncherLookup,
         &TransitionRevision {
+            parameters: Vec::new(),
             instance: instance.id,
             expected_state_version: instance.state_version,
             source: source.clone(),
@@ -1819,6 +1821,7 @@ fn transform_receipt_keeps_open_risk_until_atomic_target_publication() {
             &app,
             &crate::workflow::PlatformHostLauncherLookup,
             &TransitionRevision {
+                parameters: Vec::new(),
                 instance: instance.id,
                 expected_state_version: instance.state_version,
                 source: source.clone(),
@@ -2158,6 +2161,7 @@ fn cancellation_after_receipt_timeout_and_cleanup_failure_cannot_publish_transfo
             &app,
             &crate::workflow::PlatformHostLauncherLookup,
             &TransitionRevision {
+                parameters: Vec::new(),
                 instance: instance.id,
                 expected_state_version: instance.state_version,
                 source: source.clone(),

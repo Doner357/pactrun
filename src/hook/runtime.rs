@@ -49,6 +49,8 @@ pub(crate) struct TargetRuntimeFacts {
     pub(super) proposal: super::protocol::authority::AcceptedTargetProposal,
     pub(super) execution: crate::managed_data::ExecutionDirectory,
     pub(super) outputs: Vec<super::MigrationOutputSlot>,
+    pub(super) ordinary_outputs: Vec<super::LiveOutputSlot>,
+    pub(super) submitted_outputs: Vec<crate::domain::ManagedOutputIdentity>,
 }
 impl fmt::Debug for TargetRuntimeFacts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -469,6 +471,7 @@ fn snapshot_before_launch(
         primary_failure,
         hook_completion: None,
         completion_accepted: false,
+        ordinary_outputs_accepted: false,
         process_started: false,
         process_terminated: false,
         submitted_outputs: Vec::new(),
@@ -668,6 +671,7 @@ fn apply_step(
             if connected.writer.write_value(&proposal.receipt()).is_err() {
                 return Flow::Fail(FailureKind::ProtocolTransport);
             }
+            live.submitted_handles = proposal.ordinary_outputs().to_vec();
             live.target_proposal = Some(proposal);
             crate::persistence::fault(crate::persistence::FaultPoint::AfterTargetProposalReceipt);
             // Keep reading through EOF: any message after the proposal fails
@@ -1035,12 +1039,17 @@ fn finish_after_exit(
             live.supervisor.finish_output_relay();
             let proposal = live.target_proposal.take().expect("validated proposal");
             let outputs = live.materialized.take_migration_outputs();
-            let (execution, _) = live.materialized.into_execution();
+            let submitted_outputs = live
+                .materialized
+                .submitted_outputs(proposal.ordinary_outputs());
+            let (execution, ordinary_outputs) = live.materialized.into_execution();
             return OwnerContinuation::TargetReady(TargetRuntimeFacts {
                 run: live.run,
                 proposal,
                 execution,
                 outputs,
+                ordinary_outputs,
+                submitted_outputs,
             });
         }
     }
@@ -1089,6 +1098,7 @@ fn finish_after_exit(
         primary_failure,
         hook_completion: live.hook_completion,
         completion_accepted: live.completion_accepted,
+        ordinary_outputs_accepted: live.completion_accepted || live.target_proposal.is_some(),
         process_started: true,
         process_terminated: true,
         submitted_outputs,

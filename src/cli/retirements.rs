@@ -128,6 +128,12 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     };
     while let Some(arg) = parser.next().map_err(lex_error)? {
         match arg {
+            Arg::Long(option @ ("param" | "param-file" | "param-stdin"))
+                if operation == "delete" =>
+            {
+                let option = option.to_owned();
+                parse_execution_option(&option, parser, "execution-timeout-ms", &mut options)?;
+            }
             Arg::Long("no-retain-hook-text") if !options.no_retain_hook_text => {
                 options.no_retain_hook_text = true
             }
@@ -160,11 +166,12 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
             )?,
             _ => {
                 return Err(CliError::usage(
-                    "unsupported or duplicate retirement argument; Cleanup has no parameters or force flag",
+                    "unsupported or duplicate retirement argument; no force flag is supported",
                 ));
             }
         }
     }
+    validate_parameter_source_shape(&options.parameters)?;
     Ok(RetirementCommand::Execute {
         name,
         expected,
@@ -226,6 +233,7 @@ pub(super) fn parse_detached(parser: &mut Parser) -> Result<RetirementCommand, C
 pub(super) fn execute(
     command: RetirementCommand,
     root: &Path,
+    stdin: &mut dyn Read,
     _stderr: &mut dyn Write,
     cancellation: &ActionCancellation,
     format: reply::OutputContext,
@@ -264,12 +272,30 @@ pub(super) fn execute(
                 options.termination_grace_ms.or(Some(5000)),
             )
             .map_err(CliError::usage)?;
-            let intent = app
+            let mut intent = app
                 .resolve_deletion(&name, expected, mode)
                 .map_err(safe_error)?;
+            let (declarations, terminal, protocol) = app
+                .deletion_parameter_context(&intent)
+                .map_err(safe_error)?;
+            if let Some(protocol) = protocol {
+                format.version().require_hook(protocol)?;
+            }
+            intent.parameters = read_operation_parameter_sources(
+                &declarations,
+                terminal,
+                &options.parameters,
+                stdin,
+                cancellation,
+            )?;
             let plan = app
                 .compile_deletion(&intent, &launcher_search_directories())
                 .map_err(safe_error)?;
+            if let DeletionWork::Cleanup(cleanup) = &plan.work {
+                format
+                    .version()
+                    .require_hook(cleanup.hook.protocol_version)?;
+            }
             let command_name = if mode == DeletionMode::AbandonManagement {
                 "instance abandon"
             } else {
@@ -295,6 +321,39 @@ pub(super) fn execute(
                 };
                 {
                     let result = RetirementPlan {
+                        input_requirements: (format.version() == machine::Version::Operations)
+                            .then(|| {
+                                if matches!(plan.work, DeletionWork::Cleanup(_)) {
+                                    vec![machine::Assessment::satisfied(
+                                        machine::Operation::Cleanup,
+                                    )]
+                                } else {
+                                    vec![]
+                                }
+                            }),
+                        parameters: (format.version() == machine::Version::Operations).then(|| {
+                            match &plan.work {
+                                DeletionWork::Cleanup(cleanup) => cleanup
+                                    .parameters
+                                    .iter()
+                                    .map(|parameter| execution_presentation::PlanParameter {
+                                        parameter_id: parameter.id.as_str().into(),
+                                        effective_redaction: parameter.effective_redaction,
+                                    })
+                                    .collect(),
+                                _ => vec![],
+                            }
+                        }),
+                        output_ids: (format.version() == machine::Version::Operations).then(|| {
+                            match &plan.work {
+                                DeletionWork::Cleanup(cleanup) => cleanup
+                                    .outputs
+                                    .iter()
+                                    .map(|output| output.as_str().into())
+                                    .collect(),
+                                _ => vec![],
+                            }
+                        }),
                         instance_id: plan.instance.to_string(),
                         expected_state_version: plan.expected.to_string(),
                         revision: (&plan.revision).into(),
@@ -365,7 +424,8 @@ pub(super) fn execute(
                     .with_run_context(run)
                 })?;
             {
-                let result = execution_presentation::Inspection::from(&inspection);
+                let result =
+                    execution_presentation::Inspection::for_version(&inspection, format.version())?;
                 if matches!(&inspection.run.state, RunState::Finished(o) if o.outcome == RunOutcome::Succeeded)
                 {
                     return presentation::emit_result(format, command_name, &result);
@@ -379,6 +439,9 @@ pub(super) fn execute(
         RetirementCommand::Show(id) => {
             let id = id.full();
             let entry = app.inspect_retirement(id).map_err(safe_error)?;
+            for run in &entry.runs {
+                format.version().require_run(run)?;
+            }
             {
                 presentation::emit_result(
                     format,
@@ -469,6 +532,12 @@ pub(super) fn execute(
 #[derive(Clone, serde::Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct RetirementPlan {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_requirements: Option<Vec<machine::Assessment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<Vec<execution_presentation::PlanParameter>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_ids: Option<Vec<String>>,
     instance_id: String,
     expected_state_version: String,
     revision: presentation::Revision,

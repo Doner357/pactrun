@@ -406,6 +406,25 @@ pub(crate) fn project_service_revision(
     hooks: BTreeMap<ServiceHookSite, HookServiceContractV2>,
     migrations: BTreeMap<Sha256Digest, ServiceMigrationV2>,
 ) -> Result<ServiceRevision, ServiceContractError> {
+    project_service_revision_for_protocol(
+        common,
+        storages,
+        resources,
+        hooks,
+        migrations,
+        crate::domain::FormatVersion::BASELINE,
+    )
+}
+
+/// Structural codec validation, not a claim that the runtime implements a protocol.
+pub(crate) fn project_service_revision_for_protocol(
+    common: RevisionDeclarations,
+    storages: Vec<ServiceStorageV2>,
+    resources: Vec<ServiceResourceV2>,
+    hooks: BTreeMap<ServiceHookSite, HookServiceContractV2>,
+    migrations: BTreeMap<Sha256Digest, ServiceMigrationV2>,
+    hook_protocol: crate::domain::FormatVersion,
+) -> Result<ServiceRevision, ServiceContractError> {
     let mut core = ServiceRevision {
         common,
         storages,
@@ -447,7 +466,7 @@ pub(crate) fn project_service_revision(
         set(&mut h.requires, |a, b| a.reference.cmp(&b.reference))?;
         let (hook, access) = owners[site];
         if (!h.access.is_empty() || !h.requires.is_empty())
-            && !crate::domain::VersionDomain::Hook.supports(hook.protocol_version)
+            && hook.protocol_version != hook_protocol
         {
             return Err(invalid(
                 "persistent authority/prerequisites require a supported Hook protocol",
@@ -512,7 +531,7 @@ pub(crate) fn project_service_revision(
     }
     let mut mappings = std::mem::take(&mut core.migrations);
     for (source, m) in &mut mappings {
-        normalize_mappings(&core, source, m)?;
+        normalize_mappings(&core, source, m, hook_protocol)?;
     }
     core.migrations = mappings;
     Ok(core)
@@ -658,6 +677,7 @@ fn normalize_mappings(
     core: &ServiceRevision,
     source: &Sha256Digest,
     m: &mut ServiceMigrationV2,
+    hook_protocol: crate::domain::FormatVersion,
 ) -> Result<(), ServiceContractError> {
     let mut roles = BTreeMap::new();
     let mut consumed = BTreeSet::new();
@@ -703,7 +723,7 @@ fn normalize_mappings(
                 .find(|m| &m.source_revision_digest == source)
                 .and_then(|m| m.hook.as_ref())
                 .expect("validated Hook owner");
-            if !crate::domain::VersionDomain::Hook.supports(declaration.protocol_version) {
+            if declaration.protocol_version != hook_protocol {
                 return Err(mapping("transform requires a supported Hook protocol"));
             }
             for target in targets.iter() {

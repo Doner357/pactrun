@@ -6,7 +6,11 @@ title: Revision Format and Identity Encoding
 
 ## Supported baseline
 
-The only supported canonical marker is the string `format_version: "1.0-alpha.1"`.
+The separate [operation-scoped Core contract](./operation-format.md) defines
+`1.0-alpha.2`. This page defines `1.0-alpha.1` only;
+its canonical bytes and execution meaning remain unchanged.
+
+The canonical marker for this contract is the string `format_version: "1.0-alpha.1"`.
 The complete root requires inputs, actions, migrations, service_storages and
 service_resources; snapshot and cleanup remain optional. Runtime closure is a
 separate canonical component governed by this same domain, not a ninth format.

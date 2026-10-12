@@ -226,14 +226,14 @@ fn parse_action(value: RawJsonValue, shell_loader: bool) -> Result<ActionV1, Rev
     })
 }
 
-fn parse_output(value: RawJsonValue) -> Result<ManagedOutputV1, RevisionError> {
+pub(crate) fn parse_output(value: RawJsonValue) -> Result<ManagedOutputV1, RevisionError> {
     let mut object = closed_object(value, "ManagedOutputV1", &["id"], &[])?;
     Ok(ManagedOutputV1 {
         id: ManagedOutputIdentity::parse(take_string(&mut object, "id")?)?,
     })
 }
 
-fn parse_parameter(value: RawJsonValue) -> Result<ParameterV1, RevisionError> {
+pub(crate) fn parse_parameter(value: RawJsonValue) -> Result<ParameterV1, RevisionError> {
     let mut object = closed_object(
         value,
         "ParameterV1",

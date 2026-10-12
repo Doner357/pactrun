@@ -8,6 +8,7 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+pub(crate) mod operation;
 type Error = ServiceContractError;
 type Object = BTreeMap<String, Raw>;
 
@@ -319,6 +320,19 @@ pub(crate) fn project_service_core(bytes: &[u8]) -> Result<ServiceRevision, Erro
     VersionDomain::Revision
         .require(&version)
         .map_err(|message| Error::new("unsupported_format_version", message))?;
+    if version != "1.0-alpha.1" {
+        return Err(error(
+            "unsupported_format_version",
+            "legacy Core reader requires 1.0-alpha.1",
+        ));
+    }
+    project_service_fields(o, FormatVersion::BASELINE)
+}
+
+fn project_service_fields(
+    mut o: Object,
+    hook_protocol: FormatVersion,
+) -> Result<ServiceRevision, Error> {
     let storages = array(value(&mut o, "service_storages")?, parse_storage)?;
     let resources = array(value(&mut o, "service_resources")?, parse_resource)?;
     let mut hooks = BTreeMap::new();
@@ -402,7 +416,14 @@ pub(crate) fn project_service_core(bytes: &[u8]) -> Result<ServiceRevision, Erro
     })?;
     o.insert("migrations".into(), Raw::Array(migrations));
     let common = revision_declarations::project_declarations(raw_object(o))?;
-    project_service_revision(common, storages, resources, hooks, mappings)
+    project_service_revision_for_protocol(
+        common,
+        storages,
+        resources,
+        hooks,
+        mappings,
+        hook_protocol,
+    )
 }
 
 pub(crate) fn encode_canonical_service_revision(core: &ServiceRevision) -> Result<Vec<u8>, Error> {
@@ -415,17 +436,23 @@ pub(crate) fn encode_service_core(core: &ServiceRevision) -> Result<Vec<u8>, Err
     let root = value.as_object_mut().expect("typed Core object");
     root.insert(
         "format_version".into(),
-        VersionDomain::Revision.current_text().into(),
+        FormatVersion::BASELINE.to_string().into(),
     );
     root.insert("service_storages".into(), json(core.storages())?);
     root.insert("service_resources".into(), json(core.resources())?);
+    add_service_operations(root, core.hooks(), core.migrations())?;
+    serde_jcs::to_vec(&value).map_err(|e| Error::new("canonicalization_failed", e.to_string()))
+}
+
+fn add_service_operations(
+    root: &mut serde_json::Map<String, serde_json::Value>,
+    hooks: &BTreeMap<ServiceHookSite, HookServiceContractV2>,
+    mappings: &BTreeMap<Sha256Digest, ServiceMigrationV2>,
+) -> Result<(), Error> {
     for action in root["actions"].as_array_mut().expect("typed actions") {
         let id =
             ActionIdentity::parse(action["id"].as_str().expect("typed id")).expect("validated id");
-        add_hook(
-            &mut action["hook"],
-            &core.hooks()[&ServiceHookSite::Action(id)],
-        )?;
+        add_hook(&mut action["hook"], &hooks[&ServiceHookSite::Action(id)])?;
     }
     if let Some(snapshot) = root.get_mut("snapshot") {
         for (name, site) in [
@@ -433,15 +460,12 @@ pub(crate) fn encode_service_core(core: &ServiceRevision) -> Result<Vec<u8>, Err
             ("restore", ServiceHookSite::Restore),
         ] {
             if let Some(operation) = snapshot.get_mut(name) {
-                add_hook(&mut operation["hook"], &core.hooks()[&site])?;
+                add_hook(&mut operation["hook"], &hooks[&site])?;
             }
         }
     }
     if let Some(cleanup) = root.get_mut("cleanup") {
-        add_hook(
-            &mut cleanup["hook"],
-            &core.hooks()[&ServiceHookSite::Cleanup],
-        )?;
+        add_hook(&mut cleanup["hook"], &hooks[&ServiceHookSite::Cleanup])?;
     }
     for migration in root["migrations"].as_array_mut().expect("typed migrations") {
         let digest = Sha256Digest::parse(
@@ -450,15 +474,15 @@ pub(crate) fn encode_service_core(core: &ServiceRevision) -> Result<Vec<u8>, Err
                 .expect("typed digest"),
         )
         .expect("validated digest");
-        let m = &core.migrations()[&digest];
+        let m = &mappings[&digest];
         let object = migration.as_object_mut().expect("typed migration");
         object.insert("storage_transitions".into(), json(&m.storages)?);
         object.insert("resource_transitions".into(), json(&m.resources)?);
         if let Some(h) = object.get_mut("hook") {
-            add_hook(h, &core.hooks()[&ServiceHookSite::Migration(digest)])?;
+            add_hook(h, &hooks[&ServiceHookSite::Migration(digest)])?;
         }
     }
-    serde_jcs::to_vec(&value).map_err(|e| Error::new("canonicalization_failed", e.to_string()))
+    Ok(())
 }
 fn json(value: &(impl serde::Serialize + ?Sized)) -> Result<serde_json::Value, Error> {
     serde_json::to_value(value).map_err(|e| Error::new("canonicalization_failed", e.to_string()))

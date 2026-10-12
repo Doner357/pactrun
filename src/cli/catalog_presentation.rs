@@ -251,7 +251,8 @@ struct Declarations {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 struct InputDeclaration {
     input_id: String,
-    required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    required: Option<bool>,
     protection: &'static str,
 }
 
@@ -282,7 +283,7 @@ impl RevisionEntry {
                     .iter()
                     .map(|i| InputDeclaration {
                         input_id: i.id.as_str().into(),
-                        required: i.required,
+                        required: row.core.operation().is_none().then_some(i.required),
                         protection: match i.protection {
                             InputProtectionV1::Normal => "normal",
                             InputProtectionV1::Secret => "secret",

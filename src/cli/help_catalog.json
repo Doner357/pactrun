@@ -15,6 +15,11 @@
       "name": "--version",
       "value": null,
       "description": "Show the product version (root command only)."
+    },
+    {
+      "name": "--machine-version",
+      "value": "1.0-alpha.3|1.0-alpha.4",
+      "description": "Select a machine interface before the command; requires explicit --format json or jsonl. The default is 1.0-alpha.4."
     }
   ],
   "options": {
@@ -272,6 +277,26 @@
       "name": "--output",
       "value": "base-path",
       "description": "Publish a new bundle, appending the command's .pack or .snapshot suffix."
+    },
+    "migration-param": {
+      "name": "--param",
+      "value": "target-digest/id=value",
+      "description": "Supply a typed parameter for one exact edge of the selected Migration path."
+    },
+    "migration-param-file": {
+      "name": "--param-file",
+      "value": "target-digest/id=path",
+      "description": "Supply a typed parameter for one exact edge of the selected Migration path."
+    },
+    "migration-param-stdin": {
+      "name": "--param-stdin",
+      "value": "target-digest/id",
+      "description": "Supply a typed parameter for one exact edge of the selected Migration path."
+    },
+    "artifact-edge": {
+      "name": "--edge",
+      "value": "source-digest/target-digest",
+      "description": "Select one exact Migration edge from the retained Run path; required for edge-scoped reports."
     }
   },
   "commands": [
@@ -789,7 +814,7 @@
       "description": "Migrate along the selected declared path; --plan only previews the operation.",
       "forms": [
         {
-          "usage": "pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]",
+          "usage": "pactrun instance migrate <instance> --to <reference> [--plan] [--path <path-id>] [--input-file <target-digest>/<input-id>=<path>]... [--param <target-digest>/<parameter-id>=<value>]... [--param-file <target-digest>/<parameter-id>=<path>]... [--param-stdin <target-digest>/<parameter-id>] [--authorize-declassification] [--authorize-recovery-override] [--startup-timeout-ms <ms>] [--execution-timeout-ms <ms>] [--termination-grace-ms <ms>]",
           "description": "Migrate along the selected declared path; --plan only previews the operation."
         }
       ],
@@ -798,6 +823,9 @@
         "--plan",
         "--path",
         "migration-input-file",
+        "migration-param",
+        "migration-param-file",
+        "migration-param-stdin",
         "--authorize-declassification",
         "--authorize-recovery-override",
         "--startup-timeout-ms",
@@ -808,7 +836,8 @@
       ],
       "notes": [
         "Revision references use package:revision, with local names or IDs. Local names are case-sensitive and contain 1 to 31 ASCII characters.",
-        "Input files are target-qualified and acquired before execution. --plan does not acquire files or observe live service requirements."
+        "Input files are target-qualified and acquired before execution. --plan does not acquire Input files or observe live services; it reads parameter sources to validate the entire selected path.",
+        "Same-name parameters on different edges are independent. At most one parameter may read stdin; paths with interactive Hooks cannot use parameter stdin."
       ],
       "examples": []
     },
@@ -820,7 +849,7 @@
       "description": "Run declared Cleanup and reclaim owned service storage; irreversible.",
       "forms": [
         {
-          "usage": "pactrun instance delete <instance> [--plan] [--if-version <token>] [execution-options]",
+          "usage": "pactrun instance delete <instance> [--plan] [--if-version <token>] [--param <id>=<value>]... [--param-file <id>=<path>]... [--param-stdin <id>] [execution-options]",
           "description": "Run declared Cleanup and reclaim owned service storage; irreversible."
         }
       ],
@@ -832,11 +861,14 @@
         "--execution-timeout-ms",
         "--termination-grace-ms",
         "--no-retain-hook-text",
-        "--cancel-on-output-close"
+        "--cancel-on-output-close",
+        "--param",
+        "--param-file",
+        "--param-stdin"
       ],
       "notes": [
         "State-version tokens require their complete values, not ID prefixes.",
-        "Cleanup accepts no author parameters. Abandon does not run Cleanup."
+        "Operation-scoped Cleanup accepts its declared parameters. Each new execution supplies them again or uses defaults; finalization-only does not execute the Hook or accept parameters."
       ],
       "examples": []
     },
@@ -864,7 +896,7 @@
       ],
       "notes": [
         "State-version tokens require their complete values, not ID prefixes.",
-        "Cleanup accepts no author parameters. Abandon does not run Cleanup."
+        "Abandon does not run Cleanup and accepts no Hook parameters."
       ],
       "examples": []
     },
@@ -1258,15 +1290,18 @@
       "description": "Export a retained Run Artifact with explicit sensitive-export authorization.",
       "forms": [
         {
-          "usage": "pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export",
+          "usage": "pactrun run artifact export <run-id> <output-id> --output <path> --authorize-sensitive-export [--edge <source-digest>/<target-digest>]",
           "description": "Export a retained Run Artifact with explicit sensitive-export authorization."
         }
       ],
       "options": [
         "--output",
-        "--authorize-sensitive-export"
+        "--authorize-sensitive-export",
+        "artifact-edge"
       ],
-      "notes": [],
+      "notes": [
+        "Edge prefixes resolve against this Run, even after Revision removal. Same-name reports on other edges are not a fallback. Scoped results require machine interface 1.0-alpha.4."
+      ],
       "examples": []
     },
     {
@@ -1278,12 +1313,16 @@
       "description": "Delete the selected retained Run Artifact.",
       "forms": [
         {
-          "usage": "pactrun run artifact delete <run-id> <output-id>",
+          "usage": "pactrun run artifact delete <run-id> <output-id> [--edge <source-digest>/<target-digest>]",
           "description": "Delete the selected retained Run Artifact."
         }
       ],
-      "options": [],
-      "notes": [],
+      "options": [
+        "artifact-edge"
+      ],
+      "notes": [
+        "Edge prefixes resolve against this Run, even after Revision removal. Same-name reports on other edges are not a fallback. Scoped results require machine interface 1.0-alpha.4."
+      ],
       "examples": []
     },
     {

@@ -17,6 +17,7 @@ title: Specification Reference Index
 - [Package and Revision Identity](./packages/identity.md)
 - [Local Names and References](./packages/local-names.md)
 - [Revision Format and Identity Encoding](./packages/revision-format.md)
+- [Operation-scoped Revision Format](./packages/operation-format.md)
 - [Runtime Content](./packages/runtime-content.md)
 - [Descriptions and Provenance](./packages/metadata.md)
 - [Pack Distribution Format](./packages/distribution.md)
@@ -39,6 +40,7 @@ title: Specification Reference Index
 - [Actions, Plans, and Runs](./operations/actions-plans-runs.md)
 - [Execution and Concurrency](./operations/execution.md)
 - [Execution Diagnostics](./operations/diagnostics.md)
+- [Operation Input Requirements and Authority](./operations/input-authority.md)
 
 ## Snapshots and Restore
 
@@ -46,6 +48,7 @@ title: Specification Reference Index
 - [Snapshot Definition and Managed Data](./snapshots/definition.md)
 - [Snapshot Limits and Capabilities](./snapshots/limits.md)
 - [Snapshot Capture and Restore Execution](./snapshots/execution.md)
+- [Operation-scoped Restore](./snapshots/restore-compatibility.md)
 - [Snapshot Commands](./snapshots/commands.md)
 - [Snapshot Integrity Format](./snapshots/integrity.md)
 - [Snapshot Bundle Format](./snapshots/bundles.md)
@@ -69,12 +72,16 @@ title: Specification Reference Index
 
 ## Hooks and Integration Interfaces
 
+- [Common Operation Capabilities](./operations/common-capabilities.md)
+
 - [Hook Execution and Authority](./interfaces/hooks.md)
 - [Hook Protocol](./interfaces/hook-protocol.md)
+- [Operation-scoped Hook Protocol](./interfaces/operation-hook-protocol.md)
 - [Shell Loader](./interfaces/shell-loader.md)
 - [Command and Output Reference](./interfaces/commands.md)
 - [Object ID Selectors](./interfaces/id-selectors.md)
 - [CLI Machine Interface](./interfaces/machine-output.md)
+- [Operation-scoped Machine Output](./interfaces/operation-machine-output.md)
 - [Error Taxonomy](./interfaces/errors.md)
 
 ## Compatibility and Storage
@@ -85,3 +92,4 @@ title: Specification Reference Index
 - [Immutable Runtime Blob Storage](./storage/runtime-content.md)
 - [Revision Persistence and Publication](./storage/revision-records.md)
 - [Persistence Schema](./persistence/persistence-baseline.md)
+- [Operation Artifact Persistence](./persistence/operation-artifacts.md)

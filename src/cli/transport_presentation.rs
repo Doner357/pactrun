@@ -159,6 +159,10 @@ pub(super) struct CreatedRestore {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct SnapshotPlan {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_requirements: Option<Vec<machine::Assessment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_ids: Option<Vec<String>>,
     operation: execution_presentation::Operation,
     eligibility: SnapshotPlanEligibility,
     instance_id: String,
@@ -180,21 +184,62 @@ pub(super) struct SnapshotPlan {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SnapshotPlanEligibility {
-    Capture { required_inputs_satisfied: bool },
-    Restore { target_eligibility: &'static str },
+    Capture {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        required_inputs_satisfied: Option<bool>,
+    },
+    Restore {
+        target_eligibility: &'static str,
+    },
 }
 
 impl SnapshotPlan {
+    pub(super) fn with_version(
+        mut self,
+        plan: &crate::domain::SnapshotExecutionPlan,
+        version: machine::Version,
+    ) -> Result<Self, CliError> {
+        version.require_hook(plan.hook().protocol_version)?;
+        if version == machine::Version::Operations {
+            if let SnapshotPlanEligibility::Capture {
+                required_inputs_satisfied,
+            } = &mut self.eligibility
+            {
+                *required_inputs_satisfied = None;
+            }
+            let operation = match plan.operation() {
+                crate::domain::ManagedRunIdentity::Capture { .. } => {
+                    machine::Operation::SnapshotCapture
+                }
+                crate::domain::ManagedRunIdentity::Restore { snapshot, .. } => {
+                    machine::Operation::SnapshotRestore {
+                        snapshot_id: Some(snapshot.to_string()),
+                    }
+                }
+                _ => unreachable!("Snapshot plan"),
+            };
+            self.input_requirements = Some(vec![machine::Assessment::satisfied(operation)]);
+            self.output_ids = Some(
+                plan.outputs()
+                    .iter()
+                    .map(|output| output.as_str().into())
+                    .collect(),
+            );
+        }
+        Ok(self)
+    }
     pub(super) fn new(
         plan: &crate::domain::SnapshotExecutionPlan,
         options: &ExecutionOptions,
     ) -> Self {
         Self {
+            input_requirements: None,
+            output_ids: None,
             operation: plan.operation().into(),
             eligibility: match plan.operation() {
                 crate::domain::ManagedRunIdentity::Capture { .. } => {
                     SnapshotPlanEligibility::Capture {
-                        required_inputs_satisfied: true,
+                        required_inputs_satisfied: Some(true),
                     }
                 }
                 crate::domain::ManagedRunIdentity::Restore { .. } => {

@@ -2,6 +2,7 @@
 
 #![allow(dead_code)]
 
+mod artifacts;
 mod capture;
 #[cfg(test)]
 pub(crate) use capture::{capture_clock_for_test, install_capture_clock_for_test};
@@ -284,6 +285,7 @@ pub(crate) struct RuntimeTerminalFacts {
     pub(crate) primary_failure: Option<RunPrimaryFailure>,
     pub(crate) hook_completion: Option<HookCompletionRecord>,
     pub(crate) completion_accepted: bool,
+    pub(crate) ordinary_outputs_accepted: bool,
     pub(crate) process_started: bool,
     pub(crate) process_terminated: bool,
     pub(crate) submitted_outputs: Vec<ManagedOutputIdentity>,
@@ -815,36 +817,11 @@ fn finalize_owner_state(
         )));
     }
     if state.prepared.is_none() {
-        state.prepared = Some(Vec::new());
-        if state.facts.completion_accepted && !state.facts.submitted_outputs.is_empty() {
-            let mut slots = state
-                .facts
-                .outputs
-                .iter()
-                .map(|slot| (slot.output.clone(), slot.path.clone()))
-                .collect::<BTreeMap<_, _>>();
-            let mut prepared = Vec::new();
-            for output in &state.facts.submitted_outputs {
-                let Some(path) = slots.remove(output) else {
-                    state.publication_failed = true;
-                    prepared.clear();
-                    break;
-                };
-                match staging.stage_action_output(&path) {
-                    Ok(bytes) => prepared.push(PreparedOutput {
-                        output: output.clone(),
-                        bytes,
-                    }),
-                    Err(_) => {
-                        state.publication_failed = true;
-                        prepared.clear();
-                        break;
-                    }
-                }
-            }
-            if !state.publication_failed {
-                prepared.sort_by(|left, right| left.output.cmp(&right.output));
-                state.prepared = Some(prepared);
+        match artifacts::stage_submitted(staging, &state.facts) {
+            Ok(prepared) => state.prepared = Some(prepared),
+            Err(()) => {
+                state.publication_failed = true;
+                state.prepared = Some(Vec::new());
             }
         }
     }
@@ -966,6 +943,7 @@ pub(super) fn ready_failure(
             primary_failure,
             hook_completion: None,
             completion_accepted: false,
+            ordinary_outputs_accepted: false,
             process_started: false,
             process_terminated: true,
             submitted_outputs: Vec::new(),
@@ -992,6 +970,7 @@ pub(super) fn ready_cancelled(
             primary_failure: None,
             hook_completion: None,
             completion_accepted: false,
+            ordinary_outputs_accepted: false,
             process_started: false,
             process_terminated: false,
             submitted_outputs: Vec::new(),

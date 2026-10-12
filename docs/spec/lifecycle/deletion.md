@@ -4,6 +4,11 @@ title: Cleanup and Abandonment
 
 # Cleanup and Abandonment
 
+Cleanup `requires` and its existing binding visibility apply to implemented
+Revision `1.0-alpha.1`. Revision `1.0-alpha.2`
+uses [explicit Cleanup Input grants](../operations/input-authority.md).
+Deletion authority, stopping management and recovery boundaries do not change.
+
 Cleanup and stopping management solve different problems.
 [Kubernetes finalizers](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/)
 illustrate retaining an object until cleanup obligations are satisfied;

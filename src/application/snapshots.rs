@@ -31,11 +31,26 @@ impl PactrunApplication {
             .persistence
             .load_revision(revision)?
             .ok_or(PersistenceError::MissingRevision(revision.clone()))?;
+        if stored.content.core.operation().is_some() {
+            self.persistence
+                .qualify_snapshot_for_creation(revision, snapshot)?;
+        }
         let (parameters, hook) = crate::domain::snapshot_hook(
             stored.content.core.common(),
             crate::domain::SnapshotOperation::Restore(snapshot),
         )?;
         Ok((parameters.to_vec(), hook.clone()))
+    }
+
+    pub(crate) fn create_instance_for_restore(
+        &self,
+        name: InstanceName,
+        revision: crate::domain::RevisionIdentity,
+        snapshot: SnapshotId,
+    ) -> Result<crate::domain::InstanceView, ApplicationError> {
+        Ok(self
+            .persistence
+            .create_instance_for_restore(name, revision, snapshot)?)
     }
 
     pub(crate) fn snapshot_definition(

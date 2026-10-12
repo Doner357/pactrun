@@ -420,7 +420,7 @@ mod tests {
         let candidate = crate::authoring::parse_pack_source_yaml(yaml).unwrap();
         assert_eq!(
             candidate.revision.version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
         let root = SecureSourceRoot::open(&source).unwrap();
         let staged = resolve_candidate(p.staging_session().unwrap(), &root, candidate).unwrap();
@@ -443,7 +443,7 @@ mod tests {
         let loaded = p.load_revision(&installed).unwrap().unwrap();
         assert_eq!(
             loaded.content.core.version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
         assert_eq!(
             loaded.content.core.service_core().unwrap().resources()[0]
@@ -452,7 +452,7 @@ mod tests {
             "Config.json"
         );
         assert!(!storage.join("service-storage").exists()); // installation is not allocation
-        // Only the exact baseline is supported; numeric and foreign contracts refuse.
+        // Legacy source remains exact; numeric and foreign contracts refuse.
         for token in ["2.0", "'2'", "4"] {
             let invalid = String::from_utf8(yaml.to_vec()).unwrap().replace(
                 "source_format: 1.0-alpha.2",
@@ -466,7 +466,7 @@ mod tests {
                 .unwrap()
                 .revision
                 .version(),
-            crate::domain::VersionDomain::Revision.current()
+            crate::domain::FormatVersion::BASELINE
         );
     }
 

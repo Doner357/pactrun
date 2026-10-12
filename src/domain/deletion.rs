@@ -25,6 +25,7 @@ pub(crate) struct DeleteInstance {
     pub(crate) instance: InstanceId,
     pub(crate) expected: InstanceStateVersion,
     pub(crate) mode: DeletionMode,
+    pub(crate) parameters: Vec<super::RawParameterInput>,
 }
 
 pub(crate) struct DeletionCompilationObservation {
@@ -45,6 +46,9 @@ pub(crate) enum DeletionWork {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CompiledCleanup {
+    pub(crate) parameters: Vec<super::ParameterBinding>,
+    pub(crate) outputs: Vec<super::ManagedOutputIdentity>,
+    pub(crate) input_grants: Option<super::BindingInputUse>,
     pub(crate) hook: super::HookV1,
     pub(crate) launch: super::CompiledHookLaunch,
     pub(crate) bindings: Vec<super::ManagedInputBindingView>,
@@ -64,6 +68,9 @@ pub(crate) struct DeletionPlan {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum DeletionPlanError {
+    HookContractMismatch,
+    Parameters(super::ActionResolutionError),
+    InvalidParameters,
     UnsupportedProtocol(super::FormatVersion),
     ChangedObservation,
     MissingRequirement(super::InputBindingRefV1),
@@ -75,6 +82,9 @@ pub(crate) enum DeletionPlanError {
 impl std::fmt::Display for DeletionPlanError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match self {
+            Self::HookContractMismatch => "Hook protocol does not match the owning Revision format",
+            Self::Parameters(error) => return error.fmt(formatter),
+            Self::InvalidParameters => "Cleanup parameters do not match its invocation context",
             Self::UnsupportedProtocol(version) => {
                 return formatter
                     .write_str(&super::VersionDomain::Hook.unsupported_message(*version));
@@ -101,6 +111,38 @@ pub(crate) fn build_deletion_plan(
     observation: DeletionCompilationObservation,
     launch: Option<super::CompiledHookLaunch>,
 ) -> Result<DeletionPlan, DeletionPlanError> {
+    build_deletion_plan_inner(intent, observation, launch, None)
+}
+
+pub(crate) fn rebuild_deletion_plan(
+    plan: &DeletionPlan,
+    observation: DeletionCompilationObservation,
+) -> Result<DeletionPlan, DeletionPlanError> {
+    let (launch, parameters) = match &plan.work {
+        DeletionWork::Cleanup(cleanup) => {
+            (Some(cleanup.launch.clone()), cleanup.parameters.as_slice())
+        }
+        _ => (None, &[][..]),
+    };
+    build_deletion_plan_inner(
+        &DeleteInstance {
+            instance: plan.instance,
+            expected: plan.expected,
+            mode: plan.mode,
+            parameters: Vec::new(),
+        },
+        observation,
+        launch,
+        Some(parameters),
+    )
+}
+
+fn build_deletion_plan_inner(
+    intent: &DeleteInstance,
+    observation: DeletionCompilationObservation,
+    launch: Option<super::CompiledHookLaunch>,
+    bound_parameters: Option<&[super::ParameterBinding]>,
+) -> Result<DeletionPlan, DeletionPlanError> {
     use super::{InputBindingRoleV1, ManagedInputRole};
     if intent.instance != observation.instance.id
         || intent.expected != observation.instance.state_version
@@ -121,7 +163,34 @@ pub(crate) fn build_deletion_plan(
             attempt: obligation.attempt,
         }
     } else if let Some(cleanup) = observation.revision.core.cleanup() {
-        for requirement in &cleanup.requires {
+        let contract = &observation.revision.core;
+        let site = super::ServiceHookSite::Cleanup;
+        let declarations = contract
+            .parameters(&site)
+            .ok_or(DeletionPlanError::InvalidParameters)?;
+        let parameters = if let Some(bound) = bound_parameters {
+            if !super::bound_parameters_match(declarations, bound) {
+                return Err(DeletionPlanError::InvalidParameters);
+            }
+            bound.to_vec()
+        } else {
+            super::bind_operation_parameters(declarations, intent.parameters.clone())
+                .map_err(DeletionPlanError::Parameters)?
+        };
+        let input_grants = if let Some(operation) = contract.operation() {
+            match operation.input_use(&site) {
+                Some(super::OperationInputUse::Binding(grants)) => Some(grants),
+                _ => return Err(DeletionPlanError::ChangedObservation),
+            }
+        } else {
+            None
+        };
+        let required = input_grants
+            .as_ref()
+            .map_or(cleanup.requires.as_slice(), |grants| {
+                grants.required.as_slice()
+            });
+        for requirement in required {
             let found = observation.instance.bindings.iter().any(|binding| {
                 binding.input_id == requirement.input_id
                     && binding.present
@@ -140,6 +209,9 @@ pub(crate) fn build_deletion_plan(
             return Err(DeletionPlanError::UnsupportedProtocol(
                 cleanup.hook.protocol_version,
             ));
+        }
+        if !contract.hook_protocol_matches(cleanup.hook.protocol_version) {
+            return Err(DeletionPlanError::HookContractMismatch);
         }
         let runtime = observation.revision.runtime_content.files();
         let launch_matches = match (&cleanup.hook.launch, &launch) {
@@ -182,6 +254,14 @@ pub(crate) fn build_deletion_plan(
         )
         .map_err(|_| DeletionPlanError::ServiceBindings)?;
         DeletionWork::Cleanup(Box::new(CompiledCleanup {
+            parameters,
+            outputs: contract
+                .ordinary_outputs(&site)
+                .unwrap_or_default()
+                .iter()
+                .map(|output| output.id.clone())
+                .collect(),
+            input_grants,
             hook: cleanup.hook.clone(),
             launch,
             bindings: observation.instance.bindings,
@@ -192,6 +272,11 @@ pub(crate) fn build_deletion_plan(
     } else {
         DeletionWork::NoCleanup
     };
+    if !matches!(work, DeletionWork::Cleanup(_))
+        && (!intent.parameters.is_empty() || bound_parameters.is_some_and(|p| !p.is_empty()))
+    {
+        return Err(DeletionPlanError::InvalidParameters);
+    }
     Ok(DeletionPlan {
         instance: intent.instance,
         expected: intent.expected,

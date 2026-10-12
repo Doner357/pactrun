@@ -69,6 +69,19 @@ struct Call {
     text: bool,
 }
 
+fn output_scope(
+    options: &mut std::collections::BTreeMap<&str, OsString>,
+) -> io::Result<Option<OutputScope>> {
+    options
+        .remove("--scope")
+        .map(|value| match value.to_str() {
+            Some("ordinary") => Ok(OutputScope::Ordinary),
+            Some("target") => Ok(OutputScope::Target),
+            _ => Err(failure()),
+        })
+        .transpose()
+}
+
 fn parse(args: &[OsString]) -> io::Result<Call> {
     let verb = args.first().and_then(|s| s.to_str()).ok_or_else(failure)?;
     let mut position = vec![];
@@ -79,7 +92,7 @@ fn parse(args: &[OsString]) -> io::Result<Call> {
         if argument.starts_with("--") {
             if !matches!(
                 argument,
-                "--output" | "--file" | "--view" | "--role" | "--copy-to"
+                "--output" | "--file" | "--view" | "--role" | "--copy-to" | "--scope"
             ) {
                 return Err(failure());
             }
@@ -139,9 +152,15 @@ fn parse(args: &[OsString]) -> io::Result<Call> {
         "output" => {
             text = true;
             copy_from = options.remove("--file");
-            Request::Output { id: id(&position)? }
+            Request::Output {
+                id: id(&position)?,
+                scope: output_scope(&mut options)?,
+            }
         }
-        "output-register" => Request::OutputRegister { id: id(&position)? },
+        "output-register" => Request::OutputRegister {
+            id: id(&position)?,
+            scope: output_scope(&mut options)?,
+        },
         "candidate" if position.is_empty() => {
             text = true;
             Request::Candidate
