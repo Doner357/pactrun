@@ -21,6 +21,9 @@ mod managed_input;
 mod migration;
 mod migration_paths;
 mod object_lifecycle;
+mod operation_contracts;
+#[allow(unused_imports)]
+pub(crate) use operation_contracts::*;
 mod revision_content;
 mod revision_declarations;
 mod revision_metadata;

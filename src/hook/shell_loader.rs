@@ -121,9 +121,13 @@ enum Request {
     },
     Output {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scope: Option<OutputScope>,
     },
     OutputRegister {
         id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scope: Option<OutputScope>,
     },
     Candidate,
     SnapshotContent,
@@ -145,6 +149,13 @@ enum Request {
     TargetReady,
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum OutputScope {
+    Ordinary,
+    Target,
+}
+
 enum Pending {
     Risk {
         request_id: u64,
@@ -159,6 +170,7 @@ enum Pending {
 struct State {
     session: Value,
     produced: BTreeSet<String>,
+    produced_target: BTreeSet<String>,
     content: Vec<Value>,
     completion: Value,
     open: bool,
@@ -172,6 +184,7 @@ impl State {
         Self {
             session,
             produced: BTreeSet::new(),
+            produced_target: BTreeSet::new(),
             content: vec![],
             completion: json!({}),
             open: false,
@@ -196,7 +209,7 @@ impl State {
             "action" => value["produced_outputs"] = json!(self.produced),
             "migration" => {
                 value["produced_target_outputs"] = if value["status"] == "success" {
-                    json!(self.produced)
+                    json!(self.produced_target)
                 } else {
                     json!([])
                 }
@@ -209,6 +222,9 @@ impl State {
                 }
             }
             _ => {}
+        }
+        if self.session["protocol_version"] == crate::domain::OPERATION_HOOK_FORMAT {
+            value["produced_outputs"] = json!(self.produced);
         }
         value
     }
@@ -225,7 +241,13 @@ impl State {
             Some("cleanup") => protocol::SessionOperation::Cleanup,
             _ => return false,
         };
-        protocol::parse_hook_message_for(&bytes, operation).is_ok()
+        let Some(version) = self.session["protocol_version"]
+            .as_str()
+            .and_then(|version| version.parse().ok())
+        else {
+            return false;
+        };
+        protocol::parse_hook_message_for_contract(&bytes, operation, version).is_ok()
     }
 
     fn request(
@@ -258,14 +280,24 @@ impl State {
                 .and_then(|items| items.iter().find(|v| v["handle"] == handle))
                 .and_then(|v| v.get("path"))
                 .cloned(),
-            Request::Output { id } => session::output(&self.session, &id)
+            Request::Output { id, scope } => session::output_in_scope(&self.session, &id, scope)
                 .and_then(|v| v.get("staged_path"))
                 .cloned(),
-            Request::OutputRegister { id } => session::output(&self.session, &id)
-                .and_then(|v| v["handle"].as_str())
-                .map(str::to_owned)
-                .filter(|handle| self.produced.insert(handle.clone()))
-                .map(|_| Value::Null),
+            Request::OutputRegister { id, scope } => {
+                let target = matches!(scope, Some(OutputScope::Target))
+                    || (scope.is_none() && self.session["operation"]["kind"] == "migration");
+                session::output_in_scope(&self.session, &id, scope)
+                    .and_then(|v| v["handle"].as_str())
+                    .map(str::to_owned)
+                    .filter(|handle| {
+                        if target {
+                            self.produced_target.insert(handle.clone())
+                        } else {
+                            self.produced.insert(handle.clone())
+                        }
+                    })
+                    .map(|_| Value::Null)
+            }
             Request::Candidate => self.session["operation"]["candidate"]
                 .get("root_path")
                 .cloned(),
@@ -352,14 +384,15 @@ impl State {
                         .iter()
                         .filter_map(|v| v["handle"].as_str())
                         .collect::<BTreeSet<_>>();
-                    if expected != self.produced.iter().map(String::as_str).collect() {
+                    if expected != self.produced_target.iter().map(String::as_str).collect() {
                         None
                     } else {
-                        write_frame(
-                            wire,
-                            &json!({"type":"target_ready", "commit_handle":self.session["target_commit"]["handle"],
-                            "produced_target_outputs":self.produced}),
-                        )?;
+                        let mut proposal = json!({"type":"target_ready", "commit_handle":self.session["target_commit"]["handle"],"produced_target_outputs":self.produced_target});
+                        if self.session["protocol_version"] == crate::domain::OPERATION_HOOK_FORMAT
+                        {
+                            proposal["produced_outputs"] = json!(self.produced);
+                        }
+                        write_frame(wire, &proposal)?;
                         self.pending = Some(Pending::Target { reply });
                         return Ok(());
                     }
@@ -485,7 +518,7 @@ fn powershell_file_path(path: &OsString) -> io::Result<OsString> {
 
 fn execution(args: &[OsString]) -> io::Result<i32> {
     let version = args.get(3).and_then(|v| v.to_str()).ok_or_else(failure)?;
-    crate::domain::VersionDomain::Hook
+    let selected_version = crate::domain::VersionDomain::Hook
         .require(version)
         .map_err(|_| failure())?;
     let expected_transport = if cfg!(windows) {
@@ -498,12 +531,12 @@ fn execution(args: &[OsString]) -> io::Result<i32> {
     }
     let endpoint = env::var("PACTRUN_HOOK_PROTOCOL_ENDPOINT").map_err(|_| failure())?;
     let mut wire = connect(&endpoint)?;
-    if !protocol::read_preamble(&mut wire)? {
+    if !protocol::read_preamble_for_version(&mut wire, selected_version)? {
         return Err(failure());
     }
     let session = read_frame(&mut wire)?;
     session::validate(&session, version)?;
-    wire.write_all(protocol::PREAMBLE)?;
+    wire.write_all(protocol::preamble_for_version(selected_version)?)?;
     #[cfg(unix)]
     let listener = ProtocolListener::bind_helpers_in(Path::new(
         &env::var_os("PACTRUN_INTERNAL_SHELL_HELPER_DIRECTORY").ok_or_else(failure)?,
@@ -848,6 +881,48 @@ mod tests {
         assert!(read_frame(&mut [0_u8, 0, 0, 4, b'{'].as_slice()).is_err());
     }
 
+    // Test-ID: PR-TEST-0720
+    // Verifies: PR-REQ-0387, PR-REQ-0391
+    #[test]
+    fn operation_shell_outputs_keep_ordinary_reports_separate_from_migration_targets() {
+        let (_listener, mut wire, _peer) = pair();
+        let mut value = session();
+        value["protocol_version"] = json!(crate::domain::OPERATION_HOOK_FORMAT);
+        value["operation"] = json!({"kind":"migration","source_revision":value["revision"],"source_bindings":[],"target_bindings":[],
+            "target_outputs":[{"handle":"4".repeat(32),"input_id":"report","staged_path":env::current_dir().unwrap().join("target-slot")}],
+            "outputs":[{"handle":"6".repeat(32),"output_id":"report","staged_path":env::current_dir().unwrap().join("ordinary-slot")}]});
+        session::validate(&value, crate::domain::OPERATION_HOOK_FORMAT).unwrap();
+        assert_ne!(
+            session::output_in_scope(&value, "report", None).unwrap()["staged_path"],
+            session::output_in_scope(&value, "report", Some(OutputScope::Ordinary)).unwrap()["staged_path"]
+        );
+        let mut state = State::new(value.clone());
+        for scope in [None, Some(OutputScope::Ordinary)] {
+            let (send, recv) = mpsc::channel();
+            state
+                .request(
+                    Request::OutputRegister {
+                        id: "report".into(),
+                        scope,
+                    },
+                    send,
+                    &mut wire,
+                )
+                .unwrap();
+            assert_eq!(recv.recv().unwrap()["ok"], true);
+        }
+        let success = state.complete(true);
+        assert_eq!(success["produced_target_outputs"], json!(["4".repeat(32)]));
+        assert_eq!(success["produced_outputs"], json!(["6".repeat(32)]));
+        assert!(state.validate_message(&success));
+        let failed = state.complete(false);
+        assert_eq!(failed["produced_target_outputs"], json!([]));
+        assert_eq!(failed["produced_outputs"], json!(["6".repeat(32)]));
+        assert!(state.validate_message(&failed));
+        value["operation"]["outputs"][0]["handle"] = json!("4".repeat(32));
+        assert!(session::validate(&value, crate::domain::OPERATION_HOOK_FORMAT).is_err());
+    }
+
     // Test-ID: PR-TEST-0512
     // Verifies: PR-REQ-0349
     #[test]
@@ -859,6 +934,7 @@ mod tests {
             .request(
                 Request::OutputRegister {
                     id: "foreign".into(),
+                    scope: None,
                 },
                 send,
                 &mut wire,

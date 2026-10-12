@@ -16,7 +16,7 @@ test('Spec references return to their product topic rather than development hist
     assert.equal(route.kind, 'lookup');
     assert.ok(route.back.startsWith('spec/'));
     assert.ok(docs.has(route.back));
-    if (name === 'spec/persistence/persistence-baseline.md') assert.equal(route.back, 'spec/storage/index.md');
+    if (name.startsWith('spec/persistence/')) assert.equal(route.back, 'spec/storage/index.md');
     else if (name.split('/').length === 3 && !name.endsWith('/index.md')) assert.equal(route.back, name.slice(0, name.lastIndexOf('/') + 1) + 'index.md');
   }
 });

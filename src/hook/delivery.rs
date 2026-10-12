@@ -230,6 +230,24 @@ pub(crate) struct Delivery {
 }
 impl Delivery {
     pub(crate) fn start(root: &Path, command: &str) -> io::Result<Arc<Self>> {
+        Self::start_with_version(
+            root,
+            command,
+            crate::domain::VersionDomain::Machine.current(),
+        )
+    }
+    pub(crate) fn start_with_version(
+        root: &Path,
+        command: &str,
+        version: crate::domain::FormatVersion,
+    ) -> io::Result<Arc<Self>> {
+        if !crate::domain::VersionDomain::Machine.supports(version) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported machine delivery version",
+            ));
+        }
+        let format_version = version.to_string();
         let lease = StagingSession::prepare(root).map_err(io::Error::other)?;
         let directory = lease
             .create_delivery_directory()
@@ -263,9 +281,7 @@ impl Delivery {
                             .ok_or_else(|| io::Error::other("delivery counter overflow"))?;
                         let record = Record {
                             format: "pactrun.cli".into(),
-                            format_version: crate::domain::VersionDomain::Machine
-                                .current_text()
-                                .into(),
+                            format_version: format_version.clone(),
                             sequence: sequence.to_string(),
                             received_at_unix_ms: now(),
                             command: command.clone(),

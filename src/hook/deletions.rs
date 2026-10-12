@@ -319,6 +319,8 @@ fn finalize_storage(
 #[derive(Debug)]
 pub(crate) struct CleanupFinalization {
     facts: RuntimeTerminalFacts,
+    artifacts: super::artifacts::ArtifactPreparation,
+    cleanup_published: bool,
     may_have_run: bool,
     housekeeping_attempted: bool,
     housekeeping_failed: bool,
@@ -341,6 +343,8 @@ pub(super) fn terminal_with_cancellation(
     }
     OwnerContinuation::CleanupFinalization(Box::new(CleanupFinalization {
         facts,
+        artifacts: Default::default(),
+        cleanup_published: false,
         may_have_run,
         housekeeping_attempted: false,
         housekeeping_failed: false,
@@ -361,6 +365,7 @@ pub(super) fn before_launch(
             primary_failure,
             hook_completion: None,
             completion_accepted: false,
+            ordinary_outputs_accepted: false,
             process_started: false,
             process_terminated: false,
             submitted_outputs: vec![],
@@ -392,10 +397,10 @@ pub(super) fn finalize(
     let Some(OwnerContinuation::CleanupFinalization(state)) = guard.continuation.as_mut() else {
         unreachable!()
     };
-    if matches!(
-        p.load_managed_run(state.facts.run)?.map(|view| view.state),
-        Some(RunState::Finished(_))
-    ) {
+    let view = p
+        .load_managed_run(state.facts.run)?
+        .ok_or_else(|| PersistenceError::CorruptRun("Cleanup Run is missing".into()))?;
+    if matches!(&view.state, RunState::Finished(_)) {
         guard.complete();
         return Ok(true);
     }
@@ -403,6 +408,15 @@ pub(super) fn finalize(
         return Err(PersistenceError::InvalidRunTransition(
             "Cleanup process tree is still live".to_owned(),
         ));
+    }
+    if !state.cleanup_published {
+        state.cleanup_published = p.deletion_obligation(view.instance)?.is_some_and(|o| {
+            o.attempt == state.facts.run
+                && o.phase == crate::domain::DeletionPhase::FinalizationAuthorized
+        });
+    }
+    if !state.cleanup_published {
+        state.artifacts.prepare(staging, &state.facts);
     }
     if !state.housekeeping_attempted {
         state.cancellation.delivery.progress(
@@ -416,6 +430,11 @@ pub(super) fn finalize(
             .as_ref()
             .is_some_and(|execution| execution.cleanup().is_err());
     }
+    let mut artifact_readers = if state.cleanup_published {
+        Vec::new()
+    } else {
+        state.artifacts.readers()
+    };
     let mut finish = RunFinish {
         outcome: state.facts.outcome,
         primary_failure: state.facts.primary_failure.clone(),
@@ -432,13 +451,33 @@ pub(super) fn finalize(
             "Cleanup workspace housekeeping failed",
         ));
     }
-    if p.publish_cleanup_result(
+    if !state.cleanup_published {
+        state.artifacts.apply_failure(
+            &mut finish,
+            RunFailedStep::DeletionPlan(crate::domain::DeletionPlanStep::AuthorizeFinalization),
+        );
+    }
+    let mut writes = if state.cleanup_published {
+        Vec::new()
+    } else {
+        state.artifacts.writes(&mut artifact_readers)
+    };
+    if p.publish_cleanup_result_with_outputs(
         state.facts.run,
         &staging.owner(),
         &finish,
         state.may_have_run,
         state.facts.completion_accepted,
+        crate::persistence::RunArtifactSubmission {
+            submitted: if state.cleanup_published {
+                &[]
+            } else {
+                &state.facts.submitted_outputs
+            },
+            artifacts: &mut writes,
+        },
     )? {
+        state.cleanup_published = true;
         if state.cancellation.is_requested() {
             finish.outcome = RunOutcome::Cancelled;
             p.finish_run_owned(&staging.owner(), state.facts.run, &finish, &[], &mut [])?;

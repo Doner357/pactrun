@@ -38,11 +38,13 @@ const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
 pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
 // Private SQLite bootstrap/admission marker, not the public format version.
-pub(crate) const SCHEMA_VERSION: i64 = 3;
+pub(crate) const SCHEMA_VERSION: i64 = 4;
 pub(super) const BASELINE_SQL: &str = include_str!("persistence_baseline.sql");
 pub(super) const ALPHA1_SQL: &str = include_str!("persistence_alpha1.sql");
 pub(super) const ALPHA2_SQL: &str = include_str!("persistence_alpha2.sql");
 pub(super) const ALPHA3_SQL: &str = include_str!("persistence_alpha3.sql");
+pub(super) const ALPHA4_SQL: &str = include_str!("persistence_alpha4.sql");
+pub(super) const SCOPED_ARTIFACTS_SQL: &str = include_str!("scoped_artifacts.sql");
 pub(super) const CORE_DIAGNOSTICS_SQL: &str = include_str!("core_diagnostics.sql");
 pub(super) const FAILURE_CAUSES_SQL: &str = include_str!("failure_causes.sql");
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -265,7 +267,10 @@ impl PactrunPersistence {
         };
         match state {
             DatabaseState::Baseline => Ok(()),
-            DatabaseState::Alpha1 | DatabaseState::Alpha2 | DatabaseState::Alpha3 => {
+            DatabaseState::Alpha1
+            | DatabaseState::Alpha2
+            | DatabaseState::Alpha3
+            | DatabaseState::Alpha4 => {
                 drop(reader);
                 super::schema_upgrade::upgrade(&root)
             }
@@ -725,6 +730,7 @@ pub(super) enum DatabaseState {
     Alpha1,
     Alpha2,
     Alpha3,
+    Alpha4,
     Baseline,
 }
 
@@ -754,6 +760,10 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
         (APPLICATION_ID, 2, true) => {
             validate_schema(database, 2)?;
             Ok(DatabaseState::Alpha3)
+        }
+        (APPLICATION_ID, 3, true) => {
+            validate_schema(database, 3)?;
+            Ok(DatabaseState::Alpha4)
         }
         (APPLICATION_ID, version, _) => Err(PersistenceError::DatabaseOwnership(format!(
             "unsupported persistence bootstrap marker {version}; development stores are not upgraded"
@@ -825,14 +835,16 @@ fn require_persistence_version(
             |row| row.get(0),
         )
         .map_err(|error| PersistenceError::sqlite("read persistence format version", error))?;
-    if version <= 2 {
+    if version <= 3 {
         return if text
             == if version == 0 {
                 "1.0-alpha.1"
             } else if version == 1 {
                 "1.0-alpha.2"
-            } else {
+            } else if version == 2 {
                 "1.0-alpha.3"
+            } else {
+                "1.0-alpha.4"
             } {
             Ok(())
         } else {
@@ -855,12 +867,13 @@ pub(super) fn validate_schema(database: &Connection, version: i64) -> Result<(),
             .execute_batch(BASELINE_SQL)
             .map_err(|error| PersistenceError::sqlite("construct expected baseline", error))?;
         require_persistence_version(database, version)?;
-    } else if version <= 2 {
+    } else if version <= 3 {
         expected
             .execute_batch(match version {
                 0 => ALPHA1_SQL,
                 1 => ALPHA2_SQL,
-                _ => ALPHA3_SQL,
+                2 => ALPHA3_SQL,
+                _ => ALPHA4_SQL,
             })
             .map_err(|error| {
                 PersistenceError::sqlite("construct expected alpha.1 schema", error)

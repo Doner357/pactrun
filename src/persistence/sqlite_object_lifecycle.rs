@@ -215,7 +215,7 @@ impl PactrunPersistence {
                     )?,
                     artifacts: exists(
                         &tx,
-                        "SELECT EXISTS(SELECT 1 FROM run_artifacts WHERE run_id=?1)",
+                        "SELECT EXISTS(SELECT 1 FROM run_artifacts WHERE run_id=?1 UNION ALL SELECT 1 FROM run_scoped_artifacts WHERE run_id=?1)",
                         args,
                     )?,
                     authorize_artifacts: *delete_artifacts,

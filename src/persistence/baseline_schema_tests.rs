@@ -142,7 +142,7 @@ fn baseline_bootstraps_reopens_and_rechecks_metadata_before_admitted_writes() {
     assert!(PactrunPersistence::open_read_only(temp.path()).is_err());
     assert!(PactrunPersistence::open(temp.path()).is_err());
     db.execute(
-        "UPDATE pactrun_metadata SET format_version='1.0-alpha.4'",
+        "UPDATE pactrun_metadata SET format_version='1.0-alpha.5'",
         [],
     )
     .unwrap();

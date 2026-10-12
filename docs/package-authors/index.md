@@ -38,6 +38,8 @@ These optional tutorials are not automatic next steps after every Pack.
 | What exact source syntax and metadata shapes are accepted? | [Complete Pack source reference](./reference/source-format.md) |
 | What changes Revision identity, and what are the validation rules? | [Declaration types and identity](./reference/revision-format.md) |
 | What Snapshot sizes and structure can the runtime handle? | [Snapshot authoring limits](./reference/snapshot-limits.md) |
+| How do I give each operation its own Inputs and common capabilities? | [Operation-scoped fields](./reference/operation-format.md), [Input requirements and read scope](./reference/operation-inputs.md) |
+| How do lifecycle Hooks receive parameters and return reports? | [Common parameters and reports](./reference/operation-capabilities.md), [operation-scoped messages](./reference/operation-hooks.md) |
 
 The field guides explain everyday choices. The advanced references are generated
 from the same product rules and remain in this author section. Their optional

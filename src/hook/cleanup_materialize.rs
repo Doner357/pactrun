@@ -30,6 +30,24 @@ impl MaterializedExecution {
                 .into_iter()
                 .filter(|binding| binding.payload.is_some())
             {
+                if let Some(grants) = &plan.input_grants {
+                    let reference = crate::domain::InputBindingRefV1 {
+                        input_id: binding.input.clone(),
+                        role: match binding.role {
+                            ManagedInputRole::Active { .. } => {
+                                crate::domain::InputBindingRoleV1::Active
+                            }
+                            ManagedInputRole::Retained => {
+                                crate::domain::InputBindingRoleV1::Retained
+                            }
+                        },
+                    };
+                    if grants.required.binary_search(&reference).is_err()
+                        && grants.optional.binary_search(&reference).is_err()
+                    {
+                        continue;
+                    }
+                }
                 let (path, mut file) =
                     directory.create_file(&Path::new("bindings").join(binding.input.as_str()))?;
                 p.stream_admitted_payload(run, &binding.input, &mut file)?;
@@ -46,18 +64,25 @@ impl MaterializedExecution {
                 launch_command(&plan.launch, &runtime, plan.hook.protocol_version)?;
             arguments.extend(plan.hook.args.iter().cloned());
             let session_id = random_handle()?;
-            let session = json!({"type":"session_start","protocol_version":plan.hook.protocol_version,
+            let parameters = plan.parameters.iter().map(|parameter| {
+                Ok(json!({"parameter_id":parameter.id.as_str(), "value":parameter_value(parameter.value())?}))
+            }).collect::<Result<Vec<_>, MaterializationError>>()?;
+            let mut session = json!({"type":"session_start","protocol_version":plan.hook.protocol_version,
                 "session_id":session_id,"run_id":run.to_string(),
                 "revision":{"package_id":revision.package_id.to_string(),"revision_content_digest":revision.content_digest.to_string()},
-                "parameters":[],"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},
+                "parameters":parameters,"workspace":{"handle":random_handle()?,"root_path":host_path(&workspace)?},
                 "io":{"terminal":terminal_name(plan.hook.io.terminal)},"operation":{"kind":"cleanup","bindings":bindings}});
+            let (outputs, authorities) = materialize_outputs(&directory, &plan.outputs, "outputs")?;
+            if plan.hook.protocol_version == crate::domain::operation_hook_version() {
+                session["operation"]["outputs"] = json!(authorities);
+            }
             super::super::protocol::validate_session_frame(&session)?;
-            Ok((program, arguments, session_id, session))
+            Ok((program, arguments, session_id, session, outputs))
         })();
         match result {
-            Ok((program, arguments, session_id, session)) => Self {
+            Ok((program, arguments, session_id, session, outputs)) => Self {
                 directory,
-                outputs: Vec::new(),
+                outputs,
                 program,
                 arguments,
                 session_id,

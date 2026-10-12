@@ -242,43 +242,59 @@ impl VersionDomain {
     pub(crate) const fn current(self) -> FormatVersion {
         // Each domain owns its entry; shared initial values do not couple evolution.
         match self {
-            Self::Revision | Self::Hook | Self::Snapshot | Self::SnapshotBundle => {
-                FormatVersion::BASELINE
-            }
-            Self::PackSource | Self::PackDistribution | Self::Machine | Self::Persistence => {
-                FormatVersion {
-                    major: 1,
-                    minor: 0,
-                    prerelease: Some(Prerelease {
-                        stage: Stage::Alpha,
-                        number: if matches!(self, Self::Persistence) {
-                            4
-                        } else if matches!(self, Self::Machine) {
-                            3
-                        } else {
-                            2
-                        },
-                    }),
-                }
-            }
+            Self::Snapshot | Self::SnapshotBundle => FormatVersion::BASELINE,
+            Self::PackSource
+            | Self::Revision
+            | Self::Hook
+            | Self::PackDistribution
+            | Self::Machine
+            | Self::Persistence => FormatVersion {
+                major: 1,
+                minor: 0,
+                prerelease: Some(Prerelease {
+                    stage: Stage::Alpha,
+                    number: if matches!(self, Self::Persistence) {
+                        5
+                    } else if matches!(self, Self::Machine) {
+                        4
+                    } else if matches!(self, Self::PackSource) {
+                        3
+                    } else {
+                        2
+                    },
+                }),
+            },
         }
     }
     pub(crate) const fn current_text(self) -> &'static str {
         match self {
-            Self::Persistence => "1.0-alpha.4",
-            Self::Machine => "1.0-alpha.3",
-            Self::PackSource | Self::PackDistribution => "1.0-alpha.2",
+            Self::Persistence => "1.0-alpha.5",
+            Self::Machine => "1.0-alpha.4",
+            Self::PackSource => "1.0-alpha.3",
+            Self::Revision | Self::Hook | Self::PackDistribution => "1.0-alpha.2",
             _ => "1.0-alpha.1",
         }
     }
     pub(crate) fn supports(self, version: FormatVersion) -> bool {
-        version == self.current()
+        self.supported_texts()
+            .iter()
+            .any(|text| text.parse::<FormatVersion>().ok() == Some(version))
+    }
+    pub(crate) const fn supported_texts(self) -> &'static [&'static str] {
+        match self {
+            Self::PackSource => &["1.0-alpha.2", "1.0-alpha.3"],
+            Self::Revision | Self::Hook => &["1.0-alpha.1", "1.0-alpha.2"],
+            Self::PackDistribution => &["1.0-alpha.2"],
+            Self::Machine => &["1.0-alpha.3", "1.0-alpha.4"],
+            Self::Persistence => &["1.0-alpha.5"],
+            Self::Snapshot | Self::SnapshotBundle => &["1.0-alpha.1"],
+        }
     }
     pub(crate) fn unsupported_message(self, required: FormatVersion) -> String {
         format!(
             "unsupported {} version {required}; this executable supports {}; use an explicitly supporting release without converting or deleting data",
             self.name(),
-            self.current()
+            self.supported_texts().join(", ")
         )
     }
     pub(crate) fn require(self, text: &str) -> Result<FormatVersion, String> {
@@ -289,7 +305,7 @@ impl VersionDomain {
             return Err(format!(
                 "unsupported {} version {version}; this executable supports {}; use an explicitly supporting release, without converting or deleting data",
                 self.name(),
-                self.current()
+                self.supported_texts().join(", ")
             ));
         }
         Ok(version)
@@ -389,13 +405,16 @@ mod tests {
                 domain.current()
             );
             for text in ["1.0-alpha.2", "1.0", "1.1", "2.0", "0.1"] {
-                if text == domain.current_text() {
+                if domain.supported_texts().contains(&text) {
                     continue;
                 }
                 assert!(domain.require(text).unwrap_err().contains(domain.name()));
             }
-            if domain.current_text() == "1.0-alpha.2" {
+            if !domain.supported_texts().contains(&"1.0-alpha.1") {
                 assert!(domain.require("1.0-alpha.1").is_err());
+            }
+            for text in domain.supported_texts() {
+                assert!(domain.require(text).is_ok());
             }
             assert!(domain.require("1").is_err());
         }

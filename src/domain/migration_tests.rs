@@ -326,6 +326,7 @@ fn hook() -> HookV1 {
 }
 fn intent(from: u8, to: u8) -> TransitionRevision {
     TransitionRevision {
+        parameters: Vec::new(),
         instance: InstanceId::from_bytes([1; 16]),
         expected_state_version: InstanceStateVersion::from_bytes([2; 16]),
         source: identity(from),

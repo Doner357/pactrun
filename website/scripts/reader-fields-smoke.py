@@ -68,7 +68,12 @@ def install(name, source, success=True, hook=False):
 required_source = manifest(input_block)
 reference = install('input', required_source)
 run('instance', 'create', 'reader-input', '--revision', reference)
-assert json.loads(run('--format', 'json', 'instance', 'show', 'reader-input'))['result']['required_inputs_satisfied'] is False
+current = json.loads(run('--format', 'json', 'instance', 'show', 'reader-input'))
+assert current['format_version'] == '1.0-alpha.4'
+assert 'required_inputs_satisfied' not in current['result']
+# This fixture deliberately uses legacy global-required Inputs. Its old readiness
+# projection is available only through the explicitly selected legacy interface.
+assert json.loads(run('--format', 'json', '--machine-version', '1.0-alpha.3', 'instance', 'show', 'reader-input'))['result']['required_inputs_satisfied'] is False
 run('instance', 'delete', 'reader-input')
 install('quoted-boolean', required_source.replace('required: true', 'required: "true"'), success=False)
 

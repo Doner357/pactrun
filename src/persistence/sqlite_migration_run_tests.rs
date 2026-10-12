@@ -148,6 +148,7 @@ fn plan(
 ) -> MigrationExecutionPlan {
     let observed = p.observe_migration_compilation(instance).unwrap();
     let intent = TransitionRevision {
+        parameters: Vec::new(),
         instance,
         expected_state_version: observed.state_version,
         source: path[0].clone(),
@@ -162,6 +163,10 @@ fn plan(
         .edges()
         .iter()
         .map(|e| MigrationCompiledEdge {
+            parameters: Vec::new(),
+            outputs: Vec::new(),
+            source_inputs: None,
+            target_inputs: None,
             service: None,
             bindings: e.clone(),
             runtime: observed

@@ -4,6 +4,11 @@ title: Input and Resource Declarations
 
 # Input and Resource Declarations
 
+The global required and visibility rules below apply to implemented Revision
+`1.0-alpha.1`. For Revision `1.0-alpha.2`,
+[operation Input contracts](../operations/input-authority.md) replace those
+rules; stable identity, payload opacity and independent protection rules remain.
+
 ## Input declarations
 
 ### PR-REQ-0127 - Stable InputIdentity

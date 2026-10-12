@@ -7,7 +7,7 @@ slug: /spec/storage/schema
 
 The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
-integer are private bootstrap marker 3, not a second public format version.
+integer are private bootstrap marker 4, not a second public format version.
 Only pristine storage or the exact supported metadata and schema may be admitted.
 Existing populated files without supported metadata are refused before Pactrun
 staging, admission/content-coordination creation, conversion or cleanup. Ordinary
@@ -28,7 +28,7 @@ representation is absent. Managed Input chunks remain an active representation.
 ## Complete fresh schema
 
 ```sql
--- Fresh Persistence 1.0-alpha.4. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.5. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -667,6 +667,26 @@ CREATE TABLE run_artifact_chunks (
         ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_scoped_artifacts (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    artifact_key BLOB NOT NULL CHECK(length(artifact_key) = 8 + length(output_identity)),
+    edge_index INTEGER NOT NULL CHECK(edge_index >= -1),
+    output_identity BLOB NOT NULL CHECK(length(output_identity) > 0),
+    byte_length INTEGER NOT NULL CHECK(byte_length BETWEEN 0 AND 536870912),
+    PRIMARY KEY (run_id, artifact_key),
+    UNIQUE (run_id, edge_index, output_identity),
+    FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE run_scoped_artifact_chunks (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    artifact_key BLOB NOT NULL CHECK(length(artifact_key) > 8),
+    chunk_index INTEGER NOT NULL CHECK(chunk_index >= 0),
+    chunk_bytes BLOB NOT NULL CHECK(length(chunk_bytes) BETWEEN 1 AND 1048576),
+    PRIMARY KEY (run_id, artifact_key, chunk_index),
+    FOREIGN KEY (run_id, artifact_key) REFERENCES run_scoped_artifacts(run_id, artifact_key) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_artifacts (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     output_identity BLOB NOT NULL CHECK(length(output_identity) > 0),
@@ -991,7 +1011,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 3),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 4),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -1000,7 +1020,7 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.4');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.5');
 
 CREATE TABLE package_local_names (
     package_id BLOB NOT NULL CHECK(length(package_id) = 16),

@@ -14,7 +14,7 @@ fn transcript(session: &Value, messages: &[Value]) -> Result<Value, String> {
             let decoded = parse_hook_message_for(raw.as_bytes(), SessionOperation::Migration).map_err(|e|e.code.to_owned())?;
             match state.accept(decoded).map_err(|e|e.code.to_owned())? {
                 ProtocolStep::RiskRequest {request_id, requested} => pending = Some((request_id, requested)),
-                ProtocolStep::Completed(done) => {submitted = done.produced_outputs; completion = Some("submitted");},
+                ProtocolStep::Completed(done) => {submitted = done.produced_target_outputs; completion = Some("submitted");},
                 ProtocolStep::HookProtocolError(_) => completion=Some("protocol_error"),
                 _ => {},
             }

@@ -100,7 +100,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
                 .persist_revision(revision.package_id, &content, &[publication])
                 .unwrap();
             let observed = p.observe_migration_compilation(view.id).unwrap();
-            let intent = TransitionRevision {
+            let intent = TransitionRevision { parameters: Vec::new(),
                 instance: view.id,
                 expected_state_version: view.state_version,
                 source: revision.clone(),
@@ -115,7 +115,7 @@ fn prepare(p: &PactrunPersistence, path: &Path, case: &str, admitted: bool) -> R
             let edges = bindings
                 .edges()
                 .iter()
-                .map(|edge| MigrationCompiledEdge {
+                .map(|edge| MigrationCompiledEdge { parameters: Vec::new(), outputs: Vec::new(), source_inputs: None, target_inputs: None,
                     service: None,
                     bindings: edge.clone(),
                     runtime: content.runtime_content.files().to_vec(),

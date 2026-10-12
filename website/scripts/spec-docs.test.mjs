@@ -59,6 +59,46 @@ test('source documentation keeps Hook and source format domains independent', ()
   assert.doesNotMatch(get('spec/packages/distribution.md'), /label-source|portable\s+labels|Label\/provenance/);
 });
 
+// Exact format ownership remains explicit even when more than one reader is supported.
+test('operation contracts select exact versions while preserving legacy ownership', () => {
+  const get = name => docs.find(([file]) => file === name)?.[1];
+  const format = get('spec/packages/operation-format.md');
+  for (const row of [
+    '| Pack source | `1.0-alpha.2` | `1.0-alpha.3` |',
+    '| Revision canonical | `1.0-alpha.1` | `1.0-alpha.2` |',
+    '| Hook Protocol | `1.0-alpha.1` | `1.0-alpha.2` |',
+    '| CLI machine interface | `1.0-alpha.3` | `1.0-alpha.4` |',
+  ]) assert.ok(format.includes(row), row);
+  assert.match(format, /legacy contracts/);
+  assert.match(get('spec/packages/source-format.md'), /source marker for this contract is the string `source_format: "1\.0-alpha\.2"`/);
+  assert.match(get('spec/packages/revision-format.md'), /canonical marker for this contract is the string `format_version: "1\.0-alpha\.1"`/);
+  assert.match(get('spec/interfaces/hook-protocol.md'), /supported value is `1\.0-alpha\.1`/);
+  assert.match(get('spec/interfaces/machine-output.md'), /legacy machine interface `1\.0-alpha\.3`/);
+});
+
+test('new operation requirements have owners and linked executable evidence', () => {
+  const owners = new Map([
+    ['spec/packages/operation-format.md', ['0379', '0380', '0389']],
+    ['spec/operations/input-authority.md', ['0381', '0382', '0383']],
+    ['spec/snapshots/restore-compatibility.md', ['0384', '0385', '0386']],
+    ['spec/interfaces/operation-hook-protocol.md', ['0387']],
+    ['spec/interfaces/operation-machine-output.md', ['0388']],
+    ['spec/operations/common-capabilities.md', ['0390', '0391']],
+    ['spec/persistence/operation-artifacts.md', ['0392']],
+  ]);
+  for (const [name, ids] of owners) {
+    const body = docs.find(([file]) => file === name)?.[1];
+    assert.ok(body, name);
+    const sections = [...body.matchAll(/^### (PR-REQ-\d+)\b/gm)];
+    assert.deepEqual(sections.map(match => match[1]), ids.map(id => 'PR-REQ-' + id), name);
+    for (const [index, match] of sections.entries()) {
+      const section = body.slice(match.index, sections[index + 1]?.index ?? body.length);
+      assert.match(section, /\*\*Verification: PR-TEST-\d+/, match[1]);
+      assert.doesNotMatch(section, /\*\*Verification: Pending automated coverage\.\*\*/, match[1]);
+    }
+  }
+});
+
 test('current reference and Store-opening prose does not retain replaced rules', () => {
   for (const [name, body] of docs) {
     if (name.startsWith('pactrun-developers/')) continue;

@@ -4,6 +4,12 @@ title: CLI Machine Interface
 
 # CLI Machine Interface
 
+This page defines legacy machine interface `1.0-alpha.3`. Select it explicitly
+with leading `--format json --machine-version 1.0-alpha.3` (or `jsonl`). The
+[operation-scoped output contract](./operation-machine-output.md), `1.0-alpha.4`,
+is the current default. The rules and examples below describe the selected
+legacy contract; they do not change the newer contract.
+
 Object-ID operands follow the [CLI selector contract](./id-selectors.md).
 Machine responses always retain full identities.
 
@@ -285,7 +291,7 @@ replay or compensation. Interactive execution is outside this contract.
 
 `--format jsonl` selects the same `pactrun.cli` interface and string
 `format_version: "1.0-alpha.3"` as ordinary results, not another version domain. Each physical LF-terminated
-line follows the [event schema](./cli-events.schema.json). Each
+line follows the [legacy event schema](./cli-events-alpha3.schema.json). Each
 UTF-8 line contains one compact JSON object with format, format_version, sequence, receipt time,
 command and a typed event. Sequence is a decimal string and orders observation
 within this invocation. Events are acceptance_pending, run_accepted, core_progress,
@@ -380,7 +386,7 @@ detail but MUST apply the same disclosure rules and observe the same command fac
 
 ## Existing representation conventions
 
-The checked-in [JSON Schema](./cli-machine.schema.json) defines the shape
+The checked-in [legacy JSON Schema](./cli-machine-alpha3.schema.json) defines the shape
 inventory for the canonical commands. Its generation test compares explicit
 CLI projections to the checked-in contract; tests write a candidate only under
 target/, never silently update this specification. The following meanings apply:

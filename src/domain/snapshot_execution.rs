@@ -44,6 +44,8 @@ pub(crate) struct SnapshotExecutionPlan {
     operation: ManagedRunIdentity,
     access: OperationAccessV1,
     parameters: Vec<ParameterBinding>,
+    input_grants: Option<ActiveInputUse>,
+    outputs: Vec<ManagedOutputIdentity>,
     active_bindings: Vec<ActiveInstanceBindingReference>,
     runtime: Vec<RuntimeFileV1>,
     hook: HookV1,
@@ -53,6 +55,18 @@ pub(crate) struct SnapshotExecutionPlan {
 }
 
 impl SnapshotExecutionPlan {
+    pub(crate) fn input_grants(&self) -> Option<&ActiveInputUse> {
+        self.input_grants.as_ref()
+    }
+    pub(crate) fn allows_input(&self, input: &InputIdentity) -> bool {
+        self.input_grants.as_ref().is_none_or(|grants| {
+            grants.required.binary_search(input).is_ok()
+                || grants.optional.binary_search(input).is_ok()
+        })
+    }
+    pub(crate) fn outputs(&self) -> &[ManagedOutputIdentity] {
+        &self.outputs
+    }
     pub(crate) fn service_bindings(&self) -> &ServiceHookBindings {
         &self.service_bindings
     }
@@ -199,27 +213,62 @@ pub(crate) fn build_snapshot_plan(
         ));
     }
     let core = &observation.revision.core;
+    let site = match intent.operation {
+        SnapshotOperation::Capture => ServiceHookSite::Capture,
+        SnapshotOperation::Restore(_) => ServiceHookSite::Restore,
+    };
+    let input_grants = snapshot_input_grants(core, &site)?;
+    let outputs = core
+        .ordinary_outputs(&site)
+        .ok_or(SnapshotPlanError::Invalid(
+            "Snapshot capability is unavailable",
+        ))?
+        .iter()
+        .map(|output| output.id.clone())
+        .collect();
     let (parameters, hook) = snapshot_hook(core.common(), intent.operation)?;
     if !crate::domain::VersionDomain::Hook.supports(hook.protocol_version) {
         return Err(SnapshotPlanError::UnsupportedProtocol(
             hook.protocol_version,
         ));
     }
+    if !core.hook_protocol_matches(hook.protocol_version) {
+        return Err(SnapshotPlanError::Invalid(
+            "Hook protocol does not match the owning Revision format",
+        ));
+    }
     let parameters = bind_operation_parameters(parameters, intent.parameters.clone())
         .map_err(SnapshotPlanError::Parameters)?;
     let operation = match intent.operation {
         SnapshotOperation::Capture => {
-            let missing = observation
-                .instance
-                .bindings
-                .iter()
-                .filter(|b| b.role == (ManagedInputRole::Active { required: true }) && !b.present)
-                .map(|b| b.input_id.clone())
-                .collect::<Vec<_>>();
+            let missing = if let Some(grants) = &input_grants {
+                grants
+                    .required
+                    .iter()
+                    .filter(|id| {
+                        !observation.instance.bindings.iter().any(|b| {
+                            &b.input_id == *id
+                                && b.present
+                                && matches!(b.role, ManagedInputRole::Active { .. })
+                        })
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            } else {
+                observation
+                    .instance
+                    .bindings
+                    .iter()
+                    .filter(|b| {
+                        b.role == (ManagedInputRole::Active { required: true }) && !b.present
+                    })
+                    .map(|b| b.input_id.clone())
+                    .collect::<Vec<_>>()
+            };
             if !missing.is_empty() {
                 return Err(SnapshotPlanError::MissingRequired(missing));
             }
-            if !observation.instance.required_inputs_satisfied {
+            if input_grants.is_none() && !observation.instance.required_inputs_satisfied {
                 return Err(SnapshotPlanError::Invalid(
                     "Capture requires complete active inputs",
                 ));
@@ -243,6 +292,7 @@ pub(crate) fn build_snapshot_plan(
                 ));
             }
             validate_restore_transition(&observation.instance.bindings, snapshot)?;
+            validate_restore_requirements(core, snapshot)?;
             ManagedRunIdentity::Restore {
                 revision: observation.instance.active_revision.clone(),
                 snapshot: id,
@@ -252,10 +302,7 @@ pub(crate) fn build_snapshot_plan(
     let access = operation
         .authoritative_access(core.common())
         .map_err(|_| SnapshotPlanError::Invalid("Snapshot capability is unavailable"))?;
-    let service_hook = core.service_hook(&match intent.operation {
-        SnapshotOperation::Capture => ServiceHookSite::Capture,
-        SnapshotOperation::Restore(_) => ServiceHookSite::Restore,
-    });
+    let service_hook = core.service_hook(&site);
     let service_bindings = bind_current_service_hook(
         &service_hook,
         observation.service_state.as_ref(),
@@ -270,6 +317,8 @@ pub(crate) fn build_snapshot_plan(
         operation,
         access,
         parameters,
+        input_grants,
+        outputs,
         active_bindings: if matches!(intent.operation, SnapshotOperation::Capture) {
             observation.active_bindings
         } else {
@@ -281,4 +330,43 @@ pub(crate) fn build_snapshot_plan(
         service_bindings,
         service_hook,
     })
+}
+
+pub(crate) fn snapshot_input_grants(
+    core: &RevisionCore,
+    site: &ServiceHookSite,
+) -> Result<Option<ActiveInputUse>, SnapshotPlanError> {
+    let Some(operation) = core.operation() else {
+        return Ok(None);
+    };
+    match operation.input_use(site) {
+        Some(OperationInputUse::Active(grants)) => Ok(Some(grants)),
+        _ => Err(SnapshotPlanError::Invalid(
+            "Snapshot Input declaration is unavailable",
+        )),
+    }
+}
+
+pub(crate) fn validate_restore_requirements(
+    core: &RevisionCore,
+    snapshot: &SnapshotManifest,
+) -> Result<(), SnapshotPlanError> {
+    if let Some(grants) = snapshot_input_grants(core, &ServiceHookSite::Restore)? {
+        let missing = grants
+            .required
+            .iter()
+            .filter(|id| {
+                !snapshot.managed_bindings().iter().any(|binding| {
+                    &binding.input_id == *id
+                        && binding.role == SnapshotBindingRole::Active
+                        && matches!(binding.state, SnapshotBindingState::Bound(_))
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(SnapshotPlanError::MissingRequired(missing));
+        }
+    }
+    Ok(())
 }

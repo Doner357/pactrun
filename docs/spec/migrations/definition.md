@@ -4,6 +4,11 @@ title: Migration Definition
 
 # Migration Definition
 
+Input requirement field names below belong to implemented Revision
+`1.0-alpha.1`. Revision `1.0-alpha.2` replaces
+them with [source/target read declarations](../packages/operation-format.md).
+Transitions, target ownership and independent output obligations remain.
+
 Migration is a managed, staged transition along a Revision graph. It is owned
 by the target Revision and is not an Action.
 

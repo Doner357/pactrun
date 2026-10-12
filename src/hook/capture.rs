@@ -420,6 +420,7 @@ pub(crate) struct CaptureFinalization {
     pub(super) captured_at: Option<SnapshotTimestamp>,
     pub(super) submitted: Vec<CaptureServiceContentSubmission>,
     prepared: Option<PreparedCapture>,
+    artifacts: super::artifacts::ArtifactPreparation,
     failure: Option<&'static str>,
     cleanup_attempted: bool,
     cleanup_failed: bool,
@@ -471,6 +472,7 @@ pub(super) fn terminal(
         captured_at,
         submitted,
         prepared: None,
+        artifacts: Default::default(),
         failure: None,
         cleanup_attempted: false,
         cleanup_failed: false,
@@ -497,6 +499,7 @@ pub(super) fn advance(
             "Capture process is still live".to_owned(),
         ));
     }
+    state.artifacts.prepare(staging, &state.facts);
     if state.facts.outcome == RunOutcome::Succeeded
         && state.failure.is_none()
         && state.prepared.is_none()
@@ -522,6 +525,7 @@ pub(super) fn advance(
             state.cleanup_failed = execution.cleanup().is_err();
         }
     }
+    let mut artifact_readers = state.artifacts.readers();
     let mut finish = RunFinish {
         outcome: state.facts.outcome,
         primary_failure: state.facts.primary_failure.clone(),
@@ -548,7 +552,14 @@ pub(super) fn advance(
             "Capture execution workspace cleanup failed",
         ));
     }
-    let result = if let Some(prepared) = &state.prepared {
+    state.artifacts.apply_failure(
+        &mut finish,
+        RunFailedStep::SnapshotPlan(SnapshotPlanStep::PublishManagedResult),
+    );
+    let mut artifact_writes = state.artifacts.writes(&mut artifact_readers);
+    let result = if let Some(prepared) = &state.prepared
+        && finish.outcome == RunOutcome::Succeeded
+    {
         let readers = prepared
             .blobs
             .values()
@@ -574,15 +585,25 @@ pub(super) fn advance(
                 },
             )
             .collect::<Vec<_>>();
-        p.publish_capture(
+        p.publish_capture_with_outputs(
             &staging.owner(),
             state.facts.run,
             &finish,
             &prepared.manifest,
             &mut writes,
+            crate::persistence::RunArtifactSubmission {
+                submitted: &state.facts.submitted_outputs,
+                artifacts: &mut artifact_writes,
+            },
         )
     } else {
-        p.finish_run_owned(&staging.owner(), state.facts.run, &finish, &[], &mut [])
+        p.finish_run_owned(
+            &staging.owner(),
+            state.facts.run,
+            &finish,
+            &state.facts.submitted_outputs,
+            &mut artifact_writes,
+        )
     };
     match result {
         Ok(_) => {

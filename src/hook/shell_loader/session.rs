@@ -114,7 +114,7 @@ pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
     object(value, &fields, &["target_commit"])?;
     if value["type"] != "session_start"
         || value["protocol_version"].as_str() != Some(version)
-        || version != crate::domain::VersionDomain::Hook.current_text()
+        || !matches!(version, "1.0-alpha.1" | "1.0-alpha.2")
     {
         return Err(failure());
     }
@@ -144,6 +144,8 @@ pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
         }
     }
     let op = &value["operation"];
+    let common_outputs = version == crate::domain::OPERATION_HOOK_FORMAT;
+    let extra_fields: &[&str] = if common_outputs { &["outputs"] } else { &[] };
     match op["kind"].as_str() {
         Some("action") => {
             object(
@@ -165,14 +167,18 @@ pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
                     "target_bindings",
                     "target_outputs",
                 ],
-                &[],
+                extra_fields,
             )?;
             revision(&op["source_revision"])?;
             bindings(&op["source_bindings"], true, &mut handles)?;
             bindings(&op["target_bindings"], false, &mut handles)?;
         }
         Some("snapshot_capture") => {
-            object(op, &["kind", "access", "bindings", "candidate"], &[])?;
+            object(
+                op,
+                &["kind", "access", "bindings", "candidate"],
+                extra_fields,
+            )?;
             one_of(&op["access"], &["observe", "mutate"])?;
             bindings(&op["bindings"], false, &mut handles)?;
             object(&op["candidate"], &["handle", "root_path"], &[])?;
@@ -183,7 +189,7 @@ pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
             object(
                 op,
                 &["kind", "snapshot_id", "bindings", "snapshot_content"],
-                &[],
+                extra_fields,
             )?;
             opaque(&op["snapshot_id"])?;
             bindings(&op["bindings"], false, &mut handles)?;
@@ -226,32 +232,33 @@ pub(super) fn validate(value: &Value, version: &str) -> io::Result<()> {
             }
         }
         Some("cleanup") => {
-            object(op, &["kind", "bindings"], &[])?;
+            object(op, &["kind", "bindings"], extra_fields)?;
             bindings(&op["bindings"], true, &mut handles)?;
         }
         _ => return Err(failure()),
     }
-    let key = if op["kind"] == "migration" {
-        "input_id"
+    let ordinary: &[Value] = if common_outputs || op["kind"] == "action" {
+        array(&op["outputs"])?
     } else {
-        "output_id"
+        &[]
     };
-    let mut output_ids = BTreeSet::new();
-    for output in outputs(value) {
-        object(output, &["handle", key, "staged_path"], &[])?;
-        handle(&output["handle"], &mut handles)?;
-        id(&output[key])?;
-        absolute(&output["staged_path"])?;
-        let key = output[key].as_str().unwrap();
-        if !output_ids.insert(key) {
-            return Err(failure());
+    let target: &[Value] = if op["kind"] == "migration" {
+        array(&op["target_outputs"])?
+    } else {
+        &[]
+    };
+    for (outputs, key) in [(ordinary, "output_id"), (target, "input_id")] {
+        let mut output_ids = BTreeSet::new();
+        for output in outputs {
+            object(output, &["handle", key, "staged_path"], &[])?;
+            handle(&output["handle"], &mut handles)?;
+            id(&output[key])?;
+            absolute(&output["staged_path"])?;
+            let key = output[key].as_str().unwrap();
+            if !output_ids.insert(key) {
+                return Err(failure());
+            }
         }
-    }
-    if op["kind"] == "action" {
-        array(&op["outputs"])?;
-    }
-    if op["kind"] == "migration" {
-        array(&op["target_outputs"])?;
     }
     {
         let mut keys = BTreeSet::new();
@@ -336,13 +343,27 @@ pub(super) fn outputs(session: &Value) -> &[Value] {
     .unwrap_or_default()
 }
 pub(super) fn output<'a>(session: &'a Value, id: &str) -> Option<&'a Value> {
-    outputs(session).iter().find(|v| {
-        v[if session["operation"]["kind"] == "migration" {
-            "input_id"
-        } else {
-            "output_id"
-        }] == id
-    })
+    output_in_scope(session, id, None)
+}
+pub(super) fn output_in_scope<'a>(
+    session: &'a Value,
+    id: &str,
+    scope: Option<OutputScope>,
+) -> Option<&'a Value> {
+    let migration = session["operation"]["kind"] == "migration";
+    let target = matches!(scope, Some(OutputScope::Target)) || (scope.is_none() && migration);
+    if target && !migration {
+        return None;
+    }
+    let (field, key) = if target {
+        ("target_outputs", "input_id")
+    } else {
+        ("outputs", "output_id")
+    };
+    session["operation"][field]
+        .as_array()?
+        .iter()
+        .find(|output| output[key] == id)
 }
 pub(super) fn input(session: &Value, id: &str, view: &str, role: &str) -> Option<Value> {
     let op = &session["operation"];

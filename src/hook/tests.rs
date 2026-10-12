@@ -81,6 +81,8 @@ mod v2_runtime {
 mod deletion_runtime {
     include!("deletion_tests.rs");
 }
+#[path = "operation_runtime_tests.rs"]
+mod operation_runtime;
 
 mod supervision_runtime {
     include!("supervision_tests.rs");

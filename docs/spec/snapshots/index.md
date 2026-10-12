@@ -10,6 +10,7 @@ Capture a complete recovery representation, validate its integrity, transport it
 - [Snapshot Definition and Managed Data](./definition.md)
 - [Snapshot Limits and Capabilities](./limits.md)
 - [Snapshot Capture and Restore Execution](./execution.md)
+- [Operation-scoped Restore](./restore-compatibility.md)
 - [Snapshot Commands](./commands.md)
 - [Snapshot Integrity Format](./integrity.md)
 - [Snapshot Bundle Format](./bundles.md)

@@ -244,13 +244,44 @@ fn retirement_parsing_requires_exact_explicit_intent_before_opening_storage() {
             id,
             "--assert-cleanup-complete",
         ],
-        vec!["instance", "delete", "retire", "--param", "x=y"],
+        vec!["instance", "delete", "retire", "--param", "x"],
+        vec![
+            "instance", "delete", "retire", "--param", "x=y", "--param", "x=z",
+        ],
+        vec!["instance", "abandon", "retire", "--param", "x=y"],
         vec!["instance", "delete", "retire", "--plan", "--plan"],
     ] {
         let (code, _, _) = invoke(&absent, &args);
         assert_eq!(code, 2, "{args:?}");
         assert!(!absent.exists());
     }
+}
+
+// Test-ID: PR-TEST-0722
+// Verifies: PR-REQ-0390
+#[test]
+fn undeclared_cleanup_parameters_refuse_before_file_acquisition_or_retirement() {
+    let (_temp, root, instance, _, path) = fixture();
+    let (code, _, error) = invoke(
+        &root,
+        &[
+            "instance",
+            "delete",
+            "retire",
+            "--param-file",
+            "unknown=nonexistent-private-parameter-file",
+        ],
+    );
+    assert_eq!(code, 2);
+    assert!(error.contains("unknown operation parameter"));
+    assert!(!error.contains("nonexistent-private-parameter-file"));
+    assert_eq!(
+        fs::read(path.join("secret")).unwrap(),
+        b"service-owned-private-sentinel"
+    );
+    let p = PactrunPersistence::open_read_only(&root).unwrap();
+    assert!(p.load_instance_by_id(instance.id).unwrap().is_some());
+    assert!(p.list_managed_runs(instance.id).unwrap().is_empty());
 }
 
 // Test-ID: PR-TEST-0416

@@ -370,6 +370,7 @@ pub(super) fn execute(
             let page = app
                 .catalog_revisions(options.limit, options.after.as_ref())
                 .map_err(app_error)?;
+            format.require_revisions(&page.items)?;
             let result = catalog_presentation::Page {
                 items: page
                     .items
@@ -387,6 +388,7 @@ pub(super) fn execute(
             let author =
                 capability_presentation::project(&row, &[&capability_presentation::Selection::All]);
             if !metadata_only {
+                format.version().require_core(&row.core)?;
                 return presentation::emit_result(
                     format,
                     "revision show",
@@ -414,6 +416,11 @@ pub(super) fn execute(
                 let page = app
                     .inspect_retirements(options.limit, after)
                     .map_err(app_error)?;
+                for entry in &page.items {
+                    for run in &entry.runs {
+                        format.version().require_run(run)?;
+                    }
+                }
                 let result = catalog_presentation::Page {
                     items: page
                         .items
@@ -472,6 +479,7 @@ pub(super) fn execute(
                 let full = app
                     .inspect_runs_complete(&selector, options.limit, after)
                     .map_err(app_error)?;
+                format.require_revisions(&full.revisions)?;
                 let page = catalog_presentation::Page {
                     items: full
                         .inspections
@@ -482,12 +490,15 @@ pub(super) fn execute(
                                 value.run_prefix_length = *run;
                                 value.instance_prefix_length = *instance;
                             }
-                            definitions::InspectedRun {
+                            Ok(definitions::InspectedRun {
                                 value,
-                                inspection: i.into(),
-                            }
+                                inspection: execution_presentation::Inspection::for_version(
+                                    i,
+                                    format.version(),
+                                )?,
+                            })
                         })
-                        .collect(),
+                        .collect::<Result<Vec<_>, CliError>>()?,
                     next: full.page.next.map(|id| id.to_string()),
                 };
                 presentation::emit_result(

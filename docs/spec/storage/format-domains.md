@@ -6,6 +6,10 @@ title: Format Domains and Support
 
 ## Independent version domains
 
+The [operation-scoped format contract](../packages/operation-format.md) adds
+exact Source, Core, Hook and machine contracts. Support is selected explicitly;
+version ordering alone never grants compatibility.
+
 The [formal product compatibility policy](./compatibility.md)
 defines same-Major compatibility. Format-domain ownership determines which
 representation a particular interface supports.
@@ -28,12 +32,14 @@ suffixes do not select a format. Reader selection uses the explicit version stri
 
 Each domain owns its implemented readers and writers. A matching Major or an
 ordered newer identifier MUST NOT be interpreted as automatic support. Format
-Minor does not imply minimum product Minor. Pack source and Pack distribution
-write `1.0-alpha.2`; the CLI machine interface writes `1.0-alpha.3`. Persistence
-writes `1.0-alpha.4` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2` and
-`1.0-alpha.3` Store schemas
+Minor does not imply minimum product Minor. Pack source writes `1.0-alpha.3` and also reads `1.0-alpha.2`. Pack distribution
+remains `1.0-alpha.2`. The CLI machine interface defaults to `1.0-alpha.4` and
+also supports explicit `1.0-alpha.3` selection. Persistence
+writes `1.0-alpha.5` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2`,
+`1.0-alpha.3` and `1.0-alpha.4` Store schemas
 through its supported upgrade path.
-Revision, Hook, Snapshot integrity and Snapshot bundle remain `1.0-alpha.1`.
+Revision and Hook default to `1.0-alpha.2` and retain their exact `1.0-alpha.1`
+contracts. Snapshot integrity and Snapshot bundle remain `1.0-alpha.1`.
 Changes follow the owning contract rather than synchronizing
 unrelated domains. Unsupported formats are refused in their necessary scope.
 

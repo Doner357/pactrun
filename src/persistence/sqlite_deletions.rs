@@ -463,6 +463,28 @@ impl PactrunPersistence {
         may_have_run: bool,
         completion_accepted: bool,
     ) -> Result<bool, PersistenceError> {
+        self.publish_cleanup_result_with_outputs(
+            run,
+            owner,
+            finish,
+            may_have_run,
+            completion_accepted,
+            super::RunArtifactSubmission {
+                submitted: &[],
+                artifacts: &mut [],
+            },
+        )
+    }
+
+    pub(crate) fn publish_cleanup_result_with_outputs(
+        &self,
+        run: RunId,
+        owner: &ExecutionOwnerSession,
+        finish: &RunFinish,
+        may_have_run: bool,
+        completion_accepted: bool,
+        outputs: super::RunArtifactSubmission<'_, '_>,
+    ) -> Result<bool, PersistenceError> {
         let mut db = self
             .database
             .lock()
@@ -487,6 +509,13 @@ impl PactrunPersistence {
             RunState::Running(e) => e.risk_state,
             _ => unreachable!(),
         };
+        if (!outputs.submitted.is_empty() || !outputs.artifacts.is_empty())
+            && (!completion_accepted || finish.hook_completion.is_none())
+        {
+            return Err(invalid(
+                "Cleanup artifacts require accepted completion evidence",
+            ));
+        }
         if finish.outcome == RunOutcome::Succeeded {
             if !may_have_run
                 || !completion_accepted
@@ -501,6 +530,7 @@ impl PactrunPersistence {
             let authority = authorize_hook_finalization(true, risk)
                 .map_err(|_| invalid("Cleanup success has Open risk"))?;
             let (_, _, version) = instance_header(&tx, view.instance)?;
+            super::sqlite_runs::insert_scoped_artifacts(&tx, run, -1, outputs, true)?;
             authorize_finalization(&tx, view.instance, run, version, authority)?;
             super::sqlite_revision_store::fault(super::FaultPoint::BeforeCleanupBoundaryCommit);
             tx.commit()
@@ -525,6 +555,7 @@ impl PactrunPersistence {
             }
             reconcile_obligation(&tx, run)?;
         }
+        super::sqlite_runs::insert_scoped_artifacts(&tx, run, -1, outputs, false)?;
         super::sqlite_runs::finish_deletion_in_transaction(&tx, run, owner, finish, false)?;
         tx.commit()
             .map_err(|e| PersistenceError::sqlite("commit Cleanup non-success", e))?;
@@ -751,16 +782,8 @@ impl PactrunPersistence {
             }
             let current = load_instance_view_from(&tx, view.instance)?.ok_or_else(corrupt)?;
             let content = load_revision_from(&tx, &revision)?.ok_or_else(corrupt)?;
-            let launch = match &plan.work {
-                DeletionWork::Cleanup(cleanup) => Some(cleanup.launch.clone()),
-                _ => None,
-            };
-            let rebuilt = build_deletion_plan(
-                &DeleteInstance {
-                    instance: plan.instance,
-                    expected: plan.expected,
-                    mode: plan.mode,
-                },
+            let rebuilt = crate::domain::rebuild_deletion_plan(
+                plan,
                 DeletionCompilationObservation {
                     instance: current,
                     revision_identity: revision,
@@ -771,7 +794,6 @@ impl PactrunPersistence {
                     )?,
                     obligation: obligation_from(&tx, view.instance)?,
                 },
-                launch,
             );
             if rebuilt.as_ref().ok() != Some(plan) {
                 return Ok(Some(AdmissionRefusal::PlanInvalidated(
