@@ -231,6 +231,7 @@ pub(super) fn resolve(
     let mut r = Resolver::new(root, cancellation);
     match command {
         Command::ShowRun { run } => run.resolve(&mut r)?,
+        Command::RunExport(request) => request.run.resolve(&mut r)?,
         Command::ExportRevision { revision, .. } | Command::CreateInstance { revision, .. } => {
             r.revision(revision)?
         }

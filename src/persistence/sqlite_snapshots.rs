@@ -315,43 +315,75 @@ pub(super) fn copy_historical_input(
     authorize_secret: bool,
     destination: &mut impl Write,
 ) -> Result<HistoricalInputExport, PersistenceError> {
+    let Some(snapshot) = historical_source(db, context)? else {
+        return Ok(HistoricalInputExport::Unavailable);
+    };
+    snapshot.copy_input(db, content, input, authorize_secret, destination)
+}
+
+pub(super) struct HistoricalSnapshotSource {
+    snapshot: StoredSnapshot,
+    bindings: BTreeMap<InputIdentity, usize>,
+}
+pub(super) fn historical_source(
+    db: &Connection,
+    context: &HistoricalInputContext,
+) -> Result<Option<HistoricalSnapshotSource>, PersistenceError> {
     let invalid = || PersistenceError::CorruptRun("invalid historical Snapshot binding".into());
     let id = context.snapshot.ok_or_else(invalid)?;
     let integrity = context.snapshot_integrity.as_ref().ok_or_else(invalid)?;
     let snapshot = match load_snapshot(db, id) {
         Ok(snapshot) => snapshot,
-        Err(PersistenceError::MissingSnapshot(_)) => return Ok(HistoricalInputExport::Unavailable),
+        Err(PersistenceError::MissingSnapshot(_)) => return Ok(None),
         Err(error) => return Err(error),
     };
     if snapshot.manifest.integrity_digest() != integrity {
         // A deleted ID may have been imported again with different valid content.
-        return Ok(HistoricalInputExport::Unavailable);
+        return Ok(None);
     }
-    let binding = snapshot
+    let bindings = snapshot
         .manifest
         .manifest()
         .managed_bindings()
         .iter()
-        .find(|binding| binding.input_id == input.input)
-        .ok_or_else(invalid)?;
-    let expected_role = match input.role {
-        InputHistoryRole::Active => SnapshotBindingRole::Active,
-        InputHistoryRole::Retained => SnapshotBindingRole::Retained,
-    };
-    if binding.role != expected_role {
-        return Err(invalid());
+        .enumerate()
+        .map(|(index, binding)| (binding.input_id.clone(), index))
+        .collect();
+    Ok(Some(HistoricalSnapshotSource { snapshot, bindings }))
+}
+impl HistoricalSnapshotSource {
+    pub(super) fn copy_input(
+        &self,
+        db: &Connection,
+        content: &RuntimeContentStore,
+        input: &HistoricalInput,
+        authorize_secret: bool,
+        destination: &mut impl Write,
+    ) -> Result<HistoricalInputExport, PersistenceError> {
+        let invalid = || PersistenceError::CorruptRun("invalid historical Snapshot binding".into());
+        let snapshot = &self.snapshot;
+        let id = snapshot.manifest.manifest().snapshot_id();
+        let index = self.bindings.get(&input.input).ok_or_else(invalid)?;
+        let binding = &snapshot.manifest.manifest().managed_bindings()[*index];
+        let expected_role = match input.role {
+            InputHistoryRole::Active => SnapshotBindingRole::Active,
+            InputHistoryRole::Retained => SnapshotBindingRole::Retained,
+        };
+        if binding.role != expected_role {
+            return Err(invalid());
+        }
+        let SnapshotBindingState::Bound(digest) = &binding.state else {
+            return Err(invalid());
+        };
+        let protection = input.protection.sticky(binding.protection);
+        if protection == ManagedInputProtection::Secret && !authorize_secret {
+            return Err(PersistenceError::UnauthorizedSecretExport);
+        }
+        let length = snapshot.lengths[digest];
+        SnapshotCapability::RestoreInput.check(length)?;
+        stream_blob(db, content, id, digest, length, destination)?;
+        Ok(HistoricalInputExport::Copied { protection })
     }
-    let SnapshotBindingState::Bound(digest) = &binding.state else {
-        return Err(invalid());
-    };
-    let protection = input.protection.sticky(binding.protection);
-    if protection == ManagedInputProtection::Secret && !authorize_secret {
-        return Err(PersistenceError::UnauthorizedSecretExport);
-    }
-    let length = snapshot.lengths[digest];
-    SnapshotCapability::RestoreInput.check(length)?;
-    stream_blob(db, content, id, digest, length, destination)?;
-    Ok(HistoricalInputExport::Copied { protection })
 }
 
 fn inspection(snapshot: &StoredSnapshot) -> SnapshotInspection {

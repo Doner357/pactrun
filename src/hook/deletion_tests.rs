@@ -3,6 +3,19 @@ use crate::domain::*;
 const WORKER: &str = "hook::tests::deletion_runtime::cleanup_hook_worker";
 const OWNER_WORKER: &str = "hook::tests::deletion_runtime::deletion_owner_worker";
 
+// Test-ID: PR-TEST-0785
+// Verifies: PR-REQ-0405
+#[test]
+fn run_export_cleanup_after_retirement_does_not_require_live_instance_or_payloads() {
+    let f=fixture("success"); let run=start(&f,DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let (code,result)=super::run_export_runtime::export(&f,run,"cleanup.zip",&["--include-secrets","--authorize-secret-export"]);
+    assert_eq!(code,0,"{result}");
+    let (report,files)=super::run_export_runtime::contents(&f.marker("cleanup.zip"));
+    assert_eq!(report["inputs"][0]["state"],"unavailable"); assert_eq!(files.len(),1);
+    assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
+}
+
 fn fixture(mode: &str) -> RuntimeFixture {
     RuntimeFixture::with_source(|source, _, manifest| {
         let args = serde_json::to_string(&vec!["--exact".to_owned(),WORKER.to_owned(),"--nocapture".to_owned(),"--skip".to_owned(),

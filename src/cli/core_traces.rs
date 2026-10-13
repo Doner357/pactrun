@@ -195,7 +195,7 @@ pub(super) fn operation(command: &Command) -> TraceOperation {
         Command::Lifecycle(_) | Command::Artifact(artifacts::ArtifactCommand::Delete { .. }) => {
             TraceOperation::Collection
         }
-        Command::Artifact(_) => TraceOperation::RunExport,
+        Command::Artifact(_) | Command::RunExport(_) => TraceOperation::RunExport,
         _ => TraceOperation::Catalog,
     }
 }

@@ -801,6 +801,12 @@ pub(super) fn render(
             return Ok(());
         }
         "run artifact export" => return write(out, "Artifact exported"),
+        "run export" => {
+            return write(
+                out,
+                "Run report exported. Review it for sensitive information before sharing.",
+            );
+        }
         "run artifact delete" => {
             return write(
                 out,

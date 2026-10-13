@@ -42,6 +42,7 @@ title: Specification Reference Index
 - [Execution Diagnostics](./operations/diagnostics.md)
 - [Service Prerequisite Diagnostics](./operations/service-diagnostics.md)
 - [Historical Input References](./operations/input-history.md)
+- [Run Support Export](./operations/run-export.md)
 - [Operation Input Requirements and Authority](./operations/input-authority.md)
 
 ## Snapshots and Restore

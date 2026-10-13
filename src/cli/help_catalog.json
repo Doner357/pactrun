@@ -141,6 +141,22 @@
       "value": null,
       "description": "Explicitly authorize protected export."
     },
+    "--include-hook-text": {
+      "name": "--include-hook-text", "value": null,
+      "description": "Include retained Hook-authored evidence; requires sensitive-export authorization."
+    },
+    "--include-artifacts": {
+      "name": "--include-artifacts", "value": null,
+      "description": "Copy currently retained Run Artifacts; requires sensitive-export authorization."
+    },
+    "--include-inputs": {
+      "name": "--include-inputs", "value": null,
+      "description": "Copy available ordinary historical Inputs, never current replacement values."
+    },
+    "--include-secrets": {
+      "name": "--include-secrets", "value": null,
+      "description": "Copy available historical Secrets; requires separate secret-export authorization."
+    },
     "--authorize-sensitive-export": {
       "name": "--authorize-sensitive-export",
       "value": null,
@@ -1299,6 +1315,21 @@
       "options": [],
       "notes": [],
       "examples": []
+    },
+    {
+      "path": ["run", "export"],
+      "description": "Copy an explicitly selected support report to a new ZIP file.",
+      "forms": [{
+        "usage": "pactrun run export <run-id> --output <path> [--include-hook-text] [--include-artifacts] [--include-inputs] [--include-secrets] [--authorize-sensitive-export] [--authorize-secret-export]",
+        "description": "Export available metadata and diagnostics; sensitive contents are excluded by default."
+      }],
+      "options": ["--output", "--include-hook-text", "--include-artifacts", "--include-inputs", "--include-secrets", "--authorize-sensitive-export", "--authorize-secret-export"],
+      "notes": [
+        "Hook text and Artifacts require --authorize-sensitive-export. Secrets separately require --authorize-secret-export. Authorization alone does not select content.",
+        "The exact output path is used without appending an extension. Existing destinations are never overwritten. No upload is performed.",
+        "Review before sharing: selected bytes are not redacted, and metadata can also be sensitive. Unavailable history is not replaced by current values. This is not a backup or replay plan."
+      ],
+      "examples": ["pactrun run export 01234567 --output support.zip", "pactrun run export 01234567 --output detailed.zip --include-hook-text --include-artifacts --authorize-sensitive-export"]
     },
     {
       "path": [

@@ -3,6 +3,89 @@ use crate::domain::*;
 use std::ffi::OsString;
 
 const WORKER: &str = "hook::tests::operation_runtime::operation_hook_worker";
+
+// Test-ID: PR-TEST-0784
+// Verifies: PR-REQ-0404, PR-REQ-0405
+#[test]
+fn run_export_capture_and_restore_use_exact_context_and_preserve_absence() {
+    let f = fixture();
+    let capture = snapshot_run(
+        &f,
+        SnapshotOperation::Capture,
+        "success",
+        &f.marker("report-capture"),
+    );
+    assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+    let snapshot = captured_snapshot(&f, capture);
+    let flags = [
+        "--include-inputs",
+        "--include-secrets",
+        "--authorize-secret-export",
+    ];
+    let check = |run, name, scope: &str| {
+        let (code, result) = super::run_export_runtime::export(&f, run, name, &flags);
+        assert_eq!(code, 0, "{result}");
+        let (report, files) = super::run_export_runtime::contents(&f.marker(name));
+        let items = report["inputs"].as_array().unwrap();
+        let secret = items
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap();
+        assert_eq!(secret["scope"], scope);
+        assert_eq!(secret["state"], "copied");
+        assert_eq!(files[secret["member"].as_str().unwrap()], SECRET_BINDING);
+        let absent = items
+            .iter()
+            .find(|i| i["input_id"] == "configuration")
+            .unwrap();
+        assert_eq!(absent["state"], "absent");
+        assert!(absent["member"].is_null());
+    };
+    check(capture, "capture.zip", "current");
+    let restore = snapshot_run(
+        &f,
+        SnapshotOperation::Restore(snapshot),
+        "success",
+        &f.marker("report-restore"),
+    );
+    assert_eq!(finish(&f, restore).outcome, RunOutcome::Succeeded);
+    check(restore, "restore.zip", "snapshot");
+    // Restore installs new payload identities; Capture history does not pin the replaced ones.
+    assert_eq!(
+        super::run_export_runtime::export(&f, capture, "capture-after-restore.zip", &flags).0,
+        0
+    );
+    let (after, files) =
+        super::run_export_runtime::contents(&f.marker("capture-after-restore.zip"));
+    assert_eq!(
+        after["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap()["state"],
+        "unavailable"
+    );
+    assert_eq!(files.len(), 1);
+    f.application
+        .delete_object(&ObjectDeletion::Snapshot(snapshot))
+        .unwrap();
+    assert_eq!(
+        super::run_export_runtime::export(&f, restore, "deleted-snapshot.zip", &flags).0,
+        0
+    );
+    let (report, files) = super::run_export_runtime::contents(&f.marker("deleted-snapshot.zip"));
+    assert_eq!(
+        report["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap()["state"],
+        "unavailable"
+    );
+    assert_eq!(files.len(), 1);
+}
 #[path = "operation_failure_tests.rs"]
 mod failures;
 fn hook() -> Value {

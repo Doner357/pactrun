@@ -85,6 +85,8 @@ mod deletion_runtime {
 mod input_history_runtime;
 #[path = "operation_runtime_tests.rs"]
 mod operation_runtime;
+#[path = "run_export_tests.rs"]
+mod run_export_runtime;
 #[path = "service_diagnostics_tests.rs"]
 mod service_diagnostics_runtime;
 

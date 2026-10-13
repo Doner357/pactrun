@@ -100,6 +100,29 @@ an external service. `instance resolve-manual-recovery` is an operator assertion
 after repair, not a repair command. Do not use recovery override merely to silence
 a warning. See [recovery rules](./recovery.md).
 
+## Export a support report
+
+Start with metadata and available Pactrun diagnostics:
+
+```text
+pactrun run export <run-id> --output support.zip
+```
+
+To also copy retained Hook text and report attachments, explicitly select and
+authorize them:
+
+```text
+pactrun run export <run-id> --output detailed-support.zip --include-hook-text --include-artifacts --authorize-sensitive-export
+```
+
+`--include-inputs` selects ordinary historical Inputs. Secrets are separate:
+use `--include-secrets --authorize-secret-export` only when you intend to disclose
+them. Missing historical bytes are marked unavailable, not replaced with current
+values. Export copies data without deleting sources or overwriting destinations.
+No report is uploaded automatically. Review the ZIP before sharing: selected
+content is not redacted and metadata may also be sensitive. See the
+[report reference](../pactrun-users/reference/run-export.md).
+
 ## Automation
 
 Use `--format json` for a complete structured response or `--format jsonl` for

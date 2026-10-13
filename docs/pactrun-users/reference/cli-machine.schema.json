@@ -1353,6 +1353,43 @@
       ],
       "type": "object"
     },
+    "Exported": {
+      "properties": {
+        "copied_artifacts": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "copied_inputs": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "review_before_sharing": {
+          "type": "boolean"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "unavailable_inputs": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "outcome",
+        "copied_inputs",
+        "unavailable_inputs",
+        "copied_artifacts",
+        "review_before_sharing"
+      ],
+      "type": "object"
+    },
     "Failure": {
       "properties": {
         "cause": {
@@ -7185,6 +7222,25 @@
       "if": {
         "properties": {
           "command": {
+            "const": "run export"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Exported"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
             "const": "revision list"
           },
           "status": {
@@ -9032,6 +9088,42 @@
       "if": {
         "properties": {
           "command": {
+            "const": "run export"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Exported"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
             "const": "revision list"
           },
           "error": {
@@ -10388,6 +10480,7 @@
             "snapshot delete",
             "run artifact export",
             "run artifact delete",
+            "run export",
             "revision list",
             "revision show",
             "revision metadata show",

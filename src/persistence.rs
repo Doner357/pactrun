@@ -23,6 +23,8 @@ mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;
 mod sqlite_input_history;
 mod sqlite_input_history_export;
+mod sqlite_run_export;
+pub(crate) use sqlite_run_export::RunExportSink;
 mod sqlite_instances;
 mod sqlite_migration_runs;
 mod sqlite_migrations;

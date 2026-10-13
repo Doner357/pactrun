@@ -86,6 +86,7 @@ fn generated() -> Value {
     cases!(super::names::NameResult => "package rename", "package unname", "revision rename", "revision unname");
     cases!(p::Deletion => "run delete", "revision delete", "snapshot delete");
     cases!(p::ArtifactResult => "run artifact export", "run artifact delete");
+    cases!(run_export::Exported => "run export");
     cases!(c::Page<c::RevisionEntry> => "revision list");
     cases!(Presented<c::RevisionEntry> => "revision show");
     cases!(c::RevisionEntry => "revision metadata show");

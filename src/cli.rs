@@ -39,6 +39,7 @@ mod names;
 mod presentation;
 mod reply;
 mod retirements;
+mod run_export;
 #[cfg(test)]
 mod schema_tests;
 mod service_storage;
@@ -75,6 +76,7 @@ enum Command {
     Catalog(catalog::CatalogCommand),
     Lifecycle(lifecycle::LifecycleCommand),
     Artifact(artifacts::ArtifactCommand),
+    RunExport(run_export::Request),
     Retirement(retirements::RetirementCommand),
     ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
@@ -1339,6 +1341,7 @@ fn parse_execution_option(
 
 fn parse_run(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "run command")?.as_str() {
+        "export" => run_export::parse(parser).map(Command::RunExport),
         "delete" => lifecycle::parse_run_delete(parser).map(Command::Lifecycle),
         "artifact" => artifacts::parse(parser).map(Command::Artifact),
         "list" => catalog::parse_runs(parser),
@@ -1443,6 +1446,9 @@ fn execute(
     }
     if let Command::Artifact(command) = command {
         return artifacts::execute(command, &storage_root, format);
+    }
+    if let Command::RunExport(command) = command {
+        return run_export::execute(command, &storage_root, format);
     }
     if let Command::Retirement(command) = command {
         return retirements::execute(command, &storage_root, stdin, stderr, cancellation, format);
@@ -2002,6 +2008,7 @@ fn execute(
         | Command::Version
         | Command::GeneratePackageId
         | Command::Artifact(_)
+        | Command::RunExport(_)
         | Command::Lifecycle(_)
         | Command::Migration(_)
         | Command::Snapshot(_)

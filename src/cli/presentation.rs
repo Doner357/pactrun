@@ -34,6 +34,7 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         Command::ShowAction { .. } => "action show",
         Command::Invoke { .. } => "invoke",
         Command::ShowRun { .. } => "run show",
+        Command::RunExport(_) => "run export",
         Command::ReconcileRuns => "run reconcile",
         Command::Artifact(A::Export { .. }) => "run artifact export",
         Command::Artifact(A::Delete { .. }) => "run artifact delete",

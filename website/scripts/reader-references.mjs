@@ -11,6 +11,7 @@ export const references = [
   ['Users', 'core-traces', 'Core phase and timing diagnostics', 'spec/interfaces/core-traces.md'],
   ['Users', 'service-diagnostics', 'Service prerequisite failure details', 'spec/operations/service-diagnostics.md'],
   ['Users', 'input-history', 'Historical Input references', 'spec/operations/input-history.md'],
+  ['Users', 'run-export', 'Run support reports', 'spec/operations/run-export.md'],
   ['Users', 'snapshot-details', 'Snapshot command details', 'spec/snapshots/commands.md'],
   ['Users', 'migration-details', 'Migration command details', 'spec/migrations/commands.md'],
   ['Users', 'resource-details', 'Resource command details', 'spec/instances/resource-commands.md'],

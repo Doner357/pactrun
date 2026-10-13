@@ -4,6 +4,30 @@ use crate::domain::*;
 use std::ffi::OsString;
 const WORKER: &str = "hook::tests::migration_runtime::migration_hook_worker";
 
+// Test-ID: PR-TEST-0786
+// Verifies: PR-REQ-0405
+#[test]
+fn run_export_migration_preserves_exact_edges_and_prepared_vs_committed_sources() {
+    let f=RuntimeFixture::new(); let path=chain(&f);
+    let run=start(&f,&path,"success",ActionCancellation::default());
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let (code,result)=super::run_export_runtime::export(&f,run,"migration.zip",&["--include-inputs","--include-secrets","--authorize-secret-export"]);
+    assert_eq!(code,0,"{result}");
+    let (report,files)=super::run_export_runtime::contents(&f.marker("migration.zip"));
+    let inputs=report["inputs"].as_array().unwrap();
+    for item in inputs {
+        assert!(path.windows(2).any(|pair|item["edge"]["source_revision_digest"]==pair[0].content_digest.to_string()
+            && item["edge"]["target_revision_digest"]==pair[1].content_digest.to_string()));
+    }
+    let find=|scope,input|inputs.iter().find(|i|i["scope"]==scope&&i["input_id"]==input
+        &&i["edge"]["source_revision_digest"]==path[1].content_digest.to_string()).unwrap();
+    assert_eq!(find("target_prepared","request")["state"],"transient");
+    assert_eq!(find("target_prepared","result")["state"],"pending_output");
+    assert!(find("target_prepared","result")["member"].is_null());
+    let committed=find("target_committed","result"); assert_eq!(committed["state"],"copied");
+    assert_eq!(files[committed["member"].as_str().unwrap()],SECRET_BINDING);
+}
+
 fn declaration(id: &str, required: bool, secret: bool) -> InputDeclarationV1 {
     InputDeclarationV1 { id: InputIdentity::parse(id).unwrap(), required,
         protection: if secret {InputProtectionV1::Secret} else {InputProtectionV1::Normal} }
