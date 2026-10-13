@@ -195,7 +195,13 @@ pub(super) fn advance(
                 .delivery
                 .progress(state.run, super::delivery::CorePhase::FinalizingExecution);
             p.prepare_deletion_finalization(state.run, &state.owner)?;
-            if finalize_storage(p, state.run, &state.owner, &succeeded())? {
+            if finalize_storage(
+                p,
+                state.run,
+                &state.owner,
+                &succeeded(),
+                &state.cancellation,
+            )? {
                 guard.complete();
                 Ok(true)
             } else {
@@ -288,32 +294,74 @@ fn finalize_storage(
     run: RunId,
     owner: &ExecutionOwnerSession,
     finish: &RunFinish,
+    cancellation: &ActionCancellation,
 ) -> Result<bool, PersistenceError> {
-    match p.finalize_next_allocation(run, owner) {
-        Ok(false) => Ok(false),
-        Ok(true) => p.finish_instance_retirement(run, owner, finish),
-        Err(PersistenceError::ServiceStorageUnavailable(reason)) => {
-            let failure = RunFinish {
-                outcome: RunOutcome::Failed,
-                primary_failure: Some(RunPrimaryFailure {
-                    cause: None,
-                    failure: RunFailureRecord {
-                        error: PactrunErrorRef::new("service_storage", "allocation_unavailable")
-                            .expect("registered error"),
-                        message: reason.to_owned(),
-                    },
-                    step: RunFailedStep::DeletionPlan(
-                        crate::domain::DeletionPlanStep::FinalizeStorage,
-                    ),
-                }),
-                secondary_failures: finish.secondary_failures.clone(),
-                hook_completion: finish.hook_completion.clone(),
-            };
-            p.finish_run_owned(owner, run, &failure, &[], &mut [])?;
-            Ok(true)
+    use crate::persistence::AllocationFinalizationStep as Step;
+    loop {
+        // Each iteration still revalidates ownership and commits its original
+        // per-allocation boundaries. Only the artificial foreground idle is removed.
+        if cancellation.is_requested() {
+            return Ok(false);
         }
-        Err(error) => Err(error),
+        match traced(
+            cancellation,
+            crate::domain::TracePhase::StorageFinalization,
+            || p.finalize_next_allocation(run, owner),
+        ) {
+            Ok(Step::Progressed) => continue,
+            Ok(Step::Pending) => return Ok(false),
+            Ok(Step::Complete) => {
+                return traced(
+                    cancellation,
+                    crate::domain::TracePhase::ResultCommit,
+                    || p.finish_instance_retirement(run, owner, finish),
+                );
+            }
+            Err(PersistenceError::ServiceStorageUnavailable(reason)) => {
+                let failure = RunFinish {
+                    outcome: RunOutcome::Failed,
+                    primary_failure: Some(RunPrimaryFailure {
+                        cause: None,
+                        failure: RunFailureRecord {
+                            error: PactrunErrorRef::new(
+                                "service_storage",
+                                "allocation_unavailable",
+                            )
+                            .expect("registered error"),
+                            message: reason.to_owned(),
+                        },
+                        step: RunFailedStep::DeletionPlan(
+                            crate::domain::DeletionPlanStep::FinalizeStorage,
+                        ),
+                    }),
+                    secondary_failures: finish.secondary_failures.clone(),
+                    hook_completion: finish.hook_completion.clone(),
+                };
+                traced(
+                    cancellation,
+                    crate::domain::TracePhase::ResultCommit,
+                    || p.finish_run_owned(owner, run, &failure, &[], &mut []),
+                )?;
+                return Ok(true);
+            }
+            Err(error) => return Err(error),
+        }
     }
+}
+
+fn traced<T>(
+    cancellation: &ActionCancellation,
+    phase: crate::domain::TracePhase,
+    work: impl FnOnce() -> Result<T, PersistenceError>,
+) -> Result<T, PersistenceError> {
+    let span = cancellation.trace.span(phase);
+    let result = work();
+    span.finish(if result.is_ok() {
+        crate::domain::PhaseResult::Succeeded
+    } else {
+        crate::domain::PhaseResult::Failed
+    });
+    result
 }
 
 #[derive(Debug)]
@@ -481,7 +529,13 @@ pub(super) fn finalize(
         if state.cancellation.is_requested() {
             finish.outcome = RunOutcome::Cancelled;
             p.finish_run_owned(&staging.owner(), state.facts.run, &finish, &[], &mut [])?;
-        } else if !finalize_storage(p, state.facts.run, &staging.owner(), &finish)? {
+        } else if !finalize_storage(
+            p,
+            state.facts.run,
+            &staging.owner(),
+            &finish,
+            &state.cancellation,
+        )? {
             return Ok(false);
         }
     }

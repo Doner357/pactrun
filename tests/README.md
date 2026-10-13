@@ -18,6 +18,13 @@ check that the intended tests actually ran. Requirement coverage uses stable
 Test-ID and Verifies comments, not file names. Full CI needs the Node/pnpm versions
 in `website/package.json`; platform and tooling checks also use Python 3.11 or newer.
 
+For an opt-in retirement timing sample on a qualified native filesystem, run
+`cargo test --lib retirement_allocation_timing_probe -- --ignored --nocapture --test-threads=1`.
+It measures one, eight and twenty-four owned allocations (three samples each),
+and verifies that the intended allocations and Instance are retired. Timings are
+evidence, not a machine-dependent pass threshold; the ordinary regression suite
+separately checks ready-work draining and cancellation between durable steps.
+
 Process and filesystem tests need a supported persistent filesystem. Keep test
 outputs in the workspace. On Linux, run the full test commands serially:
 

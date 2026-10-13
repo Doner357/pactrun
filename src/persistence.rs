@@ -19,6 +19,7 @@ pub(crate) use store_bootstrap::prepare_new_store;
 mod sqlite_catalog;
 mod sqlite_core_diagnostics;
 mod sqlite_deletions;
+pub(crate) use sqlite_deletions::AllocationFinalizationStep;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;
 mod sqlite_input_history;

@@ -7,6 +7,15 @@ use super::{PactrunPersistence, PersistenceError};
 use crate::domain::*;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+/// Distinguish completed work from a real dependency wait without changing any
+/// durable boundary or making physical deletion one atomic database operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum AllocationFinalizationStep {
+    Pending,
+    Progressed,
+    Complete,
+}
+
 fn retirement_io_error(error: std::io::Error, fallback: &'static str) -> PersistenceError {
     // Never expose native paths or service-controlled OS error strings.
     let message = match error.kind() {
@@ -346,7 +355,7 @@ impl PactrunPersistence {
         &self,
         run: RunId,
         owner: &ExecutionOwnerSession,
-    ) -> Result<bool, PersistenceError> {
+    ) -> Result<AllocationFinalizationStep, PersistenceError> {
         let root_path = self
             .database_path
             .parent()
@@ -378,14 +387,14 @@ impl PactrunPersistence {
             params![view.instance.as_bytes().as_slice(),run.as_bytes().as_slice()], |r| r.get(0))
             .map_err(|e| PersistenceError::sqlite("check live retirement references", e))?;
         if peers {
-            return Ok(false);
+            return Ok(AllocationFinalizationStep::Pending);
         }
         let pending: Option<(Vec<u8>,Option<Vec<u8>>)> = tx.query_row(
             "SELECT f.allocation_id,f.root_identity FROM deletion_finalization_allocations f JOIN service_storage_allocations a ON a.allocation_id=f.allocation_id WHERE f.attempt_run_id=?1 AND a.instance_id=?2 AND f.finished=0 ORDER BY f.allocation_id LIMIT 1",
             params![obligation.attempt.as_bytes().as_slice(),view.instance.as_bytes().as_slice()], |r| Ok((r.get(0)?,r.get(1)?)),
         ).optional().map_err(|e| PersistenceError::sqlite("select pending allocation lifetime", e))?;
         let Some((id, saved)) = pending else {
-            return Ok(true);
+            return Ok(AllocationFinalizationStep::Complete);
         };
         let saved = physical_key(saved)?;
         let allocation = ServiceAllocationId::from_bytes(id.try_into().map_err(|_| corrupt())?);
@@ -419,7 +428,7 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("commit physical retirement evidence", e))?;
         super::sqlite_revision_store::fault(super::FaultPoint::AfterFinalizationIdentityCommit);
         if root.is_none() {
-            return Ok(false);
+            return Ok(AllocationFinalizationStep::Progressed);
         }
         drop(db);
         if let Some(root) = root {
@@ -450,7 +459,7 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("record ended allocation lifetime", e))?;
         tx.commit()
             .map_err(|e| PersistenceError::sqlite("commit finalization progress", e))?;
-        Ok(false)
+        Ok(AllocationFinalizationStep::Progressed)
     }
 
     /// Preserve the distinction between a supervised Run outcome and evidence

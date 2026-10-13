@@ -35,6 +35,8 @@ missing build provenance is not inferred from the current checkout or exporter.
 
 **Verification: PR-TEST-0753, PR-TEST-0754, PR-TEST-0755, PR-TEST-0760, PR-TEST-0762, PR-TEST-0763, PR-TEST-0764.**
 
+**Verification: PR-TEST-0788.**
+
 ### PR-REQ-0398 - Non-authoritative journals and retention
 
 The diagnostic journal uses a separate SQLite file and application marker. It
