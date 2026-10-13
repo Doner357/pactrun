@@ -26,6 +26,7 @@ fn generated() -> Value {
         }};
     }
     cases!(help::Help => "help");
+    cases!(configuration::ConfigurationInspection => "config show", "config validate");
     cases!(p::Version<'static> => "version");
     cases!(p::Package => "pack generate-id");
     cases!(t::PackInstall => "pack install");

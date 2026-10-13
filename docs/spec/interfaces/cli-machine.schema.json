@@ -626,6 +626,21 @@
       ],
       "type": "object"
     },
+    "ConfigurationInspection": {
+      "properties": {
+        "settings": {
+          "$ref": "#/$defs/Effective"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "valid",
+        "settings"
+      ],
+      "type": "object"
+    },
     "Confirmation": {
       "properties": {
         "authority": {
@@ -1256,6 +1271,25 @@
         "transitions",
         "mandatory_hook_outputs",
         "hook_present"
+      ],
+      "type": "object"
+    },
+    "Effective": {
+      "properties": {
+        "diagnostics": {
+          "$ref": "#/$defs/StoreDiagnostics"
+        },
+        "presentation": {
+          "$ref": "#/$defs/Presentation"
+        },
+        "startup_diagnostics": {
+          "$ref": "#/$defs/StartupDiagnostics"
+        }
+      },
+      "required": [
+        "presentation",
+        "startup_diagnostics",
+        "diagnostics"
       ],
       "type": "object"
     },
@@ -2239,6 +2273,13 @@
         "satisfied"
       ],
       "type": "object"
+    },
+    "Level": {
+      "enum": [
+        "normal",
+        "detailed"
+      ],
+      "type": "string"
     },
     "Local": {
       "properties": {
@@ -3349,6 +3390,21 @@
       "required": [
         "parameter_id",
         "effective_redaction"
+      ],
+      "type": "object"
+    },
+    "Presentation": {
+      "properties": {
+        "phase_messages": {
+          "$ref": "#/$defs/Setting2"
+        },
+        "verbosity": {
+          "$ref": "#/$defs/Setting"
+        }
+      },
+      "required": [
+        "verbosity",
+        "phase_messages"
       ],
       "type": "object"
     },
@@ -5126,6 +5182,85 @@
       ],
       "type": "object"
     },
+    "Setting": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "value": {
+          "$ref": "#/$defs/Verbosity"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
+    "Setting2": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
+    "Setting3": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "value": {
+          "$ref": "#/$defs/Level"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
+    "Setting4": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "value": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
+    "Setting5": {
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "value": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "type": "object"
+    },
     "Snapshot": {
       "properties": {
         "captured_at": {
@@ -5282,6 +5417,34 @@
       ],
       "type": "object"
     },
+    "Source": {
+      "enum": [
+        "default",
+        "user_file",
+        "store_file",
+        "command_line"
+      ],
+      "type": "string"
+    },
+    "StartupDiagnostics": {
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/Setting3"
+        },
+        "max_bytes": {
+          "$ref": "#/$defs/Setting5"
+        },
+        "retention_days": {
+          "$ref": "#/$defs/Setting4"
+        }
+      },
+      "required": [
+        "level",
+        "retention_days",
+        "max_bytes"
+      ],
+      "type": "object"
+    },
     "State": {
       "oneOf": [
         {
@@ -5429,6 +5592,29 @@
       "required": [
         "items",
         "preserved"
+      ],
+      "type": "object"
+    },
+    "StoreDiagnostics": {
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/Setting3"
+        },
+        "max_bytes": {
+          "$ref": "#/$defs/Setting5"
+        },
+        "retain_hook_text": {
+          "$ref": "#/$defs/Setting2"
+        },
+        "retention_days": {
+          "$ref": "#/$defs/Setting4"
+        }
+      },
+      "required": [
+        "level",
+        "retain_hook_text",
+        "retention_days",
+        "max_bytes"
       ],
       "type": "object"
     },
@@ -5719,6 +5905,14 @@
       ],
       "type": "object"
     },
+    "Verbosity": {
+      "enum": [
+        "quiet",
+        "normal",
+        "detailed"
+      ],
+      "type": "string"
+    },
     "Version": {
       "properties": {
         "build_target": {
@@ -5787,6 +5981,44 @@
         "properties": {
           "result": {
             "$ref": "#/$defs/Help"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "config show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/ConfigurationInspection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "config validate"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/ConfigurationInspection"
           }
         }
       }
@@ -7026,6 +7258,78 @@
               },
               {
                 "$ref": "#/$defs/Help"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "config show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/ConfigurationInspection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "config validate"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/ConfigurationInspection"
               },
               {
                 "type": "null"
@@ -9350,6 +9654,8 @@
         {
           "enum": [
             "help",
+            "config show",
+            "config validate",
             "version",
             "pack generate-id",
             "pack install",

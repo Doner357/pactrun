@@ -23,6 +23,7 @@ mod async_stderr;
 mod capability_presentation;
 mod catalog;
 mod catalog_presentation;
+mod configuration;
 mod definitions;
 mod empty_queries;
 mod execution_presentation;
@@ -68,6 +69,7 @@ mod short_ids;
 use short_ids::Selector;
 
 enum Command {
+    Configuration(configuration::Request),
     Catalog(catalog::CatalogCommand),
     Lifecycle(lifecycle::LifecycleCommand),
     Artifact(artifacts::ArtifactCommand),
@@ -508,6 +510,17 @@ fn run_with_cancellation(
             return report_cli_failure(selected, None, raw_request, error, stdout, stderr);
         }
     };
+    if selected.version == machine::Version::Legacy && matches!(&command, Command::Configuration(_))
+    {
+        return report_cli_failure(
+            selected,
+            None,
+            false,
+            CliError::usage("configuration commands require machine interface 1.0-alpha.4"),
+            stdout,
+            stderr,
+        );
+    }
     let command_name = presentation::command_name(&command);
     let raw = matches!(&command, Command::ExportInput { output, .. } if output == "-");
     let (executing, cancel_on_close) = streaming::execution_options(&command);
@@ -762,6 +775,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         Some(argument) => return Err(CliError::usage(argument.unexpected().to_string())),
     };
     match first.as_str() {
+        "config" => configuration::parse(&mut parser).map(Command::Configuration),
         "pack" => parse_pack(&mut parser),
         "package" => names::parse_package(&mut parser),
         "revision" => catalog::parse_revision(&mut parser),
@@ -1213,6 +1227,9 @@ fn execute(
 ) -> Result<(), CliError> {
     use presentation::emit_result;
     match command {
+        Command::Configuration(request) => {
+            return configuration::execute(request, storage_root, format);
+        }
         Command::Help(request) => {
             return emit_result(format, "help", &request.result());
         }
@@ -1832,6 +1849,7 @@ fn execute(
             emit_result(format, "run reconcile", &result)?;
         }
         Command::Help(_)
+        | Command::Configuration(_)
         | Command::Name(_)
         | Command::Catalog(_)
         | Command::Version

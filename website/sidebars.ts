@@ -9,7 +9,7 @@ const sidebars: SidebarsConfig = {
         {type: 'category', label: 'Choose a task', collapsed: false, items: [
           'guides/configure-inputs', 'guides/run-and-diagnose', 'guides/service-resources',
           'pactrun-users/operations/snapshots-migrations-and-recovery', 'guides/pack-management',
-          'guides/recovery', 'guides/retirement', 'guides/data-location',
+          'guides/recovery', 'guides/retirement', 'guides/data-location', 'guides/configuration',
         ]},
         {type: 'category', label: 'Concepts', items: [
           'pactrun-users/concepts/packages-revisions-and-instances',
@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
           'pactrun-users/reference/migration-details', 'pactrun-users/reference/resource-details',
           'pactrun-users/reference/retirement-details', 'pactrun-users/reference/object-lifecycle',
           'pactrun-users/reference/machine-output', 'pactrun-users/reference/snapshot-limits',
+          'pactrun-users/reference/configuration',
           'pactrun-users/reference/operation-output',
         ]},
       ],
@@ -123,6 +124,7 @@ const sidebars: SidebarsConfig = {
           'spec/interfaces/hook-protocol',
           'spec/interfaces/operation-hook-protocol',
           'spec/interfaces/shell-loader',
+            'spec/interfaces/configuration',
           'spec/interfaces/commands',
           'spec/interfaces/id-selectors',
           'spec/interfaces/machine-output',

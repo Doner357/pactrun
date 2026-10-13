@@ -72,6 +72,8 @@ title: Specification Reference Index
 
 ## Hooks and Integration Interfaces
 
+- [Pactrun Configuration](./interfaces/configuration.md)
+
 - [Common Operation Capabilities](./operations/common-capabilities.md)
 
 - [Hook Execution and Authority](./interfaces/hooks.md)

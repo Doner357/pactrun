@@ -38,6 +38,7 @@ a persistent or separate environment, read [data locations](./data-location.md).
 - [Retire Instances and reclaim storage](./retirement.md)
 - [Inspect and recover after failure](./recovery.md)
 - [Select a different store](./data-location.md)
+- [Inspect Pactrun configuration](./configuration.md)
 
 ## Look up details
 

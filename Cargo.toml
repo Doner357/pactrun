@@ -34,6 +34,7 @@ zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 crc32fast = "1"
 time = { version = "=0.3.55", features = ["formatting"] }
+toml = "=0.9.8"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1.4", features = ["fs", "process", "termios", "pipe"] }

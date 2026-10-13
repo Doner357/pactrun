@@ -16,6 +16,7 @@ If you are new, complete [installation](../../guides/installation.md) and the
 | Understand terms and ownership | [User vocabulary](./vocabulary.md) |
 | Choose commands, identifiers, and output | [Command guide](../operations/command-and-output-reference.md), [command details](./command-details.md) |
 | Supply Action parameters or deadlines | [Invoke reference](../operations/invoke-reference.md) |
+| Inspect user preferences and Store defaults | [Configuration reference](./configuration.md) |
 | Capture, verify, export, import, or Restore | [Snapshot details](./snapshot-details.md), [limits](./snapshot-limits.md) |
 | Select a Migration path and target files | [Migration details](./migration-details.md) |
 | Inspect or obtain an allowed service location | [Resource details](./resource-details.md) |

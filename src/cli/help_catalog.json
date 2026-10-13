@@ -23,6 +23,16 @@
     }
   ],
   "options": {
+    "--user-file": {
+      "name": "--user-file",
+      "value": "path",
+      "description": "Read this user configuration file instead of the platform default; the file must exist."
+    },
+    "--store-file": {
+      "name": "--store-file",
+      "value": "path",
+      "description": "Inspect this Store configuration file without selecting or opening its Store."
+    },
     "--plan": {
       "name": "--plan",
       "value": null,
@@ -300,6 +310,24 @@
     }
   },
   "commands": [
+    {
+      "path": ["config"],
+      "description": "Inspect or validate typed user and Store configuration without opening a Store.",
+      "forms": [], "options": [], "notes": [], "examples": []
+    },
+    {
+      "path": ["config", "show"],
+      "description": "Show effective configuration values and their sources.",
+      "forms": [{"usage": "pactrun config show [--user-file <path>] [--store-file <path>]", "description": "Resolve settings without creating or upgrading a Store."}],
+      "options": ["--user-file", "--store-file"], "notes": [],
+      "examples": ["pactrun --format json config show"]
+    },
+    {
+      "path": ["config", "validate"],
+      "description": "Validate configuration syntax, ownership, types and bounds.",
+      "forms": [{"usage": "pactrun config validate [--user-file <path>] [--store-file <path>]", "description": "Refuse invalid configuration without echoing source text or modifying files."}],
+      "options": ["--user-file", "--store-file"], "notes": [], "examples": []
+    },
     {
       "path": [
         "pack"

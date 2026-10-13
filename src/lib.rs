@@ -6,6 +6,7 @@
 mod application;
 mod authoring;
 mod cli;
+mod configuration;
 mod domain;
 mod executor;
 mod hook;

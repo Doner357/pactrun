@@ -14,6 +14,7 @@ pub(super) fn command_name(command: &Command) -> &'static str {
     use retirements::RetirementCommand as R;
     use snapshots::SnapshotCommand as S;
     match command {
+        Command::Configuration(request) => request.command_name(),
         Command::Help(_) => "help",
         Command::Version => "version",
         Command::GeneratePackageId => "pack generate-id",
