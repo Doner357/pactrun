@@ -133,7 +133,7 @@ enum Command {
         action: ActionIdentity,
     },
     Invoke {
-        no_retain_hook_text: bool,
+        retain_hook_text: Option<bool>,
         cancel_on_output_close: bool,
         name: InstanceName,
         action: ActionIdentity,
@@ -148,6 +148,27 @@ enum Command {
         run: Selector<RunId>,
     },
     ReconcileRuns,
+}
+
+impl Command {
+    fn hook_text_retention(&self) -> Option<bool> {
+        match self {
+            Self::Invoke {
+                retain_hook_text, ..
+            } => *retain_hook_text,
+            Self::Snapshot(snapshots::SnapshotCommand::Execute { options, .. }) => {
+                options.retain_hook_text
+            }
+            Self::CreateAndRestore(command) => command.options.retain_hook_text,
+            Self::Retirement(retirements::RetirementCommand::Execute { options, .. }) => {
+                options.retain_hook_text
+            }
+            Self::Migration(migrations::MigrationCommand::Plan {
+                retain_hook_text, ..
+            }) => *retain_hook_text,
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -182,7 +203,7 @@ impl ParameterSourceSpec {
 
 #[derive(Default)]
 struct ExecutionOptions {
-    no_retain_hook_text: bool,
+    retain_hook_text: Option<bool>,
     cancel_on_output_close: bool,
     parameters: Vec<ParameterSourceSpec>,
     plan: bool,
@@ -301,23 +322,25 @@ pub(crate) fn run_from_env() -> i32 {
     }
     let code = if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
-        run_with_cancellation(
+        run_configured(
             args,
             storage_root,
             &mut stdin,
             &mut stdout,
             &mut stderr,
             &cancellation,
+            true,
         )
     } else {
         let mut stdin = io::stdin();
-        run_with_cancellation(
+        run_configured(
             args,
             storage_root,
             &mut stdin,
             &mut stdout,
             &mut stderr,
             &cancellation,
+            true,
         )
     };
     if stderr.finish().is_err() && code == 0 {
@@ -486,6 +509,7 @@ pub(crate) fn run(
     run_with_cancellation(args, storage_root, stdin, stdout, stderr, &cancellation)
 }
 
+#[cfg(test)]
 fn run_with_cancellation(
     args: Vec<OsString>,
     storage_root: Option<OsString>,
@@ -494,9 +518,35 @@ fn run_with_cancellation(
     stderr: &mut (dyn Write + Send),
     cancellation: &ActionCancellation,
 ) -> i32 {
+    run_configured(
+        args,
+        storage_root,
+        stdin,
+        stdout,
+        stderr,
+        cancellation,
+        false,
+    )
+}
+
+fn run_configured(
+    args: Vec<OsString>,
+    storage_root: Option<OsString>,
+    stdin: &mut (dyn Read + Send),
+    stdout: &mut dyn Write,
+    stderr: &mut (dyn Write + Send),
+    cancellation: &ActionCancellation,
+    discover_user: bool,
+) -> i32 {
     let recognized = machine::recognize(&args);
     let raw_prefix_request = presentation::raw_input_request(&args);
-    let (selected, args) = match machine::select(args) {
+    let (mut globals, args) = match configuration::select(args) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
+        }
+    };
+    let (mut selected, args) = match machine::select(args) {
         Ok(selected) => selected,
         Err(error) => {
             return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
@@ -544,31 +594,38 @@ fn run_with_cancellation(
             stderr,
         );
     }
+    globals.overrides.retain_hook_text = command.hook_text_retention();
+    if let Command::Configuration(request) = &mut command {
+        request.globals = globals;
+        request.discover_user = discover_user;
+    } else if !matches!(&command, Command::Help(_) | Command::Version) {
+        let root = if matches!(&command, Command::GeneratePackageId) {
+            None
+        } else {
+            storage_root.as_ref()
+        };
+        let settings = match configuration::resolve(&globals, root, None, None, discover_user) {
+            Ok(settings) => settings,
+            Err(error) => {
+                return report_cli_failure(
+                    selected,
+                    Some(command_name),
+                    raw,
+                    error,
+                    stdout,
+                    stderr,
+                );
+            }
+        };
+        selected.human = (&settings).into();
+        cancellation.diagnostics.disabled.store(
+            !settings.diagnostics.retain_hook_text.value,
+            std::sync::atomic::Ordering::Release,
+        );
+    }
     if let Err(error) = short_ids::resolve(&mut command, storage_root.as_ref(), cancellation) {
         return report_cli_failure(selected, Some(command_name), raw, error, stdout, stderr);
     }
-    let disable_text = match &command {
-        Command::Invoke {
-            no_retain_hook_text,
-            ..
-        } => *no_retain_hook_text,
-        Command::Snapshot(snapshots::SnapshotCommand::Execute { options, .. }) => {
-            options.no_retain_hook_text
-        }
-        Command::CreateAndRestore(command) => command.options.no_retain_hook_text,
-        Command::Retirement(retirements::RetirementCommand::Execute { options, .. }) => {
-            options.no_retain_hook_text
-        }
-        Command::Migration(migrations::MigrationCommand::Plan {
-            no_retain_hook_text,
-            ..
-        }) => *no_retain_hook_text,
-        _ => false,
-    };
-    cancellation
-        .diagnostics
-        .disabled
-        .store(disable_text, std::sync::atomic::Ordering::Release);
     if executing {
         return streaming::execute_stream(
             command,
@@ -642,7 +699,7 @@ fn collect_reply(
     let capture = reply::Capture::new(
         command_name,
         !selected.format.requires_noninteractive(),
-        reply::DisplayOptions::for_command(&command),
+        reply::DisplayOptions::for_command(&command).with_human(selected.human),
     )
     .with_version(selected.version);
     let result = execute(
@@ -1096,7 +1153,7 @@ fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
     let action = parse_action_id(&required_value_string(parser, "Action identity")?)?;
     let options = parse_execution_options(parser, "action-timeout-ms")?;
     Ok(Command::Invoke {
-        no_retain_hook_text: options.no_retain_hook_text,
+        retain_hook_text: options.retain_hook_text,
         cancel_on_output_close: options.cancel_on_output_close,
         name,
         action,
@@ -1132,11 +1189,14 @@ fn parse_execution_option(
     options: &mut ExecutionOptions,
 ) -> Result<(), CliError> {
     match argument {
-        "no-retain-hook-text" if !options.no_retain_hook_text => options.no_retain_hook_text = true,
+        "no-retain-hook-text" | "retain-hook-text" => set_once(
+            &mut options.retain_hook_text,
+            argument == "retain-hook-text",
+            "Hook text retention selection",
+        )?,
         "cancel-on-output-close" if !options.cancel_on_output_close => {
             options.cancel_on_output_close = true
         }
-        "no-retain-hook-text" => return Err(CliError::usage("duplicate --no-retain-hook-text")),
         "param" => {
             let value = required_parser_value(parser, "parameter assignment")?;
             let (id, text) = split_parameter_assignment(value, "--param", true)?;
@@ -1614,7 +1674,7 @@ fn execute(
             }
         }
         Command::Invoke {
-            no_retain_hook_text: _,
+            retain_hook_text: _,
             cancel_on_output_close: _,
             name,
             action,

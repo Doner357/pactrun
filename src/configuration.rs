@@ -94,7 +94,7 @@ pub(crate) struct Effective {
     pub(crate) startup_diagnostics: StartupDiagnostics,
     pub(crate) diagnostics: StoreDiagnostics,
 }
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct Overrides {
     pub(crate) verbosity: Option<Verbosity>,
     pub(crate) phase_messages: Option<bool>,
@@ -141,15 +141,43 @@ struct StoreDocumentFields {
 pub(crate) struct Error {
     pub(crate) scope: &'static str,
     pub(crate) reason: &'static str,
+    location: Option<(usize, usize)>,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} configuration: {}", self.scope, self.reason)
+        write!(f, "{} configuration: {}", self.scope, self.reason)?;
+        if let Some((line, column)) = self.location {
+            write!(f, " (line {line}, column {column})")?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for Error {}
 fn error(scope: &'static str, reason: &'static str) -> Error {
-    Error { scope, reason }
+    Error {
+        scope,
+        reason,
+        location: None,
+    }
+}
+
+fn parse_error(scope: &'static str, text: &str, cause: toml::de::Error) -> Error {
+    let location = cause.span().map(|span| {
+        let prefix = &text.as_bytes()[..span.start.min(text.len())];
+        let line = prefix.iter().filter(|byte| **byte == b'\n').count() + 1;
+        let column = prefix.len()
+            - prefix
+                .iter()
+                .rposition(|byte| *byte == b'\n')
+                .map_or(0, |n| n + 1)
+            + 1;
+        (line, column)
+    });
+    Error {
+        scope,
+        reason: "invalid TOML, unknown setting or invalid setting type",
+        location,
+    }
 }
 
 pub(crate) struct FileSelection {
@@ -195,18 +223,9 @@ pub(crate) fn load(
 }
 
 fn parse(user: &str, store: &str, overrides: &Overrides) -> Result<Effective, Error> {
-    let user: UserDocument = toml::from_str(user).map_err(|_| {
-        error(
-            "user_file",
-            "invalid TOML, unknown setting or invalid setting type",
-        )
-    })?;
-    let store: StoreDocument = toml::from_str(store).map_err(|_| {
-        error(
-            "store_file",
-            "invalid TOML, unknown setting or invalid setting type",
-        )
-    })?;
+    let user: UserDocument = toml::from_str(user).map_err(|e| parse_error("user_file", user, e))?;
+    let store: StoreDocument =
+        toml::from_str(store).map_err(|e| parse_error("store_file", store, e))?;
     for (version, scope) in [(user.version, "user_file"), (store.version, "store_file")] {
         if version.is_some_and(|v| v != 1) {
             return Err(error(scope, "unsupported configuration version"));

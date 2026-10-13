@@ -883,6 +883,19 @@ impl HookWorker {
                 self.complete(json!({"status":"success","produced_outputs":[]}));
                 self.expect_accepted();
             }
+            "configuration_latch" => {
+                io::stdout()
+                    .write_all(b"configuration-latch-ready\n")
+                    .unwrap();
+                io::stdout().flush().unwrap();
+                wait_for(&marker_variant(&marker, "continue"));
+                write_frame(
+                    &mut self.stream,
+                    &json!({"type":"diagnostic","severity":"info","code":"after_config_change","message":"configuration changed while this Hook was running"}),
+                );
+                self.complete(json!({"status":"success","produced_outputs":[]}));
+                self.expect_accepted();
+            }
             "diagnostic_flood" => {
                 let message = "flood-evidence".repeat(4000);
                 for _ in 0..20000 {

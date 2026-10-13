@@ -1235,16 +1235,31 @@ pub(super) fn render(
                 out,
                 "Abandon preserves remaining service data. Stop external service processes separately.",
             )?;
-            return run_summary(value, out, false);
+            return run_summary(
+                value,
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            );
         }
         "invoke" | "snapshot capture" | "snapshot restore" | "instance delete"
         | "instance abandon"
             if value.get("run").is_some() =>
         {
-            return run_summary(value, out, false);
+            return run_summary(
+                value,
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            );
         }
         "instance migrate" if value.get("inspection").is_some() => {
-            run_summary(&value["inspection"], out, false)?;
+            run_summary(
+                &value["inspection"],
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            )?;
+            if display.human.verbosity == crate::configuration::Verbosity::Quiet {
+                return Ok(());
+            }
             write(out, "\nCurrent instance")?;
             return instance(&value["current_instance"], out);
         }

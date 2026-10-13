@@ -40,6 +40,14 @@ fn defaults_are_typed_and_ownership_is_closed() {
         .is_err()
     );
     assert!(parse("", "[diagnostics]\nunknown = true", &Overrides::default()).is_err());
+    let located = parse(
+        "\n[presentation]\nverbosity = 'sensitive-sentinel'",
+        "",
+        &Overrides::default(),
+    )
+    .unwrap_err();
+    assert_eq!(located.location.unwrap().0, 3);
+    assert!(!located.to_string().contains("sensitive-sentinel"));
 }
 
 // Test-ID: PR-TEST-0739

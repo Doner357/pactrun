@@ -238,6 +238,7 @@ impl Reply {
                         machine::Selection {
                             format,
                             version: self.version,
+                            human: self.display.human,
                         },
                         Some(self.command),
                         self.raw,
@@ -298,10 +299,15 @@ impl Reply {
 #[derive(Default)]
 pub(super) struct DisplayOptions {
     pub(super) no_trunc: bool,
+    pub(super) human: configuration::HumanPreferences,
     preview: bool,
     continuation: Option<(String, usize, Vec<String>)>,
 }
 impl DisplayOptions {
+    pub(super) fn with_human(mut self, human: configuration::HumanPreferences) -> Self {
+        self.human = human;
+        self
+    }
     pub(super) fn for_command(command: &Command) -> Self {
         use catalog::{CatalogCommand as C, RunSelector};
         let mut options = match command {

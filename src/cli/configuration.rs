@@ -1,11 +1,171 @@
 //! Configuration inspection does not acquire a Store or writer admission.
 use super::*;
-use crate::configuration::{Effective, FileSelection, Overrides};
+use crate::configuration::{Effective, FileSelection, Level, Overrides, Verbosity};
+
+#[derive(Default)]
+pub(super) struct Globals {
+    pub(super) user_file: Option<PathBuf>,
+    pub(super) overrides: Overrides,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct HumanPreferences {
+    pub(super) verbosity: Verbosity,
+    pub(super) phase_messages: bool,
+}
+impl Default for HumanPreferences {
+    fn default() -> Self {
+        Self {
+            verbosity: Verbosity::Normal,
+            phase_messages: true,
+        }
+    }
+}
+impl From<&Effective> for HumanPreferences {
+    fn from(settings: &Effective) -> Self {
+        Self {
+            verbosity: settings.presentation.verbosity.value,
+            phase_messages: settings.presentation.phase_messages.value,
+        }
+    }
+}
+
+pub(super) fn global_width(key: &str) -> Option<usize> {
+    match key {
+        "--config" | "--verbosity" | "--diagnostic-level" => Some(2),
+        "--phase-messages" | "--no-phase-messages" => Some(1),
+        _ => None,
+    }
+}
+
+/// Parse only known leading options. Command operands are never reinterpreted.
+pub(super) fn select(args: Vec<OsString>) -> Result<(Globals, Vec<OsString>), CliError> {
+    let mut globals = Globals::default();
+    let mut remaining = Vec::new();
+    let mut index = 0;
+    while let Some(key) = args.get(index).and_then(|a| a.to_str()) {
+        if matches!(key, "--format" | "--machine-version") {
+            remaining.push(args[index].clone());
+            index += 1;
+            if let Some(value) = args.get(index) {
+                remaining.push(value.clone());
+                index += 1;
+            }
+            continue;
+        }
+        let Some(width) = global_width(key) else {
+            break;
+        };
+        let value = if width == 2 {
+            Some(
+                args.get(index + 1)
+                    .ok_or_else(|| CliError::usage("missing configuration option value"))?,
+            )
+        } else {
+            None
+        };
+        match key {
+            "--config" => {
+                let path = value.expect("file option");
+                if path.is_empty() || path == "-" {
+                    return Err(CliError::usage("--config requires a file path"));
+                }
+                set_once(&mut globals.user_file, PathBuf::from(path), key)?;
+            }
+            "--verbosity" => {
+                let value = match value.and_then(|v| v.to_str()) {
+                    Some("quiet") => Verbosity::Quiet,
+                    Some("normal") => Verbosity::Normal,
+                    Some("detailed") => Verbosity::Detailed,
+                    _ => {
+                        return Err(CliError::usage(
+                            "--verbosity requires quiet, normal or detailed",
+                        ));
+                    }
+                };
+                set_once(&mut globals.overrides.verbosity, value, key)?;
+            }
+            "--diagnostic-level" => {
+                let value = match value.and_then(|v| v.to_str()) {
+                    Some("normal") => Level::Normal,
+                    Some("detailed") => Level::Detailed,
+                    _ => {
+                        return Err(CliError::usage(
+                            "--diagnostic-level requires normal or detailed",
+                        ));
+                    }
+                };
+                set_once(&mut globals.overrides.level, value, key)?;
+            }
+            "--phase-messages" | "--no-phase-messages" => set_once(
+                &mut globals.overrides.phase_messages,
+                key == "--phase-messages",
+                "phase message selection",
+            )?,
+            _ => unreachable!("known global width"),
+        }
+        index += width;
+    }
+    remaining.extend_from_slice(&args[index..]);
+    Ok((globals, remaining))
+}
+
+pub(super) fn resolve(
+    globals: &Globals,
+    root: Option<&OsString>,
+    candidate_user: Option<&Path>,
+    candidate_store: Option<&Path>,
+    discover_user: bool,
+) -> Result<Effective, CliError> {
+    if candidate_user.is_some() && globals.user_file.is_some() {
+        return Err(CliError::usage(
+            "--config and --user-file select the same user configuration; choose one",
+        ));
+    }
+    let explicit_user = candidate_user.or(globals.user_file.as_deref());
+    let user = match explicit_user {
+        Some(path) => Some(FileSelection {
+            path: path.to_owned(),
+            required: true,
+        }),
+        None if discover_user => {
+            crate::configuration::default_user_path(env::current_exe().ok().as_deref(), |key| {
+                env::var_os(key)
+            })
+            .map_err(|e| CliError::usage(e.to_string()))?
+            .map(|path| FileSelection {
+                path,
+                required: false,
+            })
+        }
+        None => None,
+    };
+    let store = match candidate_store {
+        Some(path) => Some(FileSelection {
+            path: path.to_owned(),
+            required: true,
+        }),
+        None => match root {
+            Some(root) if root.is_empty() => {
+                return Err(CliError::usage("selected Store root must not be empty"));
+            }
+            Some(root) => Some(FileSelection {
+                path: PathBuf::from(root).join("pactrun.toml"),
+                required: false,
+            }),
+            None => None,
+        },
+    };
+    crate::configuration::load(user.as_ref(), store.as_ref(), &globals.overrides)
+        .map_err(|e| CliError::usage(e.to_string()))
+}
 
 pub(super) struct Request {
     validate: bool,
     user_file: Option<PathBuf>,
     store_file: Option<PathBuf>,
+    pub(super) globals: Globals,
+    pub(super) discover_user: bool,
 }
 impl Request {
     pub(super) fn command_name(&self) -> &'static str {
@@ -31,6 +191,8 @@ pub(super) fn parse(parser: &mut Parser) -> Result<Request, CliError> {
         validate,
         user_file: None,
         store_file: None,
+        globals: Globals::default(),
+        discover_user: false,
     };
     while let Some(arg) = parser.next().map_err(lex_error)? {
         let (slot, label) = match arg {
@@ -60,40 +222,13 @@ pub(super) fn execute(
     output: reply::OutputContext,
 ) -> Result<(), CliError> {
     let name = request.command_name();
-    let user = match request.user_file {
-        Some(path) => Some(FileSelection {
-            path,
-            required: true,
-        }),
-        None => {
-            crate::configuration::default_user_path(env::current_exe().ok().as_deref(), |key| {
-                env::var_os(key)
-            })
-            .map_err(|e| CliError::usage(e.to_string()))?
-            .map(|path| FileSelection {
-                path,
-                required: false,
-            })
-        }
-    };
-    let store = match request.store_file {
-        Some(path) => Some(FileSelection {
-            path,
-            required: true,
-        }),
-        None => match root {
-            Some(root) if root.is_empty() => {
-                return Err(CliError::usage("selected Store root must not be empty"));
-            }
-            Some(root) => Some(FileSelection {
-                path: PathBuf::from(root).join("pactrun.toml"),
-                required: false,
-            }),
-            None => None,
-        },
-    };
-    let settings = crate::configuration::load(user.as_ref(), store.as_ref(), &Overrides::default())
-        .map_err(|e| CliError::usage(e.to_string()))?;
+    let settings = resolve(
+        &request.globals,
+        root.as_ref(),
+        request.user_file.as_deref(),
+        request.store_file.as_deref(),
+        request.discover_user,
+    )?;
     presentation::emit_result(
         output,
         name,

@@ -8,6 +8,7 @@ change; the broader commands already include the lower-level checks.
 | `cargo fmt --all -- --check` | Rust formatting |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Rust lint checks |
 | `cargo test -p pactrun --test invoke_cli --all-features` | Focused executable invocation tests |
+| `cargo test -p pactrun --test configuration_cli` | Real normal/test entry configuration discovery and no-Store checks |
 | `cargo xtask system-test` | System scenarios and the invocation CLI target |
 | `cargo xtask rust-ci` | Formatting, Clippy and all workspace Rust tests |
 | `cargo xtask ci` | Format conformance, Rust checks, website typecheck and documentation build |

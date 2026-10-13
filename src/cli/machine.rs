@@ -404,6 +404,7 @@ pub(super) fn requirements(
 pub(super) struct Selection {
     pub(super) format: presentation::Format,
     pub(super) version: Version,
+    pub(super) human: configuration::HumanPreferences,
 }
 impl Selection {
     pub(super) fn with_format(self, format: presentation::Format) -> Self {
@@ -415,6 +416,7 @@ impl From<presentation::Format> for Selection {
         Self {
             format,
             version: Version::default(),
+            human: configuration::HumanPreferences::default(),
         }
     }
 }
@@ -424,6 +426,10 @@ pub(super) fn recognize(args: &[OsString]) -> Selection {
     let (mut format_seen, mut version_seen) = (false, false);
     let mut index = 0;
     while let Some(key) = args.get(index).and_then(|key| key.to_str()) {
+        if let Some(width) = configuration::global_width(key) {
+            index += width;
+            continue;
+        }
         let Some(value) = args.get(index + 1).and_then(|value| value.to_str()) else {
             break;
         };

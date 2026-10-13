@@ -32,7 +32,7 @@ are UTF-8 and limited to 65,536 bytes inclusive, including for stream reads.
 Error classification MUST NOT echo source text or parsed values that might
 accidentally contain secrets.
 
-**Verification: PR-TEST-0738, PR-TEST-0741, PR-TEST-0742, PR-TEST-0743, PR-TEST-0744.**
+**Verification: PR-TEST-0738, PR-TEST-0741, PR-TEST-0742, PR-TEST-0743, PR-TEST-0744, PR-TEST-0747, PR-TEST-0752.**
 
 ### PR-REQ-0394 - Typed settings and bounded diagnostic defaults
 
@@ -73,7 +73,7 @@ Effective inspection MUST identify each setting's value and source: `default`,
 still has source `default`. Inspection and validation MUST not create or upgrade
 a Store or apply retention. File selection paths are not stored diagnostic text.
 
-**Verification: PR-TEST-0738, PR-TEST-0739, PR-TEST-0741, PR-TEST-0744, PR-TEST-0745; Pending automated coverage.**
+**Verification: PR-TEST-0738, PR-TEST-0739, PR-TEST-0741, PR-TEST-0744, PR-TEST-0745, PR-TEST-0746, PR-TEST-0747, PR-TEST-0749, PR-TEST-0751, PR-TEST-0752.**
 
 ### Configuration inspection commands
 
@@ -90,3 +90,36 @@ installing them or changing the selected Store. Human, JSON and JSONL results
 use the ordinary CLI presentation contract. Machine configuration commands
 require interface `1.0-alpha.4`; an explicit legacy selection is refused before
 configuration acquisition with a null command in the legacy error envelope.
+
+### PR-REQ-0396 - Runtime resolution and explicit invocation overrides
+
+Normal commands MUST resolve configuration before selector database reads,
+parameter/Input acquisition, Store preparation, or Hook execution. Help and
+version queries MUST remain usable without reading configuration files.
+Configuration inspection MUST permit explicit candidate files even when default
+files are invalid. Commands that do not use a Store do not acquire its file.
+An absent default file preserves built-in behavior. Invalid existing settings
+fail before operation side effects and do not expose the file's text.
+
+Leading `--config <path>` replaces the user-file location for this invocation.
+Leading `--verbosity quiet|normal|detailed`, `--diagnostic-level normal|detailed`,
+and `--phase-messages` or `--no-phase-messages` supply explicit overrides. These
+selectors may interleave with leading format/version selectors, never consume
+command operands, and reject duplicates/conflicting selections. Diagnostic
+level overrides both startup and Store diagnostic levels for this invocation.
+
+Every Hook execution command accepts `--retain-hook-text` and
+`--no-retain-hook-text`. Omission uses the Store default; either explicit flag
+overrides that default in either direction. Repetition or combining the flags
+is invalid. An override does not alter the configuration file, does not apply
+retroactively, and does not change live Hook output or safe Core evidence.
+
+Human quiet mode suppresses optional stage chatter, never raw Hook bytes,
+accepted Hook/Core diagnostic failures, result identities, warnings or recovery
+information. Normal mode retains concise results. Detailed mode includes the
+retained execution detail in execution summaries. Disabling phase messages
+suppresses optional finalization/waiting notices, not acceptance uncertainty or
+storage-retry ownership warnings. Machine output content and framing do not
+depend on human presentation preferences.
+
+**Verification: PR-TEST-0746, PR-TEST-0747, PR-TEST-0748, PR-TEST-0749, PR-TEST-0750, PR-TEST-0751, PR-TEST-0752.**

@@ -117,7 +117,7 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let mut expected = None;
     let mut options = ExecutionOptions {
-        no_retain_hook_text: false,
+        retain_hook_text: None,
         cancel_on_output_close: false,
         parameters: vec![],
         plan: false,
@@ -134,8 +134,12 @@ fn parse_execution(parser: &mut Parser, operation: &str) -> Result<RetirementCom
                 let option = option.to_owned();
                 parse_execution_option(&option, parser, "execution-timeout-ms", &mut options)?;
             }
-            Arg::Long("no-retain-hook-text") if !options.no_retain_hook_text => {
-                options.no_retain_hook_text = true
+            Arg::Long(option @ ("no-retain-hook-text" | "retain-hook-text")) => {
+                set_once(
+                    &mut options.retain_hook_text,
+                    option == "retain-hook-text",
+                    "Hook text retention selection",
+                )?;
             }
             Arg::Long("cancel-on-output-close") if !options.cancel_on_output_close => {
                 options.cancel_on_output_close = true

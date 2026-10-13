@@ -111,12 +111,16 @@ pub(super) fn recognize(args: &[OsString]) -> Format {
 /// fixed Input-export grammar is inspected; arbitrary operands are not formats.
 pub(super) fn raw_input_request(args: &[OsString]) -> bool {
     let mut args = args;
-    while args
-        .first()
-        .is_some_and(|a| a == "--format" || a == "--machine-version")
-        && args.len() >= 2
-    {
-        args = &args[2..];
+    while let Some(key) = args.first().and_then(|v| v.to_str()) {
+        let width = if matches!(key, "--format" | "--machine-version") {
+            Some(2)
+        } else {
+            configuration::global_width(key)
+        };
+        let Some(width) = width.filter(|width| args.len() >= *width) else {
+            break;
+        };
+        args = &args[width..];
     }
     args.first().is_some_and(|a| a == "input")
         && args.get(1).is_some_and(|a| a == "export")
@@ -127,6 +131,7 @@ pub(super) fn raw_input_request(args: &[OsString]) -> bool {
 }
 
 pub(super) fn select(args: Vec<OsString>) -> Result<(Format, Vec<OsString>), CliError> {
+    let (_, args) = configuration::select(args)?;
     machine::select(args).map(|(selection, args)| (selection.format, args))
 }
 

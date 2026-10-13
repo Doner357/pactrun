@@ -2,6 +2,31 @@
   "description": "Manage installed Packs, long-lived Instances and Pack-defined operations.",
   "global_options": [
     {
+      "name": "--config",
+      "value": "path",
+      "description": "Select an existing user configuration file before the command; does not select a Store."
+    },
+    {
+      "name": "--verbosity",
+      "value": "quiet|normal|detailed",
+      "description": "Override Human presentation for this invocation; machine output and raw Hook bytes are unchanged."
+    },
+    {
+      "name": "--diagnostic-level",
+      "value": "normal|detailed",
+      "description": "Override startup and Store diagnostic detail for this invocation."
+    },
+    {
+      "name": "--phase-messages",
+      "value": null,
+      "description": "Enable optional Pactrun Human phase messages; quiet mode still suppresses optional chatter."
+    },
+    {
+      "name": "--no-phase-messages",
+      "value": null,
+      "description": "Suppress optional Human phase messages, never acceptance uncertainty or storage-retry warnings."
+    },
+    {
       "name": "--help",
       "value": null,
       "description": "Show help for this command or command group."
@@ -242,6 +267,11 @@
       "name": "--no-retain-hook-text",
       "value": null,
       "description": "Do not retain Hook free text; live output remains enabled."
+    },
+    "--retain-hook-text": {
+      "name": "--retain-hook-text",
+      "value": null,
+      "description": "Retain this invocation's Hook free text, overriding the Store default without changing the file."
     },
     "--cancel-on-output-close": {
       "name": "--cancel-on-output-close",
@@ -767,6 +797,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -859,6 +890,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -888,6 +920,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close",
         "--param",
@@ -919,6 +952,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1224,6 +1258,7 @@
         "--startup-timeout-ms",
         "--action-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1439,6 +1474,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1466,6 +1502,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],

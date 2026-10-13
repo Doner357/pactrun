@@ -91,6 +91,37 @@ use the ordinary CLI presentation contract. Machine configuration commands
 require interface `1.0-alpha.4`; an explicit legacy selection is refused before
 configuration acquisition with a null command in the legacy error envelope.
 
+### Runtime resolution and explicit invocation overrides {#pr-req-0396---runtime-resolution-and-explicit-invocation-overrides}
+
+Normal commands MUST resolve configuration before selector database reads,
+parameter/Input acquisition, Store preparation, or Hook execution. Help and
+version queries MUST remain usable without reading configuration files.
+Configuration inspection MUST permit explicit candidate files even when default
+files are invalid. Commands that do not use a Store do not acquire its file.
+An absent default file preserves built-in behavior. Invalid existing settings
+fail before operation side effects and do not expose the file's text.
+
+Leading `--config <path>` replaces the user-file location for this invocation.
+Leading `--verbosity quiet|normal|detailed`, `--diagnostic-level normal|detailed`,
+and `--phase-messages` or `--no-phase-messages` supply explicit overrides. These
+selectors may interleave with leading format/version selectors, never consume
+command operands, and reject duplicates/conflicting selections. Diagnostic
+level overrides both startup and Store diagnostic levels for this invocation.
+
+Every Hook execution command accepts `--retain-hook-text` and
+`--no-retain-hook-text`. Omission uses the Store default; either explicit flag
+overrides that default in either direction. Repetition or combining the flags
+is invalid. An override does not alter the configuration file, does not apply
+retroactively, and does not change live Hook output or safe Core evidence.
+
+Human quiet mode suppresses optional stage chatter, never raw Hook bytes,
+accepted Hook/Core diagnostic failures, result identities, warnings or recovery
+information. Normal mode retains concise results. Detailed mode includes the
+retained execution detail in execution summaries. Disabling phase messages
+suppresses optional finalization/waiting notices, not acceptance uncertainty or
+storage-retry ownership warnings. Machine output content and framing do not
+depend on human presentation preferences.
+
 <details>
 <summary>Maintainer sources (optional)</summary>
 
