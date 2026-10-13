@@ -48,6 +48,27 @@ fn chain(f: &RuntimeFixture) -> Vec<RevisionIdentity> {
     vec![a,b,c,d]
 }
 
+// Test-ID: PR-TEST-0775
+// Verifies: PR-REQ-0402, PR-REQ-0403
+#[test]
+fn input_history_migration_keeps_edge_roles_transients_and_committed_values_distinct() {
+    let f=RuntimeFixture::new(); let path=chain(&f);
+    let run=start(&f,&path,"success",ActionCancellation::default());
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let p=persistence(&f.storage); let history=p.input_history(run).unwrap();
+    assert_eq!(history.len(),9);
+    let context=|edge,scope|history.iter().find(|c|c.edge_index==Some(edge)&&c.scope==scope).unwrap();
+    let source=context(1,InputHistoryScope::Source);
+    assert_eq!(source.inputs.iter().find(|i|i.input.as_str()=="secret_config").unwrap().role,InputHistoryRole::Retained);
+    let prepared=context(1,InputHistoryScope::TargetPrepared);
+    assert_eq!(prepared.inputs.iter().find(|i|i.input.as_str()=="request").unwrap().origin,InputHistoryOrigin::Transient);
+    assert_eq!(prepared.inputs.iter().find(|i|i.input.as_str()=="result").unwrap().origin,InputHistoryOrigin::PendingOutput);
+    let committed=context(1,InputHistoryScope::TargetCommitted);
+    assert!(matches!(committed.inputs.iter().find(|i|i.input.as_str()=="result").unwrap().origin,InputHistoryOrigin::Managed(_)));
+    let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    assert_eq!(db.query_row("SELECT count(*) FROM run_migration_payload_pins WHERE run_id=?1",[run.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
+}
+
 fn start(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, cancel: ActionCancellation) -> RunId {
     start_with_policy(f, path, mode, cancel, policy(Some(5_000), Some(5_000), Some(10)))
 }

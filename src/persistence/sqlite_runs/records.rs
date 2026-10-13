@@ -348,6 +348,7 @@ pub(in crate::persistence) fn inspect_run_from(
         RunState::Running(_) => super::scoped_artifacts::load_scoped_artifacts(db, run)?,
     };
     Ok(crate::domain::ManagedRunInspectionData {
+        input_history: super::super::sqlite_input_history::load(db, run)?,
         published_artifacts,
         run: view,
         current_recovery_guard: guard,

@@ -243,6 +243,17 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
             operation(&run["operation"])
         ),
     )?;
+    if details && let Some(history) = value.get("input_history") {
+        if history["recorded"] == true {
+            write(
+                out,
+                "Historical Input references (not a payload backup or proof of Hook reads)",
+            )?;
+            tree(&history["contexts"], out, 2)?;
+        } else {
+            write(out, "Historical Input references: not recorded")?;
+        }
+    }
     let state = &run["state"];
     write(
         out,

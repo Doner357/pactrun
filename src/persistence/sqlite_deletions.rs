@@ -849,6 +849,7 @@ impl PactrunPersistence {
                     run,
                     &cleanup.service_bindings,
                 )?;
+                super::sqlite_input_history::record_pins(&tx, run, &plan.revision, true)?;
             }
             Ok(())
         };

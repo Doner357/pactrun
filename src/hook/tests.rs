@@ -81,6 +81,8 @@ mod v2_runtime {
 mod deletion_runtime {
     include!("deletion_tests.rs");
 }
+#[path = "input_history_tests.rs"]
+mod input_history_runtime;
 #[path = "operation_runtime_tests.rs"]
 mod operation_runtime;
 #[path = "service_diagnostics_tests.rs"]

@@ -416,6 +416,7 @@ pub(crate) struct ManagedRunView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ManagedRunInspectionData {
+    pub(crate) input_history: Vec<super::HistoricalInputContext>,
     pub(crate) published_artifacts: Vec<RunArtifactSummary>,
     pub(crate) diagnostics: Option<super::DiagnosticInspection>,
     pub(crate) run: ManagedRunView,

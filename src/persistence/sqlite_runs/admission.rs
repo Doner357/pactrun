@@ -306,6 +306,20 @@ impl PactrunPersistence {
                             })?;
                     }
                 }
+                if let ManagedRunIdentity::Restore { snapshot, .. } = &operation {
+                    super::super::sqlite_input_history::record_snapshot(
+                        &transaction,
+                        run,
+                        *snapshot,
+                    )?;
+                } else {
+                    super::super::sqlite_input_history::record_pins(
+                        &transaction,
+                        run,
+                        active_revision,
+                        matches!(operation, ManagedRunIdentity::Capture { .. }),
+                    )?;
+                }
             }
             Err(refusal) => {
                 let finish = RunFinish {

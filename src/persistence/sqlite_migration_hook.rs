@@ -16,8 +16,9 @@ impl PactrunPersistence {
             .lock()
             .map_err(|_| PersistenceError::DatabaseLockPoisoned)?;
         let tx = db
-            .transaction_with_behavior(TransactionBehavior::Deferred)
-            .map_err(|e| PersistenceError::sqlite("read pinned Migration edge", e))?;
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| PersistenceError::sqlite("prepare pinned Migration edge", e))?;
+        self.check_write_admission(&tx)?;
         let view = load_managed_run_from(&tx, run)?;
         let progress = progress_view(&tx, run)?.ok_or_else(corrupt)?;
         let (_, active, version) = instance_header(&tx, view.instance)?;
@@ -36,6 +37,8 @@ impl PactrunPersistence {
         };
         let source = load_revision_from(&tx, &invocation.path()[edge])?.ok_or_else(corrupt)?;
         let target = load_revision_from(&tx, &invocation.path()[edge + 1])?.ok_or_else(corrupt)?;
+        let source_declarations = source.content.core.inputs().to_vec();
+        let target_declarations = target.content.core.inputs().to_vec();
         let source_inputs = source
             .content
             .core
@@ -65,6 +68,27 @@ impl PactrunPersistence {
             invocation.authorized(),
         )
         .map_err(|_| rejected("Migration edge requirements changed"))?;
+        super::super::sqlite_input_history::record_migration(
+            &tx,
+            run,
+            edge,
+            InputHistoryScope::Source,
+            &source_declarations,
+            plan.source_bindings(),
+            &[],
+        )?;
+        super::super::sqlite_input_history::record_migration(
+            &tx,
+            run,
+            edge,
+            InputHistoryScope::TargetPrepared,
+            &target_declarations,
+            plan.staged_bindings(),
+            &plan.declaration().produces_target,
+        )?;
+        tx.commit().map_err(|e| {
+            PersistenceError::sqlite("publish Migration Input reference context", e)
+        })?;
         Ok((plan, source_inputs, target_inputs))
     }
 

@@ -16,6 +16,8 @@ pub(crate) use core_trace::*;
 mod error;
 mod execution;
 mod identity;
+mod input_history;
+pub(crate) use input_history::*;
 mod local_names;
 #[allow(unused_imports)]
 pub(crate) use local_names::*;

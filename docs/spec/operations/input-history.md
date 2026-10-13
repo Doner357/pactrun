@@ -1,0 +1,58 @@
+---
+title: Historical Input References
+---
+
+# Historical Input References
+
+### PR-REQ-0402 - Automatic context-qualified Input history
+
+Pactrun records Input reference metadata automatically within the transactions
+that establish admitted contexts or publish a Migration edge. This requires no
+operator flag and MUST NOT create per-Run payload copies. Action history describes
+its admitted present bindings, not the entire Instance or proof that a Hook read
+bytes. Capture/Cleanup history describes their managed binding context. Restore
+history refers to the selected immutable Snapshot, not current Instance values.
+
+Migration history MUST keep source, prepared target and committed target contexts
+distinct for each exact accepted edge. Existing payload origins remain exact
+references. Operator staging is transient; pending Hook outputs are not invented
+as pre-Hook Input values. Committed target values are recorded at their actual
+publication boundary. A repeated capture of the same context must be identical;
+it MUST NOT overwrite earlier observations with a newer Instance view.
+
+An empty recorded context differs from a context that was never recorded. Old
+Runs and attempts refused before context establishment do not acquire invented
+history. Historical role and protection are captured facts. Ordinary inspection
+MUST NOT reveal payload IDs, hashes, sizes, native paths or Input/Secret contents.
+
+Run inspection exposes `input_history.recorded` and context metadata. Contexts
+identify current, Snapshot, source, prepared-target or committed-target views;
+Migration contexts use exact edge digests rather than a user-facing ordinal.
+`managed_reference` and `snapshot_reference` describe captured provenance, not a
+claim that bytes are still available or verified. `absent`, `transient` and
+`pending_output` remain distinct. Export performs its own authorized resolution.
+Earlier machine responses may omit the additive `input_history` member; consumers
+must not infer historical values from that absence.
+
+**Verification: PR-TEST-0771, PR-TEST-0772, PR-TEST-0773, PR-TEST-0774, PR-TEST-0775, PR-TEST-0776.**
+
+### PR-REQ-0403 - References are not retention or disclosure authority
+
+History belongs to its Run but MUST NOT introduce foreign keys, pins, GC roots or
+recovery obligations to payloads, Snapshots, live Instances or Revisions. Existing
+reclamation and deletion rules remain effective. A historical reference can
+remain after its content has been reclaimed; it is not a backup guarantee.
+
+Resolution MUST use the exact recorded payload or Snapshot binding context.
+Current values MUST NOT substitute for unavailable historical values. A valid
+reference does not grant disclosure: Secret content needs explicit selection
+and purpose-specific export authorization, and history cannot lower an existing
+protection floor. A missing payload is unavailable, not an empty payload. I/O or
+integrity failures MUST NOT be silently treated as ordinary absence.
+
+Snapshot references retain the existing Snapshot integrity identity internally,
+not only its opaque ID. Deleting and later importing different content under a
+reused ID MUST NOT make that content the original historical input. Integrity
+anchors are not exposed by ordinary history inspection and do not pin a Snapshot.
+
+**Verification: PR-TEST-0771, PR-TEST-0772, PR-TEST-0773, PR-TEST-0774, PR-TEST-0775, PR-TEST-0776.**

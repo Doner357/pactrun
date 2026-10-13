@@ -296,6 +296,17 @@ pub(super) fn inspection_from(
     Ok(inspection(&load_snapshot(db, id)?))
 }
 
+pub(super) fn history_bindings(
+    db: &Connection,
+    id: SnapshotId,
+) -> Result<(SnapshotIntegrityDigest, Vec<SnapshotBinding>), PersistenceError> {
+    let snapshot = load_snapshot(db, id)?;
+    Ok((
+        snapshot.manifest.integrity_digest().clone(),
+        snapshot.manifest.manifest().managed_bindings().to_vec(),
+    ))
+}
+
 fn inspection(snapshot: &StoredSnapshot) -> SnapshotInspection {
     let manifest = snapshot.manifest.manifest();
     let mut budget = RestoreExpansionBudget::default();

@@ -1704,6 +1704,41 @@
       ],
       "type": "string"
     },
+    "HistoricalInput": {
+      "properties": {
+        "input_id": {
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "absent",
+            "managed_reference",
+            "snapshot_reference",
+            "transient",
+            "pending_output"
+          ]
+        },
+        "protection": {
+          "enum": [
+            "normal",
+            "secret"
+          ]
+        },
+        "role": {
+          "enum": [
+            "active",
+            "retained"
+          ]
+        }
+      },
+      "required": [
+        "input_id",
+        "role",
+        "protection",
+        "origin"
+      ],
+      "type": "object"
+    },
     "History": {
       "properties": {
         "current_name": {
@@ -1949,6 +1984,71 @@
       ],
       "type": "object"
     },
+    "InputHistory": {
+      "properties": {
+        "contexts": {
+          "items": {
+            "$ref": "#/$defs/InputHistoryContext"
+          },
+          "type": "array"
+        },
+        "recorded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "recorded",
+        "contexts"
+      ],
+      "type": "object"
+    },
+    "InputHistoryContext": {
+      "properties": {
+        "coverage": {
+          "enum": [
+            "admitted_bindings",
+            "managed_context"
+          ]
+        },
+        "edge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactEdge"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/HistoricalInput"
+          },
+          "type": "array"
+        },
+        "scope": {
+          "enum": [
+            "current",
+            "snapshot",
+            "source",
+            "target_prepared",
+            "target_committed"
+          ]
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "coverage",
+        "inputs"
+      ],
+      "type": "object"
+    },
     "InputMutation": {
       "properties": {
         "input_id": {
@@ -2096,6 +2196,9 @@
               "type": "null"
             }
           ]
+        },
+        "input_history": {
+          "$ref": "#/$defs/InputHistory"
         },
         "migration_progress": {
           "anyOf": [
@@ -4434,6 +4537,9 @@
             }
           ]
         },
+        "input_history": {
+          "$ref": "#/$defs/InputHistory"
+        },
         "migration_progress": {
           "anyOf": [
             {
@@ -4641,6 +4747,9 @@
               "type": "null"
             }
           ]
+        },
+        "input_history": {
+          "$ref": "#/$defs/InputHistory"
         },
         "migration_progress": {
           "anyOf": [

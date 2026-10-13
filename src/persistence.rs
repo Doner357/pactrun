@@ -21,6 +21,7 @@ mod sqlite_core_diagnostics;
 mod sqlite_deletions;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;
+mod sqlite_input_history;
 mod sqlite_instances;
 mod sqlite_migration_runs;
 mod sqlite_migrations;

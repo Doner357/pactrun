@@ -183,6 +183,21 @@ fn service_presence_failure_is_retained_after_repair_and_instance_retirement() {
     assert_eq!(state.primary_failure.unwrap().cause, Some(RunFailureCause::ServicePresenceRequirement(Box::new(expected))));
 }
 
+// Test-ID: PR-TEST-0773
+// Verifies: PR-REQ-0402, PR-REQ-0403
+#[test]
+fn input_history_cleanup_context_survives_retirement_without_payload_bytes() {
+    let f=fixture("success"); let run=start(&f,DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let p=persistence(&f.storage); let history=p.input_history(run).unwrap();
+    assert_eq!(history.len(),1); assert_eq!(history[0].coverage,InputHistoryCoverage::ManagedContext);
+    let input=history[0].inputs.iter().find(|i|i.input.as_str()=="secret_config").unwrap();
+    let InputHistoryOrigin::Managed(payload)=input.origin else {panic!("missing Cleanup history")};
+    let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    assert_eq!(db.query_row("SELECT count(*) FROM managed_input_payloads WHERE payload_id=?1",[payload.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
+    assert!(p.load_instance_by_id(f.instance.id).unwrap().is_none());
+}
+
 // Test-ID: PR-TEST-0406
 // Verifies: PR-REQ-0113, PR-REQ-0181, PR-REQ-0336
 #[test]

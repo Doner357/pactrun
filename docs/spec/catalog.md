@@ -41,6 +41,7 @@ title: Specification Reference Index
 - [Execution and Concurrency](./operations/execution.md)
 - [Execution Diagnostics](./operations/diagnostics.md)
 - [Service Prerequisite Diagnostics](./operations/service-diagnostics.md)
+- [Historical Input References](./operations/input-history.md)
 - [Operation Input Requirements and Authority](./operations/input-authority.md)
 
 ## Snapshots and Restore

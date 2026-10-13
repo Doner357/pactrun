@@ -502,6 +502,7 @@ struct MigrationProgress {
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Inspection {
+    input_history: InputHistory,
     #[serde(skip_serializing_if = "Option::is_none")]
     published_artifacts: Option<Vec<Artifact>>,
     run: Run,
@@ -509,6 +510,101 @@ pub(super) struct Inspection {
     capture_result: Option<String>,
     migration_progress: Option<MigrationProgress>,
     diagnostics: Option<Diagnostics>,
+}
+
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct InputHistory {
+    recorded: bool,
+    contexts: Vec<InputHistoryContext>,
+}
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct InputHistoryContext {
+    scope: &'static str,
+    coverage: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    edge: Option<ArtifactEdge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snapshot_id: Option<String>,
+    inputs: Vec<HistoricalInput>,
+}
+#[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+struct HistoricalInput {
+    input_id: String,
+    role: &'static str,
+    protection: &'static str,
+    origin: &'static str,
+}
+impl InputHistory {
+    fn from_view(view: &crate::domain::ManagedRunInspectionData) -> Self {
+        use crate::domain::{
+            InputHistoryCoverage as C, InputHistoryOrigin as O, InputHistoryRole as R,
+            InputHistoryScope as S, ManagedRunIdentity,
+        };
+        Self {
+            recorded: !view.input_history.is_empty(),
+            contexts: view
+                .input_history
+                .iter()
+                .map(|context| InputHistoryContext {
+                    scope: match context.scope {
+                        S::Current => "current",
+                        S::Snapshot => "snapshot",
+                        S::Source => "source",
+                        S::TargetPrepared => "target_prepared",
+                        S::TargetCommitted => "target_committed",
+                    },
+                    coverage: match context.coverage {
+                        C::AdmittedBindings => "admitted_bindings",
+                        C::ManagedContext => "managed_context",
+                    },
+                    edge: context.edge_index.and_then(|index| {
+                        if let ManagedRunIdentity::Migration(invocation) = &view.run.operation {
+                            Some(ArtifactEdge {
+                                source_revision_digest: invocation
+                                    .path()
+                                    .get(index)?
+                                    .content_digest
+                                    .to_string(),
+                                target_revision_digest: invocation
+                                    .path()
+                                    .get(index + 1)?
+                                    .content_digest
+                                    .to_string(),
+                            })
+                        } else {
+                            None
+                        }
+                    }),
+                    snapshot_id: context.snapshot.map(|id| id.to_string()),
+                    inputs: context
+                        .inputs
+                        .iter()
+                        .map(|input| HistoricalInput {
+                            input_id: input.input.as_str().into(),
+                            role: match input.role {
+                                R::Active => "active",
+                                R::Retained => "retained",
+                            },
+                            protection: match input.protection {
+                                crate::domain::ManagedInputProtection::Normal => "normal",
+                                crate::domain::ManagedInputProtection::Secret => "secret",
+                            },
+                            origin: match input.origin {
+                                O::Absent => "absent",
+                                O::Managed(_) => "managed_reference",
+                                O::Snapshot => "snapshot_reference",
+                                O::Transient => "transient",
+                                O::PendingOutput => "pending_output",
+                            },
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
 }
 
 /// Adds the historical inspection without removing the established partial Run ID.
@@ -523,6 +619,7 @@ pub(super) struct RefusedExecution {
 impl From<&crate::domain::ManagedRunInspectionData> for Inspection {
     fn from(view: &crate::domain::ManagedRunInspectionData) -> Self {
         Self {
+            input_history: InputHistory::from_view(view),
             published_artifacts: None,
             run: (&view.run).into(),
             current_recovery_guard: view.current_recovery_guard.as_ref().map(Into::into),

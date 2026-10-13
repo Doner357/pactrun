@@ -50,6 +50,12 @@ whether the operation succeeded.
 Pactrun's safe helper classifications remain available. Sequence gaps mark
 omitted events; an incomplete collection can have an unknown tail.
 
+`run show` also lists captured Input reference contexts. They describe admitted
+or managed binding state, not proof that the Hook read every value. They do not
+keep payloads or Snapshots alive. An older Run can have no recorded context;
+current Instance values are never used to fill that gap. See
+[historical Input references](../pactrun-users/reference/input-history.md).
+
 ## Diagnose a refusal or failure
 
 For Pactrun's own phases and aggregate timings, use the retained Core trace:

@@ -212,6 +212,25 @@ fn generated() -> Value {
     schema["$defs"]["TracePolicy"]["properties"]["max_bytes"] =
         json!({"type":"integer","minimum":1048576,"maximum":1073741824});
     schema["$defs"]["InputMutation"]["required"] = json!(["state_version"]);
+    // Current producers always emit captured history. Older responses may omit
+    // this additive member; absence does not invent historical observations.
+    for definition in schema["$defs"].as_object_mut().unwrap().values_mut() {
+        if definition["properties"].get("input_history").is_some() {
+            definition["required"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|field| field != "input_history");
+        }
+    }
+    schema["$defs"]["HistoricalInput"]["properties"]["origin"] = json!({"enum":["absent","managed_reference","snapshot_reference","transient","pending_output"]});
+    schema["$defs"]["HistoricalInput"]["properties"]["role"] =
+        json!({"enum":["active","retained"]});
+    schema["$defs"]["HistoricalInput"]["properties"]["protection"] =
+        json!({"enum":["normal","secret"]});
+    schema["$defs"]["InputHistoryContext"]["properties"]["scope"] =
+        json!({"enum":["current","snapshot","source","target_prepared","target_committed"]});
+    schema["$defs"]["InputHistoryContext"]["properties"]["coverage"] =
+        json!({"enum":["admitted_bindings","managed_context"]});
     for definition in schema["$defs"].as_object_mut().unwrap().values_mut() {
         if definition["properties"].get("missing_input_ids").is_some() {
             definition["required"]

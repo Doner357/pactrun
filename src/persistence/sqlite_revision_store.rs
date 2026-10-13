@@ -46,6 +46,7 @@ pub(super) const ALPHA3_SQL: &str = include_str!("persistence_alpha3.sql");
 pub(super) const ALPHA4_SQL: &str = include_str!("persistence_alpha4.sql");
 pub(super) const ALPHA5_SQL: &str = include_str!("persistence_alpha5.sql");
 pub(super) const SERVICE_FAILURE_CAUSES_SQL: &str = include_str!("service_failure_causes.sql");
+pub(super) const INPUT_HISTORY_SQL: &str = include_str!("input_history.sql");
 pub(super) const SCOPED_ARTIFACTS_SQL: &str = include_str!("scoped_artifacts.sql");
 pub(super) const CORE_DIAGNOSTICS_SQL: &str = include_str!("core_diagnostics.sql");
 pub(super) const FAILURE_CAUSES_SQL: &str = include_str!("failure_causes.sql");

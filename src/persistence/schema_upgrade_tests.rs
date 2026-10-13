@@ -37,7 +37,7 @@ fn legacy() -> (tempfile::TempDir, PathBuf, RevisionIdentity) {
 
 fn downgrade_fixture(root: &Path) {
     let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-    db.execute_batch("DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
+    db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
         .unwrap();
     db.execute_batch(
         "DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections;",
@@ -84,7 +84,7 @@ fn alpha5_upgrade_adds_empty_service_facts_and_preserves_identity_with_writer_ex
             .query_row("SELECT core_jcs FROM revisions", [], |r| r.get(0))
             .unwrap();
         db.execute_batch(
-            "DROP TABLE run_service_prerequisite_causes; DROP TABLE writable_admissions;",
+            "DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE writable_admissions;",
         )
         .unwrap();
         let ddl = super::super::sqlite_revision_store::ALPHA5_SQL
@@ -155,7 +155,7 @@ fn alpha2_upgrade_preserves_names_and_refuses_live_old_writers() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        db.execute_batch("DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
+        db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
             .unwrap();
         db.execute_batch(
             "DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections;",
@@ -242,7 +242,7 @@ fn alpha4_upgrade_preserves_artifact_bytes_and_refuses_live_writers() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        db.execute_batch("DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE writable_admissions;").unwrap();
+        db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE writable_admissions;").unwrap();
         let ddl = super::super::sqlite_revision_store::ALPHA4_SQL
             .split_once("CREATE TABLE writable_admissions (")
             .unwrap()
@@ -358,7 +358,7 @@ fn alpha3_upgrade_adds_empty_core_history_and_preserves_identity() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
-        db.execute_batch("DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
+        db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
             .unwrap();
         db.execute_batch("DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
         let ddl = super::super::sqlite_revision_store::ALPHA3_SQL
