@@ -1,5 +1,7 @@
 # Pactrun
 
+[![AI Disclosure: AGAIN](https://img.shields.io/badge/AI%20Disclosure-AGAIN-8055CC?style=flat-square)](https://github.com/Doner357/AGAIN)
+
 Pactrun manages installed Pack revisions, long-lived Instances, and Pack-defined
 operations on the local machine. It runs as a single executable on Linux and Windows.
 
