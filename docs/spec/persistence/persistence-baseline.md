@@ -1729,6 +1729,8 @@ from development-era schemas.
 **Verification: PR-TEST-0195, PR-TEST-0196, PR-TEST-0197, PR-TEST-0198,
 PR-TEST-0201, PR-TEST-0622, PR-TEST-0623, PR-TEST-0639.**
 
+**Verification: PR-TEST-0790, PR-TEST-0791, PR-TEST-0792.**
+
 ### PR-REQ-0308 - Migration record ownership and admission {#pr-req-0308---v6-migration-persistence-and-upgrade-boundary}
 
 The baseline preserves operation ranks and stored meaning, including the

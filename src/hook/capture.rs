@@ -28,6 +28,7 @@ impl From<io::Error> for CaptureError {
 impl From<StagingError> for CaptureError {
     fn from(error: StagingError) -> Self {
         match error {
+            StagingError::Store(source) => Self::Persistence(*source),
             StagingError::Io { source, .. } => Self::Host(source.kind()),
             StagingError::Unsupported(_) => Self::Host(io::ErrorKind::Unsupported),
             StagingError::ManagedInputTooLarge | StagingError::LengthOverflow => {

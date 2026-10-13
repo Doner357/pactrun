@@ -7,6 +7,12 @@ Build on Windows or Linux with a native C compiler and linker for bundled
 SQLite. Windows CI uses the MSVC toolchain. Release reproduction uses the pinned
 toolchain in the release workflow rather than whichever compiler is newest.
 
+The rusqlite dependency is pinned to an official Git commit bundling SQLite
+3.53.4. The Windows VFS must include the SQLite 3.53.3 fix that distinguishes
+extended local DOS-device paths from UNC paths. Do not replace that source with
+an older bundled engine, strip native path prefixes, or relax `synchronous=FULL`
+to work around locking failures. Cargo.lock records the exact source revision.
+
 From the repository root:
 
 ```text

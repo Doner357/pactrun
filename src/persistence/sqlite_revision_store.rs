@@ -287,10 +287,19 @@ impl PactrunPersistence {
 
     pub(crate) fn open(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
-        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
-            PersistenceError::DatabaseOwnership("could not prepare writer session".to_owned())
-        })?;
+        let session = Self::prepare_writer_session(&root)?;
         Self::open_prepared(&root, session)
+    }
+
+    fn prepare_writer_session(
+        root: &Path,
+    ) -> Result<crate::managed_data::StagingSession, PersistenceError> {
+        use crate::managed_data::StagingError;
+        crate::managed_data::StagingSession::prepare(root).map_err(|error| match error {
+            StagingError::Store(source) => *source,
+            StagingError::Io { operation, source } => PersistenceError::Io { operation, source },
+            other => PersistenceError::DatabaseOwnership(other.to_string()),
+        })
     }
 
     pub(crate) fn open_prepared(
@@ -303,9 +312,7 @@ impl PactrunPersistence {
     pub(crate) fn open_for_collection(root: &Path) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         Self::preflight_storage(&root, true)?;
-        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
-            PersistenceError::DatabaseOwnership("could not prepare collection session".to_owned())
-        })?;
+        let session = Self::prepare_writer_session(&root)?;
         Self::open_prepared_for(&root, session, true)
     }
 

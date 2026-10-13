@@ -36,7 +36,9 @@ impl Reason {
         match error {
             StagingError::Io { source, .. } => Self::from_io(source),
             StagingError::ManagedInputTooLarge => Self::TooLarge,
-            StagingError::Unsupported(_) | StagingError::LengthOverflow => Self::Unavailable,
+            StagingError::Store(_)
+            | StagingError::Unsupported(_)
+            | StagingError::LengthOverflow => Self::Unavailable,
         }
     }
     pub(crate) fn code(self) -> &'static str {

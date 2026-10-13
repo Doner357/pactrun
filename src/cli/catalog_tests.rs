@@ -583,3 +583,152 @@ fn catalog_concurrent_cas_has_one_winner_and_snapshot_queries_reject_corruption(
     );
     assert_eq!(invoke(&root, &["revision", "list"]).0, 1);
 }
+
+// Test-ID: PR-TEST-0790
+// Verifies: PR-REQ-0299
+#[cfg(windows)]
+#[test]
+#[ignore = "manual Windows cold/warm Store opening probe; passing does not prove SQLITE_PROTOCOL fixed"]
+fn windows_store_open_cold_and_warm_waves_probe() {
+    use crate::persistence::PersistenceError;
+    #[derive(Debug, serde::Serialize)]
+    struct Failure {
+        wave: usize,
+        worker: usize,
+        operation: &'static str,
+        sqlite_code: Option<i32>,
+    }
+    let mut failed_cases = 0;
+    for keepalive in [false, true] {
+        'widths: for width in [2, 8] {
+            let (temp, root, ids) = fixture(1);
+            let anchor = keepalive.then(|| PactrunPersistence::open(&root).unwrap());
+            let mut longest = std::time::Duration::ZERO;
+            let started = std::time::Instant::now();
+            for wave in 0..32 {
+                let gate = std::sync::Arc::new(std::sync::Barrier::new(width + 1));
+                let workers: Vec<_> = (0..width)
+                    .map(|worker| {
+                        let gate = gate.clone();
+                        let root = root.clone();
+                        let revision = ids[0].clone();
+                        std::thread::spawn(move || {
+                            gate.wait();
+                            let started = std::time::Instant::now();
+                            let result = PactrunPersistence::open(&root)
+                                .and_then(|p| {
+                                    p.load_revision(&revision)?.ok_or_else(|| {
+                                        PersistenceError::MissingRevision(revision.clone())
+                                    })?;
+                                    Ok(())
+                                })
+                                .map_err(|error| {
+                                    let (operation, sqlite_code) = match error {
+                                        PersistenceError::Sqlite { operation, source } => (
+                                            operation,
+                                            source.sqlite_error().map(|e| e.extended_code),
+                                        ),
+                                        PersistenceError::Io { operation, .. } => (operation, None),
+                                        _ => ("non-SQLite Store opening failure", None),
+                                    };
+                                    Failure {
+                                        wave,
+                                        worker,
+                                        operation,
+                                        sqlite_code,
+                                    }
+                                });
+                            (started.elapsed(), result)
+                        })
+                    })
+                    .collect();
+                // No barrier follows product code: a failed opener cannot strand peers.
+                gate.wait();
+                let mut failures = Vec::new();
+                let mut panics = 0;
+                for worker in workers {
+                    match worker.join() {
+                        Ok((elapsed, result)) => {
+                            longest = longest.max(elapsed);
+                            if let Err(error) = result {
+                                failures.push(error);
+                            }
+                        }
+                        Err(_) => panics += 1,
+                    }
+                }
+                if panics != 0 || !failures.is_empty() {
+                    println!(
+                        "STORE_OPEN_FAILURE {}",
+                        serde_json::json!({"keepalive":keepalive,"width":width,"wave":wave,"failures":failures,"panics":panics})
+                    );
+                    drop(anchor);
+                    let kept = temp.keep();
+                    println!(
+                        "STORE_OPEN_RETAINED_FIXTURE {}",
+                        kept.file_name().unwrap().to_string_lossy()
+                    );
+                    failed_cases += 1;
+                    continue 'widths;
+                }
+            }
+            assert!(
+                PactrunPersistence::open(&root)
+                    .unwrap()
+                    .load_revision(&ids[0])
+                    .unwrap()
+                    .is_some()
+            );
+            println!(
+                "STORE_OPEN_PROBE {}",
+                serde_json::json!({"keepalive":keepalive,"width":width,"waves":32,"opens":width*32,"elapsed_us":started.elapsed().as_micros().to_string(),"longest_open_us":longest.as_micros().to_string()})
+            );
+            drop(anchor);
+        }
+    }
+    assert_eq!(
+        failed_cases, 0,
+        "Store opening probe failed; synthetic Stores retained for diagnosis"
+    );
+}
+
+// Test-ID: PR-TEST-0792
+// Verifies: PR-REQ-0299
+#[cfg(windows)]
+#[test]
+fn windows_cold_store_opening_keeps_extended_local_paths_and_fixed_sqlite() {
+    // SQLite 3.53.3 fixes local DOS-device names being mistaken for UNC paths.
+    // Check the linked engine, not the Rust wrapper's package version.
+    assert!(
+        rusqlite::version_number() >= 3_053_003,
+        "bundled SQLite lacks the Windows local-path locking fix"
+    );
+    let (_temp, root, ids) = fixture(1);
+    assert!(
+        fs::canonicalize(&root)
+            .unwrap()
+            .as_os_str()
+            .to_string_lossy()
+            .starts_with(r"\\?\")
+    );
+    for _ in 0..8 {
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(9));
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                let root = root.clone();
+                let revision = ids[0].clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    PactrunPersistence::open(root).and_then(|p| p.load_revision(&revision))
+                })
+            })
+            .collect();
+        barrier.wait();
+        // Join everyone before assertions, so a refusal cannot strand another opener.
+        let results: Vec<_> = workers.into_iter().map(|w| w.join()).collect();
+        for result in results {
+            assert!(result.unwrap().unwrap().is_some());
+        }
+    }
+}

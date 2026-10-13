@@ -18,6 +18,14 @@ check that the intended tests actually ran. Requirement coverage uses stable
 Test-ID and Verifies comments, not file names. Full CI needs the Node/pnpm versions
 in `website/package.json`; platform and tooling checks also use Python 3.11 or newer.
 
+The opt-in Windows Store-opening investigation is
+`cargo test --lib windows_store_open_cold_and_warm_waves_probe -- --ignored --nocapture --test-threads=1`.
+It compares synchronized cold reopen waves with waves that retain one live
+connection. It preserves a failed synthetic Store and records safe operation/error
+codes without dumping database contents. A pass is observation, not proof that a
+previously intermittent locking failure is fixed; it does not replace the
+ordinary concurrent-CAS assertions.
+
 For an opt-in retirement timing sample on a qualified native filesystem, run
 `cargo test --lib retirement_allocation_timing_probe -- --ignored --nocapture --test-threads=1`.
 It measures one, eight and twenty-four owned allocations (three samples each),

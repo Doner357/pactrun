@@ -49,6 +49,12 @@ Old failure messages are not interpreted as presence observations.
 
 **Verification: PR-TEST-0687.**
 
+Preflight failure preserves the underlying typed database or I/O cause rather
+than replacing it with a generic session-preparation failure. Refusal does not
+authorize creation of staging resources or repair of unrecognized data.
+
+**Verification: PR-TEST-0791.**
+
 **Verification: PR-TEST-0665, PR-TEST-0666, PR-TEST-0667, PR-TEST-0668.**
 
 ### PR-REQ-0374 - Automatic preparation of new Stores
