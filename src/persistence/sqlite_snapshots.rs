@@ -307,6 +307,53 @@ pub(super) fn history_bindings(
     ))
 }
 
+pub(super) fn copy_historical_input(
+    db: &Connection,
+    content: &RuntimeContentStore,
+    context: &HistoricalInputContext,
+    input: &HistoricalInput,
+    authorize_secret: bool,
+    destination: &mut impl Write,
+) -> Result<HistoricalInputExport, PersistenceError> {
+    let invalid = || PersistenceError::CorruptRun("invalid historical Snapshot binding".into());
+    let id = context.snapshot.ok_or_else(invalid)?;
+    let integrity = context.snapshot_integrity.as_ref().ok_or_else(invalid)?;
+    let snapshot = match load_snapshot(db, id) {
+        Ok(snapshot) => snapshot,
+        Err(PersistenceError::MissingSnapshot(_)) => return Ok(HistoricalInputExport::Unavailable),
+        Err(error) => return Err(error),
+    };
+    if snapshot.manifest.integrity_digest() != integrity {
+        // A deleted ID may have been imported again with different valid content.
+        return Ok(HistoricalInputExport::Unavailable);
+    }
+    let binding = snapshot
+        .manifest
+        .manifest()
+        .managed_bindings()
+        .iter()
+        .find(|binding| binding.input_id == input.input)
+        .ok_or_else(invalid)?;
+    let expected_role = match input.role {
+        InputHistoryRole::Active => SnapshotBindingRole::Active,
+        InputHistoryRole::Retained => SnapshotBindingRole::Retained,
+    };
+    if binding.role != expected_role {
+        return Err(invalid());
+    }
+    let SnapshotBindingState::Bound(digest) = &binding.state else {
+        return Err(invalid());
+    };
+    let protection = input.protection.sticky(binding.protection);
+    if protection == ManagedInputProtection::Secret && !authorize_secret {
+        return Err(PersistenceError::UnauthorizedSecretExport);
+    }
+    let length = snapshot.lengths[digest];
+    SnapshotCapability::RestoreInput.check(length)?;
+    stream_blob(db, content, id, digest, length, destination)?;
+    Ok(HistoricalInputExport::Copied { protection })
+}
+
 fn inspection(snapshot: &StoredSnapshot) -> SnapshotInspection {
     let manifest = snapshot.manifest.manifest();
     let mut budget = RestoreExpansionBudget::default();

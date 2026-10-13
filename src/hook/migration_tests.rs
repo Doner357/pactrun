@@ -67,6 +67,17 @@ fn input_history_migration_keeps_edge_roles_transients_and_committed_values_dist
     assert!(matches!(committed.inputs.iter().find(|i|i.input.as_str()=="result").unwrap().origin,InputHistoryOrigin::Managed(_)));
     let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
     assert_eq!(db.query_row("SELECT count(*) FROM run_migration_payload_pins WHERE run_id=?1",[run.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
+    for (scope,input,expected) in [
+        (InputHistoryScope::TargetPrepared,"request",HistoricalInputExport::Transient),
+        (InputHistoryScope::TargetPrepared,"result",HistoricalInputExport::PendingOutput),
+        (InputHistoryScope::TargetCommitted,"result",HistoricalInputExport::Copied { protection: ManagedInputProtection::Secret }),
+    ] {
+        let selector=HistoricalInputSelector {edge_index:Some(1),scope,input:InputIdentity::parse(input).unwrap()};
+        let mut bytes=Vec::new();
+        assert_eq!(p.export_historical_input(run,&selector,true,&mut bytes).unwrap(),expected);
+        if matches!(expected,HistoricalInputExport::Copied {..}) {assert_eq!(bytes,SECRET_BINDING);}
+        else {assert!(bytes.is_empty(),"prepared Input was substituted with the committed value");}
+    }
 }
 
 fn start(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, cancel: ActionCancellation) -> RunId {

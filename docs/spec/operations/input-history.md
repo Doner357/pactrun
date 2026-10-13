@@ -55,4 +55,4 @@ not only its opaque ID. Deleting and later importing different content under a
 reused ID MUST NOT make that content the original historical input. Integrity
 anchors are not exposed by ordinary history inspection and do not pin a Snapshot.
 
-**Verification: PR-TEST-0771, PR-TEST-0772, PR-TEST-0773, PR-TEST-0774, PR-TEST-0775, PR-TEST-0776.**
+**Verification: PR-TEST-0771, PR-TEST-0772, PR-TEST-0773, PR-TEST-0774, PR-TEST-0775, PR-TEST-0776, PR-TEST-0777, PR-TEST-0778.**

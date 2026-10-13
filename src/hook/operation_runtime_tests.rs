@@ -128,6 +128,34 @@ fn input_history_restore_records_snapshot_context_without_a_snapshot_pin() {
     assert_eq!(finish(&f, restore).outcome, RunOutcome::Succeeded);
     let p = persistence(&f.storage);
     let history = p.input_history(restore).unwrap();
+    let selector = HistoricalInputSelector {
+        edge_index: None,
+        scope: InputHistoryScope::Snapshot,
+        input: InputIdentity::parse("secret_config").unwrap(),
+    };
+    let mut bytes = Vec::new();
+    assert!(matches!(
+        p.export_historical_input(restore, &selector, false, &mut bytes),
+        Err(crate::persistence::PersistenceError::UnauthorizedSecretExport)
+    ));
+    assert!(bytes.is_empty());
+    assert_eq!(
+        p.export_historical_input(restore, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Copied {
+            protection: ManagedInputProtection::Secret
+        }
+    );
+    assert_eq!(bytes, SECRET_BINDING);
+    let absent = HistoricalInputSelector {
+        input: InputIdentity::parse("configuration").unwrap(),
+        ..selector.clone()
+    };
+    assert_eq!(
+        p.export_historical_input(restore, &absent, false, &mut Vec::new())
+            .unwrap(),
+        HistoricalInputExport::Absent
+    );
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].scope, InputHistoryScope::Snapshot);
     assert_eq!(history[0].snapshot, Some(snapshot));
@@ -152,6 +180,16 @@ fn input_history_restore_records_snapshot_context_without_a_snapshot_pin() {
         ObjectDeletionResult::Deleted
     );
     assert_eq!(p.input_history(restore).unwrap(), history);
+    bytes.clear();
+    assert_eq!(
+        p.export_historical_input(restore, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Unavailable
+    );
+    assert!(
+        bytes.is_empty(),
+        "deleted Snapshot fell back to restored current Input"
+    );
 }
 fn snapshot_run(
     f: &RuntimeFixture,

@@ -242,6 +242,91 @@ fn same_id_different_digest_is_a_collision_without_replacing_the_original() {
     );
 }
 
+// Test-ID: PR-TEST-0778
+// Verifies: PR-REQ-0403
+#[test]
+fn historical_input_export_snapshot_anchor_rejects_valid_reimport_under_reused_id() {
+    let (_tmp, path) = root();
+    let p = PactrunPersistence::open(&path).unwrap();
+    let mut first = prepared(&p, 2);
+    let id = first.manifest().manifest().snapshot_id();
+    p.import_snapshot_bundle(&mut first).unwrap();
+    let binding = first
+        .manifest()
+        .manifest()
+        .managed_bindings()
+        .iter()
+        .find(|b| matches!(b.state, SnapshotBindingState::Bound(_)))
+        .unwrap();
+    let input = HistoricalInput {
+        input: binding.input_id.clone(),
+        role: match binding.role {
+            SnapshotBindingRole::Active => InputHistoryRole::Active,
+            SnapshotBindingRole::Retained => InputHistoryRole::Retained,
+        },
+        protection: binding.protection,
+        origin: InputHistoryOrigin::Snapshot,
+    };
+    let mut context = HistoricalInputContext {
+        edge_index: None,
+        scope: InputHistoryScope::Snapshot,
+        coverage: InputHistoryCoverage::ManagedContext,
+        snapshot: Some(id),
+        snapshot_integrity: Some(first.manifest().integrity_digest().clone()),
+        inputs: vec![input.clone()],
+    };
+    let copy = |context: &HistoricalInputContext, bytes: &mut Vec<u8>| {
+        let mut db = p.open_read_connection().unwrap();
+        let tx = db.transaction().unwrap();
+        copy_historical_input(&tx, &p.runtime_content, context, &input, true, bytes)
+    };
+    let mut bytes = Vec::new();
+    assert!(matches!(
+        copy(&context, &mut bytes).unwrap(),
+        HistoricalInputExport::Copied { .. }
+    ));
+    assert_eq!(
+        p.delete_object(&ObjectDeletion::Snapshot(id)).unwrap(),
+        ObjectDeletionResult::Deleted
+    );
+    bytes.clear();
+    assert_eq!(
+        copy(&context, &mut bytes).unwrap(),
+        HistoricalInputExport::Unavailable
+    );
+    assert!(bytes.is_empty());
+    let mut fixture = fixture(2);
+    let mut raw: serde_json::Value =
+        serde_json::from_str(fixture["raw_manifest"].as_str().unwrap()).unwrap();
+    raw["captured_at"]["unix_seconds"] = serde_json::json!(42);
+    fixture["raw_manifest"] = serde_json::json!(serde_json::to_string(&raw).unwrap());
+    let (mut second, _) = prepared_fixture(&p, &fixture);
+    assert_ne!(
+        second.manifest().integrity_digest(),
+        first.manifest().integrity_digest()
+    );
+    assert!(p.import_snapshot_bundle(&mut second).unwrap().inserted);
+    p.verify_snapshot(id).unwrap();
+    assert_eq!(
+        copy(&context, &mut bytes).unwrap(),
+        HistoricalInputExport::Unavailable
+    );
+    assert!(
+        bytes.is_empty(),
+        "substituted reimported Snapshot for original history"
+    );
+    context.snapshot_integrity = Some(second.manifest().integrity_digest().clone());
+    assert!(matches!(
+        copy(&context, &mut bytes).unwrap(),
+        HistoricalInputExport::Copied { .. }
+    ));
+    corrupt_snapshot_for_test(&path, id);
+    assert!(
+        copy(&context, &mut Vec::new()).is_err(),
+        "corrupt content was reported as unavailable"
+    );
+}
+
 // Test-ID: PR-TEST-0214
 // Verifies: PR-REQ-0292, PR-REQ-0297, PR-REQ-0302
 #[test]

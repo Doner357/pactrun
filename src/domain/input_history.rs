@@ -112,3 +112,21 @@ pub(crate) struct HistoricalInputContext {
     pub(crate) snapshot_integrity: Option<SnapshotIntegrityDigest>,
     pub(crate) inputs: Vec<HistoricalInput>,
 }
+
+/// Selects metadata within one Run, never a caller-supplied payload identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct HistoricalInputSelector {
+    pub(crate) edge_index: Option<usize>,
+    pub(crate) scope: InputHistoryScope,
+    pub(crate) input: InputIdentity,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HistoricalInputExport {
+    Copied { protection: ManagedInputProtection },
+    NotRecorded,
+    Absent,
+    Transient,
+    PendingOutput,
+    Unavailable,
+}

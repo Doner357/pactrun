@@ -1,6 +1,122 @@
 use super::*;
 use crate::domain::*;
 
+// Test-ID: PR-TEST-0777
+// Verifies: PR-REQ-0403
+#[test]
+fn historical_input_export_uses_original_bytes_and_requires_secret_authorization() {
+    let f = RuntimeFixture::new();
+    let p = persistence(&f.storage);
+    let admitted = f.admit("direct", "success", &f.marker("history-export"));
+    let run = admitted.run();
+    let selector = HistoricalInputSelector {
+        edge_index: None,
+        scope: InputHistoryScope::Current,
+        input: InputIdentity::parse("secret_config").unwrap(),
+    };
+    let mut bytes = Vec::new();
+    assert!(matches!(
+        p.export_historical_input(run, &selector, false, &mut bytes),
+        Err(crate::persistence::PersistenceError::UnauthorizedSecretExport)
+    ));
+    assert!(bytes.is_empty());
+    f.replace_binding();
+    assert_eq!(
+        p.export_historical_input(run, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Copied {
+            protection: ManagedInputProtection::Secret
+        }
+    );
+    assert_eq!(
+        bytes, SECRET_BINDING,
+        "used the replacement instead of the exact pinned payload"
+    );
+    struct BrokenOutput;
+    impl Write for BrokenOutput {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    assert!(
+        p.export_historical_input(run, &selector, true, &mut BrokenOutput)
+            .is_err(),
+        "output failure was reported as unavailable"
+    );
+    let unknown = HistoricalInputSelector {
+        input: InputIdentity::parse("unknown").unwrap(),
+        ..selector.clone()
+    };
+    assert_eq!(
+        p.export_historical_input(run, &unknown, true, &mut Vec::new())
+            .unwrap(),
+        HistoricalInputExport::NotRecorded
+    );
+    // A malformed persisted payload is an error, not ordinary reclamation.
+    let db = rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    let history = p.input_history(run).unwrap();
+    db.execute(
+        "UPDATE run_input_references SET protection_rank=0 WHERE run_id=?1",
+        [run.as_bytes().as_slice()],
+    )
+    .unwrap();
+    let mut refused = Vec::new();
+    assert!(
+        matches!(
+            p.export_historical_input(run, &selector, false, &mut refused),
+            Err(crate::persistence::PersistenceError::UnauthorizedSecretExport)
+        ),
+        "historical metadata lowered the stored protection floor"
+    );
+    assert!(refused.is_empty());
+    db.execute(
+        "UPDATE run_input_references SET protection_rank=1 WHERE run_id=?1",
+        [run.as_bytes().as_slice()],
+    )
+    .unwrap();
+    let payload = history[0]
+        .inputs
+        .iter()
+        .find(|i| i.input == selector.input)
+        .unwrap()
+        .origin
+        .payload()
+        .unwrap();
+    db.execute(
+        "UPDATE managed_input_payloads SET byte_length=byte_length+1 WHERE payload_id=?1",
+        [payload.as_bytes().as_slice()],
+    )
+    .unwrap();
+    assert!(
+        p.export_historical_input(run, &selector, true, &mut Vec::new())
+            .is_err()
+    );
+    db.execute(
+        "UPDATE managed_input_payloads SET byte_length=byte_length-1 WHERE payload_id=?1",
+        [payload.as_bytes().as_slice()],
+    )
+    .unwrap();
+    f.application.execute_admitted_action(
+        admitted,
+        policy(None, None, None),
+        ActionCancellation::default(),
+    );
+    assert!(f.application.advance_owner_continuation(run).unwrap());
+    bytes.clear();
+    assert_eq!(
+        p.export_historical_input(run, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Unavailable
+    );
+    assert!(
+        bytes.is_empty(),
+        "reclaimed history leaked current binding bytes"
+    );
+}
+
 // Test-ID: PR-TEST-0771
 // Verifies: PR-REQ-0402, PR-REQ-0403
 #[test]
