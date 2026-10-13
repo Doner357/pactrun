@@ -29,6 +29,7 @@ mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
 mod sqlite_service_admission;
+mod sqlite_service_failures;
 mod sqlite_service_migrations;
 mod sqlite_service_preparations;
 mod sqlite_service_storage;

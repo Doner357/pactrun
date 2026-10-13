@@ -1,6 +1,135 @@
 use super::*;
 use std::process::{Command, Stdio};
 
+// Test-ID: PR-TEST-0770
+// Verifies: PR-REQ-0400
+#[test]
+fn service_presence_capture_restore_and_migration_keep_operation_and_edge_facts() {
+    let reference = json!({"view":"current","role":"active","kind":"resource","id":"uploads"});
+    let f = RuntimeFixture::with_source(|_, _, manifest| {
+        let mut value = revision();
+        value["service_storages"] = json!([{"id":"data"}]);
+        value["service_resources"] =
+            json!([{"id":"uploads","storage_id":"data","locator":"uploads","kind":"directory"}]);
+        for operation in ["capture", "restore"] {
+            value["snapshot"][operation]["hook"]["service_requires"] =
+                json!([{"reference":reference,"presence":"present"}]);
+        }
+        *manifest = source(value);
+    });
+    let p = persistence(&f.storage);
+    let allocation = p
+        .load_instance_service_state(f.instance.id)
+        .unwrap()
+        .unwrap()
+        .storages[0]
+        .allocation;
+    let path = f
+        .storage
+        .join("service-storage")
+        .join(format!("alloc-{allocation}"))
+        .join("uploads");
+    let assert_cause = |run, view, edge: Option<MigrationEdgeIdentity>| {
+        let outcome = finish(&f, run);
+        assert_eq!(outcome.outcome, RunOutcome::Failed);
+        assert_eq!(outcome.terminal_risk, RecoveryRiskState::Clear);
+        let failure = outcome.primary_failure.unwrap();
+        assert_eq!(failure.step.rank(), 1);
+        let Some(RunFailureCause::ServicePresenceRequirement(cause)) = failure.cause else {
+            panic!("service facts lost by operation adapter")
+        };
+        assert_eq!(cause.reference.view, view);
+        assert_eq!(cause.edge, edge);
+        assert_eq!(cause.expected, ServicePresenceRequirement::Present);
+        assert_eq!(cause.observed, ServicePresenceRequirement::Absent);
+        assert_eq!(
+            cause.reference.scope,
+            ServiceScope::Resource(ServiceResourceIdentity::parse("uploads").unwrap())
+        );
+    };
+    let marker = f.marker("capture-presence-refused");
+    let run = snapshot_run(&f, SnapshotOperation::Capture, "success", &marker);
+    assert_cause(run, ServiceView::Current, None);
+    assert!(!marker.exists());
+    fs::create_dir(&path).unwrap();
+    let capture = snapshot_run(
+        &f,
+        SnapshotOperation::Capture,
+        "success",
+        &f.marker("capture-for-presence"),
+    );
+    assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+    let snapshot = captured_snapshot(&f, capture);
+    fs::remove_dir(&path).unwrap();
+    let marker = f.marker("restore-presence-refused");
+    let restore = snapshot_run(&f, SnapshotOperation::Restore(snapshot), "success", &marker);
+    assert_cause(restore, ServiceView::Current, None);
+    assert!(!marker.exists());
+    let mut target = revision();
+    let mut migration_hook = hook();
+    migration_hook["service_requires"] = json!([{"reference":{"view":"source","role":"active","kind":"resource","id":"uploads"},"presence":"present"}]);
+    target["migrations"] = json!([{"source_revision_digest":f.instance.active_revision.content_digest.to_string(),"transitions":[],"produces_target":[],"parameters":declarations(),"outputs":[{"id":"report"}],"hook":migration_hook}]);
+    let directory = f.temporary.path().join("source");
+    fs::write(directory.join("pactrun.yaml"), source(target)).unwrap();
+    let target = f
+        .application
+        .install_pack_source(
+            &directory,
+            &RevisionMetadataMutationBatch::new(vec![]).unwrap(),
+        )
+        .unwrap()
+        .revision;
+    let edge = MigrationEdgeIdentity {
+        source: f.instance.active_revision.content_digest,
+        target: target.content_digest,
+    };
+    let marker = f.marker("migration-presence-refused");
+    let current = f.application.load_instance(f.instance.id).unwrap().unwrap();
+    let intent = TransitionRevision {
+        instance: f.instance.id,
+        expected_state_version: current.state_version,
+        source: current.active_revision.clone(),
+        target: target.clone(),
+        path: MigrationPathSelection::Exact(vec![current.active_revision.clone(), target]),
+        operator_inputs: vec![],
+        authorize_declassification: false,
+        parameters: params("success", &marker)
+            .into_iter()
+            .map(|parameter| MigrationParameterInput {
+                edge: edge.clone(),
+                parameter,
+            })
+            .collect(),
+    };
+    let plan = crate::workflow::compile_migration(
+        &f.application,
+        &crate::workflow::PlatformHostLauncherLookup,
+        &intent,
+        &[],
+    )
+    .unwrap();
+    let run = f
+        .application
+        .accept_migration_inputs(
+            plan,
+            false,
+            ActionCancellation::default(),
+            vec![],
+            policy(Some(20_000), Some(20_000), Some(500)),
+        )
+        .unwrap();
+    assert_cause(run, ServiceView::Source, Some(edge));
+    assert!(!marker.exists());
+    assert_eq!(
+        f.application
+            .load_instance(f.instance.id)
+            .unwrap()
+            .unwrap()
+            .active_revision,
+        current.active_revision
+    );
+}
+
 // Test-ID: PR-TEST-0733
 // Verifies: PR-REQ-0387, PR-REQ-0391, PR-REQ-0392
 #[test]

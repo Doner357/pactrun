@@ -252,6 +252,7 @@ pub(crate) struct RunPrimaryFailure {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RunFailureCause {
     MissingRequiredInputs(Vec<super::InputIdentity>),
+    ServicePresenceRequirement(Box<super::ServicePresenceFailure>),
 }
 
 /// The Hook-owned completion result. `message: Some(String::new())` is a

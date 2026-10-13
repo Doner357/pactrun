@@ -40,6 +40,7 @@ title: Specification Reference Index
 - [Actions, Plans, and Runs](./operations/actions-plans-runs.md)
 - [Execution and Concurrency](./operations/execution.md)
 - [Execution Diagnostics](./operations/diagnostics.md)
+- [Service Prerequisite Diagnostics](./operations/service-diagnostics.md)
 - [Operation Input Requirements and Authority](./operations/input-authority.md)
 
 ## Snapshots and Restore

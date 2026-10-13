@@ -142,6 +142,47 @@ fn baseline_cleanup_qualifies_live_service_prerequisites_before_launch_and_ends_
     assert!(p.load_instance_by_id(f.instance.id).unwrap().is_none());
 }
 
+// Test-ID: PR-TEST-0767
+// Verifies: PR-REQ-0400
+#[test]
+fn service_presence_failure_is_retained_after_repair_and_instance_retirement() {
+    let f = fixture("service"); let p = persistence(&f.storage);
+    let allocation = p.load_instance_service_state(f.instance.id).unwrap().unwrap().storages[0].allocation;
+    let path = f.storage.join("service-storage").join(format!("alloc-{allocation}"));
+    let run = start(&f, DeletionMode::ManagedCleanup); let failed = finish(&f, run);
+    assert_eq!(failed.outcome, RunOutcome::Failed); assert_eq!(failed.terminal_risk, RecoveryRiskState::Clear);
+    let expected = ServicePresenceFailure { reference: ServiceReferenceV2 { view:ServiceView::Current, role:ServiceRole::Active, scope:ServiceScope::Resource(ServiceResourceIdentity::parse("config").unwrap()) }, expected:ServicePresenceRequirement::Present, observed:ServicePresenceRequirement::Absent, edge:None };
+    assert_eq!(failed.primary_failure.as_ref().unwrap().cause, Some(RunFailureCause::ServicePresenceRequirement(Box::new(expected.clone()))));
+    assert!(!f.marker("cleanup-count").exists());
+    let inspect = || {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let args = vec!["--format".into(), "json".into(), "run".into(), "show".into(), run.to_string().into()];
+        assert_eq!(crate::cli::run(args, Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut out, &mut err), 0);
+        let value:Value = serde_json::from_slice(&out).unwrap();
+        let cause = value["result"]["run"]["state"]["primary_failure"]["cause"].clone();
+        assert_eq!(cause["kind"], "service_presence_requirement"); assert_eq!(cause["reference"]["id"], "config");
+        assert_eq!(cause["expected"], "present"); assert_eq!(cause["observed"], "absent");
+        assert!(!cause.to_string().contains("config.json"));
+        cause
+    };
+    let original = inspect(); fs::write(path.join("config.json"), b"live config").unwrap();
+    let (mut human, mut errors) = (Vec::new(), Vec::new());
+    assert_eq!(crate::cli::run(vec!["run".into(), "show".into(), run.to_string().into()], Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut human, &mut errors), 0);
+    let human = String::from_utf8(human).unwrap();
+    assert!(human.contains("current/active/config") && human.contains("Expected: present; observed: absent"));
+    assert!(!human.contains("config.json"));
+    let (mut legacy, mut errors) = (Vec::new(), Vec::new());
+    assert_ne!(crate::cli::run(vec!["--format".into(), "json".into(), "--machine-version".into(), "1.0-alpha.3".into(), "run".into(), "show".into(), run.to_string().into()], Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut legacy, &mut errors), 0);
+    assert!(String::from_utf8(legacy).unwrap().contains("cannot represent service prerequisite"));
+    assert_eq!(inspect(), original);
+    let cleanup = start(&f, DeletionMode::ManagedCleanup); assert_eq!(finish(&f, cleanup).outcome, RunOutcome::Succeeded);
+    assert!(!path.exists()); assert_eq!(inspect(), original);
+    let reopened = PactrunPersistence::open_read_only(&f.storage).unwrap();
+    let state = reopened.load_managed_run(run).unwrap().unwrap().state;
+    let RunState::Finished(state) = state else { panic!("historical Run changed state") };
+    assert_eq!(state.primary_failure.unwrap().cause, Some(RunFailureCause::ServicePresenceRequirement(Box::new(expected))));
+}
+
 // Test-ID: PR-TEST-0406
 // Verifies: PR-REQ-0113, PR-REQ-0181, PR-REQ-0336
 #[test]

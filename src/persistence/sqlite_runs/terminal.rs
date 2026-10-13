@@ -504,6 +504,19 @@ pub(super) fn finish_run_authorized(
                 ],
             )
             .map_err(|error| PersistenceError::sqlite("insert Run primary failure", error))?;
+        if let Some(crate::domain::RunFailureCause::ServicePresenceRequirement(cause)) =
+            &primary.cause
+        {
+            if primary.failure.error.owner() != "admission"
+                || primary.failure.error.code() != "plan_invalidated"
+                || primary.step.rank() != 1
+            {
+                return Err(PersistenceError::CorruptRun(
+                    "invalid service prerequisite cause".into(),
+                ));
+            }
+            super::super::sqlite_service_failures::save(transaction, run, operation.kind(), cause)?;
+        }
         if let Some(crate::domain::RunFailureCause::MissingRequiredInputs(ids)) = &primary.cause {
             if ids.is_empty()
                 || primary.failure.error.owner() != "admission"

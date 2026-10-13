@@ -275,6 +275,37 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                     ),
                 )?;
                 write(out, format!("  Stage: {}", text(f, "step")))?;
+            } else if key == "primary_failure"
+                && f["cause"]["kind"] == "service_presence_requirement"
+            {
+                let cause = &f["cause"];
+                let reference = &cause["reference"];
+                write(
+                    out,
+                    format!(
+                        "  Service resource: {}/{}/{}",
+                        text(reference, "view"),
+                        text(reference, "role"),
+                        text(reference, "id")
+                    ),
+                )?;
+                write(
+                    out,
+                    format!(
+                        "  Expected: {}; observed: {}",
+                        text(cause, "expected"),
+                        text(cause, "observed")
+                    ),
+                )?;
+                write(out, format!("  Stage: {}", text(f, "step")))?;
+                if let Some(edge) = cause.get("edge") {
+                    write(out, "  Migration edge")?;
+                    tree(edge, out, 4)?;
+                }
+                write(
+                    out,
+                    "  Historical observation: inspect current resources before considering another attempt.",
+                )?;
             } else {
                 tree(f, out, 2)?;
             }

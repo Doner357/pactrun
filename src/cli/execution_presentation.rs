@@ -171,7 +171,16 @@ pub(super) struct Failure {
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum FailureCause {
-    MissingRequiredInputs { input_ids: Vec<String> },
+    MissingRequiredInputs {
+        input_ids: Vec<String>,
+    },
+    ServicePresenceRequirement {
+        reference: definitions::Reference,
+        expected: crate::domain::ServicePresenceRequirement,
+        observed: crate::domain::ServicePresenceRequirement,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        edge: Option<ArtifactEdge>,
+    },
 }
 
 impl Failure {
@@ -270,6 +279,17 @@ impl From<&RunState> for State {
                         crate::domain::RunFailureCause::MissingRequiredInputs(ids) => {
                             FailureCause::MissingRequiredInputs {
                                 input_ids: ids.iter().map(|id| id.as_str().to_owned()).collect(),
+                            }
+                        }
+                        crate::domain::RunFailureCause::ServicePresenceRequirement(facts) => {
+                            FailureCause::ServicePresenceRequirement {
+                                reference: (&facts.reference).into(),
+                                expected: facts.expected,
+                                observed: facts.observed,
+                                edge: facts.edge.as_ref().map(|edge| ArtifactEdge {
+                                    source_revision_digest: edge.source.to_string(),
+                                    target_revision_digest: edge.target.to_string(),
+                                }),
                             }
                         }
                     });

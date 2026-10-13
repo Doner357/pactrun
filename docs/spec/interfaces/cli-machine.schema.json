@@ -1420,6 +1420,40 @@
             "input_ids"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "edge": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ArtifactEdge"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expected": {
+              "$ref": "#/$defs/ServicePresenceRequirement"
+            },
+            "kind": {
+              "const": "service_presence_requirement",
+              "type": "string"
+            },
+            "observed": {
+              "$ref": "#/$defs/ServicePresenceRequirement"
+            },
+            "reference": {
+              "$ref": "#/$defs/Reference"
+            }
+          },
+          "required": [
+            "kind",
+            "reference",
+            "expected",
+            "observed"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -5252,6 +5286,13 @@
         "requirements"
       ],
       "type": "object"
+    },
+    "ServicePresenceRequirement": {
+      "enum": [
+        "present",
+        "absent"
+      ],
+      "type": "string"
     },
     "ServiceSource": {
       "properties": {

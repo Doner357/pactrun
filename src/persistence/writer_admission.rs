@@ -60,7 +60,8 @@ pub(super) fn open_writer_database(
         state @ (DatabaseState::Alpha1
         | DatabaseState::Alpha2
         | DatabaseState::Alpha3
-        | DatabaseState::Alpha4) => {
+        | DatabaseState::Alpha4
+        | DatabaseState::Alpha5) => {
             return Err(unsupported_source(state));
         }
     }

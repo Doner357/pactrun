@@ -27,7 +27,7 @@ with an explanation of the required correction. Authors' labels MUST NOT become
 user names. Package names remain unset and unavailable installation times remain
 unknown. Existing Revision and Instance identities remain unchanged.
 
-The exact alpha.1, alpha.2, alpha.3 and alpha.4 schemas upgrade to Persistence `1.0-alpha.5`.
+The exact alpha.1 through alpha.5 schemas upgrade to Persistence `1.0-alpha.6`.
 Existing failure text remains unchanged. An upgrade MUST NOT parse old messages
 to manufacture structured historical causes. Such a cause is unavailable for
 older Runs unless it was recorded as typed evidence at failure time.
@@ -40,6 +40,12 @@ existing artifact bytes, managed identities, or immutable content.
 **Verification: PR-TEST-0692.**
 
 **Verification: PR-TEST-0718.**
+
+Service prerequisite cause storage is added empty under
+[the diagnostic upgrade contract](../operations/service-diagnostics.md#pr-req-0401---service-failure-evidence-schema-upgrade).
+Old failure messages are not interpreted as presence observations.
+
+**Verification: PR-TEST-0768.**
 
 **Verification: PR-TEST-0687.**
 

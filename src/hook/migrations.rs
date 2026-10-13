@@ -396,12 +396,12 @@ pub(super) fn advance(
                 state.service_prepared.as_ref().map(|(_, edge)| edge),
             ) {
                 Ok(materialized) => state.materialized = Some(materialized),
-                Err(_) => {
+                Err(error) => {
                     state.accept_hook_progress(
                         staging,
                         ready_failure(
                             state.run,
-                            FailureKind::SessionMaterialization,
+                            FailureKind::materialization(&error),
                             Vec::new(),
                             None,
                         ),

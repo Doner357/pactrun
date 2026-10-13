@@ -10,6 +10,20 @@ pub(super) enum Version {
 impl Version {
     pub(super) fn require_run(self, run: &crate::domain::ManagedRunView) -> Result<(), CliError> {
         if let crate::domain::RunState::Finished(outcome) = &run.state {
+            if self == Self::Legacy
+                && outcome.primary_failure.as_ref().is_some_and(|failure| {
+                    matches!(
+                        failure.cause,
+                        Some(crate::domain::RunFailureCause::ServicePresenceRequirement(
+                            _
+                        ))
+                    )
+                })
+            {
+                return Err(CliError::operation(
+                    "machine interface 1.0-alpha.3 cannot represent service prerequisite failure facts; select --machine-version 1.0-alpha.4",
+                ));
+            }
             self.require_artifacts(&outcome.artifacts)?;
             if self == Self::Legacy
                 && !matches!(run.operation, crate::domain::ManagedRunIdentity::Action(_))

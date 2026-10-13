@@ -43,7 +43,7 @@ New Source Hook defaults select `1.0-alpha.2`; old Source defaults do not change
 
 Pack distribution, Snapshot integrity and Snapshot bundle versions are not
 advanced by these operation formats. Supporting the new Core does not change the Pack
-envelope. Persistence alpha.5 is defined separately by
+envelope. Operation artifact persistence is defined separately by
 operation artifact storage and uses the
 supported atomic Store upgrade path without rewriting immutable content.
 

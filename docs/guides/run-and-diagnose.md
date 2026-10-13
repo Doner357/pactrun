@@ -71,6 +71,7 @@ Hook stdout/stderr, Input values or service logs. See the
 | --- | --- |
 | Missing required Input | Use the suggested `input set` commands, then preview again |
 | Missing or invalid parameter | Inspect `action show` and supply the declared parameter |
+| Service presence requirement not met | Read the resource reference and expected/observed presence; inspect current service state before considering another attempt |
 | Conflict or changed state | Reinspect the Instance; plan again before retrying |
 | Host executable unavailable | Check the Pack's interpreter/program prerequisites |
 | Hook failure or cancellation | Inspect the Run; check service state before another write |
@@ -81,6 +82,12 @@ An invocation refused for missing Inputs prints a command for each missing value
 for example `pactrun input set demo config --file <path>`. Replace `<path>` with
 your configuration file. After binding, `run show` still records the Inputs that
 were missing in that earlier attempt; inspect the Instance for current readiness.
+
+Service presence causes are also historical observations. `run show` preserves
+the logical resource, view and role even after the resource is repaired or the
+Instance is retired. Migration reports include the exact affected edge; an
+earlier edge may already have committed. The cause does not disclose native paths
+or authorize a retry. See [service failure details](../pactrun-users/reference/service-diagnostics.md).
 
 `run reconcile` addresses retained execution bookkeeping; it does not repair
 an external service. `instance resolve-manual-recovery` is an operator assertion

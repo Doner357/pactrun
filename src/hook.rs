@@ -1000,7 +1000,14 @@ pub(super) fn outcome_and_failure(
             (
                 RunOutcome::Failed,
                 Some(RunPrimaryFailure {
-                    cause: None,
+                    cause: match &failure {
+                        FailureKind::ServicePrerequisite(facts) => {
+                            Some(crate::domain::RunFailureCause::ServicePresenceRequirement(
+                                Box::new(facts.clone()),
+                            ))
+                        }
+                        _ => None,
+                    },
                     failure: RunFailureRecord {
                         error: PactrunErrorRef::new(owner, code)
                             .expect("execution diagnostics are valid stable names"),
@@ -1026,7 +1033,7 @@ pub(super) enum FailureKind {
     Protocol(protocol::ProtocolFailure),
     ProtocolV2(protocol::authority::Failure),
     ServiceAccess(&'static str),
-    ServicePrerequisite,
+    ServicePrerequisite(crate::domain::ServicePresenceFailure),
 }
 
 impl FailureKind {
@@ -1036,8 +1043,8 @@ impl FailureKind {
             materialize::MaterializationError::Service(NativeServiceError::Access(error)) => {
                 Self::ServiceAccess(error.code())
             }
-            materialize::MaterializationError::Service(NativeServiceError::Prerequisite) => {
-                Self::ServicePrerequisite
+            materialize::MaterializationError::Service(NativeServiceError::Prerequisite(facts)) => {
+                Self::ServicePrerequisite(facts.clone())
             }
             materialize::MaterializationError::Service(NativeServiceError::Storage(
                 PersistenceError::CorruptServiceStorage(_),
@@ -1062,7 +1069,7 @@ impl FailureKind {
                 ActionPlanStep::EstablishSession,
                 "ServiceStorage authority qualification failed",
             ),
-            Self::ServicePrerequisite => (
+            Self::ServicePrerequisite(_) => (
                 "admission",
                 "plan_invalidated",
                 ActionPlanStep::EstablishSession,

@@ -7,7 +7,7 @@ slug: /spec/storage/schema
 
 The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
-integer are private bootstrap marker 4, not a second public format version.
+integer are private bootstrap marker 5, not a second public format version.
 Only pristine storage or the exact supported metadata and schema may be admitted.
 Existing populated files without supported metadata are refused before Pactrun
 staging, admission/content-coordination creation, conversion or cleanup. Ordinary
@@ -28,7 +28,7 @@ representation is absent. Managed Input chunks remain an active representation.
 ## Complete fresh schema
 
 ```sql
--- Fresh Persistence 1.0-alpha.5. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.6. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -904,6 +904,22 @@ CREATE TABLE run_revision_pins (
         ON DELETE RESTRICT
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_service_prerequisite_causes (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    view_rank INTEGER NOT NULL CHECK(view_rank BETWEEN 0 AND 2),
+    role_rank INTEGER NOT NULL CHECK(role_rank IN (0, 1)),
+    resource_id BLOB NOT NULL CHECK(length(resource_id) BETWEEN 1 AND 128),
+    expected_presence INTEGER NOT NULL CHECK(expected_presence IN (0, 1)),
+    observed_presence INTEGER NOT NULL CHECK(observed_presence IN (0, 1)),
+    source_revision_digest BLOB CHECK(source_revision_digest IS NULL OR length(source_revision_digest) = 32),
+    target_revision_digest BLOB CHECK(target_revision_digest IS NULL OR length(target_revision_digest) = 32),
+    PRIMARY KEY(run_id),
+    CHECK(expected_presence <> observed_presence),
+    CHECK((source_revision_digest IS NULL) = (target_revision_digest IS NULL)),
+    CHECK(source_revision_digest IS NULL OR source_revision_digest <> target_revision_digest),
+    FOREIGN KEY(run_id) REFERENCES run_primary_failures(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_secondary_failures (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
@@ -1011,7 +1027,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 4),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 5),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -1020,7 +1036,7 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.5');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.6');
 
 CREATE TABLE package_local_names (
     package_id BLOB NOT NULL CHECK(length(package_id) = 16),

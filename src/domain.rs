@@ -30,6 +30,8 @@ mod revision_content;
 mod revision_declarations;
 mod revision_metadata;
 mod run;
+#[cfg(test)]
+mod service_diagnostics_tests;
 mod service_migration;
 mod service_storage;
 mod service_storage_state;

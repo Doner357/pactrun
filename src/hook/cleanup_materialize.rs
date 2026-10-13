@@ -88,6 +88,7 @@ impl MaterializedExecution {
                 session_id,
                 session,
                 operation: super::super::protocol::SessionOperation::Cleanup,
+                migration_edge: None,
                 terminal: plan.hook.io.terminal,
                 capture: None,
                 migration_outputs: Vec::new(),
