@@ -73,6 +73,7 @@ title: Specification Reference Index
 ## Hooks and Integration Interfaces
 
 - [Pactrun Configuration](./interfaces/configuration.md)
+- [Core Diagnostic Traces](./interfaces/core-traces.md)
 
 - [Common Operation Capabilities](./operations/common-capabilities.md)
 

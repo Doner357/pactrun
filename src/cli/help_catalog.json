@@ -48,6 +48,14 @@
     }
   ],
   "options": {
+    "--startup": {
+      "name": "--startup", "value": null,
+      "description": "Inspect the user journal for startup and invocations without a Run, without opening the selected Store."
+    },
+    "--run": {
+      "name": "--run", "value": "run-id",
+      "description": "Inspect a retained Core phase trace by complete Run identity."
+    },
     "--user-file": {
       "name": "--user-file",
       "value": "path",
@@ -340,6 +348,20 @@
     }
   },
   "commands": [
+    {
+      "path": ["diagnostic"], "description": "Inspect retained Pactrun phase and timing evidence.",
+      "forms": [], "options": [], "notes": [], "examples": []
+    },
+    {
+      "path": ["diagnostic", "list"], "description": "List a bounded recent window of diagnostic records without creating files.",
+      "forms": [{"usage": "pactrun diagnostic list [--startup] [--limit <1..100>]", "description": "The default limit is 20; has_more marks omitted older records."}],
+      "options": ["--startup", "--limit"], "notes": ["An unclosed record has an unknown tail; it is not proof that a process is still running."], "examples": []
+    },
+    {
+      "path": ["diagnostic", "show"], "description": "Inspect typed Core phases, timings, omissions and closure.",
+      "forms": [{"usage": "pactrun diagnostic show <diagnostic-id> [--startup]", "description": "Use the complete identity shown by diagnostic list."}, {"usage": "pactrun diagnostic show --run <run-id>", "description": "Find a retained associated trace in the selected Store."}],
+      "options": ["--startup", "--run"], "notes": ["Trace evidence is not a Run outcome or permission to replay an operation."], "examples": []
+    },
     {
       "path": ["config"],
       "description": "Inspect or validate typed user and Store configuration without opening a Store.",

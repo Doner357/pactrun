@@ -52,6 +52,21 @@ omitted events; an incomplete collection can have an unknown tail.
 
 ## Diagnose a refusal or failure
 
+For Pactrun's own phases and aggregate timings, use the retained Core trace:
+
+```text
+pactrun diagnostic show --run <complete-run-id>
+pactrun diagnostic list --startup
+pactrun diagnostic show <diagnostic-id> --startup
+```
+
+Startup records can explain failures before a Run exists without creating the
+selected Store. Diagnostic inspection does not require valid runtime configuration
+and does not log itself. Records can be absent after failed collection or retention;
+absence does not prove that an operation never ran. Core traces do not include
+Hook stdout/stderr, Input values or service logs. See the
+[Core diagnostics reference](../pactrun-users/reference/core-traces.md).
+
 | Situation | Next action |
 | --- | --- |
 | Missing required Input | Use the suggested `input set` commands, then preview again |

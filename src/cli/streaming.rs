@@ -259,7 +259,9 @@ pub(super) fn execute_stream(
         worker.join().unwrap_or_else(|_| {
             delivery.fail("execution_response_unavailable");
             delivery.finish();
-            reply::Reply::unavailable(name, delivery.known_run()).with_version(selected.version)
+            reply::Reply::unavailable(name, delivery.known_run())
+                .with_version(selected.version)
+                .with_diagnostic_id(selected.diagnostic_id)
         })
     });
     if output_failed {

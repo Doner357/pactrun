@@ -10,6 +10,7 @@ fn isolated_command(binary: &Path, config: &Path, data: &Path) -> Command {
         .env("XDG_CONFIG_HOME", config)
         .env("LOCALAPPDATA", data)
         .env("XDG_DATA_HOME", data);
+    command.env("XDG_STATE_HOME", data.join("state"));
     command
 }
 
@@ -109,5 +110,6 @@ fn real_entries_discover_separate_user_files_and_explicit_overrides_without_stor
         value["result"]["settings"]["presentation"]["verbosity"]["source"],
         "command_line"
     );
-    assert!(!data.exists());
+    assert!(!data.join("pactrun").exists());
+    assert!(!data.join("pactrun-test").exists());
 }

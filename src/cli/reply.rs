@@ -73,6 +73,7 @@ impl<T: Serialize + Send> Prepared for Value<T> {
     }
 }
 pub(super) struct Capture {
+    diagnostic_id: Option<crate::domain::TraceId>,
     expected: &'static str,
     pub(super) interactive: bool,
     value: Mutex<Option<Box<dyn Prepared>>>,
@@ -88,6 +89,7 @@ impl Capture {
     pub(super) fn new(expected: &'static str, interactive: bool, display: DisplayOptions) -> Self {
         Self {
             expected,
+            diagnostic_id: None,
             interactive,
             value: Mutex::new(None),
             display,
@@ -96,6 +98,10 @@ impl Capture {
     }
     pub(super) fn with_version(mut self, version: machine::Version) -> Self {
         self.version = version;
+        self
+    }
+    pub(super) fn with_diagnostic_id(mut self, id: Option<crate::domain::TraceId>) -> Self {
+        self.diagnostic_id = id;
         self
     }
     pub(super) fn publish<T: Serialize + Send + 'static>(
@@ -130,6 +136,7 @@ impl Capture {
             error
         };
         Reply {
+            diagnostic_id: self.diagnostic_id,
             command: self.expected,
             value,
             error,
@@ -141,6 +148,7 @@ impl Capture {
 }
 
 pub(super) struct Reply {
+    diagnostic_id: Option<crate::domain::TraceId>,
     pub(super) command: &'static str,
     value: Option<Box<dyn Prepared>>,
     pub(super) error: Option<CliError>,
@@ -155,6 +163,7 @@ impl Reply {
             run.map(|run_id| presentation::PartialResult::Run(presentation::KnownRun { run_id }));
         Self {
             command,
+            diagnostic_id: None,
             value: None,
             error: Some(error),
             raw: false,
@@ -164,6 +173,10 @@ impl Reply {
     }
     pub(super) fn with_version(mut self, version: machine::Version) -> Self {
         self.version = version;
+        self
+    }
+    pub(super) fn with_diagnostic_id(mut self, id: Option<crate::domain::TraceId>) -> Self {
+        self.diagnostic_id = id;
         self
     }
     pub(super) fn exit_code(&self) -> i32 {
@@ -178,6 +191,7 @@ impl Reply {
         sequence: Option<&str>,
     ) -> Result<(), CliError> {
         let envelope = presentation::Envelope {
+            diagnostic_id: self.diagnostic_id,
             version: self.version,
             command: self.command,
             error: self.error.as_ref(),
@@ -236,6 +250,7 @@ impl Reply {
                     }
                     return report_cli_failure(
                         machine::Selection {
+                            diagnostic_id: self.diagnostic_id,
                             format,
                             version: self.version,
                             human: self.display.human,

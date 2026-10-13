@@ -2281,6 +2281,24 @@
       ],
       "type": "string"
     },
+    "Listing": {
+      "properties": {
+        "has_more": {
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/Summary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "has_more"
+      ],
+      "type": "object"
+    },
     "Local": {
       "properties": {
         "note": {
@@ -3375,6 +3393,106 @@
         "has_more",
         "next_after",
         "evaluation"
+      ],
+      "type": "object"
+    },
+    "PhaseEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "at_us": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "elapsed_us": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/TracePhase"
+        },
+        "result": {
+          "$ref": "#/$defs/PhaseResult"
+        },
+        "sequence": {
+          "maxLength": 20,
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        },
+        "span": {
+          "maxLength": 20,
+          "pattern": "^[1-9][0-9]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "span",
+        "phase",
+        "result",
+        "at_us",
+        "elapsed_us"
+      ],
+      "type": "object"
+    },
+    "PhaseResult": {
+      "enum": [
+        "started",
+        "succeeded",
+        "failed",
+        "unfinished"
+      ],
+      "type": "string"
+    },
+    "PhaseTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "elapsed_us": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "failed": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "finished": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "max_elapsed_us": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "started": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "unfinished": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "started",
+        "finished",
+        "failed",
+        "unfinished",
+        "elapsed_us",
+        "max_elapsed_us"
       ],
       "type": "object"
     },
@@ -5637,6 +5755,52 @@
       ],
       "type": "object"
     },
+    "Summary": {
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/TraceId"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "omitted": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/TraceOperation"
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updated_at_unix_ms": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "operation",
+        "updated_at_unix_ms",
+        "closed",
+        "exit_code",
+        "observed",
+        "omitted"
+      ],
+      "type": "object"
+    },
     "Target": {
       "oneOf": [
         {
@@ -5861,6 +6025,285 @@
       ],
       "type": "object"
     },
+    "TraceDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "association_conflict": {
+          "type": "boolean"
+        },
+        "closed": {
+          "type": "boolean"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/PhaseEvent"
+          },
+          "maxItems": 1024,
+          "type": "array"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/TraceFormat"
+        },
+        "format_version": {
+          "$ref": "#/$defs/TraceVersion"
+        },
+        "id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "observed": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "omitted": {
+          "maxLength": 20,
+          "pattern": "^(0|[1-9][0-9]*)$",
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/TraceOperation"
+        },
+        "policy": {
+          "$ref": "#/$defs/TracePolicy"
+        },
+        "producer": {
+          "$ref": "#/$defs/TraceProducer"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "saturated": {
+          "type": "boolean"
+        },
+        "started_at_unix_ms": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "totals": {
+          "additionalProperties": false,
+          "properties": {
+            "admission": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "command": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "compilation": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "configuration": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "directory_sync": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "durable_record_write": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "hook_execution": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "hook_launch": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "input_read": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "materialization": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "output_delivery": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "output_publication": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "output_validation": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "resolution": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "result_commit": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "session_setup": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "storage_finalization": {
+              "$ref": "#/$defs/PhaseTotals"
+            },
+            "store_open": {
+              "$ref": "#/$defs/PhaseTotals"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "format",
+        "format_version",
+        "id",
+        "producer",
+        "run_id",
+        "operation",
+        "started_at_unix_ms",
+        "closed",
+        "exit_code",
+        "saturated",
+        "association_conflict",
+        "observed",
+        "omitted",
+        "policy",
+        "totals",
+        "events"
+      ],
+      "type": "object"
+    },
+    "TraceFormat": {
+      "enum": [
+        "pactrun.core-trace"
+      ],
+      "type": "string"
+    },
+    "TraceId": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "TraceOperation": {
+      "enum": [
+        "unknown",
+        "catalog",
+        "package_install",
+        "revision_export",
+        "instance_create",
+        "input_set",
+        "input_export",
+        "input_delete",
+        "action_invoke",
+        "snapshot_capture",
+        "snapshot_restore",
+        "snapshot_transport",
+        "migration",
+        "retirement",
+        "recovery",
+        "collection",
+        "run_export"
+      ],
+      "type": "string"
+    },
+    "TracePhase": {
+      "enum": [
+        "command",
+        "configuration",
+        "resolution",
+        "store_open",
+        "compilation",
+        "admission",
+        "materialization",
+        "session_setup",
+        "hook_launch",
+        "hook_execution",
+        "output_publication",
+        "storage_finalization",
+        "result_commit",
+        "output_delivery",
+        "input_read",
+        "output_validation",
+        "durable_record_write",
+        "directory_sync"
+      ],
+      "type": "string"
+    },
+    "TracePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "detailed": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "maximum": 1073741824,
+          "minimum": 1048576,
+          "type": "integer"
+        },
+        "retention_days": {
+          "maximum": 3650,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "detailed",
+        "retention_days",
+        "max_bytes"
+      ],
+      "type": "object"
+    },
+    "TraceProducer": {
+      "additionalProperties": false,
+      "properties": {
+        "product_version": {
+          "type": "string"
+        },
+        "source_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_manifest_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "product_version",
+        "target",
+        "source_commit",
+        "source_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "TraceVersion": {
+      "enum": [
+        "1.0-alpha.1"
+      ],
+      "type": "string"
+    },
     "Transition": {
       "properties": {
         "kind": {
@@ -6019,6 +6462,44 @@
         "properties": {
           "result": {
             "$ref": "#/$defs/ConfigurationInspection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "diagnostic list"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/Listing"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "diagnostic show"
+          },
+          "status": {
+            "const": "success"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/TraceDocument"
           }
         }
       }
@@ -7330,6 +7811,78 @@
               },
               {
                 "$ref": "#/$defs/ConfigurationInspection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "diagnostic list"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/Listing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "diagnostic show"
+          },
+          "error": {
+            "properties": {
+              "kind": {
+                "const": "output"
+              }
+            }
+          },
+          "status": {
+            "const": "failure"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/PartialResult"
+              },
+              {
+                "$ref": "#/$defs/TraceDocument"
               },
               {
                 "type": "null"
@@ -9656,6 +10209,8 @@
             "help",
             "config show",
             "config validate",
+            "diagnostic list",
+            "diagnostic show",
             "version",
             "pack generate-id",
             "pack install",
@@ -9726,6 +10281,10 @@
     },
     "delivery": {
       "$ref": "#/$defs/DeliveryResult"
+    },
+    "diagnostic_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
     },
     "error": {
       "anyOf": [

@@ -402,6 +402,7 @@ pub(super) fn requirements(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Selection {
+    pub(super) diagnostic_id: Option<crate::domain::TraceId>,
     pub(super) format: presentation::Format,
     pub(super) version: Version,
     pub(super) human: configuration::HumanPreferences,
@@ -415,6 +416,7 @@ impl From<presentation::Format> for Selection {
     fn from(format: presentation::Format) -> Self {
         Self {
             format,
+            diagnostic_id: None,
             version: Version::default(),
             human: configuration::HumanPreferences::default(),
         }

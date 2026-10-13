@@ -11,6 +11,8 @@ mod diagnostics;
 pub(crate) use diagnostics::*;
 mod core_diagnostics;
 pub(crate) use core_diagnostics::*;
+mod core_trace;
+pub(crate) use core_trace::*;
 mod error;
 mod execution;
 mod identity;

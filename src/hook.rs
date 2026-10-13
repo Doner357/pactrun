@@ -87,6 +87,7 @@ pub(crate) struct HookRuntimePolicy {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionCancellation {
+    pub(crate) trace: Arc<crate::trace::Trace>,
     pub(crate) diagnostics: Arc<diagnostics::Diagnostics>,
     pub(crate) delivery: Arc<delivery::DeliverySlot>,
     requested: Arc<AtomicBool>,
@@ -234,6 +235,7 @@ fn checked_deadline(start: Instant, duration: Duration) -> Option<Instant> {
 
 impl AcceptanceArbiter for ActionCancellation {
     fn accepted(&self, run: RunId) {
+        self.trace.associate(run);
         self.delivery.accepted(run);
     }
     fn retain_hook_text(&self) -> bool {

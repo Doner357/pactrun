@@ -24,6 +24,7 @@ mod capability_presentation;
 mod catalog;
 mod catalog_presentation;
 mod configuration;
+mod core_traces;
 mod definitions;
 mod empty_queries;
 mod execution_presentation;
@@ -69,6 +70,7 @@ mod short_ids;
 use short_ids::Selector;
 
 enum Command {
+    Diagnostics(core_traces::Request),
     Configuration(configuration::Request),
     Catalog(catalog::CatalogCommand),
     Lifecycle(lifecycle::LifecycleCommand),
@@ -306,25 +308,35 @@ pub(crate) fn run_from_env() -> i32 {
     let executable = env::current_exe().ok();
     let storage_root = storage_config::selected_root(executable.as_deref(), |key| env::var_os(key));
     let cancellation = ActionCancellation::default();
+    let root_trace = core_traces::root_span(&cancellation, &args);
     if presentation::recognize(&args) == presentation::Format::Human {
         cancellation.diagnostics.enable_live();
     }
     let mut stdout = io::stdout();
     let mut stderr = async_stderr::AsyncStderr::new();
-    if let Some(exit) = preflight_presentation(&args, &mut stdout, &mut stderr) {
+    if let Some(exit) =
+        preflight_presentation(&args, &mut stdout, &mut stderr, cancellation.trace.id())
+    {
+        root_trace.finish(core_traces::phase_result(exit));
+        core_traces::configure(&cancellation, storage_root.as_ref(), None);
+        cancellation.trace.finish(exit);
         return exit;
     }
     if SystemCancellationHandler
         .install(cancellation.clone())
         .is_err()
     {
-        return report_startup_failure(&args, &mut stdout, &mut stderr);
+        let code = report_startup_failure(&args, &mut stdout, &mut stderr, cancellation.trace.id());
+        root_trace.finish(core_traces::phase_result(code));
+        core_traces::configure(&cancellation, storage_root.as_ref(), None);
+        cancellation.trace.finish(code);
+        return code;
     }
     let code = if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
         run_configured(
             args,
-            storage_root,
+            storage_root.clone(),
             &mut stdin,
             &mut stdout,
             &mut stderr,
@@ -335,7 +347,7 @@ pub(crate) fn run_from_env() -> i32 {
         let mut stdin = io::stdin();
         run_configured(
             args,
-            storage_root,
+            storage_root.clone(),
             &mut stdin,
             &mut stdout,
             &mut stderr,
@@ -343,11 +355,17 @@ pub(crate) fn run_from_env() -> i32 {
             true,
         )
     };
-    if stderr.finish().is_err() && code == 0 {
+    let code = if stderr.finish().is_err() && code == 0 {
         1
     } else {
         code
+    };
+    if !cancellation.trace.configured() {
+        core_traces::configure(&cancellation, storage_root.as_ref(), None);
     }
+    root_trace.finish(core_traces::phase_result(code));
+    cancellation.trace.finish(code);
+    code
 }
 
 #[cfg(test)]
@@ -360,11 +378,11 @@ fn run_with_handler_installer<I: CancellationHandlerInstaller>(
     stderr: &mut (dyn Write + Send),
 ) -> i32 {
     let cancellation = ActionCancellation::default();
-    if let Some(exit) = preflight_presentation(&args, stdout, stderr) {
+    if let Some(exit) = preflight_presentation(&args, stdout, stderr, None) {
         return exit;
     }
     if installer.install(cancellation.clone()).is_err() {
-        return report_startup_failure(&args, stdout, stderr);
+        return report_startup_failure(&args, stdout, stderr, None);
     }
     run_with_cancellation(args, storage_root, stdin, stdout, stderr, &cancellation)
 }
@@ -538,7 +556,8 @@ fn run_configured(
     cancellation: &ActionCancellation,
     discover_user: bool,
 ) -> i32 {
-    let recognized = machine::recognize(&args);
+    let mut recognized = machine::recognize(&args);
+    recognized.diagnostic_id = cancellation.trace.id();
     let raw_prefix_request = presentation::raw_input_request(&args);
     let (mut globals, args) = match configuration::select(args) {
         Ok(parsed) => parsed,
@@ -552,6 +571,7 @@ fn run_configured(
             return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
         }
     };
+    selected.diagnostic_id = cancellation.trace.id();
     let format = selected.format;
     let raw_request = presentation::raw_input_request(&args);
     let mut command = match parse_command(args) {
@@ -560,13 +580,27 @@ fn run_configured(
             return report_cli_failure(selected, None, raw_request, error, stdout, stderr);
         }
     };
-    if selected.version == machine::Version::Legacy && matches!(&command, Command::Configuration(_))
+    cancellation
+        .trace
+        .operation(core_traces::operation(&command));
+    if matches!(
+        &command,
+        Command::Help(_) | Command::Version | Command::Configuration(_) | Command::Diagnostics(_)
+    ) {
+        cancellation.trace.suppress();
+        selected.diagnostic_id = None;
+    }
+    if selected.version == machine::Version::Legacy
+        && matches!(
+            &command,
+            Command::Configuration(_) | Command::Diagnostics(_)
+        )
     {
         return report_cli_failure(
             selected,
             None,
             false,
-            CliError::usage("configuration commands require machine interface 1.0-alpha.4"),
+            CliError::usage("this command requires machine interface 1.0-alpha.4"),
             stdout,
             stderr,
         );
@@ -598,13 +632,28 @@ fn run_configured(
     if let Command::Configuration(request) = &mut command {
         request.globals = globals;
         request.discover_user = discover_user;
+    } else if matches!(&command, Command::Diagnostics(_)) {
+        if globals.user_file.is_some() {
+            return report_cli_failure(
+                selected,
+                Some(command_name),
+                false,
+                CliError::usage("diagnostic inspection does not load --config files"),
+                stdout,
+                stderr,
+            );
+        }
     } else if !matches!(&command, Command::Help(_) | Command::Version) {
         let root = if matches!(&command, Command::GeneratePackageId) {
             None
         } else {
             storage_root.as_ref()
         };
-        let settings = match configuration::resolve(&globals, root, None, None, discover_user) {
+        let settings = match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::Configuration, || {
+                configuration::resolve(&globals, root, None, None, discover_user)
+            }) {
             Ok(settings) => settings,
             Err(error) => {
                 return report_cli_failure(
@@ -618,12 +667,18 @@ fn run_configured(
             }
         };
         selected.human = (&settings).into();
+        core_traces::configure(cancellation, root, Some(&settings));
         cancellation.diagnostics.disabled.store(
             !settings.diagnostics.retain_hook_text.value,
             std::sync::atomic::Ordering::Release,
         );
     }
-    if let Err(error) = short_ids::resolve(&mut command, storage_root.as_ref(), cancellation) {
+    if let Err(error) = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::Resolution, || {
+            short_ids::resolve(&mut command, storage_root.as_ref(), cancellation)
+        })
+    {
         return report_cli_failure(selected, Some(command_name), raw, error, stdout, stderr);
     }
     if executing {
@@ -701,7 +756,8 @@ fn collect_reply(
         !selected.format.requires_noninteractive(),
         reply::DisplayOptions::for_command(&command).with_human(selected.human),
     )
-    .with_version(selected.version);
+    .with_version(selected.version)
+    .with_diagnostic_id(selected.diagnostic_id);
     let result = execute(
         command,
         storage_root,
@@ -719,11 +775,15 @@ fn preflight_presentation(
     args: &[OsString],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    diagnostic_id: Option<crate::domain::TraceId>,
 ) -> Option<i32> {
     let parsed = presentation::select(args.to_vec()).and_then(|(_, args)| parse_command(args));
     parsed.err().map(|error| {
         report_cli_failure(
-            machine::recognize(args),
+            machine::Selection {
+                diagnostic_id,
+                ..machine::recognize(args)
+            },
             None,
             presentation::raw_input_request(args),
             error,
@@ -737,6 +797,7 @@ fn report_startup_failure(
     args: &[OsString],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    diagnostic_id: Option<crate::domain::TraceId>,
 ) -> i32 {
     let mut error = CliError::operation(CANCELLATION_HANDLER_FAILURE);
     error.kind = presentation::ErrorKind::Startup;
@@ -747,7 +808,17 @@ fn report_startup_failure(
         .is_some_and(
             |command| matches!(command, Command::ExportInput { output, .. } if output == "-"),
         );
-    report_cli_failure(machine::recognize(args), None, raw, error, stdout, stderr)
+    report_cli_failure(
+        machine::Selection {
+            diagnostic_id,
+            ..machine::recognize(args)
+        },
+        None,
+        raw,
+        error,
+        stdout,
+        stderr,
+    )
 }
 
 fn report_cli_failure(
@@ -783,6 +854,7 @@ fn report_cli_failure(
             command,
             error.partial.as_ref(),
             &error,
+            selected.diagnostic_id,
             destination,
         ) {
             if !raw {
@@ -805,6 +877,12 @@ fn report_cli_failure(
                 stderr,
                 "publication: destination_published={} (this attempt only; no rollback or durability guarantee)",
                 publication.destination_published
+            );
+        }
+        if let Some(id) = selected.diagnostic_id {
+            let _ = writeln!(
+                stderr,
+                "Diagnostic record: {id} (inspect retained availability with diagnostic show)"
             );
         }
     }
@@ -832,6 +910,7 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         Some(argument) => return Err(CliError::usage(argument.unexpected().to_string())),
     };
     match first.as_str() {
+        "diagnostic" => core_traces::parse(&mut parser).map(Command::Diagnostics),
         "config" => configuration::parse(&mut parser).map(Command::Configuration),
         "pack" => parse_pack(&mut parser),
         "package" => names::parse_package(&mut parser),
@@ -1287,6 +1366,9 @@ fn execute(
 ) -> Result<(), CliError> {
     use presentation::emit_result;
     match command {
+        Command::Diagnostics(request) => {
+            return core_traces::execute(request, storage_root, format);
+        }
         Command::Configuration(request) => {
             return configuration::execute(request, storage_root, format);
         }
@@ -1397,12 +1479,16 @@ fn execute(
             | Command::Invoke { plan: true, .. }
             | Command::ShowRun { .. }
     );
-    let application = if readonly {
-        PactrunApplication::open_read_only(&storage_root)
-    } else {
-        PactrunApplication::open(&storage_root)
-    }
-    .map_err(app_error)?;
+    let application = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::StoreOpen, || {
+            if readonly {
+                PactrunApplication::open_read_only(&storage_root)
+            } else {
+                PactrunApplication::open(&storage_root)
+            }
+        })
+        .map_err(app_error)?;
     match command {
         Command::ExportRevision {
             revision,
@@ -1909,6 +1995,7 @@ fn execute(
             emit_result(format, "run reconcile", &result)?;
         }
         Command::Help(_)
+        | Command::Diagnostics(_)
         | Command::Configuration(_)
         | Command::Name(_)
         | Command::Catalog(_)

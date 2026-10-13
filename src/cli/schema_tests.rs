@@ -4,6 +4,39 @@ use super::*;
 use schemars::{JsonSchema, Schema, SchemaGenerator, generate::SchemaSettings};
 use serde_json::{Value, json};
 
+// Test-ID: PR-TEST-0764
+// Verifies: PR-REQ-0397, PR-REQ-0398
+#[test]
+fn core_trace_schema_preserves_decimal_counters_and_bounded_policy() {
+    use crate::domain::{
+        PhaseResult, TraceId, TraceOperation, TracePhase, TracePolicy, TraceWindow,
+    };
+    let mut window = TraceWindow::new(
+        TraceId::from_bytes([8; 16]),
+        TraceOperation::Catalog,
+        Some(1),
+        TracePolicy::default(),
+    );
+    let span = window.begin(TracePhase::Command, 0).unwrap();
+    window.end(span, TracePhase::Command, 5, 5, PhaseResult::Succeeded);
+    window.close(0);
+    let response = json!({"format":"pactrun.cli","format_version":"1.0-alpha.4","command":"diagnostic show","status":"success","result":window.snapshot(),"error":null});
+    let validator = jsonschema::validator_for(&generated()).unwrap();
+    assert!(validator.is_valid(&response));
+    let mut invalid = response.clone();
+    invalid["result"]["events"][0]["sequence"] = json!("01");
+    assert!(!validator.is_valid(&invalid));
+    let mut invalid = response.clone();
+    invalid["result"]["policy"]["max_bytes"] = json!(0);
+    assert!(!validator.is_valid(&invalid));
+    let mut invalid = response.clone();
+    invalid["result"]["id"] = json!("A".repeat(32));
+    assert!(!validator.is_valid(&invalid));
+    let mut invalid = response;
+    invalid["result"]["observed"] = json!(2);
+    assert!(!validator.is_valid(&invalid));
+}
+
 fn shape<T: JsonSchema>(generator: &mut SchemaGenerator) -> Value {
     serde_json::to_value(generator.subschema_for::<T>()).unwrap()
 }
@@ -27,6 +60,8 @@ fn generated() -> Value {
     }
     cases!(help::Help => "help");
     cases!(configuration::ConfigurationInspection => "config show", "config validate");
+    cases!(crate::trace_journal::Listing => "diagnostic list");
+    cases!(crate::domain::TraceDocument => "diagnostic show");
     cases!(p::Version<'static> => "version");
     cases!(p::Package => "pack generate-id");
     cases!(t::PackInstall => "pack install");
@@ -119,6 +154,7 @@ fn generated() -> Value {
             "status":{"enum":["success","failure"]},
             "result":{"type":["object","null"]},
             "delivery":delivery,
+            "diagnostic_id":{"type":"string","pattern":"^[0-9a-f]{32}$"},
             "error":{"anyOf":[{"type":"null"},{"type":"object","required":["kind","message","reference"],"properties":{
                 "kind":{"enum":["usage","operation","output","startup"]},"message":{"type":"string"},"reference":{"anyOf":[reference,{"type":"null"}]},"diagnostic":acquisition,"deletion_obligation":deletion_obligation,"retirement_reason":{"enum":["permission_denied","allocation_busy","unsupported_entry_kind"]}
             }}]}
@@ -136,6 +172,45 @@ fn generated() -> Value {
     schema["$defs"]["Help"]["required"] = json!(["usage"]);
     // Older alpha.2 results lack the newly explicit target/readiness facts.
     // Current producers always provide them; readers do not infer missing IDs.
+    let decimal = json!({"type":"string","pattern":"^(0|[1-9][0-9]*)$","maxLength":20});
+    for (definition, fields) in [
+        ("PhaseEvent", vec!["sequence", "span", "at_us"]),
+        (
+            "PhaseTotals",
+            vec![
+                "started",
+                "finished",
+                "failed",
+                "unfinished",
+                "elapsed_us",
+                "max_elapsed_us",
+            ],
+        ),
+        ("TraceDocument", vec!["observed", "omitted"]),
+    ] {
+        for field in fields {
+            schema["$defs"][definition]["properties"][field] = decimal.clone();
+        }
+    }
+    for field in ["sequence", "span"] {
+        schema["$defs"]["PhaseEvent"]["properties"][field]["pattern"] = json!("^[1-9][0-9]*$");
+    }
+    schema["$defs"]["PhaseEvent"]["properties"]["elapsed_us"] =
+        json!({"anyOf":[decimal,{"type":"null"}]});
+    schema["$defs"]["TraceDocument"]["properties"]["started_at_unix_ms"] =
+        json!({"anyOf":[decimal,{"type":"null"}]});
+    let trace_id = json!({"type":"string","pattern":"^[0-9a-f]{32}$"});
+    schema["$defs"]["TraceId"] = trace_id.clone();
+    schema["$defs"]["TraceDocument"]["properties"]["id"] = trace_id.clone();
+    schema["$defs"]["TraceDocument"]["properties"]["run_id"] =
+        json!({"anyOf":[trace_id,{"type":"null"}]});
+    schema["$defs"]["TraceDocument"]["properties"]["exit_code"] =
+        json!({"anyOf":[{"type":"integer","minimum":0,"maximum":255},{"type":"null"}]});
+    schema["$defs"]["TraceDocument"]["properties"]["events"]["maxItems"] = json!(1024);
+    schema["$defs"]["TracePolicy"]["properties"]["retention_days"] =
+        json!({"type":"integer","minimum":1,"maximum":3650});
+    schema["$defs"]["TracePolicy"]["properties"]["max_bytes"] =
+        json!({"type":"integer","minimum":1048576,"maximum":1073741824});
     schema["$defs"]["InputMutation"]["required"] = json!(["state_version"]);
     for definition in schema["$defs"].as_object_mut().unwrap().values_mut() {
         if definition["properties"].get("missing_input_ids").is_some() {

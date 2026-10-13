@@ -8,6 +8,7 @@ import {requirementAnchors} from '../plugins/document-catalog/index.mjs';
 export const references = [
   ['Users', 'command-details', 'Command details', 'spec/interfaces/commands.md'],
   ['Users', 'configuration', 'Pactrun configuration reference', 'spec/interfaces/configuration.md'],
+  ['Users', 'core-traces', 'Core phase and timing diagnostics', 'spec/interfaces/core-traces.md'],
   ['Users', 'snapshot-details', 'Snapshot command details', 'spec/snapshots/commands.md'],
   ['Users', 'migration-details', 'Migration command details', 'spec/migrations/commands.md'],
   ['Users', 'resource-details', 'Resource command details', 'spec/instances/resource-commands.md'],

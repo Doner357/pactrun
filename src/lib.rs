@@ -26,6 +26,8 @@ mod service_storage;
 mod snapshot_bundle;
 mod snapshot_integrity;
 mod strict_json;
+mod trace;
+mod trace_journal;
 mod workflow;
 mod zip_output;
 

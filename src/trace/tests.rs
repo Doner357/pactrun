@@ -1,0 +1,106 @@
+use super::*;
+
+fn scratch() -> tempfile::TempDir {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/alpha8-trace-tests");
+    std::fs::create_dir_all(&root).unwrap();
+    tempfile::tempdir_in(root).unwrap()
+}
+
+// Test-ID: PR-TEST-0760
+// Verifies: PR-REQ-0397, PR-REQ-0398, PR-REQ-0399
+#[test]
+fn core_trace_writer_records_safe_failures_and_storage_failure_does_not_change_results() {
+    let temp = scratch();
+    let location = Location::startup(temp.path().join("startup/diagnostics.sqlite3"));
+    let trace = Arc::new(Trace::default());
+    trace.begin();
+    trace.operation(TraceOperation::ActionInvoke);
+    trace.configure(
+        Some(location.clone()),
+        None,
+        TracePolicy::startup(),
+        TracePolicy::default(),
+    );
+    let value: Result<u8, ()> = trace.measure(TracePhase::StoreOpen, || Err(()));
+    assert!(value.is_err());
+    {
+        let _unfinished = trace.span(TracePhase::Command);
+    }
+    let finished = trace.finish(1).unwrap();
+    assert!(matches!(finished.persistence, PersistenceStatus::Complete));
+    let stored = crate::trace_journal::read(&location, finished.id)
+        .unwrap()
+        .unwrap();
+    assert!(stored.closed && stored.valid());
+    assert_eq!(stored.exit_code, Some(1));
+    assert_eq!(stored.totals[&TracePhase::StoreOpen].failed, 1);
+    assert_eq!(stored.totals[&TracePhase::Command].unfinished, 1);
+    let foreign = temp.path().join("foreign");
+    std::fs::write(&foreign, b"do not overwrite").unwrap();
+    let trace = Arc::new(Trace::default());
+    trace.begin();
+    trace.configure(
+        Some(Location::startup(foreign.clone())),
+        None,
+        TracePolicy::startup(),
+        TracePolicy::default(),
+    );
+    assert_eq!(
+        trace
+            .measure::<_, ()>(TracePhase::Command, || Ok(7))
+            .unwrap(),
+        7
+    );
+    assert!(matches!(
+        trace.finish(0).unwrap().persistence,
+        PersistenceStatus::Unavailable
+    ));
+    assert_eq!(std::fs::read(foreign).unwrap(), b"do not overwrite");
+}
+
+// Test-ID: PR-TEST-0761
+// Verifies: PR-REQ-0399
+#[test]
+fn core_trace_suppression_and_store_association_do_not_provision_a_store() {
+    let temp = scratch();
+    let startup = Location::startup(temp.path().join("startup/log.sqlite3"));
+    let trace = Arc::new(Trace::default());
+    trace.begin();
+    trace.suppress();
+    trace.configure(
+        Some(startup.clone()),
+        None,
+        TracePolicy::startup(),
+        TracePolicy::default(),
+    );
+    assert!(trace.finish(0).is_none());
+    assert!(!temp.path().join("startup").exists());
+    let root = temp.path().join("store");
+    std::fs::create_dir_all(root.join("database")).unwrap();
+    let trace = Arc::new(Trace::default());
+    trace.begin();
+    trace.configure(
+        Some(startup),
+        Some(&root),
+        TracePolicy::startup(),
+        TracePolicy::default(),
+    );
+    let run = RunId::from_bytes([3; 16]);
+    trace.associate(run);
+    trace
+        .measure::<_, ()>(TracePhase::Command, || Ok(()))
+        .unwrap();
+    let finished = trace.finish(0).unwrap();
+    assert!(matches!(finished.persistence, PersistenceStatus::Complete));
+    assert_eq!(
+        crate::trace_journal::read_run(&Location::store(&root), run)
+            .unwrap()
+            .unwrap()
+            .id,
+        finished.id
+    );
+    assert!(!root.join("database/pactrun.sqlite3").exists());
+    let unsafe_location = Location::startup(root.join("nested/../logs/log.sqlite3"));
+    assert!(unsafe_location.overlaps_store(&root));
+    assert!(Location::startup(root.join("log.sqlite3")).overlaps_store(&root));
+}
