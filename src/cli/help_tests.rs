@@ -23,6 +23,18 @@ fn query(root: Option<&Path>, args: &[&str]) -> (i32, String, String) {
     )
 }
 
+// Supporting coverage for PR-TEST-0649.
+#[test]
+fn bounded_diagnostic_help_does_not_invent_cursor_navigation() {
+    let (code, diagnostic, error) = query(None, &["diagnostic", "list", "--help"]);
+    assert_eq!(code, 0, "{error}");
+    assert!(diagnostic.contains("has_more") && diagnostic.contains("--limit"));
+    assert!(!diagnostic.contains("cursor") && !diagnostic.contains("--after"));
+    let (code, revision, error) = query(None, &["revision", "list", "--help"]);
+    assert_eq!(code, 0, "{error}");
+    assert!(revision.contains("--after") && revision.contains("cursor"));
+}
+
 // Test-ID: PR-TEST-0649
 // Verifies: PR-REQ-0271, PR-REQ-0359, PR-REQ-0360
 #[test]
