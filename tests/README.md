@@ -123,3 +123,9 @@ without Store changes, and candidate reinstall after uninstall. It prepares the
 Pack with the baseline source format, then reinstalls the same Revision using
 the candidate source format. It does not require an old executable to read the
 upgraded Store or combine with public-source acquisition.
+
+For alpha.7-to-alpha.8 qualification, use `--store-upgrade --versions
+1.0.0-alpha.7 1.0.0-alpha.8`. This explicitly rehearses Persistence
+`1.0-alpha.5` to `1.0-alpha.6`, preserves the supported legacy Pack source and
+its immutable Revision, and retains the same old-reader-refusal, separate test
+Store, uninstall/reinstall and data-preservation assertions.

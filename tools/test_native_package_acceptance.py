@@ -203,6 +203,22 @@ class NativePackageAcceptance(unittest.TestCase):
             self.tool.upgraded_store_scenarios(before,{'blob':'hash'},'test')
         self.assertEqual(source.read_text(),original)
 
+    def test_diagnostic_release_upgrade_keeps_explicit_transition_and_legacy_source(self):
+        baseline=release('1.0.0-alpha.7','1.0-alpha.3','1.0-alpha.4','1.0-alpha.5')
+        candidate=release('1.0.0-alpha.8','1.0-alpha.3','1.0-alpha.4','1.0-alpha.6')
+        for record in [baseline,candidate]:
+            record['supported_formats']['pack_source'].append('1.0-alpha.2')
+        records=[baseline,candidate]
+        versions=['1.0.0-alpha.7','1.0.0-alpha.8']
+        self.assertEqual(self.tool.upgrade_fixture_source_format(records,versions),'1.0-alpha.2')
+        with self.assertRaisesRegex(ValueError,'Persistence'):
+            self.tool.fixture_source_format(records,versions)
+        with self.assertRaisesRegex(ValueError,'Persistence'):
+            self.tool.upgrade_fixture_source_format(records,list(reversed(versions)))
+        candidate['supported_formats']['pack_source'].remove('1.0-alpha.2')
+        with self.assertRaisesRegex(ValueError,'common Pack source'):
+            self.tool.upgrade_fixture_source_format(records,versions)
+
     def test_observed_uses_separate_json_output(self):
         with patch.object(self.tool,'binary',return_value='pactrun'), \
              patch.object(self.tool,'run',return_value=(0,response('version',{'product_version':'1.0.0-alpha.1'}))) as run:
