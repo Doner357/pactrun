@@ -6,6 +6,21 @@ fn scratch() -> tempfile::TempDir {
     tempfile::tempdir_in(root).unwrap()
 }
 
+fn await_completion(trace: &Trace, code: i32) -> Completion {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let completed = trace.finish(code).unwrap();
+        if !matches!(completed.persistence, PersistenceStatus::Pending) {
+            return completed;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "diagnostic writer did not reach a terminal receipt"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // Test-ID: PR-TEST-0804
 // Verifies: PR-REQ-0397
 #[test]
@@ -58,7 +73,7 @@ fn traced_read_preserves_bytes_retries_and_vectored_errors_without_recording_con
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
         assert_eq!(error.to_string(), "private-source-sentinel");
-        let completion = trace.finish(0).unwrap();
+        let completion = await_completion(&trace, 0);
         let document = crate::trace_journal::read(&location, completion.id)
             .unwrap()
             .unwrap();
@@ -100,7 +115,7 @@ fn core_trace_writer_records_safe_failures_and_storage_failure_does_not_change_r
     {
         let _unfinished = trace.span(TracePhase::Command);
     }
-    let finished = trace.finish(1).unwrap();
+    let finished = await_completion(&trace, 1);
     assert!(matches!(finished.persistence, PersistenceStatus::Complete));
     let stored = crate::trace_journal::read(&location, finished.id)
         .unwrap()
@@ -126,7 +141,7 @@ fn core_trace_writer_records_safe_failures_and_storage_failure_does_not_change_r
         7
     );
     assert!(matches!(
-        trace.finish(0).unwrap().persistence,
+        await_completion(&trace, 0).persistence,
         PersistenceStatus::Unavailable
     ));
     assert_eq!(std::fs::read(foreign).unwrap(), b"do not overwrite");
@@ -164,7 +179,7 @@ fn core_trace_suppression_and_store_association_do_not_provision_a_store() {
     trace
         .measure::<_, ()>(TracePhase::Command, || Ok(()))
         .unwrap();
-    let finished = trace.finish(0).unwrap();
+    let finished = await_completion(&trace, 0);
     assert!(matches!(finished.persistence, PersistenceStatus::Complete));
     assert_eq!(
         crate::trace_journal::read_run(&Location::store(&root), run)

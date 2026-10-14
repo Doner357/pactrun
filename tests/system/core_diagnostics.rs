@@ -244,7 +244,7 @@ fn alpha3_real_run_history_survives_upgrade_without_invented_core_events() {
     let before: Value = serde_json::from_slice(&output.stdout).unwrap();
     let run = before["result"]["run"]["run_id"].as_str().unwrap();
     let db = rusqlite::Connection::open(scenario.storage.join("database/pactrun.sqlite3")).unwrap();
-    db.execute_batch("PRAGMA foreign_keys=ON; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
+    db.execute_batch("PRAGMA foreign_keys=ON; DROP INDEX run_diagnostic_retention; DROP INDEX run_core_diagnostic_retention; DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();
     let old = include_str!("../../src/persistence/persistence_alpha3.sql");
     let admission = old
         .split_once("CREATE TABLE writable_admissions (")
@@ -254,6 +254,18 @@ fn alpha3_real_run_history_survives_upgrade_without_invented_core_events() {
         .unwrap()
         .0;
     db.execute_batch(&format!("CREATE TABLE writable_admissions ({admission}; UPDATE pactrun_metadata SET format_version='1.0-alpha.3'; PRAGMA user_version=2;")).unwrap();
+    let expected = rusqlite::Connection::open_in_memory().unwrap();
+    expected.execute_batch(old).unwrap();
+    let objects = |connection: &rusqlite::Connection| {
+        connection.prepare("SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").unwrap()
+            .query_map([], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,Option<String>>(3)?)))
+            .unwrap().collect::<Result<Vec<_>,_>>().unwrap()
+    };
+    assert_eq!(
+        objects(&db),
+        objects(&expected),
+        "fixture is not the frozen alpha.3 schema"
+    );
     drop(db);
     let output = execute(&scenario, &["--format", "json", "run", "show", run]);
     assert_success(&output);
