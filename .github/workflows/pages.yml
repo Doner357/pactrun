@@ -1,16 +1,24 @@
 name: Pages
 
-# Reuse the current CI run's artifact. No cross-run artifact trust or rebuild.
+# Deploy the current run's verified artifact. Publication may import an exact
+# main-CI artifact only after validating its producer and archive digest.
 on:
   workflow_call:
+    inputs:
+      product_version:
+        type: string
+        required: true
+      allow_manual_publication:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-    name: Deploy verified Pages artifact
-    if: ${{ always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true' }}
+    name: Gate and deploy verified Pages artifact
+    if: ${{ always() && !cancelled() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.allow_manual_publication)) && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,17 +34,35 @@ jobs:
       - name: Refuse stale publication
         id: eligibility
         uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: v${{ inputs.product_version }}
+          ALLOW_MANUAL_PUBLICATION: ${{ inputs.allow_manual_publication && 'true' || 'false' }}
         with:
           script: |
             // BEGIN PAGES GUARD
             const {data} = await github.rest.repos.getBranch({
               ...context.repo, branch: 'main',
             });
-            const eligible = context.eventName === 'push'
+            const allowedEvent = context.eventName === 'push'
+              || (context.eventName === 'workflow_dispatch' && process.env.ALLOW_MANUAL_PUBLICATION === 'true');
+            let eligible = allowedEvent
               && context.ref === 'refs/heads/main'
               && data.commit.sha === context.sha;
+            if (eligible) {
+              const tag = process.env.RELEASE_TAG;
+              if (!/^v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?$/.test(tag)) {
+                throw new Error('Invalid publication version');
+              }
+              try {
+                const release = await github.rest.repos.getReleaseByTag({...context.repo, tag});
+                eligible = release.data.draft === false && release.data.tag_name === tag;
+              } catch (error) {
+                if (error.status === 404) eligible = false;
+                else throw error;
+              }
+            }
             core.setOutput('publish', eligible ? 'true' : 'false');
-            if (!eligible) core.notice('Not the current main push; leaving the published site unchanged.');
+            if (!eligible) core.notice('Source is not current or its release is not public; leaving the published site unchanged.');
             // END PAGES GUARD
 
       - name: Deploy the artifact verified by this CI run

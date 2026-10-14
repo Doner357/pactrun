@@ -1,0 +1,15 @@
+name: Pinned documentation browser
+description: Install locked browser-verification tooling into the disposable runner directory
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        test "$RUNNER_OS" = Linux
+        mkdir -p "$RUNNER_TEMP/browser-tools"
+        cp tools/browser/package.json tools/browser/pnpm-lock.yaml "$RUNNER_TEMP/browser-tools/"
+        pnpm --dir "$RUNNER_TEMP/browser-tools" install --frozen-lockfile --ignore-scripts
+        PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/browser-cache" \
+          node "$RUNNER_TEMP/browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+        echo "PLAYWRIGHT_PACKAGE=$RUNNER_TEMP/browser-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+        echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/browser-cache" >> "$GITHUB_ENV"

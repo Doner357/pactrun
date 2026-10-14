@@ -9,7 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from ci_scope import changed_paths, requires_runtime
+from ci_scope import changed_paths, delivery_metadata, requires_browser, requires_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,6 +28,24 @@ class ScopeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(requires_runtime(["README.md", path]))
         self.assertTrue(requires_runtime([]))
+
+    def test_generated_delivery_metadata_does_not_require_product_retests(self):
+        paths = ['releases/catalog.json', 'releases/1.0.0-alpha.9.json',
+                 'bucket/pactrun-preview.json', 'Formula/pactrun-preview.rb']
+        self.assertFalse(requires_runtime(paths))
+        self.assertTrue(all(delivery_metadata(path) for path in paths))
+        for path in ['tools/release_artifacts.py', 'xtask/src/release_sources.rs',
+                     '.github/workflows/release-candidate.yml', 'releases/schema.sql',
+                     'src/main.rs', 'Cargo.toml', '.config/nextest.toml']:
+            with self.subTest(path=path):
+                self.assertTrue(requires_runtime([*paths, path]))
+
+    def test_browser_scope_includes_rendering_inputs_but_not_plain_runtime_code(self):
+        self.assertTrue(requires_browser([]))
+        for path in ['website/pnpm-lock.yaml','docs/spec/example.md','src/cli/help_catalog.json',
+                     'tools/browser/pnpm-lock.yaml','.github/workflows/ci.yml']:
+            self.assertTrue(requires_browser([path]))
+        self.assertFalse(requires_browser(['src/domain/migration.rs','releases/catalog.json']))
 
     def test_unknown_initial_and_invalid_events(self):
         cases = [("workflow_dispatch", {}), ("push", {"before": "0" * 40}),
@@ -77,32 +95,42 @@ class ScopeTests(unittest.TestCase):
                        GITHUB_SHA="b" * 40, GITHUB_OUTPUT=str(output))
             subprocess.run([sys.executable, str(ROOT / "tools/ci_scope.py")], cwd=ROOT, env=env, check=True,
                            stdout=subprocess.PIPE)
-            self.assertEqual(output.read_text(encoding="utf-8"), "runtime=true\n")
+            self.assertEqual(output.read_text(encoding="utf-8"), "runtime=true\ndelivery=true\nbrowser=true\n")
 
     @unittest.skipIf(os.name == "nt", "CI gate uses the Ubuntu bash runner; exercised on Linux")
     def test_actual_aggregate_gate(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         script = textwrap.dedent(workflow.split("# BEGIN CI GATE\n", 1)[1].split("# END CI GATE", 1)[0])
         cases = [
-            ("success", "true", "success", "success", True),
-            ("success", "false", "success", "skipped", True),
-            ("failure", "false", "success", "skipped", False),
-            ("success", "true", "success", "skipped", False),
-            ("success", "false", "failure", "skipped", False),
-            ("success", "true", "success", "cancelled", False),
-            ("success", "", "success", "skipped", False),
-            ("skipped", "false", "skipped", "skipped", False),
-            ("success", "false", "success", "failure", False),
+            ("success", "true", "true", "success", "success", True),
+            ("success", "false", "false", "success", "skipped", True),
+            ("success", "false", "true", "success", "success", True),
+            ("success", "false", "true", "success", "skipped", False),
+            ("success", "true", "false", "success", "success", False),
+            ("failure", "false", "false", "success", "skipped", False),
+            ("success", "true", "true", "success", "skipped", False),
+            ("success", "false", "false", "failure", "skipped", False),
+            ("success", "true", "true", "success", "cancelled", False),
+            ("success", "", "false", "success", "skipped", False),
+            ("skipped", "false", "false", "skipped", "skipped", False),
+            ("success", "false", "false", "success", "failure", False),
         ]
-        for scope, runtime, ubuntu, windows, expected in cases:
+        for scope, runtime, delivery, ubuntu, windows, expected in cases:
             for debian in ['success', 'skipped', 'failure', 'cancelled', '']:
                 allowed = expected and debian == ('success' if runtime == 'true' else 'skipped')
                 with self.subTest(scope=scope, runtime=runtime, ubuntu=ubuntu, windows=windows, debian=debian):
-                    env = dict(os.environ, SCOPE_RESULT=scope, RUNTIME=runtime,
+                    env = dict(os.environ, SCOPE_RESULT=scope, RUNTIME=runtime, DELIVERY=delivery,
                                UBUNTU_RESULT=ubuntu, WINDOWS_RESULT=windows, DEBIAN12_RESULT=debian)
                     result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], env=env,
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     self.assertEqual(result.returncode == 0, allowed, result.stderr.decode())
+
+    def test_metadata_consumers_and_docs_still_run_when_runtime_is_reused(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        self.assertEqual(workflow.count('Verify current delivery consumers when runtime was omitted or reused'), 2)
+        self.assertEqual(workflow.count('-B -m unittest tools.test_native_package_acceptance'), 2)
+        self.assertIn('Verify documentation and build the current site', workflow)
+        self.assertIn('if-no-files-found: ignore', workflow)
 
 
 if __name__ == "__main__":

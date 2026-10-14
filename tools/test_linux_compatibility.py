@@ -115,7 +115,10 @@ class LinuxCompatibility(unittest.TestCase):
         shared = (ROOT / '.github/workflows/linux-compatibility.yml').read_text()
         self.assertIn('uses: ./.github/workflows/linux-compatibility.yml', ci)
         self.assertIn('uses: ./.github/workflows/linux-compatibility.yml', candidate)
-        self.assertNotIn('platform: linux-x86_64', candidate)
+        package = candidate.split('\n  package:\n',1)[1].split('\n  linux:\n',1)[0]
+        self.assertNotIn('platform: linux-x86_64', package)
+        self.assertEqual(candidate.count('uses: ./.github/workflows/linux-compatibility.yml'),1)
+        self.assertIn('needs: [package, linux]',candidate)
         self.assertIn('needs: [scope, ubuntu, windows, debian12]', ci)
         self.assertEqual(shared.count('needs: build'), 2)
         self.assertEqual(shared.count('uses: actions/download-artifact@v4'), 2)

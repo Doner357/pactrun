@@ -7,6 +7,13 @@ import subprocess
 from pathlib import Path
 
 
+def delivery_metadata(path):
+    # Only generated records/definitions, never the generators or CI policy.
+    return ((path.startswith('releases/') and path.endswith('.json'))
+            or (path.startswith('bucket/') and path.endswith('.json'))
+            or (path.startswith('Formula/') and path.endswith('.rb')))
+
+
 def requires_runtime(paths):
     if not paths:
         return True
@@ -18,8 +25,17 @@ def requires_runtime(paths):
         # Spec can embed DDL, schemas and normative fixtures; fail closed there.
         if path.startswith("docs/") and not path.startswith("docs/spec/") and path.endswith(".md"):
             continue
+        if delivery_metadata(path):
+            continue
         return True
     return False
+
+
+def requires_browser(paths):
+    return not paths or any(path.startswith(('docs/', 'website/', 'tools/browser/', 'src/cli/help'))
+                           or path in ('tools/check_docs_browser.py', '.github/workflows/ci.yml',
+                                       '.github/workflows/pages.yml', '.github/workflows/publish-release.yml')
+                           for path in paths)
 
 
 def changed_paths(event_name, event, head, root):
@@ -42,15 +58,21 @@ def changed_paths(event_name, event, head, root):
 
 def main():
     runtime = True
+    delivery = True
+    browser = True
     try:
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
         paths = changed_paths(os.environ["GITHUB_EVENT_NAME"], event, os.environ["GITHUB_SHA"], Path.cwd())
         runtime = requires_runtime(paths)
-        print(f"Changed paths: {len(paths)}; runtime verification: {runtime}")
+        delivery = runtime or any(delivery_metadata(path) for path in paths)
+        browser = requires_browser(paths)
+        print(f"Changed paths: {len(paths)}; runtime: {runtime}; delivery: {delivery}")
     except (KeyError, ValueError, OSError, subprocess.CalledProcessError) as error:
-        print(f"Cannot prove documentation-only scope ({type(error).__name__}); using full verification.")
+        print(f"Cannot bound verification scope ({type(error).__name__}); using full verification.")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"runtime={str(runtime).lower()}\n")
+        output.write(f"delivery={str(delivery).lower()}\n")
+        output.write(f"browser={str(browser).lower()}\n")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,149 @@
+name: Native candidate qualification
+
+on:
+  workflow_call:
+    inputs:
+      source_commit:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      baseline_version:
+        type: string
+        required: true
+      candidate_run_id:
+        type: string
+        default: ''
+      public_source:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  native:
+    name: Native ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            platform: windows-x86_64
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      CANDIDATE_SOURCE: ${{ inputs.source_commit }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      BASELINE_VERSION: ${{ inputs.baseline_version }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      QUALIFICATION_PLATFORM: ${{ matrix.platform }}
+      PUBLIC_SOURCE: ${{ inputs.public_source && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check external candidate run before trusting its artifacts
+        if: inputs.candidate_run_id != ''
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import json, os, subprocess
+          run_id = os.environ['CANDIDATE_RUN_ID']
+          assert run_id.isdecimal() and int(run_id) > 0
+          path = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{run_id}"
+          run = json.loads(subprocess.check_output(['gh','api',path]))
+          assert run['path'] == '.github/workflows/release-candidate.yml'
+          assert run['conclusion'] == 'success' and run['status'] == 'completed'
+          assert run['event'] == 'workflow_dispatch'
+          assert run['head_branch'] in ('main','release/'+os.environ['CANDIDATE_VERSION'])
+          if run['head_sha'] != os.environ['CANDIDATE_SOURCE']:
+              assert run['head_branch'] == 'main'
+              subprocess.run(['git','merge-base','--is-ancestor',os.environ['CANDIDATE_SOURCE'],run['head_sha']],check=True)
+          assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: ${{ runner.temp }}/candidates
+          run-id: ${{ inputs.candidate_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.98.1
+          cache: true
+      - name: Test qualification tooling without installing packages
+        run: python -B -m unittest tools.test_qualify_candidate tools.test_release_artifacts tools.test_native_package_acceptance
+      - name: Build source-qualified catalog tooling, not another product image
+        run: cargo build --locked --release -p xtask
+      - name: Verify exact candidates and prepare immutable baseline inputs
+        shell: python
+        run: |
+          import os, pathlib, re, subprocess, sys
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          baseline = os.environ['BASELINE_VERSION']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?', baseline)
+          subprocess.run([sys.executable,'-B','-m','tools.qualify_candidate','prepare',
+              '--artifacts',str(temp/'candidates'),'--source',os.environ['CANDIDATE_SOURCE'],
+              '--version',os.environ['CANDIDATE_VERSION'],'--baseline-record',f'releases/{baseline}.json',
+              '--output',str(temp/'qualification-inputs')],check=True)
+          subprocess.run([sys.executable,'-B','-m','tools.qualify_candidate','standalone',
+              '--artifacts',str(temp/'candidates'/('candidate-'+os.environ['QUALIFICATION_PLATFORM'])),
+              '--platform',os.environ['QUALIFICATION_PLATFORM'],'--source',os.environ['CANDIDATE_SOURCE'],
+              '--version',os.environ['CANDIDATE_VERSION'],'--output',str(temp/'standalone')],check=True)
+      - name: Prepare an isolated pinned package-manager template
+        shell: python
+        run: |
+          import os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          manager = temp/'manager'
+          windows = os.name == 'nt'
+          url, commit = ('https://github.com/ScoopInstaller/Scoop.git','b588a06e41d920d2123ec70aee682bae14935939') if windows else ('https://github.com/Homebrew/brew.git','570982948a8a194f0f42f43f4a5bce2d1c9f64cb')
+          for command in [['git','init',str(manager)],['git','-C',str(manager),'remote','add','origin',url],
+                          ['git','-C',str(manager),'fetch','--depth=1','origin',commit],
+                          ['git','-C',str(manager),'checkout','--detach',commit]]:
+              subprocess.run(command,check=True)
+          assert subprocess.check_output(['git','-C',str(manager),'rev-parse','HEAD'],text=True).strip() == commit
+          if not windows:
+              assert os.getuid() != 0
+              env = dict(os.environ,HOMEBREW_NO_AUTO_UPDATE='1',HOMEBREW_NO_ANALYTICS='1',
+                         HOMEBREW_FORCE_VENDOR_RUBY='1',HOMEBREW_CACHE=str(temp/'manager-cache'))
+              subprocess.run([str(manager/'bin/brew'),'ruby','-e','puts RUBY_VERSION'],env=env,check=True)
+      - name: Run real native installation and continuity checks
+        shell: python
+        run: |
+          import json, os, pathlib, subprocess, sys
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          prepared = json.loads((temp/'qualification-inputs/prepared.json').read_text())
+          command = [sys.executable,'-B','tools/native_package_acceptance.py',
+              '--root',str(temp/'native'),'--manager',str((temp/'manager').resolve()),
+              '--xtask',str((pathlib.Path('target/release')/('xtask.exe' if os.name=='nt' else 'xtask')).resolve()),
+              '--parts',*prepared['parts'],'--versions',*prepared['versions']]
+          if os.name == 'nt': command.append('--allow-user-path-change')
+          if os.environ['PUBLIC_SOURCE'] == 'true':
+              command.extend(['--public-source','https://github.com/Doner357/pactrun',
+                              '--public-version',os.environ['CANDIDATE_VERSION']])
+          elif prepared['store_upgrade']:
+              command.append('--store-upgrade')
+          subprocess.run([sys.executable,'-B','tools/measure_command.py',
+              '--output',str(temp/'native-metrics/measurement.json'),'--label','native-'+os.environ['QUALIFICATION_PLATFORM'],
+              '--',*command],check=True)
+          results = json.loads((temp/'native/evidence/results.json').read_text())
+          assert results and all(result['passed'] is True for result in results)
+      - name: Retain qualification evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}-${{ inputs.public_source && 'public' || 'candidate' }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native/evidence/
+            ${{ runner.temp }}/native-metrics/
+            ${{ runner.temp }}/standalone/probe.json
+            ${{ runner.temp }}/qualification-inputs/prepared.json
+          if-no-files-found: warn

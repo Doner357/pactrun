@@ -47,6 +47,7 @@ fn main() -> ExitCode {
         }
         Some("ci") => run_ci(&workspace_root),
         Some("rust-ci") => run_rust_ci(&workspace_root),
+        Some("conformance") => run_conformance(&workspace_root),
         Some("system-test") => run_system_tests(&workspace_root),
         Some("docs-build") => build_docs(&workspace_root),
         Some("revision-reference-verify") => revision_reference::verify(&workspace_root),
@@ -66,7 +67,7 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("error: {error}");
             eprintln!(
-                "usage: cargo xtask <ci|rust-ci|system-test|docs-build|revision-reference-verify|revision-canonical-verify|revision-reference-calculate|snapshot-reference-verify|snapshot-reference-calculate|snapshot-integrity-verify|hook-protocol-verify|error-catalog-verify>"
+                "usage: cargo xtask <ci|rust-ci|conformance|system-test|docs-build|revision-reference-verify|revision-canonical-verify|revision-reference-calculate|snapshot-reference-verify|snapshot-reference-calculate|snapshot-integrity-verify|hook-protocol-verify|error-catalog-verify>"
             );
             ExitCode::FAILURE
         }
@@ -81,12 +82,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn run_ci(workspace_root: &Path) -> Result<(), String> {
-    revision_reference::verify(workspace_root)?;
-    verify_revision_canonical(workspace_root)?;
-    snapshot_reference::verify(workspace_root)?;
-    snapshot_production::verify(workspace_root)?;
-    hook_protocol::verify(workspace_root)?;
-    error_catalog::verify(workspace_root)?;
+    run_conformance(workspace_root)?;
     run_rust_ci(workspace_root)?;
     run(
         workspace_root,
@@ -96,7 +92,17 @@ fn run_ci(workspace_root: &Path) -> Result<(), String> {
     build_docs(workspace_root)
 }
 
-fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
+fn run_conformance(workspace_root: &Path) -> Result<(), String> {
+    revision_reference::verify(workspace_root)?;
+    verify_revision_oracles(workspace_root)?;
+    snapshot_reference::verify(workspace_root)?;
+    hook_protocol::verify(workspace_root)?;
+    // Production canonical/snapshot tests run once in the workspace test suite.
+    // Standalone focused commands retain their production tests and traceability.
+    error_catalog::verify(workspace_root)
+}
+
+fn verify_revision_oracles(workspace_root: &Path) -> Result<(), String> {
     run(
         workspace_root,
         "node",
@@ -112,7 +118,11 @@ fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
             "tests/oracles/revision_canonical_services.mjs",
             "tests/vectors/revision_canonical/services.json",
         ],
-    )?;
+    )
+}
+
+fn verify_revision_canonical(workspace_root: &Path) -> Result<(), String> {
+    verify_revision_oracles(workspace_root)?;
     run(
         workspace_root,
         "cargo",
@@ -154,12 +164,44 @@ fn run_rust_ci(workspace_root: &Path) -> Result<(), String> {
             "warnings",
         ],
     )?;
-    run(
-        workspace_root,
-        "cargo",
-        &["test", "--workspace", "--all-features"],
-    )?;
+    let runner = env::var("PACTRUN_TEST_RUNNER").unwrap_or_else(|_| "nextest".into());
+    if runner == "nextest" {
+        run(
+            workspace_root,
+            if cfg!(windows) { "python" } else { "python3" },
+            &["-B", "tools/verify_test_inventory.py"],
+        )?;
+    }
+    for arguments in test_commands(&runner)? {
+        run(workspace_root, "cargo", &arguments)?;
+    }
     Ok(())
+}
+
+fn test_commands(runner: &str) -> Result<Vec<Vec<&'static str>>, String> {
+    match runner {
+        "nextest" => Ok(vec![
+            vec![
+                "nextest",
+                "run",
+                "--locked",
+                "--workspace",
+                "--all-features",
+                "--profile",
+                "ci",
+                "--no-tests",
+                "fail",
+            ],
+            vec!["test", "--locked", "--workspace", "--all-features", "--doc"],
+        ]),
+        "libtest" => Ok(vec![vec![
+            "test",
+            "--locked",
+            "--workspace",
+            "--all-features",
+        ]]),
+        _ => Err("PACTRUN_TEST_RUNNER must be nextest or libtest".into()),
+    }
 }
 
 fn run_system_tests(workspace_root: &Path) -> Result<(), String> {
@@ -219,5 +261,32 @@ fn run(workspace_root: &Path, program: &str, arguments: &[&str]) -> Result<(), S
         Ok(())
     } else {
         Err(format!("{program} exited with {status}"))
+    }
+}
+
+#[cfg(test)]
+mod verification_tests {
+    use super::test_commands;
+
+    #[test]
+    fn nextest_runs_production_tests_once_and_keeps_doctests() {
+        let commands = test_commands("nextest").unwrap();
+        assert_eq!(commands.len(), 2);
+        assert_eq!(&commands[0][..2], &["nextest", "run"]);
+        assert!(commands[0].ends_with(&["--no-tests", "fail"]));
+        assert!(commands[1].contains(&"--doc"));
+        assert!(
+            commands
+                .iter()
+                .all(|command| command.contains(&"--workspace")
+                    && command.contains(&"--all-features"))
+        );
+    }
+
+    #[test]
+    fn explicit_libtest_baseline_runs_once_and_unknown_runner_fails_closed() {
+        assert_eq!(test_commands("libtest").unwrap().len(), 1);
+        assert!(test_commands("").is_err());
+        assert!(test_commands("nextest --skip tests").is_err());
     }
 }

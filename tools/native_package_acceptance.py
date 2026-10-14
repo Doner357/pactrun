@@ -18,6 +18,34 @@ def isolated_product_environment(root):
                 LOCALAPPDATA=str(root/'data'), XDG_DATA_HOME=str(root/'data'),
                 XDG_STATE_HOME=str(root/'home/state'))
 
+def restored_user_path(original, current, shim):
+    """Undo only owned additions and Scoop's documented empty-entry removal.
+
+    Preserve original text exactly when the nonempty entries still match. Any
+    unrelated edit remains in place and is reported as a restoration failure.
+    """
+    ours = shim.rstrip('\\/').casefold()
+    owned = lambda entry: entry.rstrip('\\/').casefold() == ours
+    additions = max(0, sum(owned(p) for p in current.split(';'))
+                       - sum(owned(p) for p in original.split(';')))
+    kept = []
+    for entry in current.split(';'):
+        if additions and owned(entry):
+            additions -= 1
+        else:
+            kept.append(entry)
+    cleaned = ';'.join(kept)
+    if [p for p in cleaned.split(';') if p] == [p for p in original.split(';') if p]:
+        return original, True
+    return cleaned, False
+
+def user_path_restoration(original, observed, shim):
+    before=original[0] if original is not None else ''
+    current=observed[0] if observed is not None else ''
+    cleaned,exact=restored_user_path(before,current,shim)
+    if exact: return original
+    return (cleaned,observed[1]) if observed is not None else None
+
 def cli_result(output, command):
     envelope = json.loads(output)
     if (not isinstance(envelope, dict) or envelope.get('format') != 'pactrun.cli'
@@ -158,6 +186,12 @@ def manager_setup():
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,'Environment') as k:
             try: ORIGINAL_PATH=winreg.QueryValueEx(k,'Path')
             except FileNotFoundError: pass
+        if ORIGINAL_PATH is not None:
+            if not isinstance(ORIGINAL_PATH[0],str) or ORIGINAL_PATH[1] not in (winreg.REG_SZ,winreg.REG_EXPAND_SZ):
+                raise ValueError('Unsupported user PATH representation')
+            shim=str(MANAGER/'shims').rstrip('\\/').casefold()
+            if any(p.rstrip('\\/').casefold()==shim for p in ORIGINAL_PATH[0].split(';')):
+                raise ValueError('Rehearsal shim already belongs to user PATH; choose a fresh root')
         run(['git','clone','--no-hardlinks',args.manager,MANAGER/'apps/scoop/current'],'scoop-clone')
         run(['git','-C',MANAGER/'apps/scoop/current','checkout','--detach','b588a06e41d920d2123ec70aee682bae14935939'],'scoop-pin')
         for d in ['buckets','shims','cache','persist']: (MANAGER/d).mkdir()
@@ -533,17 +567,23 @@ def main(argv=None):
         if WIN and MANAGER.exists():
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,'Environment',0,winreg.KEY_READ|winreg.KEY_SET_VALUE) as k:
-                try: current,kind=winreg.QueryValueEx(k,'Path')
-                except FileNotFoundError: current,kind='',winreg.REG_EXPAND_SZ
-                ours=str(MANAGER/'shims').rstrip('\\/').casefold()
-                cleaned=';'.join(p for p in current.split(';') if p.rstrip('\\/').casefold()!=ours)
-                if cleaned!=current:
-                    if ORIGINAL_PATH is not None and cleaned==ORIGINAL_PATH[0]: kind=ORIGINAL_PATH[1]
-                    if not cleaned and ORIGINAL_PATH is None: winreg.DeleteValue(k,'Path')
-                    else: winreg.SetValueEx(k,'Path',0,kind,cleaned)
+                try: observed=winreg.QueryValueEx(k,'Path')
+                except FileNotFoundError: observed=None
                 before_path=ORIGINAL_PATH[0] if ORIGINAL_PATH else ''
-                (ROOT/'evidence/path-fingerprints.json').write_text(json.dumps(dict(before=hashlib.sha256(before_path.encode()).hexdigest(),after=hashlib.sha256(cleaned.encode()).hexdigest())),encoding='utf-8')
-                check('only temporary shim PATH entry removed',cleaned==before_path)
+                desired=user_path_restoration(ORIGINAL_PATH,observed,str(MANAGER/'shims'))
+                if desired!=observed:
+                    if desired is None:
+                        if observed is not None: winreg.DeleteValue(k,'Path')
+                    else:
+                        winreg.SetValueEx(k,'Path',0,desired[1],desired[0])
+                try: after=winreg.QueryValueEx(k,'Path')
+                except FileNotFoundError: after=None
+                after_path=after[0] if after is not None else ''
+                (ROOT/'evidence/path-fingerprints.json').write_text(json.dumps(dict(
+                    before=hashlib.sha256(before_path.encode()).hexdigest(),after=hashlib.sha256(after_path.encode()).hexdigest(),
+                    before_kind=ORIGINAL_PATH[1] if ORIGINAL_PATH else None,after_kind=after[1] if after else None,
+                    exact_restoration=after==ORIGINAL_PATH)),encoding='utf-8')
+                check('only temporary shim PATH entry removed',after==ORIGINAL_PATH)
             import ctypes
             from ctypes import wintypes
             notify=ctypes.WinDLL('user32',use_last_error=True).SendMessageTimeoutW
