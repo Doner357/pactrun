@@ -192,6 +192,156 @@ fn accepted_run_links_core_trace_without_recording_hook_terminal_text() {
     );
 }
 
+// Test-ID: PR-TEST-0805
+// Verifies: PR-REQ-0397, PR-REQ-0396
+#[test]
+fn detailed_input_reads_are_real_events_without_changing_secret_bytes() {
+    let fixture = Fixture::new();
+    let source = fixture._temp.path().join("input-source");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("pactrun.yaml"), "source_format: 1.0-alpha.3\npackage_id: 000000000000000000000000000000b8\nrevision:\n  inputs: [{id: config, protection: secret}]\nruntime_content: {}\n").unwrap();
+    let installed = fixture
+        .command()
+        .args(["--format", "json", "pack", "install"])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        installed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&installed.stdout)
+    );
+    let installed: Value = serde_json::from_slice(&installed.stdout).unwrap();
+    let reference = installed["result"]["reference"].as_str().unwrap();
+    let path = fixture._temp.path().join("private-input-path-sentinel.bin");
+    let mut bytes = b"private-input-value-sentinel\0\xff\r\n".to_vec();
+    bytes.extend(vec![0x81; 70_000]);
+    fs::write(&path, &bytes).unwrap();
+    let initial = format!("config={}", path.display());
+    let (out, created) = fixture.json(&[
+        "--diagnostic-level",
+        "detailed",
+        "instance",
+        "create",
+        "trace-input",
+        "--revision",
+        reference,
+        "--input-file",
+        &initial,
+    ]);
+    assert!(out.status.success(), "{created}");
+    let (_, shown) = fixture.json(&[
+        "diagnostic",
+        "show",
+        created["diagnostic_id"].as_str().unwrap(),
+        "--startup",
+    ]);
+    assert!(
+        shown["result"]["totals"]["input_read"]["finished"]
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
+            > 0
+    );
+    for level in ["normal", "detailed"] {
+        let (out, result) = fixture.json(&[
+            "--diagnostic-level",
+            level,
+            "input",
+            "set",
+            "trace-input",
+            "config",
+            "--file",
+            path.to_str().unwrap(),
+        ]);
+        assert!(out.status.success(), "{result}");
+        let (out, shown) = fixture.json(&[
+            "diagnostic",
+            "show",
+            result["diagnostic_id"].as_str().unwrap(),
+            "--startup",
+        ]);
+        assert!(out.status.success(), "{shown}");
+        let trace = &shown["result"];
+        assert_eq!(trace["closed"], true);
+        assert!(
+            trace["totals"]["input_read"]["finished"]
+                .as_str()
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+                > 0
+        );
+        assert_eq!(
+            trace["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|event| event["phase"] == "input_read"),
+            level == "detailed"
+        );
+        assert!(!trace.to_string().contains("private-input-value-sentinel"));
+        assert!(!trace.to_string().contains("private-input-path-sentinel"));
+        let exported = fixture
+            .command()
+            .args([
+                "input",
+                "export",
+                "trace-input",
+                "config",
+                "--output",
+                "-",
+                "--authorize-secret-export",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            exported.status.success(),
+            "{}",
+            String::from_utf8_lossy(&exported.stderr)
+        );
+        assert_eq!(exported.stdout, bytes);
+        let destination = fixture._temp.path().join(format!("export-{level}.bin"));
+        let (out, exported) = fixture.json(&[
+            "--diagnostic-level",
+            level,
+            "input",
+            "export",
+            "trace-input",
+            "config",
+            "--output",
+            destination.to_str().unwrap(),
+            "--authorize-secret-export",
+        ]);
+        assert!(out.status.success(), "{exported}");
+        assert_eq!(fs::read(destination).unwrap(), bytes);
+        let (out, shown) = fixture.json(&[
+            "diagnostic",
+            "show",
+            exported["diagnostic_id"].as_str().unwrap(),
+            "--startup",
+        ]);
+        assert!(out.status.success(), "{shown}");
+        let trace = &shown["result"];
+        assert_eq!(trace["totals"]["output_publication"]["finished"], "1");
+        assert_eq!(trace["totals"]["durable_record_write"]["finished"], "1");
+        assert_eq!(
+            trace["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|event| event["phase"] == "durable_record_write"),
+            level == "detailed"
+        );
+        assert_eq!(
+            !trace["totals"]["directory_sync"].is_null(),
+            cfg!(target_os = "linux")
+        );
+        assert!(!trace.to_string().contains("private-input-value-sentinel"));
+    }
+}
+
 // Native fixture avoids altering host PowerShell execution policy.
 #[test]
 fn trace_native_worker() {

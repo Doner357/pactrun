@@ -187,11 +187,18 @@ fn application_export_requires_one_shot_authorization_and_atomic_no_clobber() {
     drop(p);
     let app = crate::application::PactrunApplication::open(&path).unwrap();
     let output = tmp.path().join("export.zip");
-    assert!(app.export_snapshot_file(id, &output, false).is_err());
+    assert!(
+        app.export_snapshot_file(id, &output, false, &Default::default())
+            .is_err()
+    );
     assert!(!output.exists());
-    app.export_snapshot_file(id, &output, true).unwrap();
+    app.export_snapshot_file(id, &output, true, &Default::default())
+        .unwrap();
     let before = fs::read(&output).unwrap();
-    assert!(app.export_snapshot_file(id, &output, true).is_err());
+    assert!(
+        app.export_snapshot_file(id, &output, true, &Default::default())
+            .is_err()
+    );
     assert_eq!(fs::read(&output).unwrap(), before);
     #[cfg(unix)]
     {

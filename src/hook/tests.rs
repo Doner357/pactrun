@@ -81,8 +81,9 @@ fn completed_phase_trace(
     f: &RuntimeFixture,
     cancellation: &ActionCancellation,
     run: RunId,
+    code: i32,
 ) -> crate::domain::TraceDocument {
-    let finished = cancellation.trace.finish(0).unwrap();
+    let finished = cancellation.trace.finish(code).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if let Ok(Some(trace)) = crate::trace_journal::read(
@@ -2516,17 +2517,19 @@ fn workspace_bytes_do_not_acquire_authority_on_success_rejection_or_timeout() {
 }
 
 // Test-ID: PR-TEST-0106
-// Verifies: PR-REQ-0073, PR-REQ-0144, PR-REQ-0281
+// Verifies: PR-REQ-0073, PR-REQ-0144, PR-REQ-0281, PR-REQ-0397
 #[test]
 fn accepted_output_subset_is_published_only_after_cleanup() {
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("output-subset");
     let admitted = fixture.admit("output_subset", "output_subset", &marker);
     let run = admitted.run();
+    let cancellation = phase_cancellation(&fixture, crate::domain::TraceOperation::ActionInvoke);
+    cancellation.trace.associate(run);
     fixture.application.execute_admitted_action(
         admitted,
         policy(None, None, None),
-        ActionCancellation::default(),
+        cancellation.clone(),
     );
     let session: Value =
         serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
@@ -2557,6 +2560,15 @@ fn accepted_output_subset_is_published_only_after_cleanup() {
         )
         .unwrap();
     assert_eq!(bytes, b"unpublished-output");
+    let trace = completed_phase_trace(&fixture, &cancellation, run, 0);
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].finished,
+        1
+    );
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].failed,
+        0
+    );
     assert!(
         outcome
             .artifacts
@@ -2602,17 +2614,19 @@ fn late_completion_keeps_timeout_outcome_but_publishes_eligible_output() {
 }
 
 // Test-ID: PR-TEST-0107
-// Verifies: PR-REQ-0051, PR-REQ-0144, PR-REQ-0281
+// Verifies: PR-REQ-0051, PR-REQ-0144, PR-REQ-0281, PR-REQ-0397
 #[test]
 fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("output-publication-failure");
     let admitted = fixture.admit("direct", "output", &marker);
     let run = admitted.run();
+    let cancellation = phase_cancellation(&fixture, crate::domain::TraceOperation::ActionInvoke);
+    cancellation.trace.associate(run);
     fixture.application.execute_admitted_action(
         admitted,
         policy(None, None, None),
-        ActionCancellation::default(),
+        cancellation.clone(),
     );
     let session: Value =
         serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
@@ -2638,6 +2652,15 @@ fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
     );
     assert!(outcome.secondary_failures.is_empty());
     assert!(outcome.artifacts.is_empty());
+    let trace = completed_phase_trace(&fixture, &cancellation, run, 1);
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].finished,
+        1
+    );
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].failed,
+        1
+    );
 }
 
 // Test-ID: PR-TEST-0110

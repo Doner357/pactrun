@@ -34,6 +34,12 @@ the closed phase vocabulary. Normal detail omits individual internal phase
 events while keeping their aggregates; detailed mode includes those events.
 Counter exhaustion MUST stop capture with an explicit saturation flag.
 
+Internal observations include actual source-read attempts, managed-output
+validation and staging, and publication durability barriers. A platform adapter
+that performs no separate directory-sync call does not invent a successful
+directory-sync observation. These observations never retain source bytes or
+backend error messages, and never change the publication truth boundary.
+
 Trace records contain only closed operation/phase/result classifications, opaque
 identities, counters and timestamps. They MUST NOT contain paths, arguments,
 Input/Secret values, raw operating-system messages, Hook free text or terminal

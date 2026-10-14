@@ -61,6 +61,7 @@ pub(super) fn execute(
     request: Request,
     root: &Path,
     format: reply::OutputContext,
+    capture: &std::sync::Arc<crate::trace::Trace>,
 ) -> Result<(), CliError> {
     if format.version() == machine::Version::Legacy {
         return Err(CliError::operation(
@@ -90,7 +91,7 @@ pub(super) fn execute(
             errors::io_reason(error.kind()),
         )
     })?;
-    crate::output_publication::publish_reported(&stage, &request.destination).map_err(|error| {
+    crate::output_publication::publish_reported_traced(&stage, &request.destination, capture).map_err(|error| {
         let message = if error.destination_published {
             "Run report was published but durability could not be confirmed; the existing report was not removed"
         } else if error.source.kind() == io::ErrorKind::AlreadyExists {

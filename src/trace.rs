@@ -4,6 +4,7 @@ use crate::{
     trace_journal::{Error, Journal, Location},
 };
 use std::{
+    io::{self, Read},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
     thread,
@@ -67,6 +68,12 @@ pub(crate) struct Completion {
 }
 
 impl Trace {
+    pub(crate) fn reader<R: Read>(self: &Arc<Self>, source: R) -> TracedReader<R> {
+        TracedReader {
+            source,
+            trace: self.clone(),
+        }
+    }
     pub(crate) fn id(&self) -> Option<TraceId> {
         self.shared
             .state
@@ -290,6 +297,23 @@ impl Trace {
             PersistenceStatus::Pending
         };
         Some(Completion { id, persistence })
+    }
+}
+
+/// Measures read attempts only. It never copies, examines or retains the bytes.
+pub(crate) struct TracedReader<R> {
+    source: R,
+    trace: Arc<Trace>,
+}
+impl<R: Read> Read for TracedReader<R> {
+    fn read(&mut self, destination: &mut [u8]) -> io::Result<usize> {
+        self.trace
+            .measure(TracePhase::InputRead, || self.source.read(destination))
+    }
+    fn read_vectored(&mut self, destinations: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        self.trace.measure(TracePhase::InputRead, || {
+            self.source.read_vectored(destinations)
+        })
     }
 }
 impl Drop for Trace {

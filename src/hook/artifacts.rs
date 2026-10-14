@@ -17,6 +17,7 @@ pub(super) fn stage_submitted(
         facts.ordinary_outputs_accepted,
         &facts.submitted_outputs,
         &facts.outputs,
+        &facts.trace,
     )
 }
 
@@ -25,6 +26,7 @@ fn stage_outputs(
     accepted: bool,
     submitted: &[ManagedOutputIdentity],
     slots: &[LiveOutputSlot],
+    trace: &std::sync::Arc<crate::trace::Trace>,
 ) -> Result<Vec<PreparedOutput>, ()> {
     if !accepted || submitted.is_empty() {
         return Ok(Vec::new());
@@ -39,7 +41,11 @@ fn stage_outputs(
     let mut prepared = Vec::new();
     for output in submitted {
         let path = sources.remove(output).ok_or(())?;
-        let bytes = staging.stage_action_output(path).map_err(|_| ())?;
+        let bytes = trace
+            .measure(crate::domain::TracePhase::OutputValidation, || {
+                staging.stage_action_output(path)
+            })
+            .map_err(|_| ())?;
         prepared.push(PreparedOutput {
             output: output.clone(),
             bytes,
@@ -64,6 +70,7 @@ impl ArtifactPreparation {
             facts.ordinary_outputs_accepted,
             &facts.submitted_outputs,
             &facts.outputs,
+            &facts.trace,
         );
     }
     pub(super) fn prepare_submission(
@@ -72,11 +79,12 @@ impl ArtifactPreparation {
         accepted: bool,
         submitted: &[ManagedOutputIdentity],
         slots: &[LiveOutputSlot],
+        trace: &std::sync::Arc<crate::trace::Trace>,
     ) {
         if self.prepared.is_some() {
             return;
         }
-        match stage_outputs(staging, accepted, submitted, slots) {
+        match stage_outputs(staging, accepted, submitted, slots, trace) {
             Ok(outputs) => self.prepared = Some(outputs),
             Err(()) => {
                 self.failed = true;

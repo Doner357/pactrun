@@ -127,3 +127,5 @@ storage-retry ownership warnings. Machine output content and framing do not
 depend on human presentation preferences.
 
 **Verification: PR-TEST-0746, PR-TEST-0747, PR-TEST-0748, PR-TEST-0749, PR-TEST-0750, PR-TEST-0751, PR-TEST-0752.**
+
+**Verification: PR-TEST-0805.**

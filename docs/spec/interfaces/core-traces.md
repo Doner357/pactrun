@@ -28,6 +28,12 @@ the closed phase vocabulary. Normal detail omits individual internal phase
 events while keeping their aggregates; detailed mode includes those events.
 Counter exhaustion MUST stop capture with an explicit saturation flag.
 
+Internal observations include actual source-read attempts, managed-output
+validation and staging, and publication durability barriers. A platform adapter
+that performs no separate directory-sync call does not invent a successful
+directory-sync observation. These observations never retain source bytes or
+backend error messages, and never change the publication truth boundary.
+
 Trace records contain only closed operation/phase/result classifications, opaque
 identities, counters and timestamps. They MUST NOT contain paths, arguments,
 Input/Secret values, raw operating-system messages, Hook free text or terminal
@@ -42,6 +48,8 @@ missing build provenance is not inferred from the current checkout or exporter.
 **Verification: PR-TEST-0753, PR-TEST-0754, PR-TEST-0755, PR-TEST-0760, PR-TEST-0762, PR-TEST-0763, PR-TEST-0764.**
 
 **Verification: PR-TEST-0247, PR-TEST-0263, PR-TEST-0312, PR-TEST-0404, PR-TEST-0788, PR-TEST-0793.**
+
+**Verification: PR-TEST-0106, PR-TEST-0107, PR-TEST-0804, PR-TEST-0805, PR-TEST-0806.**
 
 ### PR-REQ-0398 - Non-authoritative journals and retention
 

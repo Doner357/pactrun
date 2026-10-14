@@ -6,6 +6,80 @@ fn scratch() -> tempfile::TempDir {
     tempfile::tempdir_in(root).unwrap()
 }
 
+// Test-ID: PR-TEST-0804
+// Verifies: PR-REQ-0397
+#[test]
+fn traced_read_preserves_bytes_retries_and_vectored_errors_without_recording_content() {
+    struct Source {
+        interrupted: bool,
+        bytes: io::Cursor<Vec<u8>>,
+    }
+    impl Read for Source {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            let count = bytes.len().min(3);
+            self.bytes.read(&mut bytes[..count])
+        }
+        fn read_vectored(&mut self, _: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "private-source-sentinel",
+            ))
+        }
+    }
+    let bytes = b"private-input-sentinel\0\xff";
+    for detailed in [false, true] {
+        let temp = scratch();
+        let location = Location::startup(temp.path().join("reads.sqlite3"));
+        let trace = Arc::new(Trace::default());
+        trace.begin();
+        trace.configure(
+            Some(location.clone()),
+            None,
+            TracePolicy {
+                detailed,
+                ..TracePolicy::startup()
+            },
+            TracePolicy::default(),
+        );
+        let mut source = trace.reader(Source {
+            interrupted: false,
+            bytes: io::Cursor::new(bytes.to_vec()),
+        });
+        let mut actual = Vec::new();
+        source.read_to_end(&mut actual).unwrap();
+        assert_eq!(actual, bytes);
+        let mut destination = [0; 8];
+        let error = source
+            .read_vectored(&mut [io::IoSliceMut::new(&mut destination)])
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(error.to_string(), "private-source-sentinel");
+        let completion = trace.finish(0).unwrap();
+        let document = crate::trace_journal::read(&location, completion.id)
+            .unwrap()
+            .unwrap();
+        let totals = &document.totals[&TracePhase::InputRead];
+        assert!(totals.started > 2);
+        assert_eq!(totals.finished, totals.started);
+        assert_eq!(totals.failed, 2);
+        assert_eq!(
+            document
+                .events
+                .iter()
+                .any(|event| event.phase == TracePhase::InputRead),
+            detailed
+        );
+        let text = serde_json::to_string(&document).unwrap();
+        assert!(
+            !text.contains("private-input-sentinel") && !text.contains("private-source-sentinel")
+        );
+    }
+}
+
 // Test-ID: PR-TEST-0760
 // Verifies: PR-REQ-0397, PR-REQ-0398, PR-REQ-0399
 #[test]

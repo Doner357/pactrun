@@ -430,7 +430,7 @@ pub(super) fn execute(
             authorized,
         } => {
             let id = id.full();
-            app.export_snapshot_file(id, &path, authorized)
+            app.export_snapshot_file(id, &path, authorized, &cancellation.trace)
                 .map_err(safe_error)?;
             {
                 let result = transport_presentation::SnapshotExported {

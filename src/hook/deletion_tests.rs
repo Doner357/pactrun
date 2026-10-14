@@ -100,7 +100,7 @@ fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history
     assert!(p.managed_run_inspection(run).unwrap().is_some());
     assert!(matches!(p.load_managed_run(run).unwrap().unwrap().operation,
         ManagedRunIdentity::Deletion { mode: DeletionMode::ManagedCleanup, .. }));
-    let trace = completed_phase_trace(&f, &cancellation, run);
+    let trace = completed_phase_trace(&f, &cancellation, run, 0);
     assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
     assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
     assert_eq!(trace.totals[&TracePhase::StorageFinalization].finished, 1);

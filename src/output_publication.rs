@@ -20,11 +20,20 @@ pub(crate) struct PublicationFailure {
     pub(crate) source: io::Error,
 }
 
+#[cfg(test)]
 pub(crate) fn publish_reported(
     source: &StagedFile,
     destination: &Path,
 ) -> Result<(), PublicationFailure> {
     publish_reported_with_fault(source, destination, |_| Ok(()))
+}
+
+pub(crate) fn publish_reported_traced(
+    source: &StagedFile,
+    destination: &Path,
+    trace: &std::sync::Arc<crate::trace::Trace>,
+) -> Result<(), PublicationFailure> {
+    publish_reported_observed(source, destination, |_| Ok(()), Some(trace))
 }
 
 #[cfg(test)]
@@ -47,40 +56,78 @@ pub(crate) fn publish_pack(
     cancellation: &crate::hook::ActionCancellation,
 ) -> Result<(), PublicationFailure> {
     let mut gate = None;
-    publish_reported_with_fault(source, destination, |point| match point {
-        OutputPublicationPoint::CopyChunk => crate::pack_transport::check_cancel(cancellation),
-        OutputPublicationPoint::BeforeFinalNamePublication => {
-            gate = Some(cancellation.lock_acceptance_gate());
-            crate::pack_transport::check_cancel(cancellation)
-        }
-        OutputPublicationPoint::AfterFinalNamePublication => {
-            gate.take();
-            Ok(())
-        }
-    })
+    publish_reported_observed(
+        source,
+        destination,
+        |point| match point {
+            OutputPublicationPoint::CopyChunk => crate::pack_transport::check_cancel(cancellation),
+            OutputPublicationPoint::BeforeFinalNamePublication => {
+                gate = Some(cancellation.lock_acceptance_gate());
+                crate::pack_transport::check_cancel(cancellation)
+            }
+            OutputPublicationPoint::AfterFinalNamePublication => {
+                gate.take();
+                Ok(())
+            }
+        },
+        Some(&cancellation.trace),
+    )
 }
 
+#[cfg(test)]
 fn publish_reported_with_fault(
     source: &StagedFile,
     destination: &Path,
+    fault: impl FnMut(OutputPublicationPoint) -> io::Result<()>,
+) -> Result<(), PublicationFailure> {
+    publish_reported_observed(source, destination, fault, None)
+}
+
+fn publish_reported_observed(
+    source: &StagedFile,
+    destination: &Path,
     mut fault: impl FnMut(OutputPublicationPoint) -> io::Result<()>,
+    trace: Option<&std::sync::Arc<crate::trace::Trace>>,
 ) -> Result<(), PublicationFailure> {
     let mut destination_published = false;
-    publish_with_fault(source, destination, |point| {
-        if point == OutputPublicationPoint::AfterFinalNamePublication {
-            destination_published = true;
-        }
-        fault(point)
-    })
-    .map_err(|source| PublicationFailure {
+    let phase = trace.map(|trace| trace.span(crate::domain::TracePhase::OutputPublication));
+    let result = publish_observed(
+        source,
+        destination,
+        |point| {
+            if point == OutputPublicationPoint::AfterFinalNamePublication {
+                destination_published = true;
+            }
+            fault(point)
+        },
+        trace,
+    );
+    if let Some(phase) = phase {
+        phase.finish(if result.is_ok() {
+            crate::domain::PhaseResult::Succeeded
+        } else {
+            crate::domain::PhaseResult::Failed
+        });
+    }
+    result.map_err(|source| PublicationFailure {
         destination_published,
         source,
     })
 }
+#[cfg(test)]
 pub(crate) fn publish_with_fault(
     source: &StagedFile,
     destination: &Path,
+    fault: impl FnMut(OutputPublicationPoint) -> io::Result<()>,
+) -> io::Result<()> {
+    publish_observed(source, destination, fault, None)
+}
+
+fn publish_observed(
+    source: &StagedFile,
+    destination: &Path,
     mut fault: impl FnMut(OutputPublicationPoint) -> io::Result<()>,
+    trace: Option<&std::sync::Arc<crate::trace::Trace>>,
 ) -> io::Result<()> {
     if destination.file_name().is_none() {
         return Err(io::Error::new(
@@ -114,10 +161,22 @@ pub(crate) fn publish_with_fault(
             }
             file.write_all(&buffer[..n])?;
         }
-        file.sync_all()?;
+        if let Some(trace) = trace {
+            trace.measure(crate::domain::TracePhase::DurableRecordWrite, || {
+                file.sync_all()
+            })?;
+        } else {
+            file.sync_all()?;
+        }
         fault(OutputPublicationPoint::BeforeFinalNamePublication)?;
         publish_no_replace(&file, &path, destination)?;
         fault(OutputPublicationPoint::AfterFinalNamePublication)?;
+        #[cfg(target_os = "linux")]
+        if let Some(trace) = trace {
+            return trace.measure(crate::domain::TracePhase::DirectorySync, || {
+                sync_parent(parent)
+            });
+        }
         sync_parent(parent)
     })();
     drop(file);
@@ -175,6 +234,109 @@ fn sync_parent(parent: &Path) -> io::Result<()> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    // Test-ID: PR-TEST-0806
+    // Verifies: PR-REQ-0397, PR-REQ-0342
+    #[test]
+    fn traced_publication_preserves_failure_truth_and_observes_real_syncs_only() {
+        use crate::domain::{TracePhase, TracePolicy};
+        use std::sync::Arc;
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/traced-publication-tests");
+        fs::create_dir_all(&base).unwrap();
+        let temp = tempfile::tempdir_in(base).unwrap();
+        fs::create_dir(temp.path().join("staging")).unwrap();
+        let session = crate::managed_data::StagingSession::prepare(temp.path()).unwrap();
+        let mut source = session.create_managed_output_stage().unwrap();
+        source
+            .writer()
+            .write_all(b"private-output-content-sentinel")
+            .unwrap();
+        source.finish_operation_file().unwrap();
+        for detailed in [false, true] {
+            for failure in [
+                None,
+                Some(OutputPublicationPoint::BeforeFinalNamePublication),
+                Some(OutputPublicationPoint::AfterFinalNamePublication),
+            ] {
+                let name = format!("private-destination-sentinel-{detailed}-{failure:?}");
+                let destination = temp.path().join(&name);
+                let location = crate::trace_journal::Location::startup(
+                    temp.path()
+                        .join(format!("trace-{detailed}-{failure:?}.sqlite3")),
+                );
+                let trace = Arc::new(crate::trace::Trace::default());
+                trace.begin();
+                trace.configure(
+                    Some(location.clone()),
+                    None,
+                    TracePolicy {
+                        detailed,
+                        ..TracePolicy::startup()
+                    },
+                    TracePolicy::default(),
+                );
+                let result = publish_reported_observed(
+                    &source,
+                    &destination,
+                    |point| {
+                        if failure == Some(point) {
+                            Err(io::Error::other("private-failure-sentinel"))
+                        } else {
+                            Ok(())
+                        }
+                    },
+                    Some(&trace),
+                );
+                let published = failure != Some(OutputPublicationPoint::BeforeFinalNamePublication);
+                if let Err(error) = &result {
+                    assert_eq!(error.destination_published, published);
+                }
+                assert_eq!(result.is_err(), failure.is_some());
+                assert_eq!(destination.exists(), published);
+                if published {
+                    assert_eq!(
+                        fs::read(&destination).unwrap(),
+                        b"private-output-content-sentinel"
+                    );
+                }
+                let completed = trace.finish(i32::from(result.is_err())).unwrap();
+                let doc = crate::trace_journal::read(&location, completed.id)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    doc.totals[&TracePhase::OutputPublication].failed,
+                    u64::from(failure.is_some())
+                );
+                assert_eq!(doc.totals[&TracePhase::DurableRecordWrite].finished, 1);
+                assert_eq!(doc.totals[&TracePhase::DurableRecordWrite].failed, 0);
+                assert_eq!(
+                    doc.events
+                        .iter()
+                        .any(|event| event.phase == TracePhase::DurableRecordWrite),
+                    detailed
+                );
+                assert_eq!(
+                    doc.totals.contains_key(&TracePhase::DirectorySync),
+                    cfg!(target_os = "linux") && failure.is_none()
+                );
+                let text = serde_json::to_string(&doc).unwrap();
+                for private in [
+                    "private-output-content-sentinel",
+                    "private-destination-sentinel",
+                    "private-failure-sentinel",
+                ] {
+                    assert!(!text.contains(private));
+                }
+            }
+        }
+        let mut bytes = Vec::new();
+        source
+            .try_clone_reader()
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        assert_eq!(bytes, b"private-output-content-sentinel");
+    }
 
     // Test-ID: PR-TEST-0448
     // Verifies: PR-REQ-0342

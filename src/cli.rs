@@ -1472,10 +1472,10 @@ fn execute(
         return lifecycle::execute(command, &storage_root, format);
     }
     if let Command::Artifact(command) = command {
-        return artifacts::execute(command, &storage_root, format);
+        return artifacts::execute(command, &storage_root, format, &cancellation.trace);
     }
     if let Command::RunExport(command) = command {
-        return run_export::execute(command, &storage_root, format);
+        return run_export::execute(command, &storage_root, format, &cancellation.trace);
     }
     if let Command::Retirement(command) = command {
         return retirements::execute(command, &storage_root, stdin, stderr, cancellation, format);
@@ -1581,7 +1581,7 @@ fn execute(
                         })?;
                         acquisitions.push(InputAcquisition {
                             input_id: id,
-                            source: Box::new(file),
+                            source: Box::new(cancellation.trace.reader(file)),
                         });
                     }
                     InitialInputSpec::Stdin(id) => stdin_id = Some(id),
@@ -1590,7 +1590,7 @@ fn execute(
             if let Some(id) = stdin_id {
                 acquisitions.push(InputAcquisition {
                     input_id: id,
-                    source: Box::new(&mut *stdin),
+                    source: Box::new(cancellation.trace.reader(&mut *stdin)),
                 });
             }
             let view = application
@@ -1676,7 +1676,12 @@ fn execute(
                 InputSourceSpec::Stdin => Box::new(&mut *stdin),
             };
             let version = application
-                .set_input(instance, input.clone(), expected, source)
+                .set_input(
+                    instance,
+                    input.clone(),
+                    expected,
+                    Box::new(cancellation.trace.reader(source)),
+                )
                 .map_err(app_error)?;
             emit_result(
                 format,
@@ -1706,7 +1711,7 @@ fn execute(
                 io::copy(&mut reader, stdout).map_err(io_operation)?;
                 stdout.flush().map_err(io_operation)?;
             } else {
-                publish_output_file(&observation.bytes, Path::new(&output))?;
+                publish_output_file(&observation.bytes, Path::new(&output), &cancellation.trace)?;
                 emit_result(
                     format,
                     "input export",
@@ -2546,6 +2551,7 @@ fn read_cancellable_bytes(
     source: &mut dyn Read,
     cancellation: &ActionCancellation,
 ) -> Result<Vec<u8>, CliError> {
+    let mut source = cancellation.trace.reader(source);
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
@@ -2878,8 +2884,12 @@ fn io_operation(error: io::Error) -> CliError {
 #[cfg(test)]
 use crate::output_publication::OutputPublicationPoint;
 
-fn publish_output_file(source: &StagedFile, destination: &Path) -> Result<(), CliError> {
-    crate::output_publication::publish_reported(source, destination)
+fn publish_output_file(
+    source: &StagedFile,
+    destination: &Path,
+    trace: &std::sync::Arc<crate::trace::Trace>,
+) -> Result<(), CliError> {
+    crate::output_publication::publish_reported_traced(source, destination, trace)
         .map_err(|failure| publication_error(failure, destination))
 }
 

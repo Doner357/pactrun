@@ -253,7 +253,7 @@ fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_ou
     assert_eq!(fs::read(f.marker("invoked")).unwrap(), b"once\n");
     assert!(!contains(format!("{:?}",p.managed_run_inspection(run).unwrap()).as_bytes(), SECRET_BINDING));
     assert_eq!(p.managed_run_inspection(run).unwrap().unwrap().migration_progress.unwrap().committed_edges, 3);
-    let trace = completed_phase_trace(&f, &cancellation, run);
+    let trace = completed_phase_trace(&f, &cancellation, run, 0);
     assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
     assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
     assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 3);

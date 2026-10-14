@@ -594,8 +594,11 @@ impl MigrationOwnerState {
                     .outputs
                     .iter()
                     .map(|slot| {
-                        staging
-                            .stage_action_output(&slot.path)
+                        self.cancellation
+                            .trace
+                            .measure(crate::domain::TracePhase::OutputValidation, || {
+                                staging.stage_action_output(&slot.path)
+                            })
                             .map(|file| (slot.input.clone(), file))
                     })
                     .collect::<Result<BTreeMap<_, _>, _>>()
@@ -609,6 +612,7 @@ impl MigrationOwnerState {
                 valid,
                 &facts.submitted_outputs,
                 &facts.ordinary_outputs,
+                &self.cancellation.trace,
             );
             let cleaned = facts.execution.cleanup().is_ok();
             let input_outputs_ready = outputs.is_some();
@@ -674,8 +678,11 @@ impl MigrationOwnerState {
                 .migration_outputs
                 .iter()
                 .map(|slot| {
-                    staging
-                        .stage_action_output(&slot.path)
+                    self.cancellation
+                        .trace
+                        .measure(crate::domain::TracePhase::OutputValidation, || {
+                            staging.stage_action_output(&slot.path)
+                        })
                         .map(|file| (slot.input.clone(), file))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>();

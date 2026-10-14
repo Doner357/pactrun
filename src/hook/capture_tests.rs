@@ -494,7 +494,7 @@ fn capture_publication_retry_preserves_time_identity_and_distinct_source_account
         assert_eq!(result_id(&f, run), id);
         assert_eq!(manifest(&f, id).manifest().captured_at(), time);
         assert_eq!(super::super::capture::test_clock(None), reads + 1);
-        let trace = completed_phase_trace(&f, &cancellation, run);
+        let trace = completed_phase_trace(&f, &cancellation, run, 0);
         assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
         assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
         assert_eq!(trace.totals[&TracePhase::OutputPublication].finished, 1);

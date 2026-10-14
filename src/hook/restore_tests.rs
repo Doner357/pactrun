@@ -854,7 +854,7 @@ fn restore_publication_rollback_preserves_guard_pins_and_target_until_a_single_s
     assert!(guard(&f).is_none());
     assert_eq!(consequence(&f), counter);
     assert_eq!(count(&f, "run_restore_admissions"), 0);
-    let trace = completed_phase_trace(&f, &cancellation, run);
+    let trace = completed_phase_trace(&f, &cancellation, run, 0);
     assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
     assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
     assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 3);
@@ -1177,7 +1177,7 @@ fn capacity_round_trip(mib: u64) {
     assert_eq!(export(&f, f.instance.id, "secret_config"), SECRET_BINDING);
 
     let bundle = f.storage.parent().unwrap().join("capacity.zip");
-    f.application.export_snapshot_file(snapshot, &bundle, true).unwrap();
+    f.application.export_snapshot_file(snapshot, &bundle, true, &Default::default()).unwrap();
     assert!(fs::metadata(&bundle).unwrap().len() > 2 * expected);
     if mib > 16 * 1024 {
         assert!(fs::metadata(&bundle).unwrap().len() > 32 * 1024_u64.pow(3) + 128 * 1024 * 1024);
