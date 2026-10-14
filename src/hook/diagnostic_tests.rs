@@ -4,6 +4,79 @@ fn text(kind: DiagnosticKind, message: &str) -> HookText {
     HookText { kind, severity: (kind==DiagnosticKind::Diagnostic).then_some(DiagnosticSeverity::Info), code:Some("evidence".into()), message:Some(message.into()), completion_status:(kind==DiagnosticKind::Completion).then_some(crate::domain::HookCompletionStatus::Failure),truncated:false, truncated_prefix_bytes:0 }
 }
 
+// Test-ID: PR-TEST-0795
+// Verifies: PR-REQ-0398
+#[test]
+fn diagnostic_retention_inventory_charges_bytes_and_deletes_only_selected_evidence() {
+    use crate::domain::{CoreDiagnosticWindow, CoreEvidence, HelperCommand, HelperFailure, HelperReason, HelperStage};
+    let fixture = RuntimeFixture::new();
+    let first = fixture.admit("direct", "success", &fixture.marker("first"));
+    let second = fixture.admit("direct", "success", &fixture.marker("second"));
+    let runs = [first.run(), second.run()];
+    let store = persistence(&fixture.storage);
+    let before: Vec<_> = runs.iter().map(|run| store.load_managed_run(*run).unwrap()).collect();
+    let instance = store.load_instance_by_id(fixture.instance.id).unwrap();
+    let failure = HelperFailure { command: HelperCommand::Diagnostic, stage: HelperStage::ReadJson, reason: HelperReason::NotFound };
+    let mut window = DiagnosticWindow::default();
+    let message = "escaped-\n-\u{754c}";
+    for (sequence, at) in [(1, Some(1)), (2, None), (3, Some(10))] {
+        window.push(HookEvidence { sequence, received_at_unix_ms: at, stage: "action".into(), text: text(DiagnosticKind::Diagnostic, message) });
+    }
+    let mut core = CoreDiagnosticWindow::default();
+    core.push(CoreEvidence { sequence: 0, received_at_unix_ms: Some(3), stage: "action".into(), failure });
+    let mut expected_bytes = 0;
+    for run in runs {
+        store.save_diagnostics(run, &window, true, true, false).unwrap();
+        store.save_core_diagnostics(run, &core, true, false).unwrap();
+        for (sequence, at) in [(1, Some(1)), (2, None), (3, Some(10))] {
+            expected_bytes += serde_json::to_vec(&json!([run.to_string().to_uppercase(), sequence, at, "action", 0, 0, "evidence", message, 0, 0, null])).unwrap().len() as u64;
+        }
+        expected_bytes += serde_json::to_vec(&json!([run.to_string().to_uppercase(), 1, 3, "action", serde_json::to_string(&failure).unwrap()])).unwrap().len() as u64;
+    }
+    let inventory = store.diagnostic_retention_inventory(None, Some(runs[1])).unwrap();
+    assert_eq!(inventory.bytes, expected_bytes);
+    assert_eq!(inventory.candidates.len(), 8);
+    assert_eq!(inventory.candidates.iter().map(|row| row.bytes).sum::<u64>(), expected_bytes);
+    assert!(inventory.candidates[..4].iter().all(|row| !row.preferred));
+    assert!(inventory.candidates[4..].iter().all(|row| row.preferred));
+    assert_eq!(inventory.candidates[0].received_at_ms, None);
+    let expired = store.diagnostic_retention_inventory(Some(5), None).unwrap();
+    assert_eq!(expired.bytes, expected_bytes);
+    assert_eq!(expired.candidates.len(), 4);
+    assert!(expired.candidates.iter().all(|row| row.received_at_ms.is_some_and(|at| at < 5)));
+    let read_only = PactrunPersistence::open_read_only(&fixture.storage).unwrap();
+    assert!(read_only.delete_diagnostic_retention_candidates(&expired.candidates).is_err());
+    assert_eq!(store.diagnostic_retention_inventory(None, None).unwrap().bytes, expected_bytes);
+    store.delete_diagnostic_retention_candidates(&expired.candidates).unwrap();
+    let remaining = store.diagnostic_retention_inventory(None, None).unwrap();
+    assert_eq!(remaining.bytes, expected_bytes - expired.candidates.iter().map(|row| row.bytes).sum::<u64>());
+    for run in runs {
+        // Re-saving the same in-memory window cannot resurrect reclaimed rows.
+        store.save_diagnostics(run, &window, true, true, false).unwrap();
+        store.save_core_diagnostics(run, &core, true, false).unwrap();
+        let evidence = store.inspect_diagnostics(run).unwrap().unwrap();
+        assert!(evidence.started && evidence.closed && !evidence.failed);
+        assert_eq!(evidence.observed, 3);
+        assert_eq!(evidence.events.iter().map(|event| event.sequence).collect::<Vec<_>>(), [2, 3]);
+        let core = evidence.core.unwrap();
+        assert_eq!(core.observed, 1);
+        assert!(core.collection_closed && core.events.is_empty());
+    }
+    for sequence in 4..=100 {
+        window.push(HookEvidence { sequence, received_at_unix_ms: Some(sequence), stage: "action".into(), text: text(DiagnosticKind::Diagnostic, message) });
+    }
+    store.save_diagnostics(runs[1], &window, true, true, false).unwrap();
+    let page = store.diagnostic_retention_inventory(None, None).unwrap();
+    assert_eq!(page.candidates.len(), 64);
+    assert!(store.delete_diagnostic_retention_candidates(&vec![page.candidates[0].clone(); 65]).is_err());
+    assert_eq!(store.diagnostic_retention_inventory(None, None).unwrap().bytes, page.bytes);
+    assert_eq!(runs.iter().map(|run| store.load_managed_run(*run).unwrap()).collect::<Vec<_>>(), before);
+    assert_eq!(store.load_instance_by_id(fixture.instance.id).unwrap(), instance);
+    let mut input = Vec::new();
+    store.export_input(fixture.instance.id, &InputIdentity::parse("secret_config").unwrap(), true, &mut input).unwrap();
+    assert_eq!(input, SECRET_BINDING);
+}
+
 // Supporting coverage for PR-TEST-0689.
 #[test]
 fn core_diagnostic_history_is_separate_from_hook_text_retention() {

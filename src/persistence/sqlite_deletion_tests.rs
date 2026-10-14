@@ -269,7 +269,10 @@ fn legacy_incarnation_evidence_is_upgraded_before_new_backend_progress() {
             params![legacy.as_slice(), id.as_bytes().as_slice()],
         )
         .unwrap();
-    assert!(!p.finalize_next_allocation(run, &owner).unwrap());
+    assert_eq!(
+        p.finalize_next_allocation(run, &owner).unwrap(),
+        AllocationFinalizationStep::Progressed
+    );
     let saved: Vec<u8> = p
         .database
         .lock()
@@ -292,7 +295,8 @@ fn legacy_incarnation_evidence_is_upgraded_before_new_backend_progress() {
         &legacy[8..],
         "the native incarnation was not changed"
     );
-    while !p.finalize_next_allocation(run, &owner).unwrap() {}
+    while p.finalize_next_allocation(run, &owner).unwrap() != AllocationFinalizationStep::Complete {
+    }
     assert!(
         p.finish_instance_retirement(run, &owner, &success())
             .unwrap()
@@ -549,7 +553,9 @@ fn malformed_work_set_preserves_unexposed_evidence_without_authorizing_traversal
     p.admit_deletion(retry, &owner, &plan, false, &|_| Ok(()))
         .unwrap()
         .unwrap();
-    while !p.finalize_next_allocation(retry, &owner).unwrap() {}
+    while p.finalize_next_allocation(retry, &owner).unwrap() != AllocationFinalizationStep::Complete
+    {
+    }
     assert!(
         p.finish_instance_retirement(retry, &owner, &success())
             .unwrap()
@@ -614,7 +620,9 @@ fn retirement_never_adopts_an_existing_unexposed_preparation_path() {
             .unwrap();
         if mode == DeletionMode::ManagedCleanup {
             p.prepare_deletion_finalization(run, &owner).unwrap();
-            while !p.finalize_next_allocation(run, &owner).unwrap() {}
+            while p.finalize_next_allocation(run, &owner).unwrap()
+                != AllocationFinalizationStep::Complete
+            {}
         }
         assert!(
             p.finish_instance_retirement(run, &owner, &success())
@@ -712,7 +720,10 @@ fn already_accepted_retirement_is_durably_refused_after_another_run_removes_inst
         .unwrap()
         .unwrap();
     p.prepare_deletion_finalization(first, &owner).unwrap();
-    assert!(p.finalize_next_allocation(first, &owner).unwrap());
+    assert_eq!(
+        p.finalize_next_allocation(first, &owner).unwrap(),
+        AllocationFinalizationStep::Complete
+    );
     assert!(
         p.finish_instance_retirement(first, &owner, &success())
             .unwrap()
@@ -956,7 +967,9 @@ fn finalization_crashes_preserve_incarnation_and_absence_evidence() {
             .unwrap()
             .unwrap();
         if absent || (cfg!(target_os = "linux") && point == "after_finalization_removal") {
-            while !p.finalize_next_allocation(run, &owner).unwrap() {}
+            while p.finalize_next_allocation(run, &owner).unwrap()
+                != AllocationFinalizationStep::Complete
+            {}
             p.finish_instance_retirement(run, &owner, &success())
                 .unwrap();
             assert!(p.load_instance_by_id(instance.id).unwrap().is_none());
@@ -1130,13 +1143,17 @@ fn real_storage_lifetimes_end_before_instance_removal_and_preserve_history() {
             .all(|(_, root)| root.join("nested/data").exists())
     );
     p.prepare_deletion_finalization(run, &owner).unwrap();
-    assert!(!p.finalize_next_allocation(run, &owner).unwrap());
+    assert_eq!(
+        p.finalize_next_allocation(run, &owner).unwrap(),
+        AllocationFinalizationStep::Progressed
+    );
     assert_eq!(roots.iter().filter(|(_, root)| root.exists()).count(), 1);
     assert!(
         p.finish_instance_retirement(run, &owner, &success())
             .is_err()
     );
-    while !p.finalize_next_allocation(run, &owner).unwrap() {}
+    while p.finalize_next_allocation(run, &owner).unwrap() != AllocationFinalizationStep::Complete {
+    }
     p.finish_instance_retirement(run, &owner, &success())
         .unwrap();
     assert!(roots.iter().all(|(_, root)| !root.exists()));
@@ -1157,7 +1174,10 @@ fn partial_finalization_can_be_abandoned_and_only_explicit_discard_destroys_surv
         .unwrap()
         .unwrap();
     p.prepare_deletion_finalization(run, &owner).unwrap();
-    assert!(!p.finalize_next_allocation(run, &owner).unwrap());
+    assert_eq!(
+        p.finalize_next_allocation(run, &owner).unwrap(),
+        AllocationFinalizationStep::Progressed
+    );
     p.finish_run_owned(
         &owner,
         run,

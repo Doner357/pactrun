@@ -8,11 +8,13 @@ program, and creates reproducible normal/test/standalone archives.
 from __future__ import annotations
 import argparse
 import gzip
+import fnmatch
 import hashlib
 import io
 import json
 import os
 import re
+import posixpath
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
@@ -210,6 +212,67 @@ def build(root: Path, snapshot: Path, output: Path, platform: str, url_base: str
     (output / "binary-probe.json").write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
     (output / "artifact-checksums.json").write_text(json.dumps({p.name: dict(sha256=sha(p), bytes=p.stat().st_size) for p in sorted(assets.iterdir())}, indent=2)+"\n", encoding="utf-8")
 
+LICENSE_PATTERNS = ("*LICENSE*", "*LICENCE*", "COPYING*", "NOTICE*", "UNLICENSE*", "license*")
+LICENSE_LIMIT = 2 * 1024 * 1024
+
+def git_license_path(parent, target):
+    # Resolve only portable, relative names inside the qualified Git tree.
+    if not target or target.startswith('/') or '\\' in target or ':' in target or any(ord(c) < 32 for c in target):
+        raise ValueError("unsafe dependency license link")
+    name = posixpath.normpath(posixpath.join(parent, target))
+    if name in ('.', '..') or name.startswith('../'):
+        raise ValueError("dependency license escapes its Git source")
+    return name
+
+def git_dependency_licenses(package, base):
+    revision = package['source'].rsplit('#', 1)[-1]
+    if not re.fullmatch('[0-9a-f]{40}', revision):
+        raise ValueError("dependency Git source requires a full commit")
+    repository = Path(execute(['git', '-C', base, 'rev-parse', '--show-toplevel']).decode('utf-8').strip()).resolve()
+    if execute(['git', '-C', repository, 'rev-parse', 'HEAD']).decode('ascii').strip() != revision:
+        raise ValueError("dependency Git checkout differs from the locked commit")
+    prefix = base.resolve().relative_to(repository).as_posix()
+    prefix = '' if prefix == '.' else prefix + '/'
+    entries = {}
+    for record in execute(['git', '-C', repository, 'ls-tree', '-r', '-z', revision]).split(b'\0'):
+        if record:
+            header, name = record.split(b'\t', 1)
+            mode, kind, oid = header.decode('ascii').split()
+            entries[name.decode('utf-8')] = (mode, kind, oid)
+    candidates = set()
+    for name in entries:
+        if not name.startswith(prefix):
+            continue
+        relative = name[len(prefix):]
+        if ('/' not in relative and any(fnmatch.fnmatchcase(relative, pattern) for pattern in LICENSE_PATTERNS)) or relative.startswith('licenses/'):
+            candidates.add(name)
+    if package.get('license_file'):
+        candidates.add(git_license_path(prefix, package['license_file']))
+    result = []
+    for candidate in sorted(candidates):
+        name, visited = candidate, set()
+        while True:
+            if name in visited or len(visited) >= 16:
+                raise ValueError("cyclic or excessive dependency license links")
+            visited.add(name)
+            entry = entries.get(name)
+            if entry is None or entry[1] != 'blob' or entry[0] not in ('100644', '100755', '120000'):
+                raise ValueError("dependency license is not a committed file")
+            mode, _, oid = entry
+            size = int(execute(['git', '-C', repository, 'cat-file', '-s', oid]))
+            if size > LICENSE_LIMIT:
+                raise ValueError("oversized dependency license file")
+            data = execute(['git', '-C', repository, 'cat-file', 'blob', oid])
+            if len(data) != size:
+                raise ValueError("dependency license size changed")
+            content = data.decode('utf-8', errors='strict')
+            if mode != '120000':
+                break
+            name = git_license_path(posixpath.dirname(name), content)
+        label = posixpath.relpath(candidate, prefix or '.')
+        result.append((label, content))
+    return result
+
 def dependency_notices(metadata):
     packages = {p["id"]: p for p in metadata["packages"]}
     nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
@@ -227,8 +290,16 @@ def dependency_notices(metadata):
         if package["source"] is None:
             continue
         base = Path(package["manifest_path"]).parent
+        if package['source'].startswith('git+'):
+            licenses = git_dependency_licenses(package, base)
+            if not licenses or not package.get('license'):
+                raise ValueError("review missing dependency license: " + package['name'])
+            text.append(f"\n=== {package['name']} {package['version']} ===\nLicense: {package['license']}\n")
+            for name, content in licenses:
+                text.append(f"\n--- {name} ---\n{content}\n")
+            continue
         candidates = set()
-        for pattern in ["*LICENSE*", "*LICENCE*", "COPYING*", "NOTICE*", "UNLICENSE*", "license*", "licenses/**/*"]:
+        for pattern in (*LICENSE_PATTERNS, "licenses/**/*"):
             candidates.update(p for p in base.glob(pattern) if p.is_file())
         if package.get("license_file"):
             candidates.add(base / package["license_file"])
@@ -236,7 +307,7 @@ def dependency_notices(metadata):
             raise ValueError("review missing dependency license: " + package["name"])
         text.append(f"\n=== {package['name']} {package['version']} ===\nLicense: {package['license']}\n")
         for file in sorted(candidates):
-            if not file.resolve().is_relative_to(base.resolve()) or file.is_symlink() or file.stat().st_size > 2 * 1024 * 1024:
+            if not file.resolve().is_relative_to(base.resolve()) or file.is_symlink() or file.stat().st_size > LICENSE_LIMIT:
                 raise ValueError("unsafe dependency license file")
             text.append(f"\n--- {file.relative_to(base).as_posix()} ---\n" + file.read_text(encoding="utf-8", errors="strict") + "\n")
     return "".join(text)

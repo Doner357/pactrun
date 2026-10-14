@@ -135,6 +135,7 @@ pub(super) fn execute(
     command: ArtifactCommand,
     root: &Path,
     format: reply::OutputContext,
+    trace: &std::sync::Arc<crate::trace::Trace>,
 ) -> Result<(), CliError> {
     let scoped = match &command {
         ArtifactCommand::Export { edge, .. } | ArtifactCommand::Delete { edge, .. } => {
@@ -182,7 +183,7 @@ pub(super) fn execute(
                     "Artifact export failed; check the Run, published output and storage",
                 ),
             })?;
-            crate::output_publication::publish_reported(&staged, &destination)
+            crate::output_publication::publish_reported_traced(&staged, &destination, trace)
                 .map_err(|error| {
                     let message = if error.destination_published {
                         "Artifact destination was published but durability could not be confirmed; the file may already exist and was not removed"

@@ -27,6 +27,9 @@ test('bootstrap prose agrees with the current private SQLite marker and rejects 
   assert.doesNotMatch(bootstrap, /exact V1|complete V1|Every V1/);
   assert.match(bootstrap, /rejected without conversion or data deletion/);
   const persistence = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
+  const markers = [...persistence.matchAll(/\bprivate (?:bootstrap |user_version )?marker (\d+)\b/g)];
+  assert.ok(markers.length > 0);
+  for (const [, value] of markers) assert.equal(value, marker, 'current schema prose contains a stale private marker');
   assert.doesNotMatch(persistence, /migration executes only the additions|only future\s+destructive lifecycle|later M7 schema must add/);
 });
 

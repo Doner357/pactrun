@@ -35,8 +35,8 @@ ordered newer identifier MUST NOT be interpreted as automatic support. Format
 Minor does not imply minimum product Minor. Pack source writes `1.0-alpha.3` and also reads `1.0-alpha.2`. Pack distribution
 remains `1.0-alpha.2`. The CLI machine interface defaults to `1.0-alpha.4` and
 also supports explicit `1.0-alpha.3` selection. Persistence
-writes `1.0-alpha.5` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2`,
-`1.0-alpha.3` and `1.0-alpha.4` Store schemas
+writes `1.0-alpha.6` and accepts the exact `1.0-alpha.1`, `1.0-alpha.2`,
+`1.0-alpha.3`, `1.0-alpha.4` and `1.0-alpha.5` Store schemas
 through its supported upgrade path.
 Revision and Hook default to `1.0-alpha.2` and retain their exact `1.0-alpha.1`
 contracts. Snapshot integrity and Snapshot bundle remain `1.0-alpha.1`.

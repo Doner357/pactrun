@@ -10,6 +10,8 @@ Use the Hook protocol, shell adapter, CLI, and structured outputs without confla
 - [Hook Protocol](./hook-protocol.md)
 - [Operation-scoped Hook Protocol (specified, not implemented)](./operation-hook-protocol.md)
 - [Shell Loader](./shell-loader.md)
+- [Pactrun Configuration](./configuration.md)
+- [Core Diagnostic Traces](./core-traces.md)
 - [Command and Output Reference](./commands.md)
 - [Object ID Selectors](./id-selectors.md)
 - [CLI Machine Interface](./machine-output.md)

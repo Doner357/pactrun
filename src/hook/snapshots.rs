@@ -152,19 +152,29 @@ pub(super) fn advance(
         state.phase = SnapshotPhase::Stop(cancelled());
     }
     if let SnapshotPhase::Stop(finish) = &state.phase {
-        p.finish_run_owned(&state.owner, state.run, finish, &[], &mut [])?;
+        state
+            .cancellation
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.finish_run_owned(&state.owner, state.run, finish, &[], &mut [])
+            })?;
         guard.complete();
         return Ok(true);
     }
     if matches!(state.phase, SnapshotPhase::Admission) {
-        match crate::executor::admit_snapshot_existing(
-            p,
-            &crate::workflow::PlatformHostLauncherLookup,
-            state.run,
-            &state.owner,
-            &state.plan,
-            state.options,
-        ) {
+        match state
+            .cancellation
+            .trace
+            .measure(crate::domain::TracePhase::Admission, || {
+                crate::executor::admit_snapshot_existing(
+                    p,
+                    &crate::workflow::PlatformHostLauncherLookup,
+                    state.run,
+                    &state.owner,
+                    &state.plan,
+                    state.options,
+                )
+            }) {
             Ok(()) => state.phase = SnapshotPhase::Ready,
             Err(ExecutorError::Refused { .. }) => {
                 guard.complete();

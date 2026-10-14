@@ -38,12 +38,15 @@ const RUNTIME_CONTENT_DIRECTORY: &str = "runtime-content";
 const DATABASE_NAME: &str = "pactrun.sqlite3";
 pub(super) const APPLICATION_ID: i64 = 0x5041_4354;
 // Private SQLite bootstrap/admission marker, not the public format version.
-pub(crate) const SCHEMA_VERSION: i64 = 4;
+pub(crate) const SCHEMA_VERSION: i64 = 5;
 pub(super) const BASELINE_SQL: &str = include_str!("persistence_baseline.sql");
 pub(super) const ALPHA1_SQL: &str = include_str!("persistence_alpha1.sql");
 pub(super) const ALPHA2_SQL: &str = include_str!("persistence_alpha2.sql");
 pub(super) const ALPHA3_SQL: &str = include_str!("persistence_alpha3.sql");
 pub(super) const ALPHA4_SQL: &str = include_str!("persistence_alpha4.sql");
+pub(super) const ALPHA5_SQL: &str = include_str!("persistence_alpha5.sql");
+pub(super) const SERVICE_FAILURE_CAUSES_SQL: &str = include_str!("service_failure_causes.sql");
+pub(super) const INPUT_HISTORY_SQL: &str = include_str!("input_history.sql");
 pub(super) const SCOPED_ARTIFACTS_SQL: &str = include_str!("scoped_artifacts.sql");
 pub(super) const CORE_DIAGNOSTICS_SQL: &str = include_str!("core_diagnostics.sql");
 pub(super) const FAILURE_CAUSES_SQL: &str = include_str!("failure_causes.sql");
@@ -270,7 +273,8 @@ impl PactrunPersistence {
             DatabaseState::Alpha1
             | DatabaseState::Alpha2
             | DatabaseState::Alpha3
-            | DatabaseState::Alpha4 => {
+            | DatabaseState::Alpha4
+            | DatabaseState::Alpha5 => {
                 drop(reader);
                 super::schema_upgrade::upgrade(&root)
             }
@@ -283,10 +287,34 @@ impl PactrunPersistence {
 
     pub(crate) fn open(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
-        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
-            PersistenceError::DatabaseOwnership("could not prepare writer session".to_owned())
-        })?;
+        let session = Self::prepare_writer_session(&root)?;
         Self::open_prepared(&root, session)
+    }
+
+    /// Existing Store only; no bootstrap, abandoned-session cleanup or runtime
+    /// publication coordination. The content adapter remains read-only.
+    pub(crate) fn open_for_diagnostics(root: &Path) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
+        let mut persistence = Self::open_current_read_only(&root, false)?;
+        let session = Self::prepare_writer_session(&root)?;
+        let database = super::writer_admission::open_diagnostic_database(
+            &persistence.database_path,
+            &session,
+        )?;
+        persistence.database = Mutex::new(database);
+        persistence.session = Some(session);
+        Ok(persistence)
+    }
+
+    fn prepare_writer_session(
+        root: &Path,
+    ) -> Result<crate::managed_data::StagingSession, PersistenceError> {
+        use crate::managed_data::StagingError;
+        crate::managed_data::StagingSession::prepare(root).map_err(|error| match error {
+            StagingError::Store(source) => *source,
+            StagingError::Io { operation, source } => PersistenceError::Io { operation, source },
+            other => PersistenceError::DatabaseOwnership(other.to_string()),
+        })
     }
 
     pub(crate) fn open_prepared(
@@ -299,9 +327,7 @@ impl PactrunPersistence {
     pub(crate) fn open_for_collection(root: &Path) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root)?;
         Self::preflight_storage(&root, true)?;
-        let session = crate::managed_data::StagingSession::prepare(&root).map_err(|_| {
-            PersistenceError::DatabaseOwnership("could not prepare collection session".to_owned())
-        })?;
+        let session = Self::prepare_writer_session(&root)?;
         Self::open_prepared_for(&root, session, true)
     }
 
@@ -344,6 +370,14 @@ impl PactrunPersistence {
     pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
         Self::preflight_storage(&root, false)?;
+        Self::open_current_read_only(&root, true)
+    }
+
+    fn open_current_read_only(
+        root: &Path,
+        coordinate_content: bool,
+    ) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
         let database_root = validate_supported_storage_root(&root.join(DATABASE_DIRECTORY))?;
         let runtime_root = validate_supported_storage_root(&root.join(RUNTIME_CONTENT_DIRECTORY))?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
@@ -360,8 +394,12 @@ impl PactrunPersistence {
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
-        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?
-            .with_collection_coordination(false, false)?;
+        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?;
+        let runtime_content = if coordinate_content {
+            runtime_content.with_collection_coordination(false, false)?
+        } else {
+            runtime_content
+        };
         Ok(Self {
             database: Mutex::new(database),
             database_path,
@@ -731,6 +769,7 @@ pub(super) enum DatabaseState {
     Alpha2,
     Alpha3,
     Alpha4,
+    Alpha5,
     Baseline,
 }
 
@@ -764,6 +803,10 @@ pub(super) fn classify_database(database: &Connection) -> Result<DatabaseState, 
         (APPLICATION_ID, 3, true) => {
             validate_schema(database, 3)?;
             Ok(DatabaseState::Alpha4)
+        }
+        (APPLICATION_ID, 4, true) => {
+            validate_schema(database, 4)?;
+            Ok(DatabaseState::Alpha5)
         }
         (APPLICATION_ID, version, _) => Err(PersistenceError::DatabaseOwnership(format!(
             "unsupported persistence bootstrap marker {version}; development stores are not upgraded"
@@ -835,7 +878,7 @@ fn require_persistence_version(
             |row| row.get(0),
         )
         .map_err(|error| PersistenceError::sqlite("read persistence format version", error))?;
-    if version <= 3 {
+    if (0..=4).contains(&version) {
         return if text
             == if version == 0 {
                 "1.0-alpha.1"
@@ -843,8 +886,10 @@ fn require_persistence_version(
                 "1.0-alpha.2"
             } else if version == 2 {
                 "1.0-alpha.3"
-            } else {
+            } else if version == 3 {
                 "1.0-alpha.4"
+            } else {
+                "1.0-alpha.5"
             } {
             Ok(())
         } else {
@@ -867,13 +912,14 @@ pub(super) fn validate_schema(database: &Connection, version: i64) -> Result<(),
             .execute_batch(BASELINE_SQL)
             .map_err(|error| PersistenceError::sqlite("construct expected baseline", error))?;
         require_persistence_version(database, version)?;
-    } else if version <= 3 {
+    } else if (0..=4).contains(&version) {
         expected
             .execute_batch(match version {
                 0 => ALPHA1_SQL,
                 1 => ALPHA2_SQL,
                 2 => ALPHA3_SQL,
-                _ => ALPHA4_SQL,
+                3 => ALPHA4_SQL,
+                _ => ALPHA5_SQL,
             })
             .map_err(|error| {
                 PersistenceError::sqlite("construct expected alpha.1 schema", error)

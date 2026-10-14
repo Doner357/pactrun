@@ -6,7 +6,7 @@ title: Operation Artifact Persistence
 
 ### PR-REQ-0392 - Lifecycle and edge-scoped artifact storage
 
-Persistence `1.0-alpha.5` adds `run_scoped_artifacts` and
+The current Persistence `1.0-alpha.6` retains `run_scoped_artifacts` and
 `run_scoped_artifact_chunks`. These rows belong to retained Runs, not live
 Instances. The existing Action terminal artifact representation remains unchanged.
 Capture and Restore ordinary artifacts use the new scoped representation. Neither
@@ -36,9 +36,11 @@ managed-state boundary. Failure diagnostics publish with the failure boundary.
 Artifact retention must not be lost when the Instance is retired, a later edge
 fails, or the owner is lost after an acknowledged durable boundary.
 
-Source schemas alpha.1 through alpha.4 upgrade through the existing exact-schema,
-writer-exclusion and atomic-publication rules. New tables begin empty; no
-historical reports or successful submissions may be fabricated. A source schema
+The tables introduced by alpha.5 remain unchanged. Source schemas alpha.1 through
+alpha.5 upgrade through the existing exact-schema, writer-exclusion and
+atomic-publication rules. Tables absent from the source begin empty; existing
+artifact rows and bytes remain intact. No historical reports or successful
+submissions may be fabricated. A source schema
 with unknown additions, damage or live/unprobeable writers remains untouched.
 
 **Verification: PR-TEST-0718, PR-TEST-0725, PR-TEST-0726, PR-TEST-0732, PR-TEST-0733, PR-TEST-0734, PR-TEST-0735, PR-TEST-0736.**

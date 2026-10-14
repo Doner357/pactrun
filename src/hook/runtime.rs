@@ -10,7 +10,10 @@
 use std::{
     fmt,
     process::ExitStatus,
-    sync::mpsc::{RecvTimeoutError, TryRecvError},
+    sync::{
+        Arc,
+        mpsc::{RecvTimeoutError, TryRecvError},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -81,6 +84,7 @@ impl RecoveryRiskPersistence for PactrunPersistence {
 }
 
 pub(crate) struct LiveExecution {
+    trace_span: Option<crate::trace::Span>,
     run: RunId,
     materialized: MaterializedAction,
     supervisor: ProcessSupervisor,
@@ -161,12 +165,22 @@ pub(super) fn execute_registered(
 ) -> OwnerContinuation {
     let run = admitted.run();
     if cancellation.is_requested() {
-        return ready_cancelled(run, Vec::new(), None);
+        return ready_cancelled(run, Vec::new(), None, cancellation.trace.clone());
     }
-    let materialized = match MaterializedAction::create(persistence, staging, &admitted) {
+    let materialized = match cancellation
+        .trace
+        .measure(crate::domain::TracePhase::Materialization, || {
+            MaterializedAction::create(persistence, staging, &admitted)
+        }) {
         Ok(materialized) => materialized,
         Err(error) => {
-            return ready_failure(run, FailureKind::materialization(&error), Vec::new(), None);
+            return ready_failure(
+                run,
+                FailureKind::materialization(&error),
+                Vec::new(),
+                None,
+                cancellation.trace.clone(),
+            );
         }
     };
     execute_materialized(risk_persistence, run, materialized, policy, cancellation)
@@ -183,32 +197,38 @@ pub(super) fn execute_materialized(
     if cancellation.is_requested() {
         let (execution, outputs) = materialized.into_execution();
         return super::deletions::adapt_early(
-            ready_cancelled(run, outputs, Some(execution)),
+            ready_cancelled(run, outputs, Some(execution), cancellation.trace.clone()),
             cleanup,
             false,
         );
     }
-    let mut listener = match ProtocolListener::for_execution(
-        materialized.program(),
-        materialized.arguments(),
-        materialized.execution_root(),
-        materialized.configured_root(),
-    ) {
-        Ok(listener) => listener,
-        Err(error) => {
-            let (execution, outputs) = materialized.into_execution();
-            return super::deletions::adapt_early(
-                ready_failure(
-                    run,
-                    FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
-                    outputs,
-                    Some(execution),
-                ),
-                cleanup,
-                false,
-            );
-        }
-    };
+    let mut listener =
+        match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::SessionSetup, || {
+                ProtocolListener::for_execution(
+                    materialized.program(),
+                    materialized.arguments(),
+                    materialized.execution_root(),
+                    materialized.configured_root(),
+                )
+            }) {
+            Ok(listener) => listener,
+            Err(error) => {
+                let (execution, outputs) = materialized.into_execution();
+                return super::deletions::adapt_early(
+                    ready_failure(
+                        run,
+                        FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
+                        outputs,
+                        Some(execution),
+                        cancellation.trace.clone(),
+                    ),
+                    cleanup,
+                    false,
+                );
+            }
+        };
     let delivery = cancellation.delivery.scope(
         run,
         materialized.session(),
@@ -219,7 +239,10 @@ pub(super) fn execute_materialized(
         diagnostics.delivery = delivery.clone();
     }
     let mut core_diagnostics = listener.attach_core_diagnostics(diagnostics.as_ref());
-    let supervisor = match cancellation.arbitrate_launch(|| {
+    let launch_trace = cancellation
+        .trace
+        .span(crate::domain::TracePhase::HookLaunch);
+    let launched = cancellation.arbitrate_launch(|| {
         ProcessSupervisor::spawn_delivered(
             materialized.program(),
             materialized.arguments(),
@@ -227,12 +250,18 @@ pub(super) fn execute_materialized(
             &listener,
             delivery.as_ref(),
         )
-    }) {
+    });
+    launch_trace.finish(match &launched {
+        Ok(Some(_)) => crate::domain::PhaseResult::Succeeded,
+        Ok(None) => crate::domain::PhaseResult::Unfinished,
+        Err(_) => crate::domain::PhaseResult::Failed,
+    });
+    let supervisor = match launched {
         Ok(Some(supervisor)) => supervisor,
         Ok(None) => {
             let (execution, outputs) = materialized.into_execution();
             return super::deletions::adapt_early(
-                ready_cancelled(run, outputs, Some(execution)),
+                ready_cancelled(run, outputs, Some(execution), cancellation.trace.clone()),
                 cleanup,
                 false,
             );
@@ -240,7 +269,13 @@ pub(super) fn execute_materialized(
         Err(_) => {
             let (execution, outputs) = materialized.into_execution();
             return super::deletions::adapt_early(
-                ready_failure(run, FailureKind::Launch, outputs, Some(execution)),
+                ready_failure(
+                    run,
+                    FailureKind::Launch,
+                    outputs,
+                    Some(execution),
+                    cancellation.trace.clone(),
+                ),
                 cleanup,
                 true,
             );
@@ -268,6 +303,11 @@ pub(super) fn execute_materialized(
     drive_execution(
         risk_persistence,
         LiveExecution {
+            trace_span: Some(
+                cancellation
+                    .trace
+                    .span(crate::domain::TracePhase::HookExecution),
+            ),
             _core_diagnostics: core_diagnostics,
             diagnostics,
             run,
@@ -327,61 +367,85 @@ pub(super) fn execute_snapshot_with_risk(
             .expect("valid cancellation");
         return run;
     }
-    let materialized = match if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
-        MaterializedAction::create_restore(persistence, staging, run, claim.plan(), &cancellation)
-    } else {
-        MaterializedAction::create_capture(persistence, staging, run, claim.plan(), &cancellation)
-    } {
-        Ok(value) => value,
-        Err(error) => {
-            let (outcome, mut primary_failure) =
-                outcome_and_failure(OutcomeWinner::Failed(FailureKind::materialization(&error)));
-            if let Some(primary) = &mut primary_failure {
-                primary.step =
-                    crate::domain::RunFailedStep::for_operation(primary.step.rank(), kind)
-                        .expect("known step");
-                primary.failure.message = match error {
-                    super::materialize::MaterializationError::Capture(error) => error.message(),
-                    _ => "Snapshot session materialization or content validation failed",
+    let materialized =
+        match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::Materialization, || {
+                if kind == crate::domain::ManagedExecutionKind::SnapshotRestore {
+                    MaterializedAction::create_restore(
+                        persistence,
+                        staging,
+                        run,
+                        claim.plan(),
+                        &cancellation,
+                    )
+                } else {
+                    MaterializedAction::create_capture(
+                        persistence,
+                        staging,
+                        run,
+                        claim.plan(),
+                        &cancellation,
+                    )
                 }
-                .to_owned();
+            }) {
+            Ok(value) => value,
+            Err(error) => {
+                let (outcome, mut primary_failure) = outcome_and_failure(OutcomeWinner::Failed(
+                    FailureKind::materialization(&error),
+                ));
+                if let Some(primary) = &mut primary_failure {
+                    primary.step =
+                        crate::domain::RunFailedStep::for_operation(primary.step.rank(), kind)
+                            .expect("known step");
+                    primary.failure.message = match error {
+                        super::materialize::MaterializationError::Capture(error) => error.message(),
+                        _ => "Snapshot session materialization or content validation failed",
+                    }
+                    .to_owned();
+                }
+                let finish = crate::domain::RunFinish {
+                    outcome: if cancellation.is_requested() {
+                        crate::domain::RunOutcome::Cancelled
+                    } else {
+                        outcome
+                    },
+                    primary_failure: if cancellation.is_requested() {
+                        None
+                    } else {
+                        primary_failure
+                    },
+                    secondary_failures: Vec::new(),
+                    hook_completion: None,
+                };
+                claim
+                    .stop_before_launch(finish)
+                    .expect("non-success Snapshot execution");
+                return run;
             }
-            let finish = crate::domain::RunFinish {
-                outcome: if cancellation.is_requested() {
-                    crate::domain::RunOutcome::Cancelled
-                } else {
-                    outcome
-                },
-                primary_failure: if cancellation.is_requested() {
-                    None
-                } else {
-                    primary_failure
-                },
-                secondary_failures: Vec::new(),
-                hook_completion: None,
-            };
-            claim
-                .stop_before_launch(finish)
-                .expect("non-success Snapshot execution");
-            return run;
-        }
-    };
-    let mut listener = match ProtocolListener::for_execution(
-        materialized.program(),
-        materialized.arguments(),
-        materialized.execution_root(),
-        materialized.configured_root(),
-    ) {
-        Ok(listener) => listener,
-        Err(error) => {
-            claim.replace(snapshot_before_launch(
-                run,
-                materialized,
-                FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
-            ));
-            return run;
-        }
-    };
+        };
+    let mut listener =
+        match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::SessionSetup, || {
+                ProtocolListener::for_execution(
+                    materialized.program(),
+                    materialized.arguments(),
+                    materialized.execution_root(),
+                    materialized.configured_root(),
+                )
+            }) {
+            Ok(listener) => listener,
+            Err(error) => {
+                claim.replace(snapshot_before_launch(
+                    run,
+                    materialized,
+                    FailureKind::IpcInitialization(super::startup::Reason::from_io(&error)),
+                    cancellation.trace.clone(),
+                ));
+                return run;
+            }
+        };
     let delivery = cancellation.delivery.scope(
         run,
         materialized.session(),
@@ -395,13 +459,17 @@ pub(super) fn execute_snapshot_with_risk(
     let mut pending_materialization = Some(materialized);
     match claim.launch_once(|_| {
         let mut materialized = pending_materialization.take().expect("one launch attempt");
-        match ProcessSupervisor::spawn_delivered(
-            materialized.program(),
-            materialized.arguments(),
-            materialized.terminal(),
-            &listener,
-            delivery.as_ref(),
-        ) {
+        match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::HookLaunch, || {
+                ProcessSupervisor::spawn_delivered(
+                    materialized.program(),
+                    materialized.arguments(),
+                    materialized.terminal(),
+                    &listener,
+                    delivery.as_ref(),
+                )
+            }) {
             Ok(supervisor) => {
                 if let Some(bridge) = &mut core_diagnostics {
                     bridge.mark_launched();
@@ -415,6 +483,11 @@ pub(super) fn execute_snapshot_with_risk(
                     ProtocolState::new_capture(materialized.session_id().to_owned())
                 };
                 Ok(LiveExecution {
+                    trace_span: Some(
+                        cancellation
+                            .trace
+                            .span(crate::domain::TracePhase::HookExecution),
+                    ),
                     _core_diagnostics: core_diagnostics,
                     diagnostics,
                     run,
@@ -442,6 +515,7 @@ pub(super) fn execute_snapshot_with_risk(
                 run,
                 materialized,
                 FailureKind::Launch,
+                cancellation.trace.clone(),
             ))),
         }
     }) {
@@ -460,12 +534,14 @@ fn snapshot_before_launch(
     run: RunId,
     mut materialized: MaterializedAction,
     failure: FailureKind,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     let restore = materialized.operation() == super::protocol::SessionOperation::Restore;
     let acquisition = materialized.take_capture();
     let (execution, outputs) = materialized.into_execution();
     let (outcome, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
     let facts = RuntimeTerminalFacts {
+        trace,
         run,
         outcome,
         primary_failure,
@@ -1037,6 +1113,9 @@ fn finish_after_exit(
         }
         if live.winner.winner.is_none() {
             live.supervisor.finish_output_relay();
+            if let Some(span) = live.trace_span.take() {
+                span.finish(crate::domain::PhaseResult::Succeeded);
+            }
             let proposal = live.target_proposal.take().expect("validated proposal");
             let outputs = live.materialized.take_migration_outputs();
             let submitted_outputs = live
@@ -1085,6 +1164,13 @@ fn finish_after_exit(
         .take()
         .expect("process exit establishes an outcome winner");
     let (outcome, primary_failure) = outcome_and_failure(winner);
+    if let Some(span) = live.trace_span.take() {
+        span.finish(if outcome == crate::domain::RunOutcome::Succeeded {
+            crate::domain::PhaseResult::Succeeded
+        } else {
+            crate::domain::PhaseResult::Failed
+        });
+    }
     let submitted_outputs = live.materialized.submitted_outputs(&live.submitted_handles);
     let capture_mode = live.materialized.operation() == super::protocol::SessionOperation::Capture;
     let restore_mode = live.materialized.operation() == super::protocol::SessionOperation::Restore;
@@ -1093,6 +1179,7 @@ fn finish_after_exit(
     let migration_outputs = live.materialized.take_migration_outputs();
     let (execution, outputs) = live.materialized.into_execution();
     let facts = RuntimeTerminalFacts {
+        trace: live.cancellation.trace.clone(),
         run: live.run,
         outcome,
         primary_failure,

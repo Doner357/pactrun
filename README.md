@@ -1,5 +1,7 @@
 # Pactrun
 
+[![AI Disclosure: AGAIN](https://img.shields.io/badge/AI%20Disclosure-AGAIN-8055CC?style=flat-square)](https://github.com/Doner357/AGAIN)
+
 Pactrun manages installed Pack revisions, long-lived Instances, and Pack-defined
 operations on the local machine. It runs as a single executable on Linux and Windows.
 
@@ -15,7 +17,7 @@ operations on the local machine. It runs as a single executable on Linux and Win
 
 To write Packs instead, verify the executable first, then follow the
 [author route](./docs/package-authors/index.md). The current delivery is Preview
-`1.0.0-alpha.7`, not a Stable release. See [version management](./docs/guides/version-management.md)
+`1.0.0-alpha.8`, not a Stable release. See [version management](./docs/guides/version-management.md)
 for updates, exact versions, and explicit channel switching. The project is
 [MIT licensed](./LICENSE); distributed dependencies retain their own licenses.
 

@@ -53,6 +53,7 @@ pub(super) struct MaterializedExecution {
     session_id: String,
     session: Value,
     operation: super::protocol::SessionOperation,
+    migration_edge: Option<crate::domain::MigrationEdgeIdentity>,
     terminal: TerminalContractV1,
     capture: Option<super::capture::CapturePreparation>,
     migration_outputs: Vec<super::MigrationOutputSlot>,
@@ -198,6 +199,7 @@ impl MaterializedAction {
                 session_id,
                 session,
                 operation: super::protocol::SessionOperation::Restore,
+                migration_edge: None,
                 protocol_state: None,
                 protocol_transport: None,
                 _service_access: None,
@@ -314,6 +316,7 @@ impl MaterializedAction {
             session_id,
             session,
             operation: super::protocol::SessionOperation::Action,
+            migration_edge: None,
             protocol_state: None,
             protocol_transport: None,
             _service_access: None,
@@ -413,6 +416,7 @@ impl MaterializedAction {
                 session_id,
                 session,
                 operation: super::protocol::SessionOperation::Capture,
+                migration_edge: None,
                 protocol_state: None,
                 protocol_transport: None,
                 _service_access: None,
@@ -467,8 +471,14 @@ impl MaterializedAction {
             if !crate::domain::VersionDomain::Hook.supports(version) {
                 return Err(MaterializationError::InvalidParameter);
             }
-            let mut service = super::service_storage::prepare(p, run, &staging.owner(), bindings)
-                .map_err(MaterializationError::Service)?;
+            let mut service = super::service_storage::prepare(
+                p,
+                run,
+                &staging.owner(),
+                bindings,
+                self.migration_edge.clone(),
+            )
+            .map_err(MaterializationError::Service)?;
             let prepared = super::protocol::authority::PreparedSession::new(
                 self.session.clone(),
                 self.operation,

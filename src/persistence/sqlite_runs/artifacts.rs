@@ -24,23 +24,36 @@ impl PactrunPersistence {
             .transaction_with_behavior(TransactionBehavior::Deferred)
             .map_err(|error| PersistenceError::sqlite("begin Run Artifact snapshot", error))?;
         run_header(&transaction, run)?;
-        let location = super::scoped_artifacts::lookup_artifact(&transaction, run, output, edge)?
-            .ok_or_else(|| {
-            PersistenceError::InvalidRunArtifact("Run has no such Artifact".to_owned())
-        })?;
-        stream_chunks(
-            &transaction,
-            location.chunks(),
-            [run.as_bytes().as_slice(), location.key.as_slice()],
-            location.byte_length,
-            destination,
-        )?;
+        copy_artifact_from(&transaction, run, output, edge, destination)?;
         transaction
             .commit()
             .map_err(|error| PersistenceError::sqlite("close Run Artifact snapshot", error))?;
         Ok(())
     }
+}
 
+pub(in crate::persistence) fn copy_artifact_from(
+    transaction: &Connection,
+    run: RunId,
+    output: &ManagedOutputIdentity,
+    edge: Option<&crate::domain::MigrationEdgeIdentity>,
+    destination: &mut impl Write,
+) -> Result<(), PersistenceError> {
+    let location = super::scoped_artifacts::lookup_artifact(transaction, run, output, edge)?
+        .ok_or_else(|| {
+            PersistenceError::InvalidRunArtifact("Run has no such Artifact".to_owned())
+        })?;
+    stream_chunks(
+        transaction,
+        location.chunks(),
+        [run.as_bytes().as_slice(), location.key.as_slice()],
+        location.byte_length,
+        destination,
+    )?;
+    Ok(())
+}
+
+impl PactrunPersistence {
     pub(crate) fn delete_run_artifact(
         &self,
         run: RunId,

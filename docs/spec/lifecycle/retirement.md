@@ -27,6 +27,8 @@ after owner loss; only Pactrun-owned finalization may be retried.
 
 **Verification: PR-TEST-0389, PR-TEST-0391, PR-TEST-0397, PR-TEST-0399, PR-TEST-0404, PR-TEST-0405, PR-TEST-0407, PR-TEST-0413, PR-TEST-0425, PR-TEST-0447.**
 
+**Verification: PR-TEST-0789.**
+
 ### PR-REQ-0335 - Explicit Cleanup completion assertion
 
 Only an unresolved Cleanup attempt may be confirmed by the operator. The
@@ -93,6 +95,13 @@ maintenance MUST preserve detached bytes.
 **Verification: PR-TEST-0406, PR-TEST-0408, PR-TEST-0409, PR-TEST-0413, PR-TEST-0414, PR-TEST-0416, PR-TEST-0417, PR-TEST-0420, PR-TEST-0422, PR-TEST-0423, PR-TEST-0426, PR-TEST-0428, PR-TEST-0429, PR-TEST-0430, PR-TEST-0431, PR-TEST-0432, PR-TEST-0433, PR-TEST-0434, PR-TEST-0435, PR-TEST-0436, PR-TEST-0438, PR-TEST-0439, PR-TEST-0440, PR-TEST-0441, PR-TEST-0442, PR-TEST-0443, PR-TEST-0444, PR-TEST-0445, PR-TEST-0446, PR-TEST-0447.**
 
 **Verification: PR-TEST-0642, PR-TEST-0643, PR-TEST-0645, PR-TEST-0652, PR-TEST-0654.**
+
+Ready allocation steps can proceed without a foreground polling delay between
+each allocation. Each step retains its own qualification and durable progress
+boundaries. Actual dependency waits still yield, and cancellation is checked
+between allocation steps; this is not a single atomic filesystem transaction.
+
+**Verification: PR-TEST-0787, PR-TEST-0788, PR-TEST-0789.**
 
 ### PR-REQ-0337 - Detached handoff and discard
 

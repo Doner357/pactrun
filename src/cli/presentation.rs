@@ -14,6 +14,8 @@ pub(super) fn command_name(command: &Command) -> &'static str {
     use retirements::RetirementCommand as R;
     use snapshots::SnapshotCommand as S;
     match command {
+        Command::Diagnostics(request) => request.command_name(),
+        Command::Configuration(request) => request.command_name(),
         Command::Help(_) => "help",
         Command::Version => "version",
         Command::GeneratePackageId => "pack generate-id",
@@ -32,6 +34,7 @@ pub(super) fn command_name(command: &Command) -> &'static str {
         Command::ShowAction { .. } => "action show",
         Command::Invoke { .. } => "invoke",
         Command::ShowRun { .. } => "run show",
+        Command::RunExport(_) => "run export",
         Command::ReconcileRuns => "run reconcile",
         Command::Artifact(A::Export { .. }) => "run artifact export",
         Command::Artifact(A::Delete { .. }) => "run artifact delete",
@@ -110,12 +113,16 @@ pub(super) fn recognize(args: &[OsString]) -> Format {
 /// fixed Input-export grammar is inspected; arbitrary operands are not formats.
 pub(super) fn raw_input_request(args: &[OsString]) -> bool {
     let mut args = args;
-    while args
-        .first()
-        .is_some_and(|a| a == "--format" || a == "--machine-version")
-        && args.len() >= 2
-    {
-        args = &args[2..];
+    while let Some(key) = args.first().and_then(|v| v.to_str()) {
+        let width = if matches!(key, "--format" | "--machine-version") {
+            Some(2)
+        } else {
+            configuration::global_width(key)
+        };
+        let Some(width) = width.filter(|width| args.len() >= *width) else {
+            break;
+        };
+        args = &args[width..];
     }
     args.first().is_some_and(|a| a == "input")
         && args.get(1).is_some_and(|a| a == "export")
@@ -126,6 +133,7 @@ pub(super) fn raw_input_request(args: &[OsString]) -> bool {
 }
 
 pub(super) fn select(args: Vec<OsString>) -> Result<(Format, Vec<OsString>), CliError> {
+    let (_, args) = configuration::select(args)?;
     machine::select(args).map(|(selection, args)| (selection.format, args))
 }
 
@@ -195,6 +203,8 @@ impl From<&crate::application::migration_input::Failure> for AcquisitionDiagnost
 #[derive(Clone, Serialize)]
 #[cfg_attr(test, derive(schemars::JsonSchema))]
 pub(super) struct Response<'a, T: Serialize> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic_id: Option<crate::domain::TraceId>,
     format: &'static str,
     format_version: &'static str,
     command: Option<&'a str>,
@@ -223,6 +233,7 @@ pub(super) fn output_error(error: io::Error) -> CliError {
 }
 
 pub(super) struct Envelope<'a> {
+    pub(super) diagnostic_id: Option<crate::domain::TraceId>,
     pub(super) version: machine::Version,
     pub(super) command: &'a str,
     pub(super) error: Option<&'a CliError>,
@@ -256,6 +267,7 @@ pub(super) fn write_reply<T: Serialize>(
         });
     }
     let response = Response {
+        diagnostic_id: envelope.diagnostic_id,
         format: FORMAT_KIND,
         format_version: envelope.version.text(),
         command: Some(envelope.command),
@@ -347,6 +359,7 @@ pub(super) fn render<T: Serialize + Clone + Send + 'static>(
         Format::Json => document(
             output,
             &Response {
+                diagnostic_id: None,
                 format: FORMAT_KIND,
                 format_version: FORMAT_VERSION,
                 command: Some(command),
@@ -365,18 +378,27 @@ pub(super) fn failure<T: Serialize>(
     error: &CliError,
     output: &mut dyn Write,
 ) -> Result<(), CliError> {
-    failure_versioned(machine::Version::default(), command, partial, error, output)
+    failure_versioned(
+        machine::Version::default(),
+        command,
+        partial,
+        error,
+        None,
+        output,
+    )
 }
 pub(super) fn failure_versioned<T: Serialize>(
     version: machine::Version,
     command: Option<&str>,
     partial: Option<&T>,
     error: &CliError,
+    diagnostic_id: Option<crate::domain::TraceId>,
     output: &mut dyn Write,
 ) -> Result<(), CliError> {
     document(
         output,
         &Response {
+            diagnostic_id,
             format: FORMAT_KIND,
             format_version: version.text(),
             command,

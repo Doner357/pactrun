@@ -221,7 +221,18 @@ where
         .env_remove(TRANSPORT_ENVIRONMENT)
         .env_remove(ENDPOINT_ENVIRONMENT)
         .stdin(Stdio::null());
+    isolate_user_environment(&mut command, cwd);
     command
+}
+
+fn isolate_user_environment(command: &mut Command, cwd: &Path) {
+    command
+        .env("LOCALAPPDATA", cwd.join("startup-data"))
+        .env("APPDATA", cwd.join("startup-config"))
+        .env("XDG_DATA_HOME", cwd.join("startup-data"))
+        .env("XDG_CONFIG_HOME", cwd.join("startup-config"))
+        .env("XDG_STATE_HOME", cwd.join("startup-state"))
+        .env("HOME", cwd.join("startup-home"));
 }
 
 pub(crate) fn startup_command<I, S>(cwd: &Path, arguments: I) -> Command
@@ -233,10 +244,8 @@ where
     command
         .args(arguments)
         .current_dir(cwd)
-        .env_remove("PACTRUN_STORAGE_ROOT")
-        .env("LOCALAPPDATA", cwd.join("startup-data"))
-        .env("XDG_DATA_HOME", cwd.join("startup-data"))
-        .env("HOME", cwd.join("startup-home"));
+        .env_remove("PACTRUN_STORAGE_ROOT");
+    isolate_user_environment(&mut command, cwd);
     command
 }
 

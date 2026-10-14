@@ -40,6 +40,9 @@ title: Specification Reference Index
 - [Actions, Plans, and Runs](./operations/actions-plans-runs.md)
 - [Execution and Concurrency](./operations/execution.md)
 - [Execution Diagnostics](./operations/diagnostics.md)
+- [Service Prerequisite Diagnostics](./operations/service-diagnostics.md)
+- [Historical Input References](./operations/input-history.md)
+- [Run Support Export](./operations/run-export.md)
 - [Operation Input Requirements and Authority](./operations/input-authority.md)
 
 ## Snapshots and Restore
@@ -71,6 +74,9 @@ title: Specification Reference Index
 - [Instance Retirement](./lifecycle/retirement.md)
 
 ## Hooks and Integration Interfaces
+
+- [Pactrun Configuration](./interfaces/configuration.md)
+- [Core Diagnostic Traces](./interfaces/core-traces.md)
 
 - [Common Operation Capabilities](./operations/common-capabilities.md)
 

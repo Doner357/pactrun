@@ -1,0 +1,2 @@
+CREATE INDEX run_diagnostic_retention ON run_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,kind,severity,code,message,truncated,truncated_prefix_bytes,completion_status) AS BLOB)));
+CREATE INDEX run_core_diagnostic_retention ON run_core_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,failure) AS BLOB)));

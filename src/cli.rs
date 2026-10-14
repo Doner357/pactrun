@@ -23,6 +23,8 @@ mod async_stderr;
 mod capability_presentation;
 mod catalog;
 mod catalog_presentation;
+mod configuration;
+mod core_traces;
 mod definitions;
 mod empty_queries;
 mod execution_presentation;
@@ -37,6 +39,7 @@ mod names;
 mod presentation;
 mod reply;
 mod retirements;
+mod run_export;
 #[cfg(test)]
 mod schema_tests;
 mod service_storage;
@@ -68,9 +71,12 @@ mod short_ids;
 use short_ids::Selector;
 
 enum Command {
+    Diagnostics(core_traces::Request),
+    Configuration(configuration::Request),
     Catalog(catalog::CatalogCommand),
     Lifecycle(lifecycle::LifecycleCommand),
     Artifact(artifacts::ArtifactCommand),
+    RunExport(run_export::Request),
     Retirement(retirements::RetirementCommand),
     ServiceStorage(service_storage::ServiceCommand),
     Migration(migrations::MigrationCommand),
@@ -131,7 +137,7 @@ enum Command {
         action: ActionIdentity,
     },
     Invoke {
-        no_retain_hook_text: bool,
+        retain_hook_text: Option<bool>,
         cancel_on_output_close: bool,
         name: InstanceName,
         action: ActionIdentity,
@@ -146,6 +152,27 @@ enum Command {
         run: Selector<RunId>,
     },
     ReconcileRuns,
+}
+
+impl Command {
+    fn hook_text_retention(&self) -> Option<bool> {
+        match self {
+            Self::Invoke {
+                retain_hook_text, ..
+            } => *retain_hook_text,
+            Self::Snapshot(snapshots::SnapshotCommand::Execute { options, .. }) => {
+                options.retain_hook_text
+            }
+            Self::CreateAndRestore(command) => command.options.retain_hook_text,
+            Self::Retirement(retirements::RetirementCommand::Execute { options, .. }) => {
+                options.retain_hook_text
+            }
+            Self::Migration(migrations::MigrationCommand::Plan {
+                retain_hook_text, ..
+            }) => *retain_hook_text,
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -180,7 +207,7 @@ impl ParameterSourceSpec {
 
 #[derive(Default)]
 struct ExecutionOptions {
-    no_retain_hook_text: bool,
+    retain_hook_text: Option<bool>,
     cancel_on_output_close: bool,
     parameters: Vec<ParameterSourceSpec>,
     plan: bool,
@@ -283,46 +310,91 @@ pub(crate) fn run_from_env() -> i32 {
     let executable = env::current_exe().ok();
     let storage_root = storage_config::selected_root(executable.as_deref(), |key| env::var_os(key));
     let cancellation = ActionCancellation::default();
+    let root_trace = core_traces::root_span(&cancellation, &args);
     if presentation::recognize(&args) == presentation::Format::Human {
         cancellation.diagnostics.enable_live();
     }
     let mut stdout = io::stdout();
     let mut stderr = async_stderr::AsyncStderr::new();
-    if let Some(exit) = preflight_presentation(&args, &mut stdout, &mut stderr) {
-        return exit;
+    if let Some(exit) =
+        preflight_presentation(&args, &mut stdout, &mut stderr, cancellation.trace.id())
+    {
+        return finish_invocation(
+            exit,
+            &mut stderr,
+            root_trace,
+            &cancellation,
+            storage_root.as_ref(),
+        );
     }
     if SystemCancellationHandler
         .install(cancellation.clone())
         .is_err()
     {
-        return report_startup_failure(&args, &mut stdout, &mut stderr);
+        let code = report_startup_failure(&args, &mut stdout, &mut stderr, cancellation.trace.id());
+        return finish_invocation(
+            code,
+            &mut stderr,
+            root_trace,
+            &cancellation,
+            storage_root.as_ref(),
+        );
     }
     let code = if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
-        run_with_cancellation(
+        run_configured(
             args,
-            storage_root,
+            storage_root.clone(),
             &mut stdin,
             &mut stdout,
             &mut stderr,
             &cancellation,
+            true,
         )
     } else {
         let mut stdin = io::stdin();
-        run_with_cancellation(
+        run_configured(
             args,
-            storage_root,
+            storage_root.clone(),
             &mut stdin,
             &mut stdout,
             &mut stderr,
             &cancellation,
+            true,
         )
     };
-    if stderr.finish().is_err() && code == 0 {
+    finish_invocation(
+        code,
+        &mut stderr,
+        root_trace,
+        &cancellation,
+        storage_root.as_ref(),
+    )
+}
+
+fn finish_invocation(
+    code: i32,
+    stderr: &mut async_stderr::AsyncStderr,
+    root_trace: crate::trace::Span,
+    cancellation: &ActionCancellation,
+    storage_root: Option<&OsString>,
+) -> i32 {
+    let delivered = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::OutputDelivery, || {
+            stderr.finish()
+        });
+    let code = if delivered.is_err() && code == 0 {
         1
     } else {
         code
+    };
+    if !cancellation.trace.configured() {
+        core_traces::configure(cancellation, storage_root, None);
     }
+    root_trace.finish(core_traces::phase_result(code));
+    cancellation.trace.finish(code);
+    code
 }
 
 #[cfg(test)]
@@ -335,11 +407,11 @@ fn run_with_handler_installer<I: CancellationHandlerInstaller>(
     stderr: &mut (dyn Write + Send),
 ) -> i32 {
     let cancellation = ActionCancellation::default();
-    if let Some(exit) = preflight_presentation(&args, stdout, stderr) {
+    if let Some(exit) = preflight_presentation(&args, stdout, stderr, None) {
         return exit;
     }
     if installer.install(cancellation.clone()).is_err() {
-        return report_startup_failure(&args, stdout, stderr);
+        return report_startup_failure(&args, stdout, stderr, None);
     }
     run_with_cancellation(args, storage_root, stdin, stdout, stderr, &cancellation)
 }
@@ -484,6 +556,7 @@ pub(crate) fn run(
     run_with_cancellation(args, storage_root, stdin, stdout, stderr, &cancellation)
 }
 
+#[cfg(test)]
 fn run_with_cancellation(
     args: Vec<OsString>,
     storage_root: Option<OsString>,
@@ -492,14 +565,42 @@ fn run_with_cancellation(
     stderr: &mut (dyn Write + Send),
     cancellation: &ActionCancellation,
 ) -> i32 {
-    let recognized = machine::recognize(&args);
+    run_configured(
+        args,
+        storage_root,
+        stdin,
+        stdout,
+        stderr,
+        cancellation,
+        false,
+    )
+}
+
+fn run_configured(
+    args: Vec<OsString>,
+    storage_root: Option<OsString>,
+    stdin: &mut (dyn Read + Send),
+    stdout: &mut dyn Write,
+    stderr: &mut (dyn Write + Send),
+    cancellation: &ActionCancellation,
+    discover_user: bool,
+) -> i32 {
+    let mut recognized = machine::recognize(&args);
+    recognized.diagnostic_id = cancellation.trace.id();
     let raw_prefix_request = presentation::raw_input_request(&args);
-    let (selected, args) = match machine::select(args) {
+    let (mut globals, args) = match configuration::select(args) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
+        }
+    };
+    let (mut selected, args) = match machine::select(args) {
         Ok(selected) => selected,
         Err(error) => {
             return report_cli_failure(recognized, None, raw_prefix_request, error, stdout, stderr);
         }
     };
+    selected.diagnostic_id = cancellation.trace.id();
     let format = selected.format;
     let raw_request = presentation::raw_input_request(&args);
     let mut command = match parse_command(args) {
@@ -508,6 +609,31 @@ fn run_with_cancellation(
             return report_cli_failure(selected, None, raw_request, error, stdout, stderr);
         }
     };
+    cancellation
+        .trace
+        .operation(core_traces::operation(&command));
+    if matches!(
+        &command,
+        Command::Help(_) | Command::Version | Command::Configuration(_) | Command::Diagnostics(_)
+    ) {
+        cancellation.trace.suppress();
+        selected.diagnostic_id = None;
+    }
+    if selected.version == machine::Version::Legacy
+        && matches!(
+            &command,
+            Command::Configuration(_) | Command::Diagnostics(_)
+        )
+    {
+        return report_cli_failure(
+            selected,
+            None,
+            false,
+            CliError::usage("this command requires machine interface 1.0-alpha.4"),
+            stdout,
+            stderr,
+        );
+    }
     let command_name = presentation::command_name(&command);
     let raw = matches!(&command, Command::ExportInput { output, .. } if output == "-");
     let (executing, cancel_on_close) = streaming::execution_options(&command);
@@ -531,31 +657,59 @@ fn run_with_cancellation(
             stderr,
         );
     }
-    if let Err(error) = short_ids::resolve(&mut command, storage_root.as_ref(), cancellation) {
+    globals.overrides.retain_hook_text = command.hook_text_retention();
+    if let Command::Configuration(request) = &mut command {
+        request.globals = globals;
+        request.discover_user = discover_user;
+    } else if matches!(&command, Command::Diagnostics(_)) {
+        if globals.user_file.is_some() {
+            return report_cli_failure(
+                selected,
+                Some(command_name),
+                false,
+                CliError::usage("diagnostic inspection does not load --config files"),
+                stdout,
+                stderr,
+            );
+        }
+    } else if !matches!(&command, Command::Help(_) | Command::Version) {
+        let root = if matches!(&command, Command::GeneratePackageId) {
+            None
+        } else {
+            storage_root.as_ref()
+        };
+        let settings = match cancellation
+            .trace
+            .measure(crate::domain::TracePhase::Configuration, || {
+                configuration::resolve(&globals, root, None, None, discover_user)
+            }) {
+            Ok(settings) => settings,
+            Err(error) => {
+                return report_cli_failure(
+                    selected,
+                    Some(command_name),
+                    raw,
+                    error,
+                    stdout,
+                    stderr,
+                );
+            }
+        };
+        selected.human = (&settings).into();
+        core_traces::configure(cancellation, root, Some(&settings));
+        cancellation.diagnostics.disabled.store(
+            !settings.diagnostics.retain_hook_text.value,
+            std::sync::atomic::Ordering::Release,
+        );
+    }
+    if let Err(error) = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::Resolution, || {
+            short_ids::resolve(&mut command, storage_root.as_ref(), cancellation)
+        })
+    {
         return report_cli_failure(selected, Some(command_name), raw, error, stdout, stderr);
     }
-    let disable_text = match &command {
-        Command::Invoke {
-            no_retain_hook_text,
-            ..
-        } => *no_retain_hook_text,
-        Command::Snapshot(snapshots::SnapshotCommand::Execute { options, .. }) => {
-            options.no_retain_hook_text
-        }
-        Command::CreateAndRestore(command) => command.options.no_retain_hook_text,
-        Command::Retirement(retirements::RetirementCommand::Execute { options, .. }) => {
-            options.no_retain_hook_text
-        }
-        Command::Migration(migrations::MigrationCommand::Plan {
-            no_retain_hook_text,
-            ..
-        }) => *no_retain_hook_text,
-        _ => false,
-    };
-    cancellation
-        .diagnostics
-        .disabled
-        .store(disable_text, std::sync::atomic::Ordering::Release);
     if executing {
         return streaming::execute_stream(
             command,
@@ -603,7 +757,7 @@ fn run_selected(
     selection: impl Into<machine::Selection>,
 ) -> i32 {
     let selected = selection.into();
-    collect_reply(
+    let reply = collect_reply(
         command,
         storage_root,
         stdin,
@@ -611,8 +765,8 @@ fn run_selected(
         stderr,
         cancellation,
         selected,
-    )
-    .render(selected.format, stdout, stderr)
+    );
+    core_traces::render_reply(reply, selected.format, stdout, stderr, &cancellation.trace)
 }
 
 fn collect_reply(
@@ -629,9 +783,10 @@ fn collect_reply(
     let capture = reply::Capture::new(
         command_name,
         !selected.format.requires_noninteractive(),
-        reply::DisplayOptions::for_command(&command),
+        reply::DisplayOptions::for_command(&command).with_human(selected.human),
     )
-    .with_version(selected.version);
+    .with_version(selected.version)
+    .with_diagnostic_id(selected.diagnostic_id);
     let result = execute(
         command,
         storage_root,
@@ -649,11 +804,15 @@ fn preflight_presentation(
     args: &[OsString],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    diagnostic_id: Option<crate::domain::TraceId>,
 ) -> Option<i32> {
     let parsed = presentation::select(args.to_vec()).and_then(|(_, args)| parse_command(args));
     parsed.err().map(|error| {
         report_cli_failure(
-            machine::recognize(args),
+            machine::Selection {
+                diagnostic_id,
+                ..machine::recognize(args)
+            },
             None,
             presentation::raw_input_request(args),
             error,
@@ -667,6 +826,7 @@ fn report_startup_failure(
     args: &[OsString],
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
+    diagnostic_id: Option<crate::domain::TraceId>,
 ) -> i32 {
     let mut error = CliError::operation(CANCELLATION_HANDLER_FAILURE);
     error.kind = presentation::ErrorKind::Startup;
@@ -677,7 +837,17 @@ fn report_startup_failure(
         .is_some_and(
             |command| matches!(command, Command::ExportInput { output, .. } if output == "-"),
         );
-    report_cli_failure(machine::recognize(args), None, raw, error, stdout, stderr)
+    report_cli_failure(
+        machine::Selection {
+            diagnostic_id,
+            ..machine::recognize(args)
+        },
+        None,
+        raw,
+        error,
+        stdout,
+        stderr,
+    )
 }
 
 fn report_cli_failure(
@@ -713,6 +883,7 @@ fn report_cli_failure(
             command,
             error.partial.as_ref(),
             &error,
+            selected.diagnostic_id,
             destination,
         ) {
             if !raw {
@@ -735,6 +906,12 @@ fn report_cli_failure(
                 stderr,
                 "publication: destination_published={} (this attempt only; no rollback or durability guarantee)",
                 publication.destination_published
+            );
+        }
+        if let Some(id) = selected.diagnostic_id {
+            let _ = writeln!(
+                stderr,
+                "Diagnostic record: {id} (inspect retained availability with diagnostic show)"
             );
         }
     }
@@ -762,6 +939,8 @@ fn parse_command(args: Vec<OsString>) -> Result<Command, CliError> {
         Some(argument) => return Err(CliError::usage(argument.unexpected().to_string())),
     };
     match first.as_str() {
+        "diagnostic" => core_traces::parse(&mut parser).map(Command::Diagnostics),
+        "config" => configuration::parse(&mut parser).map(Command::Configuration),
         "pack" => parse_pack(&mut parser),
         "package" => names::parse_package(&mut parser),
         "revision" => catalog::parse_revision(&mut parser),
@@ -1082,7 +1261,7 @@ fn parse_invoke(parser: &mut Parser) -> Result<Command, CliError> {
     let action = parse_action_id(&required_value_string(parser, "Action identity")?)?;
     let options = parse_execution_options(parser, "action-timeout-ms")?;
     Ok(Command::Invoke {
-        no_retain_hook_text: options.no_retain_hook_text,
+        retain_hook_text: options.retain_hook_text,
         cancel_on_output_close: options.cancel_on_output_close,
         name,
         action,
@@ -1118,11 +1297,14 @@ fn parse_execution_option(
     options: &mut ExecutionOptions,
 ) -> Result<(), CliError> {
     match argument {
-        "no-retain-hook-text" if !options.no_retain_hook_text => options.no_retain_hook_text = true,
+        "no-retain-hook-text" | "retain-hook-text" => set_once(
+            &mut options.retain_hook_text,
+            argument == "retain-hook-text",
+            "Hook text retention selection",
+        )?,
         "cancel-on-output-close" if !options.cancel_on_output_close => {
             options.cancel_on_output_close = true
         }
-        "no-retain-hook-text" => return Err(CliError::usage("duplicate --no-retain-hook-text")),
         "param" => {
             let value = required_parser_value(parser, "parameter assignment")?;
             let (id, text) = split_parameter_assignment(value, "--param", true)?;
@@ -1186,6 +1368,7 @@ fn parse_execution_option(
 
 fn parse_run(parser: &mut Parser) -> Result<Command, CliError> {
     match required_value_string(parser, "run command")?.as_str() {
+        "export" => run_export::parse(parser).map(Command::RunExport),
         "delete" => lifecycle::parse_run_delete(parser).map(Command::Lifecycle),
         "artifact" => artifacts::parse(parser).map(Command::Artifact),
         "list" => catalog::parse_runs(parser),
@@ -1213,6 +1396,12 @@ fn execute(
 ) -> Result<(), CliError> {
     use presentation::emit_result;
     match command {
+        Command::Diagnostics(request) => {
+            return core_traces::execute(request, storage_root, format);
+        }
+        Command::Configuration(request) => {
+            return configuration::execute(request, storage_root, format);
+        }
         Command::Help(request) => {
             return emit_result(format, "help", &request.result());
         }
@@ -1283,7 +1472,10 @@ fn execute(
         return lifecycle::execute(command, &storage_root, format);
     }
     if let Command::Artifact(command) = command {
-        return artifacts::execute(command, &storage_root, format);
+        return artifacts::execute(command, &storage_root, format, &cancellation.trace);
+    }
+    if let Command::RunExport(command) = command {
+        return run_export::execute(command, &storage_root, format, &cancellation.trace);
     }
     if let Command::Retirement(command) = command {
         return retirements::execute(command, &storage_root, stdin, stderr, cancellation, format);
@@ -1320,12 +1512,16 @@ fn execute(
             | Command::Invoke { plan: true, .. }
             | Command::ShowRun { .. }
     );
-    let application = if readonly {
-        PactrunApplication::open_read_only(&storage_root)
-    } else {
-        PactrunApplication::open(&storage_root)
-    }
-    .map_err(app_error)?;
+    let application = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::StoreOpen, || {
+            if readonly {
+                PactrunApplication::open_read_only(&storage_root)
+            } else {
+                PactrunApplication::open(&storage_root)
+            }
+        })
+        .map_err(app_error)?;
     match command {
         Command::ExportRevision {
             revision,
@@ -1385,7 +1581,7 @@ fn execute(
                         })?;
                         acquisitions.push(InputAcquisition {
                             input_id: id,
-                            source: Box::new(file),
+                            source: Box::new(cancellation.trace.reader(file)),
                         });
                     }
                     InitialInputSpec::Stdin(id) => stdin_id = Some(id),
@@ -1394,7 +1590,7 @@ fn execute(
             if let Some(id) = stdin_id {
                 acquisitions.push(InputAcquisition {
                     input_id: id,
-                    source: Box::new(&mut *stdin),
+                    source: Box::new(cancellation.trace.reader(&mut *stdin)),
                 });
             }
             let view = application
@@ -1480,7 +1676,12 @@ fn execute(
                 InputSourceSpec::Stdin => Box::new(&mut *stdin),
             };
             let version = application
-                .set_input(instance, input.clone(), expected, source)
+                .set_input(
+                    instance,
+                    input.clone(),
+                    expected,
+                    Box::new(cancellation.trace.reader(source)),
+                )
                 .map_err(app_error)?;
             emit_result(
                 format,
@@ -1510,7 +1711,7 @@ fn execute(
                 io::copy(&mut reader, stdout).map_err(io_operation)?;
                 stdout.flush().map_err(io_operation)?;
             } else {
-                publish_output_file(&observation.bytes, Path::new(&output))?;
+                publish_output_file(&observation.bytes, Path::new(&output), &cancellation.trace)?;
                 emit_result(
                     format,
                     "input export",
@@ -1597,7 +1798,7 @@ fn execute(
             }
         }
         Command::Invoke {
-            no_retain_hook_text: _,
+            retain_hook_text: _,
             cancel_on_output_close: _,
             name,
             action,
@@ -1646,8 +1847,11 @@ fn execute(
                 ));
             }
             let launcher_directories = launcher_search_directories();
-            let compiled = application
-                .compile_action(&intent, &launcher_directories)
+            let compiled = cancellation
+                .trace
+                .measure(crate::domain::TracePhase::Compilation, || {
+                    application.compile_action(&intent, &launcher_directories)
+                })
                 .map_err(app_error)?;
             if format.version() == machine::Version::Legacy
                 && compiled.protocol_version() == crate::domain::operation_hook_version()
@@ -1694,73 +1898,78 @@ fn execute(
                 ));
             }
             let admission_options = crate::executor::AdmissionOptions { recovery_override };
-            let admitted = match application.accept_and_admit_action_with_cancellation(
-                &compiled,
-                admission_options,
-                cancellation,
-            ) {
-                Ok(admitted) => admitted,
-                Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
-                    let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
-                        &error
-                    else {
-                        unreachable!()
-                    };
-                    let run = *run;
-                    let input_binding_advice = match refusal {
-                        crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
-                            Some(reply::InputBindingAdvice {
-                                instance: name.clone(),
-                                inputs: inputs.clone(),
-                            })
+            let admitted =
+                match cancellation
+                    .trace
+                    .measure(crate::domain::TracePhase::Admission, || {
+                        application.accept_and_admit_action_with_cancellation(
+                            &compiled,
+                            admission_options,
+                            cancellation,
+                        )
+                    }) {
+                    Ok(admitted) => admitted,
+                    Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
+                        let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
+                            &error
+                        else {
+                            unreachable!()
+                        };
+                        let run = *run;
+                        let input_binding_advice = match refusal {
+                            crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
+                                Some(reply::InputBindingAdvice {
+                                    instance: name.clone(),
+                                    inputs: inputs.clone(),
+                                })
+                            }
+                            _ => None,
+                        };
+                        let mut error = app_error(error);
+                        error.details.input_binding_advice = input_binding_advice;
+                        // The accepted no-launch Run is already durable. Return the
+                        // same safe historical projection as a subsequent query.
+                        if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
+                            error.partial = Some(presentation::PartialResult::RefusedExecution(
+                                Box::new(execution_presentation::RefusedExecution {
+                                    run_id: run.to_string(),
+                                    inspection: execution_presentation::Inspection::for_version(
+                                        &inspection,
+                                        format.version(),
+                                    )?,
+                                }),
+                            ));
                         }
-                        _ => None,
-                    };
-                    let mut error = app_error(error);
-                    error.details.input_binding_advice = input_binding_advice;
-                    // The accepted no-launch Run is already durable. Return the
-                    // same safe historical projection as a subsequent query.
-                    if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
-                        error.partial = Some(presentation::PartialResult::RefusedExecution(
-                            Box::new(execution_presentation::RefusedExecution {
-                                run_id: run.to_string(),
-                                inspection: execution_presentation::Inspection::for_version(
-                                    &inspection,
-                                    format.version(),
-                                )?,
-                            }),
+                        return Err(error);
+                    }
+                    Err(ApplicationError::Execution(ExecutorError::CancelledBeforeAcceptance)) => {
+                        return Err(CliError::operation(
+                            "invoke cancelled before Run acceptance; no Run was created",
                         ));
                     }
-                    return Err(error);
-                }
-                Err(ApplicationError::Execution(ExecutorError::CancelledBeforeAcceptance)) => {
-                    return Err(CliError::operation(
-                        "invoke cancelled before Run acceptance; no Run was created",
-                    ));
-                }
-                Err(ApplicationError::Execution(ExecutorError::Persistence {
-                    run: Some(candidate),
-                    ..
-                })) => match recover_candidate_admission(
-                    &application,
-                    &compiled,
-                    admission_options,
-                    candidate,
-                    cancellation,
-                )
-                .map_err(|error| error.with_run_context(candidate))?
-                {
-                    AdmissionRecovery::Admitted(admitted) => *admitted,
-                    AdmissionRecovery::Terminal(run) => {
-                        write_terminal_run_best_effort(&application, run, stderr);
-                        return Err(CliError::operation(format!(
-                            "Run {run} became terminal while Admission was being resolved"
-                        ))
-                        .with_run_context(run));
-                    }
-                },
-                Err(error) => return Err(app_error(error)),
-            };
+                    Err(ApplicationError::Execution(ExecutorError::Persistence {
+                        run: Some(candidate),
+                        ..
+                    })) => match recover_candidate_admission(
+                        &application,
+                        &compiled,
+                        admission_options,
+                        candidate,
+                        cancellation,
+                    )
+                    .map_err(|error| error.with_run_context(candidate))?
+                    {
+                        AdmissionRecovery::Admitted(admitted) => *admitted,
+                        AdmissionRecovery::Terminal(run) => {
+                            write_terminal_run_best_effort(&application, run, stderr);
+                            return Err(CliError::operation(format!(
+                                "Run {run} became terminal while Admission was being resolved"
+                            ))
+                            .with_run_context(run));
+                        }
+                    },
+                    Err(error) => return Err(app_error(error)),
+                };
             let run = application.execute_admitted_action(admitted, policy, cancellation.clone());
             loop {
                 match application.advance_owner_continuation(run) {
@@ -1832,11 +2041,14 @@ fn execute(
             emit_result(format, "run reconcile", &result)?;
         }
         Command::Help(_)
+        | Command::Diagnostics(_)
+        | Command::Configuration(_)
         | Command::Name(_)
         | Command::Catalog(_)
         | Command::Version
         | Command::GeneratePackageId
         | Command::Artifact(_)
+        | Command::RunExport(_)
         | Command::Lifecycle(_)
         | Command::Migration(_)
         | Command::Snapshot(_)
@@ -2339,6 +2551,7 @@ fn read_cancellable_bytes(
     source: &mut dyn Read,
     cancellation: &ActionCancellation,
 ) -> Result<Vec<u8>, CliError> {
+    let mut source = cancellation.trace.reader(source);
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
@@ -2671,8 +2884,12 @@ fn io_operation(error: io::Error) -> CliError {
 #[cfg(test)]
 use crate::output_publication::OutputPublicationPoint;
 
-fn publish_output_file(source: &StagedFile, destination: &Path) -> Result<(), CliError> {
-    crate::output_publication::publish_reported(source, destination)
+fn publish_output_file(
+    source: &StagedFile,
+    destination: &Path,
+    trace: &std::sync::Arc<crate::trace::Trace>,
+) -> Result<(), CliError> {
+    crate::output_publication::publish_reported_traced(source, destination, trace)
         .map_err(|failure| publication_error(failure, destination))
 }
 

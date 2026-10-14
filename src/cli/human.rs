@@ -243,6 +243,17 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
             operation(&run["operation"])
         ),
     )?;
+    if details && let Some(history) = value.get("input_history") {
+        if history["recorded"] == true {
+            write(
+                out,
+                "Historical Input references (not a payload backup or proof of Hook reads)",
+            )?;
+            tree(&history["contexts"], out, 2)?;
+        } else {
+            write(out, "Historical Input references: not recorded")?;
+        }
+    }
     let state = &run["state"];
     write(
         out,
@@ -275,6 +286,37 @@ fn run_summary(value: &Value, out: &mut dyn Write, details: bool) -> Result<(), 
                     ),
                 )?;
                 write(out, format!("  Stage: {}", text(f, "step")))?;
+            } else if key == "primary_failure"
+                && f["cause"]["kind"] == "service_presence_requirement"
+            {
+                let cause = &f["cause"];
+                let reference = &cause["reference"];
+                write(
+                    out,
+                    format!(
+                        "  Service resource: {}/{}/{}",
+                        text(reference, "view"),
+                        text(reference, "role"),
+                        text(reference, "id")
+                    ),
+                )?;
+                write(
+                    out,
+                    format!(
+                        "  Expected: {}; observed: {}",
+                        text(cause, "expected"),
+                        text(cause, "observed")
+                    ),
+                )?;
+                write(out, format!("  Stage: {}", text(f, "step")))?;
+                if let Some(edge) = cause.get("edge") {
+                    write(out, "  Migration edge")?;
+                    tree(edge, out, 4)?;
+                }
+                write(
+                    out,
+                    "  Historical observation: inspect current resources before considering another attempt.",
+                )?;
             } else {
                 tree(f, out, 2)?;
             }
@@ -759,6 +801,12 @@ pub(super) fn render(
             return Ok(());
         }
         "run artifact export" => return write(out, "Artifact exported"),
+        "run export" => {
+            return write(
+                out,
+                "Run report exported. Review it for sensitive information before sharing.",
+            );
+        }
         "run artifact delete" => {
             return write(
                 out,
@@ -1235,16 +1283,31 @@ pub(super) fn render(
                 out,
                 "Abandon preserves remaining service data. Stop external service processes separately.",
             )?;
-            return run_summary(value, out, false);
+            return run_summary(
+                value,
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            );
         }
         "invoke" | "snapshot capture" | "snapshot restore" | "instance delete"
         | "instance abandon"
             if value.get("run").is_some() =>
         {
-            return run_summary(value, out, false);
+            return run_summary(
+                value,
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            );
         }
         "instance migrate" if value.get("inspection").is_some() => {
-            run_summary(&value["inspection"], out, false)?;
+            run_summary(
+                &value["inspection"],
+                out,
+                display.human.verbosity == crate::configuration::Verbosity::Detailed,
+            )?;
+            if display.human.verbosity == crate::configuration::Verbosity::Quiet {
+                return Ok(());
+            }
             write(out, "\nCurrent instance")?;
             return instance(&value["current_instance"], out);
         }

@@ -3,6 +3,89 @@ use crate::domain::*;
 use std::ffi::OsString;
 
 const WORKER: &str = "hook::tests::operation_runtime::operation_hook_worker";
+
+// Test-ID: PR-TEST-0784
+// Verifies: PR-REQ-0404, PR-REQ-0405
+#[test]
+fn run_export_capture_and_restore_use_exact_context_and_preserve_absence() {
+    let f = fixture();
+    let capture = snapshot_run(
+        &f,
+        SnapshotOperation::Capture,
+        "success",
+        &f.marker("report-capture"),
+    );
+    assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+    let snapshot = captured_snapshot(&f, capture);
+    let flags = [
+        "--include-inputs",
+        "--include-secrets",
+        "--authorize-secret-export",
+    ];
+    let check = |run, name, scope: &str| {
+        let (code, result) = super::run_export_runtime::export(&f, run, name, &flags);
+        assert_eq!(code, 0, "{result}");
+        let (report, files) = super::run_export_runtime::contents(&f.marker(name));
+        let items = report["inputs"].as_array().unwrap();
+        let secret = items
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap();
+        assert_eq!(secret["scope"], scope);
+        assert_eq!(secret["state"], "copied");
+        assert_eq!(files[secret["member"].as_str().unwrap()], SECRET_BINDING);
+        let absent = items
+            .iter()
+            .find(|i| i["input_id"] == "configuration")
+            .unwrap();
+        assert_eq!(absent["state"], "absent");
+        assert!(absent["member"].is_null());
+    };
+    check(capture, "capture.zip", "current");
+    let restore = snapshot_run(
+        &f,
+        SnapshotOperation::Restore(snapshot),
+        "success",
+        &f.marker("report-restore"),
+    );
+    assert_eq!(finish(&f, restore).outcome, RunOutcome::Succeeded);
+    check(restore, "restore.zip", "snapshot");
+    // Restore installs new payload identities; Capture history does not pin the replaced ones.
+    assert_eq!(
+        super::run_export_runtime::export(&f, capture, "capture-after-restore.zip", &flags).0,
+        0
+    );
+    let (after, files) =
+        super::run_export_runtime::contents(&f.marker("capture-after-restore.zip"));
+    assert_eq!(
+        after["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap()["state"],
+        "unavailable"
+    );
+    assert_eq!(files.len(), 1);
+    f.application
+        .delete_object(&ObjectDeletion::Snapshot(snapshot))
+        .unwrap();
+    assert_eq!(
+        super::run_export_runtime::export(&f, restore, "deleted-snapshot.zip", &flags).0,
+        0
+    );
+    let (report, files) = super::run_export_runtime::contents(&f.marker("deleted-snapshot.zip"));
+    assert_eq!(
+        report["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["input_id"] == "secret_config")
+            .unwrap()["state"],
+        "unavailable"
+    );
+    assert_eq!(files.len(), 1);
+}
 #[path = "operation_failure_tests.rs"]
 mod failures;
 fn hook() -> Value {
@@ -104,6 +187,92 @@ fn captured_snapshot(f: &RuntimeFixture, run: RunId) -> SnapshotId {
         .try_into()
         .unwrap(),
     )
+}
+
+// Test-ID: PR-TEST-0774
+// Verifies: PR-REQ-0402, PR-REQ-0403
+#[test]
+fn input_history_restore_records_snapshot_context_without_a_snapshot_pin() {
+    let f = fixture();
+    let capture = snapshot_run(
+        &f,
+        SnapshotOperation::Capture,
+        "success",
+        &f.marker("history-capture"),
+    );
+    assert_eq!(finish(&f, capture).outcome, RunOutcome::Succeeded);
+    let snapshot = captured_snapshot(&f, capture);
+    let restore = snapshot_run(
+        &f,
+        SnapshotOperation::Restore(snapshot),
+        "success",
+        &f.marker("history-restore"),
+    );
+    assert_eq!(finish(&f, restore).outcome, RunOutcome::Succeeded);
+    let p = persistence(&f.storage);
+    let history = p.input_history(restore).unwrap();
+    let selector = HistoricalInputSelector {
+        edge_index: None,
+        scope: InputHistoryScope::Snapshot,
+        input: InputIdentity::parse("secret_config").unwrap(),
+    };
+    let mut bytes = Vec::new();
+    assert!(matches!(
+        p.export_historical_input(restore, &selector, false, &mut bytes),
+        Err(crate::persistence::PersistenceError::UnauthorizedSecretExport)
+    ));
+    assert!(bytes.is_empty());
+    assert_eq!(
+        p.export_historical_input(restore, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Copied {
+            protection: ManagedInputProtection::Secret
+        }
+    );
+    assert_eq!(bytes, SECRET_BINDING);
+    let absent = HistoricalInputSelector {
+        input: InputIdentity::parse("configuration").unwrap(),
+        ..selector.clone()
+    };
+    assert_eq!(
+        p.export_historical_input(restore, &absent, false, &mut Vec::new())
+            .unwrap(),
+        HistoricalInputExport::Absent
+    );
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].scope, InputHistoryScope::Snapshot);
+    assert_eq!(history[0].snapshot, Some(snapshot));
+    assert!(history[0].snapshot_integrity.is_some());
+    let integrity = history[0].snapshot_integrity.as_ref().unwrap().as_str();
+    assert!(!format!("{history:?}").contains(integrity));
+    assert!(
+        history[0].inputs.iter().any(
+            |i| i.input.as_str() == "secret_config" && i.origin == InputHistoryOrigin::Snapshot
+        )
+    );
+    assert!(
+        history[0]
+            .inputs
+            .iter()
+            .any(|i| i.input.as_str() == "configuration" && i.origin == InputHistoryOrigin::Absent)
+    );
+    assert_eq!(
+        f.application
+            .delete_object(&ObjectDeletion::Snapshot(snapshot))
+            .unwrap(),
+        ObjectDeletionResult::Deleted
+    );
+    assert_eq!(p.input_history(restore).unwrap(), history);
+    bytes.clear();
+    assert_eq!(
+        p.export_historical_input(restore, &selector, true, &mut bytes)
+            .unwrap(),
+        HistoricalInputExport::Unavailable
+    );
+    assert!(
+        bytes.is_empty(),
+        "deleted Snapshot fell back to restored current Input"
+    );
 }
 fn snapshot_run(
     f: &RuntimeFixture,

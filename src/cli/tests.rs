@@ -6,6 +6,8 @@ include!("names_tests.rs");
 include!("json_tests.rs");
 include!("machine_delivery_tests.rs");
 include!("short_id_tests.rs");
+#[path = "configuration_runtime_tests.rs"]
+mod configuration_runtime;
 
 // Test-ID: PR-TEST-0593
 // Verifies: PR-REQ-0038, PR-REQ-0116, PR-REQ-0119

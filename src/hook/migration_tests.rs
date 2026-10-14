@@ -4,6 +4,30 @@ use crate::domain::*;
 use std::ffi::OsString;
 const WORKER: &str = "hook::tests::migration_runtime::migration_hook_worker";
 
+// Test-ID: PR-TEST-0786
+// Verifies: PR-REQ-0405
+#[test]
+fn run_export_migration_preserves_exact_edges_and_prepared_vs_committed_sources() {
+    let f=RuntimeFixture::new(); let path=chain(&f);
+    let run=start(&f,&path,"success",ActionCancellation::default());
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let (code,result)=super::run_export_runtime::export(&f,run,"migration.zip",&["--include-inputs","--include-secrets","--authorize-secret-export"]);
+    assert_eq!(code,0,"{result}");
+    let (report,files)=super::run_export_runtime::contents(&f.marker("migration.zip"));
+    let inputs=report["inputs"].as_array().unwrap();
+    for item in inputs {
+        assert!(path.windows(2).any(|pair|item["edge"]["source_revision_digest"]==pair[0].content_digest.to_string()
+            && item["edge"]["target_revision_digest"]==pair[1].content_digest.to_string()));
+    }
+    let find=|scope,input|inputs.iter().find(|i|i["scope"]==scope&&i["input_id"]==input
+        &&i["edge"]["source_revision_digest"]==path[1].content_digest.to_string()).unwrap();
+    assert_eq!(find("target_prepared","request")["state"],"transient");
+    assert_eq!(find("target_prepared","result")["state"],"pending_output");
+    assert!(find("target_prepared","result")["member"].is_null());
+    let committed=find("target_committed","result"); assert_eq!(committed["state"],"copied");
+    assert_eq!(files[committed["member"].as_str().unwrap()],SECRET_BINDING);
+}
+
 fn declaration(id: &str, required: bool, secret: bool) -> InputDeclarationV1 {
     InputDeclarationV1 { id: InputIdentity::parse(id).unwrap(), required,
         protection: if secret {InputProtectionV1::Secret} else {InputProtectionV1::Normal} }
@@ -46,6 +70,38 @@ fn chain(f: &RuntimeFixture) -> Vec<RevisionIdentity> {
         target_input_id:InputIdentity::parse("final").unwrap(),
     }], false);
     vec![a,b,c,d]
+}
+
+// Test-ID: PR-TEST-0775
+// Verifies: PR-REQ-0402, PR-REQ-0403
+#[test]
+fn input_history_migration_keeps_edge_roles_transients_and_committed_values_distinct() {
+    let f=RuntimeFixture::new(); let path=chain(&f);
+    let run=start(&f,&path,"success",ActionCancellation::default());
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let p=persistence(&f.storage); let history=p.input_history(run).unwrap();
+    assert_eq!(history.len(),9);
+    let context=|edge,scope|history.iter().find(|c|c.edge_index==Some(edge)&&c.scope==scope).unwrap();
+    let source=context(1,InputHistoryScope::Source);
+    assert_eq!(source.inputs.iter().find(|i|i.input.as_str()=="secret_config").unwrap().role,InputHistoryRole::Retained);
+    let prepared=context(1,InputHistoryScope::TargetPrepared);
+    assert_eq!(prepared.inputs.iter().find(|i|i.input.as_str()=="request").unwrap().origin,InputHistoryOrigin::Transient);
+    assert_eq!(prepared.inputs.iter().find(|i|i.input.as_str()=="result").unwrap().origin,InputHistoryOrigin::PendingOutput);
+    let committed=context(1,InputHistoryScope::TargetCommitted);
+    assert!(matches!(committed.inputs.iter().find(|i|i.input.as_str()=="result").unwrap().origin,InputHistoryOrigin::Managed(_)));
+    let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    assert_eq!(db.query_row("SELECT count(*) FROM run_migration_payload_pins WHERE run_id=?1",[run.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
+    for (scope,input,expected) in [
+        (InputHistoryScope::TargetPrepared,"request",HistoricalInputExport::Transient),
+        (InputHistoryScope::TargetPrepared,"result",HistoricalInputExport::PendingOutput),
+        (InputHistoryScope::TargetCommitted,"result",HistoricalInputExport::Copied { protection: ManagedInputProtection::Secret }),
+    ] {
+        let selector=HistoricalInputSelector {edge_index:Some(1),scope,input:InputIdentity::parse(input).unwrap()};
+        let mut bytes=Vec::new();
+        assert_eq!(p.export_historical_input(run,&selector,true,&mut bytes).unwrap(),expected);
+        if matches!(expected,HistoricalInputExport::Copied {..}) {assert_eq!(bytes,SECRET_BINDING);}
+        else {assert!(bytes.is_empty(),"prepared Input was substituted with the committed value");}
+    }
 }
 
 fn start(f: &RuntimeFixture, path: &[RevisionIdentity], mode: &str, cancel: ActionCancellation) -> RunId {
@@ -178,12 +234,13 @@ fn retained_bindings_reactivate_discard_and_delete_without_reinterpreting_source
 }
 
 // Test-ID: PR-TEST-0312
-// Verifies: PR-REQ-0090, PR-REQ-0154, PR-REQ-0159, PR-REQ-0161, PR-REQ-0218, PR-REQ-0306, PR-REQ-0315, PR-REQ-0316
+// Verifies: PR-REQ-0090, PR-REQ-0154, PR-REQ-0159, PR-REQ-0161, PR-REQ-0218, PR-REQ-0306, PR-REQ-0315, PR-REQ-0316, PR-REQ-0397
 #[test]
 fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_outputs() {
     let f = RuntimeFixture::new();
     let path = chain(&f);
-    let run = start(&f, &path, "success", ActionCancellation::default());
+    let cancellation = phase_cancellation(&f, TraceOperation::Migration);
+    let run = start(&f, &path, "success", cancellation.clone());
     let outcome = finish(&f, run);
     assert_eq!(outcome.outcome, RunOutcome::Succeeded, "{outcome:?}");
     let p = persistence(&f.storage);
@@ -196,6 +253,11 @@ fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_ou
     assert_eq!(fs::read(f.marker("invoked")).unwrap(), b"once\n");
     assert!(!contains(format!("{:?}",p.managed_run_inspection(run).unwrap()).as_bytes(), SECRET_BINDING));
     assert_eq!(p.managed_run_inspection(run).unwrap().unwrap().migration_progress.unwrap().committed_edges, 3);
+    let trace = completed_phase_trace(&f, &cancellation, run, 0);
+    assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 3);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 0);
 }
 
 // Test-ID: PR-TEST-0313

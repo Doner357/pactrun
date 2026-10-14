@@ -7,7 +7,7 @@ slug: /spec/storage/schema
 
 The public identifier is the singleton pactrun_metadata format_version string.
 The application marker remains 0x50414354; SQLite user_version and the admission
-integer are private bootstrap marker 4, not a second public format version.
+integer are private bootstrap marker 5, not a second public format version.
 Only pristine storage or the exact supported metadata and schema may be admitted.
 Existing populated files without supported metadata are refused before Pactrun
 staging, admission/content-coordination creation, conversion or cleanup. Ordinary
@@ -28,7 +28,7 @@ representation is absent. Managed Input chunks remain an active representation.
 ## Complete fresh schema
 
 ```sql
--- Fresh Persistence 1.0-alpha.5. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.6. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -767,6 +767,37 @@ CREATE TABLE run_hook_completions (
     FOREIGN KEY (run_id) REFERENCES run_outcomes(run_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_input_contexts (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    edge_index INTEGER NOT NULL CHECK(edge_index >= -1),
+    scope_rank INTEGER NOT NULL CHECK(scope_rank BETWEEN 0 AND 4),
+    coverage_rank INTEGER NOT NULL CHECK(coverage_rank IN (0, 1)),
+    snapshot_id BLOB CHECK(snapshot_id IS NULL OR length(snapshot_id) = 16),
+    snapshot_integrity BLOB CHECK(snapshot_integrity IS NULL OR length(snapshot_integrity) = 32),
+    PRIMARY KEY(run_id, edge_index, scope_rank),
+    CHECK((scope_rank IN (0, 1) AND edge_index = -1) OR (scope_rank IN (2, 3, 4) AND edge_index >= 0)),
+    CHECK((scope_rank = 1) = (snapshot_id IS NOT NULL)),
+    CHECK((scope_rank = 1) = (snapshot_integrity IS NOT NULL)),
+    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE run_input_references (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    edge_index INTEGER NOT NULL,
+    scope_rank INTEGER NOT NULL,
+    input_id BLOB NOT NULL CHECK(length(input_id) BETWEEN 1 AND 128),
+    role_rank INTEGER NOT NULL CHECK(role_rank IN (0, 1)),
+    protection_rank INTEGER NOT NULL CHECK(protection_rank IN (0, 1)),
+    origin_rank INTEGER NOT NULL CHECK(origin_rank BETWEEN 0 AND 4),
+    payload_id BLOB CHECK(payload_id IS NULL OR length(payload_id) = 16),
+    PRIMARY KEY(run_id, edge_index, scope_rank, input_id),
+    CHECK((origin_rank = 1) = (payload_id IS NOT NULL)),
+    CHECK(origin_rank <> 2 OR scope_rank = 1),
+    CHECK(scope_rank <> 1 OR origin_rank IN (0, 2)),
+    CHECK(origin_rank NOT IN (3, 4) OR scope_rank = 3),
+    FOREIGN KEY(run_id, edge_index, scope_rank) REFERENCES run_input_contexts(run_id, edge_index, scope_rank) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_migration_boundaries (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     edge_index INTEGER NOT NULL CHECK(edge_index >= 0),
@@ -904,6 +935,22 @@ CREATE TABLE run_revision_pins (
         ON DELETE RESTRICT
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_service_prerequisite_causes (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    view_rank INTEGER NOT NULL CHECK(view_rank BETWEEN 0 AND 2),
+    role_rank INTEGER NOT NULL CHECK(role_rank IN (0, 1)),
+    resource_id BLOB NOT NULL CHECK(length(resource_id) BETWEEN 1 AND 128),
+    expected_presence INTEGER NOT NULL CHECK(expected_presence IN (0, 1)),
+    observed_presence INTEGER NOT NULL CHECK(observed_presence IN (0, 1)),
+    source_revision_digest BLOB CHECK(source_revision_digest IS NULL OR length(source_revision_digest) = 32),
+    target_revision_digest BLOB CHECK(target_revision_digest IS NULL OR length(target_revision_digest) = 32),
+    PRIMARY KEY(run_id),
+    CHECK(expected_presence <> observed_presence),
+    CHECK((source_revision_digest IS NULL) = (target_revision_digest IS NULL)),
+    CHECK(source_revision_digest IS NULL OR source_revision_digest <> target_revision_digest),
+    FOREIGN KEY(run_id) REFERENCES run_primary_failures(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_secondary_failures (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
@@ -1011,7 +1058,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 4),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 5),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -1020,7 +1067,7 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.5');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.6');
 
 CREATE TABLE package_local_names (
     package_id BLOB NOT NULL CHECK(length(package_id) = 16),
@@ -1077,6 +1124,9 @@ CREATE TABLE run_core_diagnostic_events (
     PRIMARY KEY(run_id, sequence),
     FOREIGN KEY(run_id) REFERENCES run_core_diagnostic_collections(run_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
+
+CREATE INDEX run_diagnostic_retention ON run_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,kind,severity,code,message,truncated,truncated_prefix_bytes,completion_status) AS BLOB)));
+CREATE INDEX run_core_diagnostic_retention ON run_core_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,failure) AS BLOB)));
 ```
 
 ## Functional persistence obligations
@@ -1287,8 +1337,9 @@ stable public Rust API, CLI spelling, or wire contract is created here.
 
 The complete baseline contains live Instance identities, bindings, payload
 headers and active chunk storage. application_id is 0x50414354 and user_version
-is private marker 3. All tables are STRICT and WITHOUT ROWID; correctness does
-not depend on rowid, insertion order, timestamps or query-plan iteration.
+uses the private bootstrap marker declared above. All tables are STRICT and
+WITHOUT ROWID; correctness does not depend on rowid, insertion order, timestamps
+or query-plan iteration.
 
 
 `instance_name` and `input_identity` store exact UTF-8 bytes as BLOBs. The
@@ -1378,8 +1429,8 @@ and are not a stable API.
 
 The complete baseline includes managed Run identities, invocations, execution
 owners, pins, outcomes, failures, completion, artifacts and recovery guards.
-It retains application_id 0x50414354 and private user_version marker 3. All
-relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
+It retains application_id 0x50414354 and the private bootstrap marker declared
+above. All relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
 extension performed while opening an older development store.
 
 
@@ -1580,7 +1631,8 @@ and its Instance's current recovery guard from one SQLite read snapshot. This re
 The baseline contains durable writable admission, exact operation kinds,
 Capture/Restore invocations, recovery-consequence versions, Snapshot manifests
 and immutable blob references, Restore admissions, and Capture results. The public format is the metadata
-string; user_version and admitted_schema_version remain private marker 3.
+string; user_version and admitted_schema_version use the private bootstrap
+marker declared above.
 All tables are STRICT and WITHOUT ROWID. Rowid, clocks and query plans do not
 establish correctness.
 
@@ -1681,6 +1733,8 @@ from development-era schemas.
 
 **Verification: PR-TEST-0195, PR-TEST-0196, PR-TEST-0197, PR-TEST-0198,
 PR-TEST-0201, PR-TEST-0622, PR-TEST-0623, PR-TEST-0639.**
+
+**Verification: PR-TEST-0790, PR-TEST-0791, PR-TEST-0792.**
 
 ### PR-REQ-0308 - Migration record ownership and admission {#pr-req-0308---v6-migration-persistence-and-upgrade-boundary}
 
@@ -2092,8 +2146,8 @@ collections. Foreign or drifted stores are not repaired. Reopening
 supported storage preserves Run data and existing evidence exactly; absence of a
 collection row means not-collected evidence, never permission to invent it.
 
-New Run acceptance MUST record retention policy with the Run. Diagnostic writes
-MUST revalidate writable admission and never recreate a missing collection. They
+New Run acceptance MUST record its Hook-text retention choice with the Run.
+Diagnostic writes MUST revalidate writable admission and never recreate a missing collection. They
 are separate from outcome/managed-output commit success and MUST NOT change those
 boundaries. Evidence rows and state MUST be read in one snapshot; managed Run
 inspection includes evidence in the same snapshot as Run facts and current guard.
@@ -2123,4 +2177,4 @@ MUST NOT persist Hook code/message bytes, including through debug/error paths.
 This is not an encrypted vault, backup facility or secure-erasure promise.
 
 
-**Verification: PR-TEST-0521, PR-TEST-0522, PR-TEST-0523, PR-TEST-0524, PR-TEST-0526, PR-TEST-0527.**
+**Verification: PR-TEST-0521, PR-TEST-0522, PR-TEST-0523, PR-TEST-0524, PR-TEST-0526, PR-TEST-0527, PR-TEST-0802.**

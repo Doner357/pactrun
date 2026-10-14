@@ -3,6 +3,19 @@ use crate::domain::*;
 const WORKER: &str = "hook::tests::deletion_runtime::cleanup_hook_worker";
 const OWNER_WORKER: &str = "hook::tests::deletion_runtime::deletion_owner_worker";
 
+// Test-ID: PR-TEST-0785
+// Verifies: PR-REQ-0405
+#[test]
+fn run_export_cleanup_after_retirement_does_not_require_live_instance_or_payloads() {
+    let f=fixture("success"); let run=start(&f,DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let (code,result)=super::run_export_runtime::export(&f,run,"cleanup.zip",&["--include-secrets","--authorize-secret-export"]);
+    assert_eq!(code,0,"{result}");
+    let (report,files)=super::run_export_runtime::contents(&f.marker("cleanup.zip"));
+    assert_eq!(report["inputs"][0]["state"],"unavailable"); assert_eq!(files.len(),1);
+    assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
+}
+
 fn fixture(mode: &str) -> RuntimeFixture {
     RuntimeFixture::with_source(|source, _, manifest| {
         let args = serde_json::to_string(&vec!["--exact".to_owned(),WORKER.to_owned(),"--nocapture".to_owned(),"--skip".to_owned(),
@@ -71,11 +84,14 @@ fn retirement_removes_retained_bindings_without_touching_another_instance_or_sou
 }
 
 // Test-ID: PR-TEST-0404
-// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334
+// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334, PR-REQ-0397
 #[test]
 fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history() {
     let f = fixture("success");
-    let run = start(&f, DeletionMode::ManagedCleanup);
+    let cancellation = phase_cancellation(&f, TraceOperation::Retirement);
+    let intent = f.application.resolve_deletion(&f.instance.name, None, DeletionMode::ManagedCleanup).unwrap();
+    let plan = f.application.compile_deletion(&intent, &[]).unwrap();
+    let run = f.application.accept_deletion_plan(plan, AdmissionOptions::default(), cancellation.clone(), policy(Some(5000),Some(5000),Some(20))).unwrap();
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
     assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
@@ -84,6 +100,12 @@ fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history
     assert!(p.managed_run_inspection(run).unwrap().is_some());
     assert!(matches!(p.load_managed_run(run).unwrap().unwrap().operation,
         ManagedRunIdentity::Deletion { mode: DeletionMode::ManagedCleanup, .. }));
+    let trace = completed_phase_trace(&f, &cancellation, run, 0);
+    assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::StorageFinalization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 2);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 0);
 }
 
 // Test-ID: PR-TEST-0424
@@ -139,6 +161,62 @@ fn baseline_cleanup_qualifies_live_service_prerequisites_before_launch_and_ends_
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
     assert!(!path.exists());
+    assert!(p.load_instance_by_id(f.instance.id).unwrap().is_none());
+}
+
+// Test-ID: PR-TEST-0767
+// Verifies: PR-REQ-0400
+#[test]
+fn service_presence_failure_is_retained_after_repair_and_instance_retirement() {
+    let f = fixture("service"); let p = persistence(&f.storage);
+    let allocation = p.load_instance_service_state(f.instance.id).unwrap().unwrap().storages[0].allocation;
+    let path = f.storage.join("service-storage").join(format!("alloc-{allocation}"));
+    let run = start(&f, DeletionMode::ManagedCleanup); let failed = finish(&f, run);
+    assert_eq!(failed.outcome, RunOutcome::Failed); assert_eq!(failed.terminal_risk, RecoveryRiskState::Clear);
+    let expected = ServicePresenceFailure { reference: ServiceReferenceV2 { view:ServiceView::Current, role:ServiceRole::Active, scope:ServiceScope::Resource(ServiceResourceIdentity::parse("config").unwrap()) }, expected:ServicePresenceRequirement::Present, observed:ServicePresenceRequirement::Absent, edge:None };
+    assert_eq!(failed.primary_failure.as_ref().unwrap().cause, Some(RunFailureCause::ServicePresenceRequirement(Box::new(expected.clone()))));
+    assert!(!f.marker("cleanup-count").exists());
+    let inspect = || {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let args = vec!["--format".into(), "json".into(), "run".into(), "show".into(), run.to_string().into()];
+        assert_eq!(crate::cli::run(args, Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut out, &mut err), 0);
+        let value:Value = serde_json::from_slice(&out).unwrap();
+        let cause = value["result"]["run"]["state"]["primary_failure"]["cause"].clone();
+        assert_eq!(cause["kind"], "service_presence_requirement"); assert_eq!(cause["reference"]["id"], "config");
+        assert_eq!(cause["expected"], "present"); assert_eq!(cause["observed"], "absent");
+        assert!(!cause.to_string().contains("config.json"));
+        cause
+    };
+    let original = inspect(); fs::write(path.join("config.json"), b"live config").unwrap();
+    let (mut human, mut errors) = (Vec::new(), Vec::new());
+    assert_eq!(crate::cli::run(vec!["run".into(), "show".into(), run.to_string().into()], Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut human, &mut errors), 0);
+    let human = String::from_utf8(human).unwrap();
+    assert!(human.contains("current/active/config") && human.contains("Expected: present; observed: absent"));
+    assert!(!human.contains("config.json"));
+    let (mut legacy, mut errors) = (Vec::new(), Vec::new());
+    assert_ne!(crate::cli::run(vec!["--format".into(), "json".into(), "--machine-version".into(), "1.0-alpha.3".into(), "run".into(), "show".into(), run.to_string().into()], Some(f.storage.clone().into_os_string()), &mut io::empty(), &mut legacy, &mut errors), 0);
+    assert!(String::from_utf8(legacy).unwrap().contains("cannot represent service prerequisite"));
+    assert_eq!(inspect(), original);
+    let cleanup = start(&f, DeletionMode::ManagedCleanup); assert_eq!(finish(&f, cleanup).outcome, RunOutcome::Succeeded);
+    assert!(!path.exists()); assert_eq!(inspect(), original);
+    let reopened = PactrunPersistence::open_read_only(&f.storage).unwrap();
+    let state = reopened.load_managed_run(run).unwrap().unwrap().state;
+    let RunState::Finished(state) = state else { panic!("historical Run changed state") };
+    assert_eq!(state.primary_failure.unwrap().cause, Some(RunFailureCause::ServicePresenceRequirement(Box::new(expected))));
+}
+
+// Test-ID: PR-TEST-0773
+// Verifies: PR-REQ-0402, PR-REQ-0403
+#[test]
+fn input_history_cleanup_context_survives_retirement_without_payload_bytes() {
+    let f=fixture("success"); let run=start(&f,DeletionMode::ManagedCleanup);
+    assert_eq!(finish(&f,run).outcome,RunOutcome::Succeeded);
+    let p=persistence(&f.storage); let history=p.input_history(run).unwrap();
+    assert_eq!(history.len(),1); assert_eq!(history[0].coverage,InputHistoryCoverage::ManagedContext);
+    let input=history[0].inputs.iter().find(|i|i.input.as_str()=="secret_config").unwrap();
+    let InputHistoryOrigin::Managed(payload)=input.origin else {panic!("missing Cleanup history")};
+    let db=rusqlite::Connection::open(f.storage.join("database/pactrun.sqlite3")).unwrap();
+    assert_eq!(db.query_row("SELECT count(*) FROM managed_input_payloads WHERE payload_id=?1",[payload.as_bytes().as_slice()],|r|r.get::<_,i64>(0)).unwrap(),0);
     assert!(p.load_instance_by_id(f.instance.id).unwrap().is_none());
 }
 

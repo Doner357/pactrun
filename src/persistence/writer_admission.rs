@@ -23,6 +23,46 @@ fn unsupported_source(state: DatabaseState) -> PersistenceError {
     ))
 }
 
+/// Evidence maintenance never bootstraps a database or changes its journal mode.
+pub(super) fn open_diagnostic_database(
+    path: &Path,
+    session: &StagingSession,
+) -> Result<Connection, PersistenceError> {
+    let mut database = Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )
+    .map_err(|e| PersistenceError::sqlite("open existing diagnostic writer", e))?;
+    super::sqlite_revision_store::configure_read_connection(&database)?;
+    database
+        .busy_timeout(std::time::Duration::from_millis(50))
+        .map_err(|e| PersistenceError::sqlite("bound diagnostic admission wait", e))?;
+    let mode: String = database
+        .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+        .map_err(|e| PersistenceError::sqlite("inspect diagnostic writer journal mode", e))?;
+    if mode != "wal" {
+        return Err(PersistenceError::DatabaseOwnership(
+            "diagnostic maintenance requires the existing WAL Store".into(),
+        ));
+    }
+    let tx = database
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| PersistenceError::sqlite("serialize diagnostic admission", e))?;
+    require_current_version(&tx)?;
+    let state = classify_database(&tx)?;
+    if state != DatabaseState::Baseline {
+        return Err(unsupported_source(state));
+    }
+    tx.execute(
+        "INSERT INTO writable_admissions(owner_session, admitted_schema_version) VALUES (?1,?2)",
+        params![session.owner().as_str().as_bytes(), SCHEMA_VERSION],
+    )
+    .map_err(|e| PersistenceError::sqlite("register diagnostic admission", e))?;
+    tx.commit()
+        .map_err(|e| PersistenceError::sqlite("commit diagnostic admission", e))?;
+    Ok(database)
+}
+
 pub(super) fn open_writer_database(
     path: &Path,
     session: &StagingSession,
@@ -60,7 +100,8 @@ pub(super) fn open_writer_database(
         state @ (DatabaseState::Alpha1
         | DatabaseState::Alpha2
         | DatabaseState::Alpha3
-        | DatabaseState::Alpha4) => {
+        | DatabaseState::Alpha4
+        | DatabaseState::Alpha5) => {
             return Err(unsupported_source(state));
         }
     }

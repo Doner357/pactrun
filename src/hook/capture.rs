@@ -28,6 +28,7 @@ impl From<io::Error> for CaptureError {
 impl From<StagingError> for CaptureError {
     fn from(error: StagingError) -> Self {
         match error {
+            StagingError::Store(source) => Self::Persistence(*source),
             StagingError::Io { source, .. } => Self::Host(source.kind()),
             StagingError::Unsupported(_) => Self::Host(io::ErrorKind::Unsupported),
             StagingError::ManagedInputTooLarge | StagingError::LengthOverflow => {
@@ -500,12 +501,18 @@ pub(super) fn advance(
         ));
     }
     state.artifacts.prepare(staging, &state.facts);
+    let owner = staging.owner();
     if state.facts.outcome == RunOutcome::Succeeded
         && state.failure.is_none()
         && state.prepared.is_none()
     {
         let result = match (state.acquisition.take(), state.captured_at) {
-            (Some(acquisition), Some(at)) => acquisition.complete(staging, at, &state.submitted),
+            (Some(acquisition), Some(at)) => state
+                .facts
+                .trace
+                .measure(crate::domain::TracePhase::OutputPublication, || {
+                    acquisition.complete(staging, at, &state.submitted)
+                }),
             _ => Err(CaptureError::Invalid(
                 "Capture completion has no authoritative candidate",
             )),
@@ -585,25 +592,35 @@ pub(super) fn advance(
                 },
             )
             .collect::<Vec<_>>();
-        p.publish_capture_with_outputs(
-            &staging.owner(),
-            state.facts.run,
-            &finish,
-            &prepared.manifest,
-            &mut writes,
-            crate::persistence::RunArtifactSubmission {
-                submitted: &state.facts.submitted_outputs,
-                artifacts: &mut artifact_writes,
-            },
-        )
+        state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.publish_capture_with_outputs(
+                    &owner,
+                    state.facts.run,
+                    &finish,
+                    &prepared.manifest,
+                    &mut writes,
+                    crate::persistence::RunArtifactSubmission {
+                        submitted: &state.facts.submitted_outputs,
+                        artifacts: &mut artifact_writes,
+                    },
+                )
+            })
     } else {
-        p.finish_run_owned(
-            &staging.owner(),
-            state.facts.run,
-            &finish,
-            &state.facts.submitted_outputs,
-            &mut artifact_writes,
-        )
+        state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.finish_run_owned(
+                    &owner,
+                    state.facts.run,
+                    &finish,
+                    &state.facts.submitted_outputs,
+                    &mut artifact_writes,
+                )
+            })
     };
     match result {
         Ok(_) => {

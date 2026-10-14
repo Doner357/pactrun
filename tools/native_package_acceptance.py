@@ -13,6 +13,11 @@ from contextlib import closing
 MACHINE_FORMATS = ('1.0-alpha.1', '1.0-alpha.2', '1.0-alpha.3', '1.0-alpha.4')
 SOURCE_FORMATS = ('1.0-alpha.1', '1.0-alpha.2')
 
+def isolated_product_environment(root):
+    return dict(APPDATA=str(root/'home/config'), XDG_CONFIG_HOME=str(root/'home/config'),
+                LOCALAPPDATA=str(root/'data'), XDG_DATA_HOME=str(root/'data'),
+                XDG_STATE_HOME=str(root/'home/state'))
+
 def cli_result(output, command):
     envelope = json.loads(output)
     if (not isinstance(envelope, dict) or envelope.get('format') != 'pactrun.cli'
@@ -79,9 +84,9 @@ def upgrade_fixture_source_format(records, versions):
     fixture_source_format(records, [versions[1]])
     defaults = [next(r['default_formats'] for r in records if r['product_version'] == v) for v in versions]
     transition = tuple(d['persistence'] for d in defaults)
-    if transition not in {('1.0-alpha.1', '1.0-alpha.4'), ('1.0-alpha.4', '1.0-alpha.5')}:
-        raise ValueError('Store-upgrade rehearsal requires Persistence alpha.1 to alpha.4 or alpha.4 to alpha.5')
-    if transition == ('1.0-alpha.4', '1.0-alpha.5'):
+    if transition not in {('1.0-alpha.1', '1.0-alpha.4'), ('1.0-alpha.4', '1.0-alpha.5'), ('1.0-alpha.5', '1.0-alpha.6')}:
+        raise ValueError('Store-upgrade rehearsal requires an explicitly implemented Persistence transition')
+    if transition != ('1.0-alpha.1', '1.0-alpha.4'):
         candidate = next(r for r in records if r['product_version'] == versions[1])
         if source not in candidate['supported_formats']['pack_source']:
             raise ValueError('Candidate must retain the baseline Pack source format')
@@ -482,6 +487,7 @@ def main(argv=None):
         GIT_AUTHOR_NAME='Pactrun qualification', GIT_AUTHOR_EMAIL='fixture@invalid.local',
         GIT_COMMITTER_NAME='Pactrun qualification', GIT_COMMITTER_EMAIL='fixture@invalid.local')
     ENV.pop('PACTRUN_STORAGE_ROOT',None)
+    ENV.update(isolated_product_environment(ROOT))
     RESULTS, COMMANDS, CHILDREN = [], [], []
     FLAGS = {'creationflags':subprocess.CREATE_NO_WINDOW} if WIN else {}
     SERVER=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Handler,directory=str(ROOT/'assets')))

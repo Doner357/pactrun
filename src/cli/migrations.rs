@@ -31,7 +31,7 @@ pub(super) enum MigrationCommand {
         resolved_instance: Option<InstanceId>,
     },
     Plan {
-        no_retain_hook_text: bool,
+        retain_hook_text: Option<bool>,
         cancel_on_output_close: bool,
         name: InstanceName,
         target: RevisionReference,
@@ -216,7 +216,7 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     let name = parse_instance_name(required_value_string(parser, "Instance name")?)?;
     let (mut target, mut path, mut after, mut limit) = (None, None, None, None);
     let (mut plan, mut authorize, mut override_guard) = (false, false, false);
-    let mut no_retain_hook_text = false;
+    let mut retain_hook_text = None;
     let mut cancel_on_output_close = false;
     let mut inputs = Vec::new();
     let mut parameters: Vec<ParameterTarget> = Vec::new();
@@ -277,8 +277,12 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
             Arg::Long("cancel-on-output-close") if !listing && !cancel_on_output_close => {
                 cancel_on_output_close = true
             }
-            Arg::Long("no-retain-hook-text") if !listing && !no_retain_hook_text => {
-                no_retain_hook_text = true
+            Arg::Long(option @ ("no-retain-hook-text" | "retain-hook-text")) if !listing => {
+                set_once(
+                    &mut retain_hook_text,
+                    option == "retain-hook-text",
+                    "Hook text retention selection",
+                )?;
             }
             Arg::Long("to") => set_once(
                 &mut target,
@@ -348,7 +352,7 @@ pub(super) fn parse(parser: &mut Parser, listing: bool) -> Result<MigrationComma
     } else {
         Ok(MigrationCommand::Plan {
             resolved_instance: None,
-            no_retain_hook_text,
+            retain_hook_text,
             cancel_on_output_close,
             name,
             target,
@@ -539,7 +543,7 @@ pub(super) fn execute(
             }
         }
         MigrationCommand::Plan {
-            no_retain_hook_text: _,
+            retain_hook_text: _,
             cancel_on_output_close: _,
             path,
             authorize,
@@ -630,13 +634,17 @@ pub(super) fn execute(
                 stdin,
                 cancellation,
             )?;
-            let plan = crate::workflow::compile_migration(
-                &app,
-                &crate::workflow::PlatformHostLauncherLookup,
-                &intent,
-                &launcher_search_directories(),
-            )
-            .map_err(app_error)?;
+            let plan = cancellation
+                .trace
+                .measure(crate::domain::TracePhase::Compilation, || {
+                    crate::workflow::compile_migration(
+                        &app,
+                        &crate::workflow::PlatformHostLauncherLookup,
+                        &intent,
+                        &launcher_search_directories(),
+                    )
+                })
+                .map_err(app_error)?;
             if !plan_only {
                 if format.requires_noninteractive() {
                     for edge in plan.edges() {
@@ -663,20 +671,25 @@ pub(super) fn execute(
                         Ok((key, file))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let run = match writer.accept_migration_inputs(
-                    plan,
-                    override_guard,
-                    cancellation.clone(),
-                    inputs,
-                    policy,
-                ) {
-                    Ok(run) => run,
-                    Err(ApplicationError::Execution(ExecutorError::Persistence {
-                        run: Some(run),
-                        ..
-                    })) => run,
-                    Err(error) => return Err(app_error(error)),
-                };
+                let run =
+                    match cancellation
+                        .trace
+                        .measure(crate::domain::TracePhase::Admission, || {
+                            writer.accept_migration_inputs(
+                                plan,
+                                override_guard,
+                                cancellation.clone(),
+                                inputs,
+                                policy,
+                            )
+                        }) {
+                        Ok(run) => run,
+                        Err(ApplicationError::Execution(ExecutorError::Persistence {
+                            run: Some(run),
+                            ..
+                        })) => run,
+                        Err(error) => return Err(app_error(error)),
+                    };
                 loop {
                     match writer.advance_owner_continuation(run) {
                         Ok(true) => break,

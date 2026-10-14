@@ -348,6 +348,7 @@ pub(in crate::persistence) fn inspect_run_from(
         RunState::Running(_) => super::scoped_artifacts::load_scoped_artifacts(db, run)?,
     };
     Ok(crate::domain::ManagedRunInspectionData {
+        input_history: super::super::sqlite_input_history::load(db, run)?,
         published_artifacts,
         run: view,
         current_recovery_guard: guard,
@@ -696,8 +697,21 @@ fn load_outcome_view(
         .optional()
         .map_err(|error| PersistenceError::sqlite("load Run primary failure", error))?
         .map(|(owner, code, step, message)| {
+            let missing = load_missing_input_cause(database, run, &owner, &code, step)?;
+            let service = super::super::sqlite_service_failures::load(
+                database, run, kind, &owner, &code, step,
+            )?;
+            if missing.is_some() && service.is_some() {
+                return Err(PersistenceError::CorruptRun(
+                    "conflicting primary failure causes".into(),
+                ));
+            }
             Ok::<_, PersistenceError>(RunPrimaryFailure {
-                cause: load_missing_input_cause(database, run, &owner, &code, step)?,
+                cause: service
+                    .map(|cause| {
+                        crate::domain::RunFailureCause::ServicePresenceRequirement(Box::new(cause))
+                    })
+                    .or(missing),
                 failure: RunFailureRecord {
                     error: error_ref(owner, code)?,
                     message: utf8_message(message)?,

@@ -1112,7 +1112,7 @@ fn run_phase_outcome_and_failure_records_are_exact() {
             .map(|(table, _)| table.clone())
             .collect::<std::collections::BTreeSet<_>>()
             .len(),
-        36 // Run relations, including scoped artifacts and their chunks.
+        39 // Run relations, including scoped artifacts and non-pinning Input history.
     );
     assert!(
         columns

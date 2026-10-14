@@ -13,7 +13,7 @@ use std::{collections::BTreeMap, fs::File, path::PathBuf};
 pub(crate) enum NativeServiceError {
     Storage(PersistenceError),
     Access(ServiceAccessError),
-    Prerequisite,
+    Prerequisite(ServicePresenceFailure),
 }
 impl From<PersistenceError> for NativeServiceError {
     fn from(e: PersistenceError) -> Self {
@@ -50,6 +50,7 @@ pub(crate) fn prepare(
     run: RunId,
     owner: &ExecutionOwnerSession,
     bindings: &ServiceHookBindings,
+    edge: Option<MigrationEdgeIdentity>,
 ) -> Result<PreparedServiceAccess, NativeServiceError> {
     let mut roots = BTreeMap::<ServiceAllocationId, (File, PathBuf)>::new();
     for object in bindings
@@ -90,7 +91,7 @@ pub(crate) fn prepare(
             declaration,
         } = object
         else {
-            return Err(NativeServiceError::Prerequisite);
+            return Err(ServiceAccessError::UnknownResource.into());
         };
         let observed = observations[&(*allocation, declaration.locator.clone())];
         if !matches!(
@@ -103,7 +104,15 @@ pub(crate) fn prepare(
                 ResourceLookup::Absent { .. }
             )
         ) {
-            return Err(NativeServiceError::Prerequisite);
+            return Err(NativeServiceError::Prerequisite(ServicePresenceFailure {
+                reference: required.reference.clone(),
+                expected: required.presence,
+                observed: match observed {
+                    ResourceLookup::Present { .. } => ServicePresenceRequirement::Present,
+                    ResourceLookup::Absent { .. } => ServicePresenceRequirement::Absent,
+                },
+                edge,
+            }));
         }
     }
     let mut authorities = Vec::new();

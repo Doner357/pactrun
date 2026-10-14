@@ -332,9 +332,16 @@ pactrun invoke <instance> <action>
     [--termination-grace-ms <milliseconds>]
 pactrun run list [<instance> | --instance-id <id>] [--limit <1..500>] [--after <run-id>] [--no-trunc]
 pactrun run show <run-id>
+pactrun run export <run-id> --output <path>
+    [--include-hook-text] [--include-artifacts] [--include-inputs] [--include-secrets]
+    [--authorize-sensitive-export] [--authorize-secret-export]
 pactrun run reconcile
 pactrun instance resolve-manual-recovery <instance> [--if-version <token>]
 ```
+
+The [Run support export contract](../operations/run-export.md) owns report
+selection, disclosure authorization, available historical sources and staged
+no-overwrite copying. Reports do not record terminal streams or upload data.
 
 Every exact Instance operand and Action/Parameter identity is resolved using
 the existing identity grammar. RunId values are complete 32-character lowercase
