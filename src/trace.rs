@@ -333,8 +333,24 @@ impl Drop for Span {
     }
 }
 
+enum Destination {
+    Startup(Journal),
+    Store(Box<crate::diagnostic_retention::StoreWriter>),
+}
+impl Destination {
+    fn save(&mut self, document: &crate::domain::TraceDocument, now: u64) -> Result<(), Error> {
+        match self {
+            Self::Startup(journal) => {
+                let mut document = document.clone();
+                document.retention = crate::domain::TraceRetention::Complete;
+                journal.save(&document, now)
+            }
+            Self::Store(writer) => writer.save_trace(document, now),
+        }
+    }
+}
 fn write_loop(shared: Arc<Shared>, receiver: mpsc::Receiver<()>) {
-    let mut active: Option<(Location, Journal)> = None;
+    let mut active: Option<(Location, Destination)> = None;
     let mut attempted = 0;
     let mut last_write = Instant::now() - Duration::from_millis(250);
     loop {
@@ -360,15 +376,21 @@ fn write_loop(shared: Arc<Shared>, receiver: mpsc::Receiver<()>) {
             } else {
                 s.targets.as_ref().and_then(|t| t.store_root.clone())
             };
+            let store_root = if s.associated {
+                s.targets.as_ref().and_then(|t| t.store_root.clone())
+            } else {
+                None
+            };
             (
                 s.window.snapshot(),
                 location,
                 forbidden,
+                store_root,
                 s.generation,
                 s.stopping,
             )
         };
-        let (document, location, forbidden, generation, stopping) = data;
+        let (document, location, forbidden, store_root, generation, stopping) = data;
         if generation != attempted || stopping {
             attempted = generation;
             let result = (|| {
@@ -380,7 +402,14 @@ fn write_loop(shared: Arc<Shared>, receiver: mpsc::Receiver<()>) {
                     return Err(Error::UnsafePath);
                 }
                 if active.as_ref().is_none_or(|(old, _)| old != &location) {
-                    active = Some((location.clone(), Journal::open(&location)?));
+                    let destination = if let Some(root) = &store_root {
+                        Destination::Store(Box::new(
+                            crate::diagnostic_retention::StoreWriter::open(root)?,
+                        ))
+                    } else {
+                        Destination::Startup(Journal::open(&location)?)
+                    };
+                    active = Some((location.clone(), destination));
                 }
                 active
                     .as_mut()

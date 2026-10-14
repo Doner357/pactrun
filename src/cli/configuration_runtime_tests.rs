@@ -258,6 +258,71 @@ fn configuration_store_retention_defaults_and_explicit_overrides_reach_real_runs
     }
 }
 
+// Test-ID: PR-TEST-0798
+// Verifies: PR-REQ-0394, PR-REQ-0395, PR-REQ-0398
+#[test]
+fn configured_store_byte_limit_reclaims_prior_hook_evidence_without_changing_runs() {
+    use crate::domain::{
+        DiagnosticKind, DiagnosticSeverity, DiagnosticWindow, HookEvidence, HookText,
+    };
+    let (temp, root, expected, sensitive) = prepared_cli_hook_instance_with_terminal("output");
+    let invoke = |marker: &Path| {
+        let mut args = machine_args(marker, &expected, &sensitive);
+        args.retain(|arg| arg != "--no-retain-hook-text");
+        json_invoke(&root, args)
+    };
+    let (code, response, _) = invoke(&temp.path().join("first-limit-run"));
+    assert_eq!(code, 0, "{response}");
+    let run = response["result"]["run"]["run_id"]
+        .as_str()
+        .unwrap()
+        .parse::<RunId>()
+        .unwrap();
+    let p = crate::persistence::PactrunPersistence::open(&root).unwrap();
+    let before = p.load_managed_run(run).unwrap();
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let mut window = DiagnosticWindow::default();
+    for sequence in 1..=80 {
+        window.push(HookEvidence {
+            sequence,
+            received_at_unix_ms: Some(at),
+            stage: "action".into(),
+            text: HookText {
+                kind: DiagnosticKind::Diagnostic,
+                severity: Some(DiagnosticSeverity::Info),
+                completion_status: None,
+                code: None,
+                message: Some("x".repeat(16 * 1024)),
+                truncated: false,
+                truncated_prefix_bytes: 0,
+            },
+        });
+    }
+    p.save_diagnostics(run, &window, true, true, false).unwrap();
+    assert!(p.diagnostic_retention_inventory(None, None).unwrap().bytes > 1_048_576);
+    let source =
+        "[diagnostics]\nmax_bytes = 1048576\nretention_days = 3650\nretain_hook_text = true\n";
+    let config = root.join("pactrun.toml");
+    fs::write(&config, source).unwrap();
+    let (code, response, _) = invoke(&temp.path().join("second-limit-run"));
+    assert_eq!(code, 0, "{response}");
+    let journal =
+        crate::trace_journal::Journal::open(&crate::trace_journal::Location::store(&root)).unwrap();
+    assert!(
+        p.diagnostic_retention_inventory(None, None).unwrap().bytes
+            + journal.retention_inventory(None, None).unwrap().0
+            <= 1_048_576
+    );
+    let evidence = p.inspect_diagnostics(run).unwrap().unwrap();
+    assert_eq!(evidence.observed, 80);
+    assert!(evidence.events.len() < 80);
+    assert_eq!(p.load_managed_run(run).unwrap(), before);
+    assert_eq!(fs::read_to_string(config).unwrap(), source);
+}
+
 // Test-ID: PR-TEST-0751
 // Verifies: PR-REQ-0395, PR-REQ-0396
 #[test]

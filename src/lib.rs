@@ -7,6 +7,7 @@ mod application;
 mod authoring;
 mod cli;
 mod configuration;
+mod diagnostic_retention;
 mod domain;
 mod executor;
 mod hook;

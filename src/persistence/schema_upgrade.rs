@@ -114,6 +114,8 @@ pub(super) fn upgrade(root: &Path) -> Result<(), PersistenceError> {
         .map_err(sql)?;
     tx.execute_batch(super::sqlite_revision_store::INPUT_HISTORY_SQL)
         .map_err(sql)?;
+    tx.execute_batch(include_str!("diagnostic_retention_indexes.sql"))
+        .map_err(sql)?;
     // Empty owner rows are bookkeeping, not Run history. Live owners were refused.
     tx.execute_batch("DROP TABLE writable_admissions;")
         .map_err(sql)?;

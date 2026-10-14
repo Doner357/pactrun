@@ -291,6 +291,21 @@ impl PactrunPersistence {
         Self::open_prepared(&root, session)
     }
 
+    /// Existing Store only; no bootstrap, abandoned-session cleanup or runtime
+    /// publication coordination. The content adapter remains read-only.
+    pub(crate) fn open_for_diagnostics(root: &Path) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
+        let mut persistence = Self::open_current_read_only(&root, false)?;
+        let session = Self::prepare_writer_session(&root)?;
+        let database = super::writer_admission::open_diagnostic_database(
+            &persistence.database_path,
+            &session,
+        )?;
+        persistence.database = Mutex::new(database);
+        persistence.session = Some(session);
+        Ok(persistence)
+    }
+
     fn prepare_writer_session(
         root: &Path,
     ) -> Result<crate::managed_data::StagingSession, PersistenceError> {
@@ -355,6 +370,14 @@ impl PactrunPersistence {
     pub(crate) fn open_read_only(root: impl AsRef<Path>) -> Result<Self, PersistenceError> {
         let root = validate_supported_storage_root(root.as_ref())?;
         Self::preflight_storage(&root, false)?;
+        Self::open_current_read_only(&root, true)
+    }
+
+    fn open_current_read_only(
+        root: &Path,
+        coordinate_content: bool,
+    ) -> Result<Self, PersistenceError> {
+        let root = validate_supported_storage_root(root)?;
         let database_root = validate_supported_storage_root(&root.join(DATABASE_DIRECTORY))?;
         let runtime_root = validate_supported_storage_root(&root.join(RUNTIME_CONTENT_DIRECTORY))?;
         validate_existing_regular_entry(&database_root, DATABASE_NAME)?;
@@ -371,8 +394,12 @@ impl PactrunPersistence {
             ));
         }
         validate_schema(&database, SCHEMA_VERSION)?;
-        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?
-            .with_collection_coordination(false, false)?;
+        let runtime_content = RuntimeContentStore::open_read_only(&runtime_root)?;
+        let runtime_content = if coordinate_content {
+            runtime_content.with_collection_coordination(false, false)?
+        } else {
+            runtime_content
+        };
         Ok(Self {
             database: Mutex::new(database),
             database_path,

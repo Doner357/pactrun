@@ -22,6 +22,10 @@ mod sqlite_deletions;
 pub(crate) use sqlite_deletions::AllocationFinalizationStep;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;
+mod sqlite_diagnostic_retention;
+pub(crate) use sqlite_diagnostic_retention::{
+    DiagnosticRetentionCandidate, DiagnosticRetentionInventory,
+};
 mod sqlite_input_history;
 mod sqlite_input_history_export;
 mod sqlite_run_export;

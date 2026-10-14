@@ -104,6 +104,8 @@ fn completed_phase_trace(
 mod diagnostic_runtime {
     include!("diagnostic_tests.rs");
 }
+#[path = "diagnostic_retention_tests.rs"]
+mod retention_runtime;
 
 mod capture_runtime {
     include!("capture_tests.rs");

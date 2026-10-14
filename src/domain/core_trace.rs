@@ -280,8 +280,21 @@ pub(crate) struct TraceDocument {
     #[cfg_attr(test, schemars(with = "String"))]
     pub(crate) omitted: u64,
     pub(crate) policy: TracePolicy,
+    #[serde(default)]
+    pub(crate) retention: TraceRetention,
     pub(crate) totals: BTreeMap<TracePhase, PhaseTotals>,
     pub(crate) events: Vec<PhaseEvent>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TraceRetention {
+    #[default]
+    NotChecked,
+    Complete,
+    Incomplete,
+    Unavailable,
 }
 impl TraceDocument {
     pub(crate) fn valid(&self) -> bool {
@@ -351,6 +364,7 @@ impl TraceWindow {
                 observed: 0,
                 omitted: 0,
                 policy,
+                retention: TraceRetention::NotChecked,
                 totals: BTreeMap::new(),
                 events: Vec::new(),
             },

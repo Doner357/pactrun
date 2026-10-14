@@ -150,6 +150,7 @@ pub(super) fn configure(
             )
         })
         .unwrap_or((TracePolicy::startup(), TracePolicy::default()));
+    cancellation.diagnostics.configure_retention(store);
     cancellation.trace.configure(
         startup_location(),
         root.filter(|p| !p.is_empty()).map(Path::new),

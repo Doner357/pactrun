@@ -59,6 +59,8 @@ protocol limits, Input capacity or sensitive-export authorization.
 
 **Verification: PR-TEST-0738, PR-TEST-0739, PR-TEST-0740.**
 
+**Verification: PR-TEST-0797, PR-TEST-0798.**
+
 ### PR-REQ-0395 - Invocation settings and effective source inspection
 
 Each normal invocation MUST resolve one immutable settings value before applying
@@ -74,6 +76,8 @@ still has source `default`. Inspection and validation MUST not create or upgrade
 a Store or apply retention. File selection paths are not stored diagnostic text.
 
 **Verification: PR-TEST-0738, PR-TEST-0739, PR-TEST-0741, PR-TEST-0744, PR-TEST-0745, PR-TEST-0746, PR-TEST-0747, PR-TEST-0749, PR-TEST-0751, PR-TEST-0752.**
+
+**Verification: PR-TEST-0798.**
 
 ### Configuration inspection commands
 

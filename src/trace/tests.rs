@@ -100,6 +100,14 @@ fn core_trace_suppression_and_store_association_do_not_provision_a_store() {
         finished.id
     );
     assert!(!root.join("database/pactrun.sqlite3").exists());
+    assert_eq!(
+        crate::trace_journal::read_run(&Location::store(&root), run)
+            .unwrap()
+            .unwrap()
+            .retention,
+        crate::domain::TraceRetention::Unavailable,
+    );
+    assert!(!root.join("staging").exists());
     let unsafe_location = Location::startup(root.join("nested/../logs/log.sqlite3"));
     assert!(unsafe_location.overlaps_store(&root));
     assert!(Location::startup(root.join("log.sqlite3")).overlaps_store(&root));

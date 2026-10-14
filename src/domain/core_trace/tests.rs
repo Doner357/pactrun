@@ -102,11 +102,20 @@ fn core_trace_decoding_is_closed_and_refuses_invalid_counters_and_states() {
         ("observed", serde_json::json!(2)),
         ("observed", serde_json::json!("02")),
         ("format_version", serde_json::json!("unknown")),
+        ("retention", serde_json::json!("success")),
     ] {
         let mut data = serde_json::to_value(&record).unwrap();
         data[key] = value;
         assert!(serde_json::from_value::<TraceDocument>(data).is_err());
     }
+    let mut missing = serde_json::to_value(&record).unwrap();
+    missing.as_object_mut().unwrap().remove("retention");
+    assert_eq!(
+        serde_json::from_value::<TraceDocument>(missing)
+            .unwrap()
+            .retention,
+        TraceRetention::NotChecked
+    );
     let mut corrupt = record.clone();
     corrupt.events[1].sequence = 1;
     assert!(!corrupt.valid());

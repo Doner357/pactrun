@@ -1124,6 +1124,9 @@ CREATE TABLE run_core_diagnostic_events (
     PRIMARY KEY(run_id, sequence),
     FOREIGN KEY(run_id) REFERENCES run_core_diagnostic_collections(run_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
+
+CREATE INDEX run_diagnostic_retention ON run_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,kind,severity,code,message,truncated,truncated_prefix_bytes,completion_status) AS BLOB)));
+CREATE INDEX run_core_diagnostic_retention ON run_core_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,failure) AS BLOB)));
 ```
 
 ## Functional persistence obligations
@@ -1334,8 +1337,9 @@ stable public Rust API, CLI spelling, or wire contract is created here.
 
 The complete baseline contains live Instance identities, bindings, payload
 headers and active chunk storage. application_id is 0x50414354 and user_version
-is private marker 3. All tables are STRICT and WITHOUT ROWID; correctness does
-not depend on rowid, insertion order, timestamps or query-plan iteration.
+uses the private bootstrap marker declared above. All tables are STRICT and
+WITHOUT ROWID; correctness does not depend on rowid, insertion order, timestamps
+or query-plan iteration.
 
 
 `instance_name` and `input_identity` store exact UTF-8 bytes as BLOBs. The
@@ -1425,8 +1429,8 @@ and are not a stable API.
 
 The complete baseline includes managed Run identities, invocations, execution
 owners, pins, outcomes, failures, completion, artifacts and recovery guards.
-It retains application_id 0x50414354 and private user_version marker 3. All
-relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
+It retains application_id 0x50414354 and the private bootstrap marker declared
+above. All relations use the exact STRICT/WITHOUT ROWID definitions above, never a schema
 extension performed while opening an older development store.
 
 
@@ -1627,7 +1631,8 @@ and its Instance's current recovery guard from one SQLite read snapshot. This re
 The baseline contains durable writable admission, exact operation kinds,
 Capture/Restore invocations, recovery-consequence versions, Snapshot manifests
 and immutable blob references, Restore admissions, and Capture results. The public format is the metadata
-string; user_version and admitted_schema_version remain private marker 3.
+string; user_version and admitted_schema_version use the private bootstrap
+marker declared above.
 All tables are STRICT and WITHOUT ROWID. Rowid, clocks and query plans do not
 establish correctness.
 
@@ -2141,8 +2146,8 @@ collections. Foreign or drifted stores are not repaired. Reopening
 supported storage preserves Run data and existing evidence exactly; absence of a
 collection row means not-collected evidence, never permission to invent it.
 
-New Run acceptance MUST record retention policy with the Run. Diagnostic writes
-MUST revalidate writable admission and never recreate a missing collection. They
+New Run acceptance MUST record its Hook-text retention choice with the Run.
+Diagnostic writes MUST revalidate writable admission and never recreate a missing collection. They
 are separate from outcome/managed-output commit success and MUST NOT change those
 boundaries. Evidence rows and state MUST be read in one snapshot; managed Run
 inspection includes evidence in the same snapshot as Run facts and current guard.
@@ -2172,4 +2177,4 @@ MUST NOT persist Hook code/message bytes, including through debug/error paths.
 This is not an encrypted vault, backup facility or secure-erasure promise.
 
 
-**Verification: PR-TEST-0521, PR-TEST-0522, PR-TEST-0523, PR-TEST-0524, PR-TEST-0526, PR-TEST-0527.**
+**Verification: PR-TEST-0521, PR-TEST-0522, PR-TEST-0523, PR-TEST-0524, PR-TEST-0526, PR-TEST-0527, PR-TEST-0802.**

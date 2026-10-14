@@ -37,6 +37,7 @@ fn legacy() -> (tempfile::TempDir, PathBuf, RevisionIdentity) {
 
 fn downgrade_fixture(root: &Path) {
     let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+    remove_current_diagnostic_indexes(&db);
     db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
         .unwrap();
     db.execute_batch(
@@ -64,6 +65,13 @@ fn downgrade_fixture(root: &Path) {
     validate_schema(&db, 0).unwrap();
 }
 
+fn remove_current_diagnostic_indexes(db: &Connection) {
+    db.execute_batch(
+        "DROP INDEX run_diagnostic_retention; DROP INDEX run_core_diagnostic_retention;",
+    )
+    .unwrap();
+}
+
 // Test-ID: PR-TEST-0768
 // Verifies: PR-REQ-0401, PR-REQ-0373
 #[test]
@@ -83,6 +91,7 @@ fn alpha5_upgrade_adds_empty_service_facts_and_preserves_identity_with_writer_ex
         let core: Vec<u8> = db
             .query_row("SELECT core_jcs FROM revisions", [], |r| r.get(0))
             .unwrap();
+        remove_current_diagnostic_indexes(&db);
         db.execute_batch(
             "DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE writable_admissions;",
         )
@@ -155,6 +164,7 @@ fn alpha2_upgrade_preserves_names_and_refuses_live_old_writers() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        remove_current_diagnostic_indexes(&db);
         db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
             .unwrap();
         db.execute_batch(
@@ -242,6 +252,7 @@ fn alpha4_upgrade_preserves_artifact_bytes_and_refuses_live_writers() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        remove_current_diagnostic_indexes(&db);
         db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts; DROP TABLE writable_admissions;").unwrap();
         let ddl = super::super::sqlite_revision_store::ALPHA4_SQL
             .split_once("CREATE TABLE writable_admissions (")
@@ -358,6 +369,7 @@ fn alpha3_upgrade_adds_empty_core_history_and_preserves_identity() {
         let session =
             live_writer.then(|| crate::managed_data::StagingSession::prepare(&root).unwrap());
         let db = Connection::open(root.join("database/pactrun.sqlite3")).unwrap();
+        remove_current_diagnostic_indexes(&db);
         db.execute_batch("DROP TABLE run_input_references; DROP TABLE run_input_contexts; DROP TABLE run_service_prerequisite_causes; DROP TABLE run_scoped_artifact_chunks; DROP TABLE run_scoped_artifacts;")
             .unwrap();
         db.execute_batch("DROP TABLE run_core_diagnostic_events; DROP TABLE run_core_diagnostic_collections; DROP TABLE writable_admissions;").unwrap();

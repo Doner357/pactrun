@@ -13,6 +13,9 @@ const VERSION: i64 = 1;
 const TABLE: &str = "CREATE TABLE records (id BLOB PRIMARY KEY CHECK(length(id)=16), run_id BLOB CHECK(run_id IS NULL OR length(run_id)=16), updated_at_ms INTEGER NOT NULL CHECK(updated_at_ms>=0), document BLOB NOT NULL CHECK(length(document)<=524288)) STRICT, WITHOUT ROWID";
 const INDEX: &str = "CREATE INDEX records_run ON records(run_id, updated_at_ms)";
 
+mod retention;
+pub(crate) use retention::{RetentionGuard, TraceRetentionCandidate};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Error {
     Missing,
@@ -24,6 +27,7 @@ pub(crate) enum Error {
     AccessDenied,
     Full,
     Io,
+    RetentionIncomplete,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -37,6 +41,7 @@ impl std::fmt::Display for Error {
             Self::AccessDenied => "diagnostic journal access denied",
             Self::Full => "diagnostic storage is full",
             Self::Io => "diagnostic journal I/O failed",
+            Self::RetentionIncomplete => "diagnostic retention has not completed",
         })
     }
 }
@@ -186,6 +191,21 @@ impl Journal {
     }
 
     pub(crate) fn save(&mut self, document: &TraceDocument, now_ms: u64) -> Result<(), Error> {
+        self.save_policy(document, now_ms, true)
+    }
+    pub(crate) fn save_pending_retention(
+        &mut self,
+        document: &TraceDocument,
+        now_ms: u64,
+    ) -> Result<(), Error> {
+        self.save_policy(document, now_ms, false)
+    }
+    fn save_policy(
+        &mut self,
+        document: &TraceDocument,
+        now_ms: u64,
+        trim: bool,
+    ) -> Result<(), Error> {
         if !document.valid() {
             return Err(Error::InvalidRecord);
         }
@@ -200,13 +220,18 @@ impl Journal {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql_error)?;
-        tx.execute(
-            "DELETE FROM records WHERE updated_at_ms < ?1",
-            [cutoff as i64],
-        )
-        .map_err(sql_error)?;
+        if trim {
+            tx.execute(
+                "DELETE FROM records WHERE updated_at_ms < ?1",
+                [cutoff as i64],
+            )
+            .map_err(sql_error)?;
+        }
         tx.execute("INSERT INTO records(id,run_id,updated_at_ms,document) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET run_id=excluded.run_id,updated_at_ms=excluded.updated_at_ms,document=excluded.document",
             params![document.id.as_bytes().as_slice(), run, now, bytes]).map_err(sql_error)?;
+        if !trim {
+            return tx.commit().map_err(sql_error);
+        }
         let mut retained: i64 = tx
             .query_row(
                 "SELECT COALESCE(SUM(length(document)),0) FROM records",

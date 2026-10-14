@@ -6269,6 +6269,10 @@
         "producer": {
           "$ref": "#/$defs/TraceProducer"
         },
+        "retention": {
+          "$ref": "#/$defs/TraceRetention",
+          "default": "not_checked"
+        },
         "run_id": {
           "anyOf": [
             {
@@ -6371,6 +6375,7 @@
         "observed",
         "omitted",
         "policy",
+        "retention",
         "totals",
         "events"
       ],
@@ -6484,6 +6489,15 @@
         "source_manifest_sha256"
       ],
       "type": "object"
+    },
+    "TraceRetention": {
+      "enum": [
+        "not_checked",
+        "complete",
+        "incomplete",
+        "unavailable"
+      ],
+      "type": "string"
     },
     "TraceVersion": {
       "enum": [

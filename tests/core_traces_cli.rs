@@ -72,6 +72,7 @@ fn startup_trace_records_refusal_without_store_creation_or_raw_arguments() {
     assert!(out.status.success());
     let record = &shown["result"];
     assert_eq!(record["closed"], true);
+    assert_eq!(record["retention"], "complete");
     assert_eq!(record["exit_code"], 1);
     assert_eq!(record["totals"]["store_open"]["failed"], "1");
     assert!(record["run_id"].is_null());
@@ -117,7 +118,7 @@ fn startup_trace_records_refusal_without_store_creation_or_raw_arguments() {
 }
 
 // Test-ID: PR-TEST-0763
-// Verifies: PR-REQ-0397, PR-REQ-0399
+// Verifies: PR-REQ-0397, PR-REQ-0398, PR-REQ-0399
 #[test]
 fn accepted_run_links_core_trace_without_recording_hook_terminal_text() {
     let fixture = Fixture::new();
@@ -171,6 +172,7 @@ fn accepted_run_links_core_trace_without_recording_hook_terminal_text() {
     assert_eq!(invoked["diagnostic_id"], trace["id"]);
     assert_eq!(trace["run_id"], run);
     assert_eq!(trace["closed"], true);
+    assert_eq!(trace["retention"], "complete");
     for phase in [
         "compilation",
         "admission",

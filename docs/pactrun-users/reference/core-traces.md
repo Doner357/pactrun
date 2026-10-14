@@ -48,8 +48,8 @@ missing build provenance is not inferred from the current checkout or exporter.
 ### Non-authoritative journals and retention {#pr-req-0398---non-authoritative-journals-and-retention}
 
 The diagnostic journal uses a separate SQLite file and application marker. It
-MUST NOT change the management database's durability, schema, ownership or
-transactions. Existing foreign files, unsupported journal schemas and unsafe
+MUST NOT change the management database's durability, schema, ownership markers or
+primary operation transactions. Existing foreign files, unsupported journal schemas and unsafe
 filesystem objects are refused, not repaired or overwritten. Reads MUST NOT
 create journal files or directories. Journal writes are best effort, use bounded
 contention waits, and MUST NOT change an operation's result or cause replay.
@@ -64,6 +64,37 @@ does not promise secure erasure or immediate filesystem shrinkage. Limits can
 apply to older alpha diagnostics without retaining a parallel policy. Diagnostic
 retention MUST NOT delete Runs, Artifacts, Inputs, service data or authoritative
 recovery/deletion facts. Trace references do not pin retained documents.
+
+The Store limit is one combined budget for phase documents and retained
+Hook/helper events, not a separate allowance for each class. Table-backed events
+are charged as UTF-8 JSON arrays of their stored scalar fields, including the
+Run key; collection status and observed-count rows remain Run metadata. This
+private accounting representation is not an export format. The Store maintains
+derived scalar charges in indexes, so accounting does not reserialize all
+retained text on each pass. Unknown event times
+do not acquire invented expiry dates; they remain eligible for capacity eviction.
+Reclamation preserves collection counters so an emptied retained window still
+reports omissions instead of pretending the Run originally had no evidence.
+
+Evidence writers coordinate separately from primary operations. Table-backed
+reclamation uses admitted diagnostic transactions with at most 64 selected event
+keys per transaction. It does not bootstrap or upgrade a Store, change WAL/FULL
+durability, perform abandoned-session cleanup, or acquire runtime publication
+coordination. Interrupted or unavailable maintenance is best effort; a later
+write can continue reclamation without replaying the operation.
+
+Phase evidence is persisted before attempting combined Store maintenance, so an
+unavailable management database does not itself prevent retaining the trace.
+The trace's `retention` observation is `not_checked`, `complete`, `incomplete` or
+`unavailable`. It describes the policy attempt for that window, not the operation
+outcome, a current global Store measurement, or a guarantee of continued
+availability. A missing observation is `not_checked`, never inferred success.
+If combined maintenance fails, the phase journal still attempts its own bound;
+it MUST NOT label that narrower result as successful combined retention.
+Conversely, an unavailable phase file does not by itself stop recording
+Hook/helper events in a usable management database. Table-backed recording and
+its narrower bound may continue, while combined maintenance remains unavailable.
+Neither backend's maintenance failure changes the Run outcome or authorizes replay.
 
 An individual document is limited to 524,288 bytes. Reading a damaged oversized
 document MUST NOT allocate its advertised size. Stored records are validated as

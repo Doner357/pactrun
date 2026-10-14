@@ -24,6 +24,9 @@ fn core_trace_schema_preserves_decimal_counters_and_bounded_policy() {
     let validator = jsonschema::validator_for(&generated()).unwrap();
     assert!(validator.is_valid(&response));
     let mut invalid = response.clone();
+    invalid["result"]["retention"] = json!("success");
+    assert!(!validator.is_valid(&invalid));
+    let mut invalid = response.clone();
     invalid["result"]["events"][0]["sequence"] = json!("01");
     assert!(!validator.is_valid(&invalid));
     let mut invalid = response.clone();
