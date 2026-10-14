@@ -49,6 +49,10 @@ distinct from unavailable bytes. Available Source/Target views retain exact edge
 identity. Only selected Input and Artifact payloads are read. Corruption and I/O errors fail
 the export, rather than masquerading as normal unavailable evidence.
 
+Source-copy and encoding diagnostics distinguish known access, storage-capacity,
+contention and validation failures without echoing backend error text or payload paths. An
+ordinary I/O failure is not itself a corruption verdict.
+
 The report contains `report.json` and generated relative `inputs/*.bin` and
 `artifacts/*.bin` members for copied content. Member paths are not derived from
 Hook-supplied filenames or Input identities. The JSON identifies
@@ -57,7 +61,7 @@ selection, observed inspection, independently observed Core trace, and per-item
 provenance, state and member path. This is an inspection document, not an
 authoritative persisted Run representation.
 
-**Verification: PR-TEST-0780, PR-TEST-0781, PR-TEST-0782, PR-TEST-0783, PR-TEST-0784, PR-TEST-0785, PR-TEST-0786.**
+**Verification: PR-TEST-0780, PR-TEST-0781, PR-TEST-0782, PR-TEST-0783, PR-TEST-0784, PR-TEST-0785, PR-TEST-0786, PR-TEST-0794.**
 
 ### PR-REQ-0406 - No-overwrite staged publication
 
@@ -71,4 +75,4 @@ report that partial result accurately and do not remove the published file.
 Machine output reports command results, not ZIP bytes. An output-response failure
 after publication does not undo publication and MUST NOT claim it never occurred.
 
-**Verification: PR-TEST-0780, PR-TEST-0781, PR-TEST-0782.**
+**Verification: PR-TEST-0780, PR-TEST-0781, PR-TEST-0782, PR-TEST-0794.**

@@ -53,6 +53,10 @@ distinct from unavailable bytes. Available Source/Target views retain exact edge
 identity. Only selected Input and Artifact payloads are read. Corruption and I/O errors fail
 the export, rather than masquerading as normal unavailable evidence.
 
+Source-copy and encoding diagnostics distinguish known access, storage-capacity,
+contention and validation failures without echoing backend error text or payload paths. An
+ordinary I/O failure is not itself a corruption verdict.
+
 The report contains `report.json` and generated relative `inputs/*.bin` and
 `artifacts/*.bin` members for copied content. Member paths are not derived from
 Hook-supplied filenames or Input identities. The JSON identifies

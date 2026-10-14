@@ -290,13 +290,20 @@ fn run_export_hook_text_is_opt_in_and_copy_corruption_never_publishes() {
         [],
     )
     .unwrap();
-    let (code, _) = export(
+    let (code, error) = export(
         &f,
         run,
         "corrupt.zip",
         &["--include-secrets", "--authorize-secret-export"],
     );
     assert_ne!(code, 0);
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Input content failed validation")
+    );
+    assert!(!contains(error.to_string().as_bytes(), SECRET_BINDING));
     assert!(!f.marker("corrupt.zip").exists());
     // An unselected corrupt payload is not read as report content.
     assert_eq!(export(&f, run, "metadata-after-corruption.zip", &[]).0, 0);

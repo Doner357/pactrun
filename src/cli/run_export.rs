@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::RunExportOptions;
 use serde::Serialize;
 mod archive;
+mod errors;
 mod manifest;
 
 pub(super) struct Request {
@@ -70,19 +71,24 @@ pub(super) fn execute(
     let run = request.run.full();
     let application = PactrunApplication::open(root).map_err(app_error)?;
     let trace = crate::trace_journal::read_run(&crate::trace_journal::Location::store(root), run)
-        .map_err(|_| {
-        CliError::operation("Run phase trace could not be read; no report was published")
+        .map_err(|error| {
+        CliError::operation(format!(
+            "Run phase trace could not be read: {error}; no report was published"
+        ))
     })?;
     let mut stage = application.create_run_export_stage().map_err(app_error)?;
     let result = {
         let mut writer = archive::Writer::new(&mut stage, run, request.options, trace);
-        application.write_run_export(run, request.options, &mut writer).map_err(|_| {
-            CliError::operation("Run report could not be completed; check retained sources, integrity and storage. No report was published")
-        })?;
-        writer.finish().map_err(report_error)?
+        application
+            .write_run_export(run, request.options, &mut writer)
+            .map_err(errors::read)?;
+        writer.finish().map_err(errors::encode)?
     };
-    stage.finish_operation_file().map_err(|_| {
-        CliError::operation("Run report staging could not be synchronized; no report was published")
+    stage.finish_operation_file().map_err(|error| {
+        errors::before_publication(
+            "Run report staging could not be synchronized",
+            errors::io_reason(error.kind()),
+        )
     })?;
     crate::output_publication::publish_reported(&stage, &request.destination).map_err(|error| {
         let message = if error.destination_published {
@@ -95,7 +101,4 @@ pub(super) fn execute(
         result
     })?;
     presentation::emit_result(format, "run export", &result)
-}
-fn report_error(_: crate::persistence::PersistenceError) -> CliError {
-    CliError::operation("Run report could not be encoded; no report was published")
 }

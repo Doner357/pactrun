@@ -91,8 +91,14 @@ impl<'a> Writer<'a> {
             .start_file("report.json", options())
             .map_err(zip_io)
             .map_err(failure)?;
-        serde_json::to_writer_pretty(&mut self.zip, &report)
-            .map_err(|_| failure(io::ErrorKind::Other.into()))?;
+        serde_json::to_writer_pretty(&mut self.zip, &report).map_err(|error| {
+            failure(
+                error
+                    .io_error_kind()
+                    .unwrap_or(io::ErrorKind::InvalidData)
+                    .into(),
+            )
+        })?;
         self.zip.write_all(b"\n").map_err(failure)?;
         let finished = self.zip.finish();
         if let Some(kind) = self.failed.get() {
