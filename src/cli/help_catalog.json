@@ -109,7 +109,7 @@
     "--limit": {
       "name": "--limit",
       "value": "count",
-      "description": "Bound and continue a listing using its returned cursor."
+      "description": "Limit the number of items returned by this listing."
     },
     "--after": {
       "name": "--after",
