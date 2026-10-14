@@ -15,18 +15,18 @@ not automatically isolate data from an existing normal installation. Read
 
 ## Before you start
 
-- Use an x86-64 Windows or Linux host. Alpha.7 qualification covers Windows 11,
+- Use an x86-64 Windows or Linux host. Alpha.8 qualification covers Windows 11,
   Debian 12 userland with glibc 2.36 in CI, and the same Linux payload on a native
   Debian 13/glibc 2.41 host. Container tests share a hosted kernel; not every
   kernel, filesystem or service is certified. No macOS, ARM64 or musl build is included.
 - Use glibc 2.36 or newer for the supported Linux qualification baseline.
-  Alpha.7's highest measured symbol requirement is 2.34, but this is not a claim
+  Alpha.8's highest measured symbol requirement is 2.34, but this is not a claim
   that every glibc 2.34 distribution is supported. Older alpha.1/alpha.2/alpha.3
   Linux downloads retain their glibc 2.39 requirement; update Pactrun rather than
   replacing the system libc or setting a global LD_LIBRARY_PATH.
 - Homebrew may still install its own glibc, GCC and related dependencies. That
   does not automatically change which libc an arbitrary prebuilt program loads.
-  Alpha.7 is verified directly on system glibc 2.36 as well as through Homebrew.
+  Alpha.8 is verified directly on system glibc 2.36 as well as through Homebrew.
 - Install and verify [Scoop](https://scoop.sh/) or
   [Homebrew](https://brew.sh/) first, following its own prerequisites. Do not run
   these instructions as administrator/root merely to bypass an error.
