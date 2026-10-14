@@ -22,6 +22,12 @@ prove that its containing operation committed. Dropping an unfinished phase
 records an unknown result, never success. Timing totals may overlap for nested
 phases and MUST NOT be presented as exclusive wall-clock fractions.
 
+Compilation and admission are separate observations. A plan-only invocation
+does not record admission. Output delivery records the writer attempt, not the
+operation outcome: a refusal can be delivered successfully, and a successful
+operation can have failed output delivery. None of these observations rewrites
+the retained Run outcome or proves an uncertain transaction committed.
+
 Capture keeps the first 256 and newest 768 events, with explicit observed and
 omitted counts. Per-phase aggregate counts and elapsed totals remain bounded by
 the closed phase vocabulary. Normal detail omits individual internal phase

@@ -93,6 +93,27 @@ fn startup_trace_records_refusal_without_store_creation_or_raw_arguments() {
         "inspection logged itself"
     );
     assert!(!fixture.root.exists());
+    let (out, refused) = fixture.json(&["--unknown-private-argument"]);
+    assert_eq!(out.status.code(), Some(2));
+    let (out, shown) = fixture.json(&[
+        "diagnostic",
+        "show",
+        refused["diagnostic_id"].as_str().unwrap(),
+        "--startup",
+    ]);
+    assert!(out.status.success(), "{shown}");
+    assert_eq!(shown["result"]["closed"], true);
+    assert_eq!(shown["result"]["exit_code"], 2);
+    assert_eq!(
+        shown["result"]["totals"]["output_delivery"]["finished"],
+        "1"
+    );
+    assert_eq!(shown["result"]["totals"]["output_delivery"]["failed"], "0");
+    assert!(
+        !shown["result"]
+            .to_string()
+            .contains("unknown-private-argument")
+    );
 }
 
 // Test-ID: PR-TEST-0763
@@ -129,6 +150,18 @@ fn accepted_run_links_core_trace_without_recording_hook_terminal_text() {
             .status
             .success()
     );
+    let (out, planned) = fixture.json(&["invoke", "trace-node", "inspect", "--plan"]);
+    assert!(out.status.success(), "{planned}");
+    let (out, shown) = fixture.json(&[
+        "diagnostic",
+        "show",
+        planned["diagnostic_id"].as_str().unwrap(),
+        "--startup",
+    ]);
+    assert!(out.status.success(), "{shown}");
+    assert_eq!(shown["result"]["totals"]["compilation"]["finished"], "1");
+    assert!(shown["result"]["totals"]["admission"].is_null());
+    assert!(shown["result"]["run_id"].is_null());
     let (out, invoked) = fixture.json(&["invoke", "trace-node", "inspect"]);
     assert!(out.status.success(), "{invoked}");
     let run = invoked["result"]["run"]["run_id"].as_str().unwrap();
@@ -138,6 +171,16 @@ fn accepted_run_links_core_trace_without_recording_hook_terminal_text() {
     assert_eq!(invoked["diagnostic_id"], trace["id"]);
     assert_eq!(trace["run_id"], run);
     assert_eq!(trace["closed"], true);
+    for phase in [
+        "compilation",
+        "admission",
+        "output_publication",
+        "result_commit",
+    ] {
+        assert_eq!(trace["totals"][phase]["finished"], "1");
+        assert_eq!(trace["totals"][phase]["failed"], "0");
+        assert_eq!(trace["totals"][phase]["unfinished"], "0");
+    }
     assert_eq!(trace["totals"]["hook_launch"]["finished"], "1");
     assert_eq!(trace["totals"]["hook_execution"]["finished"], "1");
     assert!(!trace.to_string().contains("private-hook-output-sentinel"));

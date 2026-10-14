@@ -61,6 +61,46 @@ fn without_hook_text() -> ActionCancellation {
     cancellation
 }
 
+fn phase_cancellation(
+    f: &RuntimeFixture,
+    operation: crate::domain::TraceOperation,
+) -> ActionCancellation {
+    let cancellation = ActionCancellation::default();
+    cancellation.trace.begin();
+    cancellation.trace.operation(operation);
+    cancellation.trace.configure(
+        None,
+        Some(&f.storage),
+        crate::domain::TracePolicy::startup(),
+        crate::domain::TracePolicy::default(),
+    );
+    cancellation
+}
+
+fn completed_phase_trace(
+    f: &RuntimeFixture,
+    cancellation: &ActionCancellation,
+    run: RunId,
+) -> crate::domain::TraceDocument {
+    let finished = cancellation.trace.finish(0).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Ok(Some(trace)) = crate::trace_journal::read(
+            &crate::trace_journal::Location::store(&f.storage),
+            finished.id,
+        ) && trace.closed
+        {
+            assert_eq!(trace.run_id, Some(run));
+            let bytes = serde_json::to_vec(&trace).unwrap();
+            assert!(!contains(&bytes, SECRET_BINDING));
+            assert!(!contains(&bytes, SENSITIVE_PARAMETER.as_bytes()));
+            return trace;
+        }
+        assert!(Instant::now() < deadline, "phase trace did not close");
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 mod diagnostic_runtime {
     include!("diagnostic_tests.rs");
 }

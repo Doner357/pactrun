@@ -282,6 +282,7 @@ pub(crate) struct MigrationOutputSlot {
 }
 
 pub(crate) struct RuntimeTerminalFacts {
+    pub(crate) trace: Arc<crate::trace::Trace>,
     pub(crate) run: RunId,
     pub(crate) outcome: RunOutcome,
     pub(crate) primary_failure: Option<RunPrimaryFailure>,
@@ -819,7 +820,12 @@ fn finalize_owner_state(
         )));
     }
     if state.prepared.is_none() {
-        match artifacts::stage_submitted(staging, &state.facts) {
+        match state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::OutputPublication, || {
+                artifacts::stage_submitted(staging, &state.facts)
+            }) {
             Ok(prepared) => state.prepared = Some(prepared),
             Err(()) => {
                 state.publication_failed = true;
@@ -867,13 +873,18 @@ fn finalize_owner_state(
         })
         .collect::<Vec<_>>();
     let owner = staging.owner();
-    match persistence.finish_run_owned(
-        &owner,
-        state.facts.run,
-        &finish,
-        &state.facts.submitted_outputs,
-        &mut artifacts,
-    ) {
+    match state
+        .facts
+        .trace
+        .measure(crate::domain::TracePhase::ResultCommit, || {
+            persistence.finish_run_owned(
+                &owner,
+                state.facts.run,
+                &finish,
+                &state.facts.submitted_outputs,
+                &mut artifacts,
+            )
+        }) {
         Ok(_) => Ok(FinalizationAdvance::Published),
         Err(error) => Err(Box::new((state, error))),
     }
@@ -936,10 +947,12 @@ pub(super) fn ready_failure(
     failure: FailureKind,
     outputs: Vec<LiveOutputSlot>,
     execution: Option<ExecutionDirectory>,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     let (_, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
     OwnerContinuation::ReadyToFinalize(FinalizationState {
         facts: RuntimeTerminalFacts {
+            trace,
             run,
             outcome: RunOutcome::Failed,
             primary_failure,
@@ -964,9 +977,11 @@ pub(super) fn ready_cancelled(
     run: RunId,
     outputs: Vec<LiveOutputSlot>,
     execution: Option<ExecutionDirectory>,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     OwnerContinuation::ReadyToFinalize(FinalizationState {
         facts: RuntimeTerminalFacts {
+            trace,
             run,
             outcome: RunOutcome::Cancelled,
             primary_failure: None,

@@ -274,25 +274,34 @@ pub(super) fn advance(
         } else {
             Vec::new()
         };
-        p.finish_migration_with_outputs(
-            &state.owner,
-            state.run,
-            &finish,
-            artifact_edge,
-            crate::persistence::RunArtifactSubmission {
-                submitted: if artifact_edge.is_some() {
-                    &state.artifact_submitted
-                } else {
-                    &[]
-                },
-                artifacts: &mut artifacts,
-            },
-        )?;
+        state
+            .cancellation
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.finish_migration_with_outputs(
+                    &state.owner,
+                    state.run,
+                    &finish,
+                    artifact_edge,
+                    crate::persistence::RunArtifactSubmission {
+                        submitted: if artifact_edge.is_some() {
+                            &state.artifact_submitted
+                        } else {
+                            &[]
+                        },
+                        artifacts: &mut artifacts,
+                    },
+                )
+            })?;
         drop(gate);
         guard.complete();
         return Ok(true);
     }
     if execution.boundary == ActionRunBoundary::Accepted {
+        let phase = state
+            .cancellation
+            .trace
+            .span(crate::domain::TracePhase::Admission);
         let result = p.admit_migration(
             state.run,
             &state.owner,
@@ -304,7 +313,13 @@ pub(super) fn advance(
                     observation,
                 )
             },
-        )?;
+        );
+        phase.finish(if matches!(&result, Ok(Ok(()))) {
+            crate::domain::PhaseResult::Succeeded
+        } else {
+            crate::domain::PhaseResult::Failed
+        });
+        let result = result?;
         drop(gate);
         if result.is_err() {
             guard.complete();
@@ -386,14 +401,19 @@ pub(super) fn advance(
                 MigrationPlanStep::EstablishSession,
             )?;
             state.hook_edge = Some(progress.committed_edges);
-            match super::materialize::MaterializedExecution::create_migration(
-                p,
-                staging,
-                state.run,
-                progress.committed_edges,
-                edge,
-                &state.inputs,
-                state.service_prepared.as_ref().map(|(_, edge)| edge),
+            match state.cancellation.trace.measure(
+                crate::domain::TracePhase::Materialization,
+                || {
+                    super::materialize::MaterializedExecution::create_migration(
+                        p,
+                        staging,
+                        state.run,
+                        progress.committed_edges,
+                        edge,
+                        &state.inputs,
+                        state.service_prepared.as_ref().map(|(_, edge)| edge),
+                    )
+                },
             ) {
                 Ok(materialized) => state.materialized = Some(materialized),
                 Err(error) => {
@@ -404,6 +424,7 @@ pub(super) fn advance(
                             FailureKind::materialization(&error),
                             Vec::new(),
                             None,
+                            state.cancellation.trace.clone(),
                         ),
                     );
                     return Ok(false);
@@ -503,23 +524,28 @@ pub(super) fn advance(
         return Ok(false);
     }
     let mut artifact_writes = state.artifacts.writes(&mut artifact_readers);
-    let result = p.publish_migration_edge(
-        state.run,
-        &state.owner,
-        progress.committed_edges,
-        &mut crate::persistence::MigrationEdgePublication {
-            submitted_outputs: &state.artifact_submitted,
-            artifacts: &mut artifact_writes,
-            target: state.target_commit.as_ref(),
-            operator_inputs: &mut writes,
-            hook_outputs: &mut output_writes,
-            completion: state
-                .hook_finish
-                .as_ref()
-                .and_then(|finish| finish.hook_completion.clone()),
-            secondary_failures: state.secondary_failures.clone(),
-        },
-    );
+    let result = state
+        .cancellation
+        .trace
+        .measure(crate::domain::TracePhase::ResultCommit, || {
+            p.publish_migration_edge(
+                state.run,
+                &state.owner,
+                progress.committed_edges,
+                &mut crate::persistence::MigrationEdgePublication {
+                    submitted_outputs: &state.artifact_submitted,
+                    artifacts: &mut artifact_writes,
+                    target: state.target_commit.as_ref(),
+                    operator_inputs: &mut writes,
+                    hook_outputs: &mut output_writes,
+                    completion: state
+                        .hook_finish
+                        .as_ref()
+                        .and_then(|finish| finish.hook_completion.clone()),
+                    secondary_failures: state.secondary_failures.clone(),
+                },
+            )
+        });
     drop(gate);
     match result {
         Ok(_) => Ok(false),

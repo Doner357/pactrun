@@ -222,17 +222,22 @@ pub(super) fn execute_stream(
                 loop {
                     match cursor.next() {
                         Ok(Some(record)) => {
-                            let written = if human {
-                                write_human_event_with_preferences(
-                                    &record,
-                                    stdout,
-                                    stderr,
-                                    false,
-                                    selected.human,
-                                )
-                            } else {
-                                write_json(stdout, &record)
-                            };
+                            let written = cancellation.trace.measure(
+                                crate::domain::TracePhase::OutputDelivery,
+                                || {
+                                    if human {
+                                        write_human_event_with_preferences(
+                                            &record,
+                                            stdout,
+                                            stderr,
+                                            false,
+                                            selected.human,
+                                        )
+                                    } else {
+                                        write_json(stdout, &record)
+                                    }
+                                },
+                            );
                             if let Err(error) = written {
                                 output_failed = true;
                                 delivery.output_closed();
@@ -277,17 +282,22 @@ pub(super) fn execute_stream(
         loop {
             match cursor.next() {
                 Ok(Some(record)) => {
-                    let written = if human {
-                        write_human_event_with_preferences(
-                            &record,
-                            stdout,
-                            stderr,
-                            false,
-                            selected.human,
-                        )
-                    } else {
-                        write_json(stdout, &record)
-                    };
+                    let written = cancellation.trace.measure(
+                        crate::domain::TracePhase::OutputDelivery,
+                        || {
+                            if human {
+                                write_human_event_with_preferences(
+                                    &record,
+                                    stdout,
+                                    stderr,
+                                    false,
+                                    selected.human,
+                                )
+                            } else {
+                                write_json(stdout, &record)
+                            }
+                        },
+                    );
                     if written.is_err() {
                         return 1;
                     }
@@ -308,14 +318,18 @@ pub(super) fn execute_stream(
         loop {
             match deferred.next() {
                 Ok(Some(record)) => {
-                    if write_human_event_with_preferences(
-                        &record,
-                        stdout,
-                        stderr,
-                        true,
-                        selected.human,
-                    )
-                    .is_err()
+                    if cancellation
+                        .trace
+                        .measure(crate::domain::TracePhase::OutputDelivery, || {
+                            write_human_event_with_preferences(
+                                &record,
+                                stdout,
+                                stderr,
+                                true,
+                                selected.human,
+                            )
+                        })
+                        .is_err()
                     {
                         return 1;
                     }
@@ -327,7 +341,8 @@ pub(super) fn execute_stream(
                 }
             }
         }
-        let rendered = response.render(format, stdout, stderr);
+        let rendered =
+            core_traces::render_reply(response, format, stdout, stderr, &cancellation.trace);
         if failed {
             let _ = writeln!(
                 stderr,
@@ -351,11 +366,15 @@ pub(super) fn execute_stream(
         events: (format == presentation::Format::Json)
             .then(|| delivery::Events(Arc::clone(&delivery))),
     };
-    let written = response.json(
-        stdout,
-        Some(&result),
-        (format == presentation::Format::Jsonl).then_some(sequence.as_str()),
-    );
+    let written = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::OutputDelivery, || {
+            response.json(
+                stdout,
+                Some(&result),
+                (format == presentation::Format::Jsonl).then_some(sequence.as_str()),
+            )
+        });
     if written.is_err() || failed { 1 } else { code }
 }
 

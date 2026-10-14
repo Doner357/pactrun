@@ -16,6 +16,12 @@ prove that its containing operation committed. Dropping an unfinished phase
 records an unknown result, never success. Timing totals may overlap for nested
 phases and MUST NOT be presented as exclusive wall-clock fractions.
 
+Compilation and admission are separate observations. A plan-only invocation
+does not record admission. Output delivery records the writer attempt, not the
+operation outcome: a refusal can be delivered successfully, and a successful
+operation can have failed output delivery. None of these observations rewrites
+the retained Run outcome or proves an uncertain transaction committed.
+
 Capture keeps the first 256 and newest 768 events, with explicit observed and
 omitted counts. Per-phase aggregate counts and elapsed totals remain bounded by
 the closed phase vocabulary. Normal detail omits individual internal phase
@@ -35,7 +41,7 @@ missing build provenance is not inferred from the current checkout or exporter.
 
 **Verification: PR-TEST-0753, PR-TEST-0754, PR-TEST-0755, PR-TEST-0760, PR-TEST-0762, PR-TEST-0763, PR-TEST-0764.**
 
-**Verification: PR-TEST-0788.**
+**Verification: PR-TEST-0247, PR-TEST-0263, PR-TEST-0312, PR-TEST-0404, PR-TEST-0788, PR-TEST-0793.**
 
 ### PR-REQ-0398 - Non-authoritative journals and retention
 
@@ -97,7 +103,7 @@ the producer may still be draining when a response is written, and collection or
 retention can leave the record unavailable. Inspect the retained document for
 closure and omissions; never infer operation success from the reference.
 
-**Verification: PR-TEST-0756, PR-TEST-0759, PR-TEST-0760, PR-TEST-0761, PR-TEST-0762, PR-TEST-0763.**
+**Verification: PR-TEST-0756, PR-TEST-0759, PR-TEST-0760, PR-TEST-0761, PR-TEST-0762, PR-TEST-0763, PR-TEST-0793.**
 
 ## Inspection
 

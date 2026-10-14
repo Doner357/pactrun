@@ -88,23 +88,33 @@ pub(super) fn advance(
     );
     let mut artifact_writes = state.artifacts.writes(&mut artifact_readers);
     let result = if finish.outcome == RunOutcome::Succeeded {
-        p.publish_restore_with_outputs(
-            &staging.owner(),
-            state.facts.run,
-            &finish,
-            crate::persistence::RunArtifactSubmission {
-                submitted: &state.facts.submitted_outputs,
-                artifacts: &mut artifact_writes,
-            },
-        )
+        state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.publish_restore_with_outputs(
+                    &staging.owner(),
+                    state.facts.run,
+                    &finish,
+                    crate::persistence::RunArtifactSubmission {
+                        submitted: &state.facts.submitted_outputs,
+                        artifacts: &mut artifact_writes,
+                    },
+                )
+            })
     } else {
-        p.finish_run_owned(
-            &staging.owner(),
-            state.facts.run,
-            &finish,
-            &state.facts.submitted_outputs,
-            &mut artifact_writes,
-        )
+        state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::ResultCommit, || {
+                p.finish_run_owned(
+                    &staging.owner(),
+                    state.facts.run,
+                    &finish,
+                    &state.facts.submitted_outputs,
+                    &mut artifact_writes,
+                )
+            })
     };
     match result {
         Ok(_) => {

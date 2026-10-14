@@ -319,20 +319,26 @@ pub(crate) fn run_from_env() -> i32 {
     if let Some(exit) =
         preflight_presentation(&args, &mut stdout, &mut stderr, cancellation.trace.id())
     {
-        root_trace.finish(core_traces::phase_result(exit));
-        core_traces::configure(&cancellation, storage_root.as_ref(), None);
-        cancellation.trace.finish(exit);
-        return exit;
+        return finish_invocation(
+            exit,
+            &mut stderr,
+            root_trace,
+            &cancellation,
+            storage_root.as_ref(),
+        );
     }
     if SystemCancellationHandler
         .install(cancellation.clone())
         .is_err()
     {
         let code = report_startup_failure(&args, &mut stdout, &mut stderr, cancellation.trace.id());
-        root_trace.finish(core_traces::phase_result(code));
-        core_traces::configure(&cancellation, storage_root.as_ref(), None);
-        cancellation.trace.finish(code);
-        return code;
+        return finish_invocation(
+            code,
+            &mut stderr,
+            root_trace,
+            &cancellation,
+            storage_root.as_ref(),
+        );
     }
     let code = if args.iter().any(argument_reads_stdin) {
         let mut stdin = CancellableStdin::new(io::stdin(), cancellation.clone());
@@ -357,13 +363,34 @@ pub(crate) fn run_from_env() -> i32 {
             true,
         )
     };
-    let code = if stderr.finish().is_err() && code == 0 {
+    finish_invocation(
+        code,
+        &mut stderr,
+        root_trace,
+        &cancellation,
+        storage_root.as_ref(),
+    )
+}
+
+fn finish_invocation(
+    code: i32,
+    stderr: &mut async_stderr::AsyncStderr,
+    root_trace: crate::trace::Span,
+    cancellation: &ActionCancellation,
+    storage_root: Option<&OsString>,
+) -> i32 {
+    let delivered = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::OutputDelivery, || {
+            stderr.finish()
+        });
+    let code = if delivered.is_err() && code == 0 {
         1
     } else {
         code
     };
     if !cancellation.trace.configured() {
-        core_traces::configure(&cancellation, storage_root.as_ref(), None);
+        core_traces::configure(cancellation, storage_root, None);
     }
     root_trace.finish(core_traces::phase_result(code));
     cancellation.trace.finish(code);
@@ -730,7 +757,7 @@ fn run_selected(
     selection: impl Into<machine::Selection>,
 ) -> i32 {
     let selected = selection.into();
-    collect_reply(
+    let reply = collect_reply(
         command,
         storage_root,
         stdin,
@@ -738,8 +765,8 @@ fn run_selected(
         stderr,
         cancellation,
         selected,
-    )
-    .render(selected.format, stdout, stderr)
+    );
+    core_traces::render_reply(reply, selected.format, stdout, stderr, &cancellation.trace)
 }
 
 fn collect_reply(
@@ -1815,8 +1842,11 @@ fn execute(
                 ));
             }
             let launcher_directories = launcher_search_directories();
-            let compiled = application
-                .compile_action(&intent, &launcher_directories)
+            let compiled = cancellation
+                .trace
+                .measure(crate::domain::TracePhase::Compilation, || {
+                    application.compile_action(&intent, &launcher_directories)
+                })
                 .map_err(app_error)?;
             if format.version() == machine::Version::Legacy
                 && compiled.protocol_version() == crate::domain::operation_hook_version()
@@ -1863,73 +1893,78 @@ fn execute(
                 ));
             }
             let admission_options = crate::executor::AdmissionOptions { recovery_override };
-            let admitted = match application.accept_and_admit_action_with_cancellation(
-                &compiled,
-                admission_options,
-                cancellation,
-            ) {
-                Ok(admitted) => admitted,
-                Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
-                    let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
-                        &error
-                    else {
-                        unreachable!()
-                    };
-                    let run = *run;
-                    let input_binding_advice = match refusal {
-                        crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
-                            Some(reply::InputBindingAdvice {
-                                instance: name.clone(),
-                                inputs: inputs.clone(),
-                            })
+            let admitted =
+                match cancellation
+                    .trace
+                    .measure(crate::domain::TracePhase::Admission, || {
+                        application.accept_and_admit_action_with_cancellation(
+                            &compiled,
+                            admission_options,
+                            cancellation,
+                        )
+                    }) {
+                    Ok(admitted) => admitted,
+                    Err(error @ ApplicationError::Execution(ExecutorError::Refused { .. })) => {
+                        let ApplicationError::Execution(ExecutorError::Refused { run, refusal }) =
+                            &error
+                        else {
+                            unreachable!()
+                        };
+                        let run = *run;
+                        let input_binding_advice = match refusal {
+                            crate::domain::AdmissionRefusal::MissingRequiredInputs(inputs) => {
+                                Some(reply::InputBindingAdvice {
+                                    instance: name.clone(),
+                                    inputs: inputs.clone(),
+                                })
+                            }
+                            _ => None,
+                        };
+                        let mut error = app_error(error);
+                        error.details.input_binding_advice = input_binding_advice;
+                        // The accepted no-launch Run is already durable. Return the
+                        // same safe historical projection as a subsequent query.
+                        if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
+                            error.partial = Some(presentation::PartialResult::RefusedExecution(
+                                Box::new(execution_presentation::RefusedExecution {
+                                    run_id: run.to_string(),
+                                    inspection: execution_presentation::Inspection::for_version(
+                                        &inspection,
+                                        format.version(),
+                                    )?,
+                                }),
+                            ));
                         }
-                        _ => None,
-                    };
-                    let mut error = app_error(error);
-                    error.details.input_binding_advice = input_binding_advice;
-                    // The accepted no-launch Run is already durable. Return the
-                    // same safe historical projection as a subsequent query.
-                    if let Ok(Some(inspection)) = application.managed_run_inspection(run) {
-                        error.partial = Some(presentation::PartialResult::RefusedExecution(
-                            Box::new(execution_presentation::RefusedExecution {
-                                run_id: run.to_string(),
-                                inspection: execution_presentation::Inspection::for_version(
-                                    &inspection,
-                                    format.version(),
-                                )?,
-                            }),
+                        return Err(error);
+                    }
+                    Err(ApplicationError::Execution(ExecutorError::CancelledBeforeAcceptance)) => {
+                        return Err(CliError::operation(
+                            "invoke cancelled before Run acceptance; no Run was created",
                         ));
                     }
-                    return Err(error);
-                }
-                Err(ApplicationError::Execution(ExecutorError::CancelledBeforeAcceptance)) => {
-                    return Err(CliError::operation(
-                        "invoke cancelled before Run acceptance; no Run was created",
-                    ));
-                }
-                Err(ApplicationError::Execution(ExecutorError::Persistence {
-                    run: Some(candidate),
-                    ..
-                })) => match recover_candidate_admission(
-                    &application,
-                    &compiled,
-                    admission_options,
-                    candidate,
-                    cancellation,
-                )
-                .map_err(|error| error.with_run_context(candidate))?
-                {
-                    AdmissionRecovery::Admitted(admitted) => *admitted,
-                    AdmissionRecovery::Terminal(run) => {
-                        write_terminal_run_best_effort(&application, run, stderr);
-                        return Err(CliError::operation(format!(
-                            "Run {run} became terminal while Admission was being resolved"
-                        ))
-                        .with_run_context(run));
-                    }
-                },
-                Err(error) => return Err(app_error(error)),
-            };
+                    Err(ApplicationError::Execution(ExecutorError::Persistence {
+                        run: Some(candidate),
+                        ..
+                    })) => match recover_candidate_admission(
+                        &application,
+                        &compiled,
+                        admission_options,
+                        candidate,
+                        cancellation,
+                    )
+                    .map_err(|error| error.with_run_context(candidate))?
+                    {
+                        AdmissionRecovery::Admitted(admitted) => *admitted,
+                        AdmissionRecovery::Terminal(run) => {
+                            write_terminal_run_best_effort(&application, run, stderr);
+                            return Err(CliError::operation(format!(
+                                "Run {run} became terminal while Admission was being resolved"
+                            ))
+                            .with_run_context(run));
+                        }
+                    },
+                    Err(error) => return Err(app_error(error)),
+                };
             let run = application.execute_admitted_action(admitted, policy, cancellation.clone());
             loop {
                 match application.advance_owner_continuation(run) {

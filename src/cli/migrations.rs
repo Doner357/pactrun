@@ -634,13 +634,17 @@ pub(super) fn execute(
                 stdin,
                 cancellation,
             )?;
-            let plan = crate::workflow::compile_migration(
-                &app,
-                &crate::workflow::PlatformHostLauncherLookup,
-                &intent,
-                &launcher_search_directories(),
-            )
-            .map_err(app_error)?;
+            let plan = cancellation
+                .trace
+                .measure(crate::domain::TracePhase::Compilation, || {
+                    crate::workflow::compile_migration(
+                        &app,
+                        &crate::workflow::PlatformHostLauncherLookup,
+                        &intent,
+                        &launcher_search_directories(),
+                    )
+                })
+                .map_err(app_error)?;
             if !plan_only {
                 if format.requires_noninteractive() {
                     for edge in plan.edges() {
@@ -667,20 +671,25 @@ pub(super) fn execute(
                         Ok((key, file))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let run = match writer.accept_migration_inputs(
-                    plan,
-                    override_guard,
-                    cancellation.clone(),
-                    inputs,
-                    policy,
-                ) {
-                    Ok(run) => run,
-                    Err(ApplicationError::Execution(ExecutorError::Persistence {
-                        run: Some(run),
-                        ..
-                    })) => run,
-                    Err(error) => return Err(app_error(error)),
-                };
+                let run =
+                    match cancellation
+                        .trace
+                        .measure(crate::domain::TracePhase::Admission, || {
+                            writer.accept_migration_inputs(
+                                plan,
+                                override_guard,
+                                cancellation.clone(),
+                                inputs,
+                                policy,
+                            )
+                        }) {
+                        Ok(run) => run,
+                        Err(ApplicationError::Execution(ExecutorError::Persistence {
+                            run: Some(run),
+                            ..
+                        })) => run,
+                        Err(error) => return Err(app_error(error)),
+                    };
                 loop {
                     match writer.advance_owner_continuation(run) {
                         Ok(true) => break,

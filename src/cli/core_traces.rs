@@ -5,6 +5,10 @@ use crate::{
     trace_journal::{self, Location},
 };
 
+#[cfg(test)]
+#[path = "core_trace_tests.rs"]
+mod tests;
+
 pub(super) enum Query {
     List(usize),
     Show(TraceId),
@@ -215,4 +219,49 @@ pub(super) fn root_span(
         cancellation.trace.begin();
     }
     cancellation.trace.span(TracePhase::Command)
+}
+
+/// Observe delivery separately from the operation's exit code. An error reply
+/// can be delivered successfully; an ignored writer error is still a failure.
+pub(super) fn render_reply(
+    reply: reply::Reply,
+    format: presentation::Format,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    trace: &std::sync::Arc<crate::trace::Trace>,
+) -> i32 {
+    let span = trace.span(TracePhase::OutputDelivery);
+    let mut out = DeliveryObservation {
+        inner: stdout,
+        failed: false,
+    };
+    let mut err = DeliveryObservation {
+        inner: stderr,
+        failed: false,
+    };
+    let code = reply.render(format, &mut out, &mut err);
+    span.finish(if out.failed || err.failed {
+        crate::domain::PhaseResult::Failed
+    } else {
+        crate::domain::PhaseResult::Succeeded
+    });
+    code
+}
+
+struct DeliveryObservation<'a> {
+    inner: &'a mut dyn Write,
+    failed: bool,
+}
+impl Write for DeliveryObservation<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let result = self.inner.write(bytes);
+        self.failed |= matches!(&result, Err(e) if e.kind() != io::ErrorKind::Interrupted)
+            || matches!(result, Ok(0) if !bytes.is_empty());
+        result
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        let result = self.inner.flush();
+        self.failed |= result.is_err();
+        result
+    }
 }

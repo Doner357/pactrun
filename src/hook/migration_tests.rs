@@ -234,12 +234,13 @@ fn retained_bindings_reactivate_discard_and_delete_without_reinterpreting_source
 }
 
 // Test-ID: PR-TEST-0312
-// Verifies: PR-REQ-0090, PR-REQ-0154, PR-REQ-0159, PR-REQ-0161, PR-REQ-0218, PR-REQ-0306, PR-REQ-0315, PR-REQ-0316
+// Verifies: PR-REQ-0090, PR-REQ-0154, PR-REQ-0159, PR-REQ-0161, PR-REQ-0218, PR-REQ-0306, PR-REQ-0315, PR-REQ-0316, PR-REQ-0397
 #[test]
 fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_outputs() {
     let f = RuntimeFixture::new();
     let path = chain(&f);
-    let run = start(&f, &path, "success", ActionCancellation::default());
+    let cancellation = phase_cancellation(&f, TraceOperation::Migration);
+    let run = start(&f, &path, "success", cancellation.clone());
     let outcome = finish(&f, run);
     assert_eq!(outcome.outcome, RunOutcome::Succeeded, "{outcome:?}");
     let p = persistence(&f.storage);
@@ -252,6 +253,11 @@ fn mixed_chain_materializes_full_context_and_commits_detached_inputs_and_hook_ou
     assert_eq!(fs::read(f.marker("invoked")).unwrap(), b"once\n");
     assert!(!contains(format!("{:?}",p.managed_run_inspection(run).unwrap()).as_bytes(), SECRET_BINDING));
     assert_eq!(p.managed_run_inspection(run).unwrap().unwrap().migration_progress.unwrap().committed_edges, 3);
+    let trace = completed_phase_trace(&f, &cancellation, run);
+    assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 3);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 0);
 }
 
 // Test-ID: PR-TEST-0313

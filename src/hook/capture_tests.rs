@@ -447,13 +447,14 @@ fn real_observe_and_mutate_capture_publish_v2_from_the_pinned_active_view() {
 }
 
 // Test-ID: PR-TEST-0247
-// Verifies: PR-REQ-0147, PR-REQ-0148, PR-REQ-0290, PR-REQ-0294, PR-REQ-0298
+// Verifies: PR-REQ-0147, PR-REQ-0148, PR-REQ-0290, PR-REQ-0294, PR-REQ-0298, PR-REQ-0397
 #[test]
 fn capture_publication_retry_preserves_time_identity_and_distinct_source_accounting() {
     for mode in ["success", "aliases"] {
         let f = fixture("observe");
         let marker = f.marker(mode);
-        let run = accept_capture(&f, mode, &marker, ActionCancellation::default());
+        let cancellation = phase_cancellation(&f, TraceOperation::SnapshotCapture);
+        let run = accept_capture(&f, mode, &marker, cancellation.clone());
         // Use an instant exactly representable by both POSIX and Windows'
         // 100ns SystemTime resolution; production retains the sampled clock.
         let at = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_700);
@@ -493,6 +494,12 @@ fn capture_publication_retry_preserves_time_identity_and_distinct_source_account
         assert_eq!(result_id(&f, run), id);
         assert_eq!(manifest(&f, id).manifest().captured_at(), time);
         assert_eq!(super::super::capture::test_clock(None), reads + 1);
+        let trace = completed_phase_trace(&f, &cancellation, run);
+        assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+        assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+        assert_eq!(trace.totals[&TracePhase::OutputPublication].finished, 1);
+        assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 2);
+        assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 1);
     }
 }
 

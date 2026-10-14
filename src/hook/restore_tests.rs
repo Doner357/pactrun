@@ -818,7 +818,7 @@ fn restore_refuses_sticky_downgrade_and_required_removal_before_any_hook_launch(
 }
 
 // Test-ID: PR-TEST-0263
-// Verifies: PR-REQ-0026, PR-REQ-0143, PR-REQ-0291, PR-REQ-0298
+// Verifies: PR-REQ-0026, PR-REQ-0143, PR-REQ-0291, PR-REQ-0298, PR-REQ-0397
 #[test]
 fn restore_publication_rollback_preserves_guard_pins_and_target_until_a_single_success() {
     let f = fixture();
@@ -830,13 +830,14 @@ fn restore_publication_rollback_preserves_guard_pins_and_target_until_a_single_s
     let old_guard = guard(&f);
     let counter = consequence(&f);
     let marker = f.marker("restore");
+    let cancellation = phase_cancellation(&f, TraceOperation::SnapshotRestore);
     let run = admit(
         &f,
         f.instance.id,
         snapshot,
         "success",
         &marker,
-        ActionCancellation::default(),
+        cancellation.clone(),
         true,
     );
     run_restore(&f, run);
@@ -853,6 +854,11 @@ fn restore_publication_rollback_preserves_guard_pins_and_target_until_a_single_s
     assert!(guard(&f).is_none());
     assert_eq!(consequence(&f), counter);
     assert_eq!(count(&f, "run_restore_admissions"), 0);
+    let trace = completed_phase_trace(&f, &cancellation, run);
+    assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 3);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 2);
     assert_eq!(
         fs::read(marker_variant(&marker, "launched")).unwrap(),
         b"launch\n"

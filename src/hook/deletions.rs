@@ -149,9 +149,19 @@ pub(super) fn advance(
         if execution.boundary == ActionRunBoundary::Admitted
             && matches!(state.plan.work, DeletionWork::Cleanup(_))
         {
-            p.publish_cleanup_result(state.run, &state.owner, &cancelled(), false, false)?;
+            state
+                .cancellation
+                .trace
+                .measure(crate::domain::TracePhase::ResultCommit, || {
+                    p.publish_cleanup_result(state.run, &state.owner, &cancelled(), false, false)
+                })?;
         } else {
-            p.finish_run_owned(&state.owner, state.run, &cancelled(), &[], &mut [])?;
+            state
+                .cancellation
+                .trace
+                .measure(crate::domain::TracePhase::ResultCommit, || {
+                    p.finish_run_owned(&state.owner, state.run, &cancelled(), &[], &mut [])
+                })?;
         }
         guard.complete();
         return Ok(true);
@@ -166,13 +176,23 @@ pub(super) fn advance(
                 _ => Err("Cleanup launcher selection changed".to_owned()),
             }
         };
-        match p.admit_deletion(
+        let phase = state
+            .cancellation
+            .trace
+            .span(crate::domain::TracePhase::Admission);
+        let result = p.admit_deletion(
             state.run,
             &state.owner,
             &state.plan,
             state.options.recovery_override,
             &check,
-        )? {
+        );
+        phase.finish(if matches!(&result, Ok(Ok(()))) {
+            crate::domain::PhaseResult::Succeeded
+        } else {
+            crate::domain::PhaseResult::Failed
+        });
+        match result? {
             Ok(()) => state.phase = Phase::Ready,
             Err(_) => {
                 guard.complete();
@@ -183,7 +203,13 @@ pub(super) fn advance(
     match &state.plan.work {
         DeletionWork::Cleanup(_) => Ok(false), // launch is outside the application mutation guard
         DeletionWork::Abandon => {
-            if !p.finish_instance_retirement(state.run, &state.owner, &succeeded())? {
+            if !state
+                .cancellation
+                .trace
+                .measure(crate::domain::TracePhase::ResultCommit, || {
+                    p.finish_instance_retirement(state.run, &state.owner, &succeeded())
+                })?
+            {
                 return Ok(false);
             }
             guard.complete();
@@ -230,17 +256,23 @@ pub(crate) fn execute_ready(
         return Ok(false);
     };
     if state.prepared.is_none() {
-        match materialize::MaterializedAction::create_cleanup(
-            p,
-            staging,
-            run,
-            &state.plan.revision,
-            cleanup,
-        ) {
+        match state
+            .cancellation
+            .trace
+            .measure(crate::domain::TracePhase::Materialization, || {
+                materialize::MaterializedAction::create_cleanup(
+                    p,
+                    staging,
+                    run,
+                    &state.plan.revision,
+                    cleanup,
+                )
+            }) {
             Ok(value) => state.prepared = Some(value),
             Err(error) => {
                 let failure = FailureKind::materialization(&error);
-                let continuation = before_launch(run, failure, false, None);
+                let continuation =
+                    before_launch(run, failure, false, None, state.cancellation.trace.clone());
                 guard.replace(continuation);
                 return Ok(true);
             }
@@ -375,7 +407,11 @@ pub(crate) struct CleanupFinalization {
     cancellation: ActionCancellation,
 }
 pub(super) fn terminal(facts: RuntimeTerminalFacts, may_have_run: bool) -> OwnerContinuation {
-    terminal_with_cancellation(facts, may_have_run, ActionCancellation::default())
+    let cancellation = ActionCancellation {
+        trace: facts.trace.clone(),
+        ..ActionCancellation::default()
+    };
+    terminal_with_cancellation(facts, may_have_run, cancellation)
 }
 pub(super) fn terminal_with_cancellation(
     mut facts: RuntimeTerminalFacts,
@@ -404,10 +440,12 @@ pub(super) fn before_launch(
     failure: FailureKind,
     may_have_run: bool,
     execution: Option<ExecutionDirectory>,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     let (outcome, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
     terminal(
         RuntimeTerminalFacts {
+            trace,
             run,
             outcome,
             primary_failure,
@@ -510,25 +548,36 @@ pub(super) fn finalize(
     } else {
         state.artifacts.writes(&mut artifact_readers)
     };
-    if p.publish_cleanup_result_with_outputs(
-        state.facts.run,
-        &staging.owner(),
-        &finish,
-        state.may_have_run,
-        state.facts.completion_accepted,
-        crate::persistence::RunArtifactSubmission {
-            submitted: if state.cleanup_published {
-                &[]
-            } else {
-                &state.facts.submitted_outputs
-            },
-            artifacts: &mut writes,
-        },
-    )? {
+    if state
+        .cancellation
+        .trace
+        .measure(crate::domain::TracePhase::ResultCommit, || {
+            p.publish_cleanup_result_with_outputs(
+                state.facts.run,
+                &staging.owner(),
+                &finish,
+                state.may_have_run,
+                state.facts.completion_accepted,
+                crate::persistence::RunArtifactSubmission {
+                    submitted: if state.cleanup_published {
+                        &[]
+                    } else {
+                        &state.facts.submitted_outputs
+                    },
+                    artifacts: &mut writes,
+                },
+            )
+        })?
+    {
         state.cleanup_published = true;
         if state.cancellation.is_requested() {
             finish.outcome = RunOutcome::Cancelled;
-            p.finish_run_owned(&staging.owner(), state.facts.run, &finish, &[], &mut [])?;
+            state
+                .cancellation
+                .trace
+                .measure(crate::domain::TracePhase::ResultCommit, || {
+                    p.finish_run_owned(&staging.owner(), state.facts.run, &finish, &[], &mut [])
+                })?;
         } else if !finalize_storage(
             p,
             state.facts.run,

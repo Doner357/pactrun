@@ -84,11 +84,14 @@ fn retirement_removes_retained_bindings_without_touching_another_instance_or_sou
 }
 
 // Test-ID: PR-TEST-0404
-// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334
+// Verifies: PR-REQ-0111, PR-REQ-0176, PR-REQ-0177, PR-REQ-0218, PR-REQ-0334, PR-REQ-0397
 #[test]
 fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history() {
     let f = fixture("success");
-    let run = start(&f, DeletionMode::ManagedCleanup);
+    let cancellation = phase_cancellation(&f, TraceOperation::Retirement);
+    let intent = f.application.resolve_deletion(&f.instance.name, None, DeletionMode::ManagedCleanup).unwrap();
+    let plan = f.application.compile_deletion(&intent, &[]).unwrap();
+    let run = f.application.accept_deletion_plan(plan, AdmissionOptions::default(), cancellation.clone(), policy(Some(5000),Some(5000),Some(20))).unwrap();
     assert_eq!(finish(&f, run).outcome, RunOutcome::Succeeded);
     assert!(f.application.load_instance(f.instance.id).unwrap().is_none());
     assert_eq!(fs::read(f.marker("cleanup-count")).unwrap(), b"x");
@@ -97,6 +100,12 @@ fn real_baseline_cleanup_completes_before_instance_removal_with_retained_history
     assert!(p.managed_run_inspection(run).unwrap().is_some());
     assert!(matches!(p.load_managed_run(run).unwrap().unwrap().operation,
         ManagedRunIdentity::Deletion { mode: DeletionMode::ManagedCleanup, .. }));
+    let trace = completed_phase_trace(&f, &cancellation, run);
+    assert_eq!(trace.totals[&TracePhase::Admission].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::Materialization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::StorageFinalization].finished, 1);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 2);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].failed, 0);
 }
 
 // Test-ID: PR-TEST-0424
