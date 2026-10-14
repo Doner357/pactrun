@@ -2,6 +2,31 @@
   "description": "Manage installed Packs, long-lived Instances and Pack-defined operations.",
   "global_options": [
     {
+      "name": "--config",
+      "value": "path",
+      "description": "Select an existing user configuration file before the command; does not select a Store."
+    },
+    {
+      "name": "--verbosity",
+      "value": "quiet|normal|detailed",
+      "description": "Override Human presentation for this invocation; machine output and raw Hook bytes are unchanged."
+    },
+    {
+      "name": "--diagnostic-level",
+      "value": "normal|detailed",
+      "description": "Override startup and Store diagnostic detail for this invocation."
+    },
+    {
+      "name": "--phase-messages",
+      "value": null,
+      "description": "Enable optional Pactrun Human phase messages; quiet mode still suppresses optional chatter."
+    },
+    {
+      "name": "--no-phase-messages",
+      "value": null,
+      "description": "Suppress optional Human phase messages, never acceptance uncertainty or storage-retry warnings."
+    },
+    {
       "name": "--help",
       "value": null,
       "description": "Show help for this command or command group."
@@ -23,6 +48,24 @@
     }
   ],
   "options": {
+    "--startup": {
+      "name": "--startup", "value": null,
+      "description": "Inspect the user journal for startup and invocations without a Run, without opening the selected Store."
+    },
+    "--run": {
+      "name": "--run", "value": "run-id",
+      "description": "Inspect a retained Core phase trace by complete Run identity."
+    },
+    "--user-file": {
+      "name": "--user-file",
+      "value": "path",
+      "description": "Read this user configuration file instead of the platform default; the file must exist."
+    },
+    "--store-file": {
+      "name": "--store-file",
+      "value": "path",
+      "description": "Inspect this Store configuration file without selecting or opening its Store."
+    },
     "--plan": {
       "name": "--plan",
       "value": null,
@@ -97,6 +140,22 @@
       "name": "--authorize-secret-export",
       "value": null,
       "description": "Explicitly authorize protected export."
+    },
+    "--include-hook-text": {
+      "name": "--include-hook-text", "value": null,
+      "description": "Include retained Hook-authored evidence; requires sensitive-export authorization."
+    },
+    "--include-artifacts": {
+      "name": "--include-artifacts", "value": null,
+      "description": "Copy currently retained Run Artifacts; requires sensitive-export authorization."
+    },
+    "--include-inputs": {
+      "name": "--include-inputs", "value": null,
+      "description": "Copy available ordinary historical Inputs, never current replacement values."
+    },
+    "--include-secrets": {
+      "name": "--include-secrets", "value": null,
+      "description": "Copy available historical Secrets; requires separate secret-export authorization."
     },
     "--authorize-sensitive-export": {
       "name": "--authorize-sensitive-export",
@@ -233,6 +292,11 @@
       "value": null,
       "description": "Do not retain Hook free text; live output remains enabled."
     },
+    "--retain-hook-text": {
+      "name": "--retain-hook-text",
+      "value": null,
+      "description": "Retain this invocation's Hook free text, overriding the Store default without changing the file."
+    },
     "--cancel-on-output-close": {
       "name": "--cancel-on-output-close",
       "value": null,
@@ -300,6 +364,38 @@
     }
   },
   "commands": [
+    {
+      "path": ["diagnostic"], "description": "Inspect retained Pactrun phase and timing evidence.",
+      "forms": [], "options": [], "notes": [], "examples": []
+    },
+    {
+      "path": ["diagnostic", "list"], "description": "List a bounded recent window of diagnostic records without creating files.",
+      "forms": [{"usage": "pactrun diagnostic list [--startup] [--limit <1..100>]", "description": "The default limit is 20; has_more marks omitted older records."}],
+      "options": ["--startup", "--limit"], "notes": ["An unclosed record has an unknown tail; it is not proof that a process is still running."], "examples": []
+    },
+    {
+      "path": ["diagnostic", "show"], "description": "Inspect typed Core phases, timings, omissions and closure.",
+      "forms": [{"usage": "pactrun diagnostic show <diagnostic-id> [--startup]", "description": "Use the complete identity shown by diagnostic list."}, {"usage": "pactrun diagnostic show --run <run-id>", "description": "Find a retained associated trace in the selected Store."}],
+      "options": ["--startup", "--run"], "notes": ["Trace evidence is not a Run outcome or permission to replay an operation."], "examples": []
+    },
+    {
+      "path": ["config"],
+      "description": "Inspect or validate typed user and Store configuration without opening a Store.",
+      "forms": [], "options": [], "notes": [], "examples": []
+    },
+    {
+      "path": ["config", "show"],
+      "description": "Show effective configuration values and their sources.",
+      "forms": [{"usage": "pactrun config show [--user-file <path>] [--store-file <path>]", "description": "Resolve settings without creating or upgrading a Store."}],
+      "options": ["--user-file", "--store-file"], "notes": [],
+      "examples": ["pactrun --format json config show"]
+    },
+    {
+      "path": ["config", "validate"],
+      "description": "Validate configuration syntax, ownership, types and bounds.",
+      "forms": [{"usage": "pactrun config validate [--user-file <path>] [--store-file <path>]", "description": "Refuse invalid configuration without echoing source text or modifying files."}],
+      "options": ["--user-file", "--store-file"], "notes": [], "examples": []
+    },
     {
       "path": [
         "pack"
@@ -739,6 +835,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -831,6 +928,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -860,6 +958,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close",
         "--param",
@@ -891,6 +990,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1196,6 +1296,7 @@
         "--startup-timeout-ms",
         "--action-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1214,6 +1315,21 @@
       "options": [],
       "notes": [],
       "examples": []
+    },
+    {
+      "path": ["run", "export"],
+      "description": "Copy an explicitly selected support report to a new ZIP file.",
+      "forms": [{
+        "usage": "pactrun run export <run-id> --output <path> [--include-hook-text] [--include-artifacts] [--include-inputs] [--include-secrets] [--authorize-sensitive-export] [--authorize-secret-export]",
+        "description": "Export available metadata and diagnostics; sensitive contents are excluded by default."
+      }],
+      "options": ["--output", "--include-hook-text", "--include-artifacts", "--include-inputs", "--include-secrets", "--authorize-sensitive-export", "--authorize-secret-export"],
+      "notes": [
+        "Hook text and Artifacts require --authorize-sensitive-export. Secrets separately require --authorize-secret-export. Authorization alone does not select content.",
+        "The exact output path is used without appending an extension. Existing destinations are never overwritten. No upload is performed.",
+        "Review before sharing: selected bytes are not redacted, and metadata can also be sensitive. Unavailable history is not replaced by current values. This is not a backup or replay plan."
+      ],
+      "examples": ["pactrun run export 01234567 --output support.zip", "pactrun run export 01234567 --output detailed.zip --include-hook-text --include-artifacts --authorize-sensitive-export"]
     },
     {
       "path": [
@@ -1411,6 +1527,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],
@@ -1438,6 +1555,7 @@
         "--startup-timeout-ms",
         "--execution-timeout-ms",
         "--termination-grace-ms",
+        "--retain-hook-text",
         "--no-retain-hook-text",
         "--cancel-on-output-close"
       ],

@@ -11,9 +11,15 @@ mod diagnostics;
 pub(crate) use diagnostics::*;
 mod core_diagnostics;
 pub(crate) use core_diagnostics::*;
+mod core_trace;
+pub(crate) use core_trace::*;
 mod error;
 mod execution;
 mod identity;
+mod input_history;
+pub(crate) use input_history::*;
+mod run_export;
+pub(crate) use run_export::*;
 mod local_names;
 #[allow(unused_imports)]
 pub(crate) use local_names::*;
@@ -28,6 +34,8 @@ mod revision_content;
 mod revision_declarations;
 mod revision_metadata;
 mod run;
+#[cfg(test)]
+mod service_diagnostics_tests;
 mod service_migration;
 mod service_storage;
 mod service_storage_state;

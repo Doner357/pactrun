@@ -1104,7 +1104,7 @@ fn compiled_service_associations_are_revalidated_and_pins_are_atomic_and_owner_s
     }
     let root_id = allocation(&p, instance.id);
     let live = directory(&root, root_id).join("config.json");
-    let native = crate::hook::service_storage::prepare(&p, run, &owner, &bindings).unwrap();
+    let native = crate::hook::service_storage::prepare(&p, run, &owner, &bindings, None).unwrap();
     assert_eq!(native.grant_count(), 1);
     assert!(!live.exists()); // read authority is not an implicit Present predicate
     let other_owner = PactrunPersistence::open(&root).unwrap();
@@ -1119,12 +1119,14 @@ fn compiled_service_associations_are_revalidated_and_pins_are_atomic_and_owner_s
     );
     fs::write(&live, b"service bytes survive Run release").unwrap();
     assert!(matches!(
-        crate::hook::service_storage::prepare(&p, run, &owner, &bindings),
-        Err(crate::hook::service_storage::NativeServiceError::Prerequisite)
+        crate::hook::service_storage::prepare(&p, run, &owner, &bindings, None),
+        Err(crate::hook::service_storage::NativeServiceError::Prerequisite(cause))
+            if cause.expected == ServicePresenceRequirement::Absent && cause.observed == ServicePresenceRequirement::Present
+                && cause.reference == bindings.requires[0].0.reference
     ));
     fs::rename(directory(&root, root_id), root.join("moved-allocation")).unwrap();
     assert!(matches!(
-        crate::hook::service_storage::prepare(&p, run, &owner, &bindings),
+        crate::hook::service_storage::prepare(&p, run, &owner, &bindings, None),
         Err(crate::hook::service_storage::NativeServiceError::Storage(
             PersistenceError::ServiceStorageUnavailable(_)
         ))

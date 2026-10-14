@@ -651,6 +651,16 @@ mod implementation {
         Ok(key)
     }
 
+    /// Link-count observation for callers refusing aliased diagnostic files.
+    pub fn file_link_count(file: &File) -> io::Result<u32> {
+        let mut info = BY_HANDLE_FILE_INFORMATION::default();
+        // SAFETY: File owns the live handle and the complete output is writable.
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut info) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(info.nNumberOfLinks)
+    }
+
     pub fn open_retirement_directory(root: &File, segment: &str) -> io::Result<File> {
         validate_service_segment(segment)?;
         let file = open_relative_native_with_sharing(

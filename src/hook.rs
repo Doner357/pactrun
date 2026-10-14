@@ -87,6 +87,7 @@ pub(crate) struct HookRuntimePolicy {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionCancellation {
+    pub(crate) trace: Arc<crate::trace::Trace>,
     pub(crate) diagnostics: Arc<diagnostics::Diagnostics>,
     pub(crate) delivery: Arc<delivery::DeliverySlot>,
     requested: Arc<AtomicBool>,
@@ -234,6 +235,7 @@ fn checked_deadline(start: Instant, duration: Duration) -> Option<Instant> {
 
 impl AcceptanceArbiter for ActionCancellation {
     fn accepted(&self, run: RunId) {
+        self.trace.associate(run);
         self.delivery.accepted(run);
     }
     fn retain_hook_text(&self) -> bool {
@@ -280,6 +282,7 @@ pub(crate) struct MigrationOutputSlot {
 }
 
 pub(crate) struct RuntimeTerminalFacts {
+    pub(crate) trace: Arc<crate::trace::Trace>,
     pub(crate) run: RunId,
     pub(crate) outcome: RunOutcome,
     pub(crate) primary_failure: Option<RunPrimaryFailure>,
@@ -817,7 +820,12 @@ fn finalize_owner_state(
         )));
     }
     if state.prepared.is_none() {
-        match artifacts::stage_submitted(staging, &state.facts) {
+        match state
+            .facts
+            .trace
+            .measure(crate::domain::TracePhase::OutputPublication, || {
+                artifacts::stage_submitted(staging, &state.facts)
+            }) {
             Ok(prepared) => state.prepared = Some(prepared),
             Err(()) => {
                 state.publication_failed = true;
@@ -865,13 +873,18 @@ fn finalize_owner_state(
         })
         .collect::<Vec<_>>();
     let owner = staging.owner();
-    match persistence.finish_run_owned(
-        &owner,
-        state.facts.run,
-        &finish,
-        &state.facts.submitted_outputs,
-        &mut artifacts,
-    ) {
+    match state
+        .facts
+        .trace
+        .measure(crate::domain::TracePhase::ResultCommit, || {
+            persistence.finish_run_owned(
+                &owner,
+                state.facts.run,
+                &finish,
+                &state.facts.submitted_outputs,
+                &mut artifacts,
+            )
+        }) {
         Ok(_) => Ok(FinalizationAdvance::Published),
         Err(error) => Err(Box::new((state, error))),
     }
@@ -934,10 +947,12 @@ pub(super) fn ready_failure(
     failure: FailureKind,
     outputs: Vec<LiveOutputSlot>,
     execution: Option<ExecutionDirectory>,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     let (_, primary_failure) = outcome_and_failure(OutcomeWinner::Failed(failure));
     OwnerContinuation::ReadyToFinalize(FinalizationState {
         facts: RuntimeTerminalFacts {
+            trace,
             run,
             outcome: RunOutcome::Failed,
             primary_failure,
@@ -962,9 +977,11 @@ pub(super) fn ready_cancelled(
     run: RunId,
     outputs: Vec<LiveOutputSlot>,
     execution: Option<ExecutionDirectory>,
+    trace: Arc<crate::trace::Trace>,
 ) -> OwnerContinuation {
     OwnerContinuation::ReadyToFinalize(FinalizationState {
         facts: RuntimeTerminalFacts {
+            trace,
             run,
             outcome: RunOutcome::Cancelled,
             primary_failure: None,
@@ -998,7 +1015,14 @@ pub(super) fn outcome_and_failure(
             (
                 RunOutcome::Failed,
                 Some(RunPrimaryFailure {
-                    cause: None,
+                    cause: match &failure {
+                        FailureKind::ServicePrerequisite(facts) => {
+                            Some(crate::domain::RunFailureCause::ServicePresenceRequirement(
+                                Box::new(facts.clone()),
+                            ))
+                        }
+                        _ => None,
+                    },
                     failure: RunFailureRecord {
                         error: PactrunErrorRef::new(owner, code)
                             .expect("execution diagnostics are valid stable names"),
@@ -1024,7 +1048,7 @@ pub(super) enum FailureKind {
     Protocol(protocol::ProtocolFailure),
     ProtocolV2(protocol::authority::Failure),
     ServiceAccess(&'static str),
-    ServicePrerequisite,
+    ServicePrerequisite(crate::domain::ServicePresenceFailure),
 }
 
 impl FailureKind {
@@ -1034,8 +1058,8 @@ impl FailureKind {
             materialize::MaterializationError::Service(NativeServiceError::Access(error)) => {
                 Self::ServiceAccess(error.code())
             }
-            materialize::MaterializationError::Service(NativeServiceError::Prerequisite) => {
-                Self::ServicePrerequisite
+            materialize::MaterializationError::Service(NativeServiceError::Prerequisite(facts)) => {
+                Self::ServicePrerequisite(facts.clone())
             }
             materialize::MaterializationError::Service(NativeServiceError::Storage(
                 PersistenceError::CorruptServiceStorage(_),
@@ -1060,7 +1084,7 @@ impl FailureKind {
                 ActionPlanStep::EstablishSession,
                 "ServiceStorage authority qualification failed",
             ),
-            Self::ServicePrerequisite => (
+            Self::ServicePrerequisite(_) => (
                 "admission",
                 "plan_invalidated",
                 ActionPlanStep::EstablishSession,

@@ -430,7 +430,7 @@ pub(super) fn execute(
             authorized,
         } => {
             let id = id.full();
-            app.export_snapshot_file(id, &path, authorized)
+            app.export_snapshot_file(id, &path, authorized, &cancellation.trace)
                 .map_err(safe_error)?;
             {
                 let result = transport_presentation::SnapshotExported {
@@ -544,13 +544,17 @@ fn execute_intent(
         .parameters
         .iter()
         .any(|p| matches!(p, ParameterSourceSpec::Stdin(_)));
-    let plan = crate::workflow::compile_snapshot(
-        app,
-        &crate::workflow::PlatformHostLauncherLookup,
-        &intent,
-        &launcher_search_directories(),
-    )
-    .map_err(safe_error)?;
+    let plan = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::Compilation, || {
+            crate::workflow::compile_snapshot(
+                app,
+                &crate::workflow::PlatformHostLauncherLookup,
+                &intent,
+                &launcher_search_directories(),
+            )
+        })
+        .map_err(safe_error)?;
     format
         .version()
         .require_hook(plan.hook().protocol_version)?;
@@ -589,14 +593,17 @@ fn execute_intent(
             );
         }
     }
-    let run = app
-        .accept_snapshot_plan(
-            plan,
-            AdmissionOptions {
-                recovery_override: options.recovery_override,
-            },
-            cancellation.clone(),
-        )
+    let run = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::Admission, || {
+            app.accept_snapshot_plan(
+                plan,
+                AdmissionOptions {
+                    recovery_override: options.recovery_override,
+                },
+                cancellation.clone(),
+            )
+        })
         .map_err(|error| {
             if let ApplicationError::Execution(ExecutorError::Persistence { run, .. }) = &error {
                 *accepted_run = *run;

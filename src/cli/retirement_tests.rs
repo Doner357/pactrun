@@ -8,6 +8,19 @@ fn fixture() -> (
     ServiceAllocationId,
     PathBuf,
 ) {
+    fixture_with_allocations(1)
+}
+
+fn fixture_with_allocations(
+    count: usize,
+) -> (
+    tempfile::TempDir,
+    PathBuf,
+    InstanceView,
+    ServiceAllocationId,
+    PathBuf,
+) {
+    assert!(count > 0);
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/deletion-cli-tests");
     fs::create_dir_all(&base).unwrap();
     let temp = tempfile::tempdir_in(base).unwrap();
@@ -16,11 +29,13 @@ fn fixture() -> (
         fs::create_dir_all(root.join(part)).unwrap();
     }
     let p = PactrunPersistence::open(&root).unwrap();
+    let storages: Vec<_> = (0..count).map(|index| serde_json::json!({"id":if index==0 {"data".to_owned()} else {format!("data{index}")}})).collect();
     let core = crate::revision_canonical::project_service_revision_source(
-        br#"{
-        "format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],
-        "service_storages":[{"id":"data"}],"service_resources":[]
-    }"#,
+        &serde_json::to_vec(&serde_json::json!({
+            "format_version":"1.0-alpha.1","inputs":[],"actions":[],"migrations":[],
+            "service_storages":storages,"service_resources":[]
+        }))
+        .unwrap(),
     )
     .unwrap();
     let runtime =
@@ -67,6 +82,226 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, String, String) {
         String::from_utf8(out).unwrap(),
         String::from_utf8(err).unwrap(),
     )
+}
+
+// Test-ID: PR-TEST-0787
+// Verifies: PR-REQ-0336
+#[test]
+#[ignore = "manual retirement timing probe; run explicitly on a qualified native filesystem"]
+fn retirement_allocation_timing_probe() {
+    for count in [1, 8, 24] {
+        for sample in 0..3 {
+            let (_temp, root, instance, _, _) = fixture_with_allocations(count);
+            let p = PactrunPersistence::open(&root).unwrap();
+            let paths: Vec<_> = p
+                .load_instance_service_state(instance.id)
+                .unwrap()
+                .unwrap()
+                .storages
+                .iter()
+                .map(|storage| {
+                    root.join("service-storage")
+                        .join(format!("alloc-{}", storage.allocation))
+                })
+                .collect();
+            assert_eq!(paths.len(), count);
+            assert!(paths.iter().all(|path| path.is_dir()));
+            let started = std::time::Instant::now();
+            let (code, out, err) =
+                invoke(&root, &["--format", "json", "instance", "delete", "retire"]);
+            let elapsed = started.elapsed();
+            assert_eq!(code, 0, "{out}; {err}");
+            let response: serde_json::Value = serde_json::from_str(&out).unwrap();
+            assert_eq!(response["result"]["run"]["state"]["outcome"], "succeeded");
+            assert!(p.load_instance_by_id(instance.id).unwrap().is_none());
+            assert!(paths.iter().all(|path| !path.exists()));
+            println!(
+                "RETIREMENT_SAMPLE {}",
+                serde_json::json!({"os":std::env::consts::OS,"allocations":count,"sample":sample,"elapsed_us":elapsed.as_micros().to_string()})
+            );
+        }
+    }
+}
+
+// Test-ID: PR-TEST-0788
+// Verifies: PR-REQ-0336, PR-REQ-0397
+#[test]
+fn ready_retirement_allocations_drain_without_foreground_polling_and_keep_phase_evidence() {
+    let (_temp, root, instance, _, _) = fixture_with_allocations(8);
+    let app = PactrunApplication::open(&root).unwrap();
+    let token = ActionCancellation::default();
+    token.trace.begin();
+    token.trace.configure(
+        None,
+        Some(&root),
+        TracePolicy::startup(),
+        TracePolicy::default(),
+    );
+    token.trace.operation(TraceOperation::Retirement);
+    let intent = app
+        .resolve_deletion(&instance.name, None, DeletionMode::ManagedCleanup)
+        .unwrap();
+    let plan = app.compile_deletion(&intent, &[]).unwrap();
+    let run = app
+        .accept_deletion_plan(
+            plan,
+            AdmissionOptions::default(),
+            token.clone(),
+            HookRuntimePolicy::from_millis(None, None, None).unwrap(),
+        )
+        .unwrap();
+    assert!(
+        app.advance_owner_continuation(run).unwrap(),
+        "ready work required another foreground polling interval"
+    );
+    assert!(app.load_instance(instance.id).unwrap().is_none());
+    let inspection = app.managed_run_inspection(run).unwrap().unwrap();
+    assert!(
+        matches!(inspection.run.state,RunState::Finished(ref outcome) if outcome.outcome==RunOutcome::Succeeded)
+    );
+    token.trace.finish(0).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let trace = loop {
+        if let Some(trace) =
+            crate::trace_journal::read_run(&crate::trace_journal::Location::store(&root), run)
+                .unwrap()
+            && trace.closed
+        {
+            break trace;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "retirement trace did not close"
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(trace.totals[&TracePhase::StorageFinalization].finished, 9);
+    assert_eq!(trace.totals[&TracePhase::StorageFinalization].failed, 0);
+    assert_eq!(trace.totals[&TracePhase::ResultCommit].finished, 1);
+    assert!(
+        !serde_json::to_string(&trace)
+            .unwrap()
+            .contains("service-owned-private-sentinel")
+    );
+}
+
+// Test-ID: PR-TEST-0789
+// Verifies: PR-REQ-0334, PR-REQ-0336
+#[test]
+fn retirement_drain_cancellation_between_allocations_keeps_retryable_progress() {
+    use std::process::{Command, Stdio};
+    let (temp, root, instance, _, _) = fixture_with_allocations(8);
+    let control = temp.path().join("control");
+    fs::create_dir(&control).unwrap();
+    let p = PactrunPersistence::open(&root).unwrap();
+    let paths: Vec<_> = p
+        .load_instance_service_state(instance.id)
+        .unwrap()
+        .unwrap()
+        .storages
+        .iter()
+        .map(|storage| {
+            root.join("service-storage")
+                .join(format!("alloc-{}", storage.allocation))
+        })
+        .collect();
+    struct Worker(std::process::Child);
+    impl Drop for Worker {
+        fn drop(&mut self) {
+            if self.0.try_wait().ok().flatten().is_none() {
+                let _ = self.0.kill();
+            }
+            let _ = self.0.wait();
+        }
+    }
+    let mut worker = Worker(
+        Command::new(env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "cli::retirements::tests::retirement_drain_cancel_worker",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("PACTRUN_RETIRE_CANCEL_ROOT", &root)
+            .env("PACTRUN_RETIRE_CANCEL_CONTROL", &control)
+            .env("PACTRUN_LIFECYCLE_SYNC", "after_finalization_removal")
+            .env("PACTRUN_LIFECYCLE_SYNC_DIR", &control)
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
+    let wait = |name: &str| {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        while !control.join(name).exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "worker did not reach {name}"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+    };
+    wait("ready");
+    fs::write(control.join("cancel"), b"cancel").unwrap();
+    wait("cancelled");
+    fs::write(control.join("release"), b"release").unwrap();
+    assert!(worker.0.wait().unwrap().success());
+    assert_eq!(
+        paths.iter().filter(|path| path.exists()).count(),
+        7,
+        "cancellation did not stop after the first committed allocation step"
+    );
+    assert!(p.load_instance_by_id(instance.id).unwrap().is_some());
+    assert_eq!(
+        p.deletion_obligation(instance.id).unwrap().unwrap().phase,
+        DeletionPhase::FinalizationAuthorized
+    );
+    let (code, out, err) = invoke(&root, &["--format", "json", "instance", "delete", "retire"]);
+    assert_eq!(code, 0, "{out}; {err}");
+    assert!(paths.iter().all(|path| !path.exists()));
+}
+
+#[test]
+fn retirement_drain_cancel_worker() {
+    let Some(root) = env::var_os("PACTRUN_RETIRE_CANCEL_ROOT") else {
+        return;
+    };
+    let control = PathBuf::from(env::var_os("PACTRUN_RETIRE_CANCEL_CONTROL").unwrap());
+    let app = PactrunApplication::open(Path::new(&root)).unwrap();
+    let token = ActionCancellation::default();
+    let request = token.clone();
+    let sender = thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        while !control.join("cancel").exists() {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
+        request.request();
+        fs::write(control.join("cancelled"), b"ack").unwrap();
+    });
+    let intent = app
+        .resolve_deletion(
+            &InstanceName::parse("retire").unwrap(),
+            None,
+            DeletionMode::ManagedCleanup,
+        )
+        .unwrap();
+    let plan = app.compile_deletion(&intent, &[]).unwrap();
+    let run = app
+        .accept_deletion_plan(
+            plan,
+            AdmissionOptions::default(),
+            token,
+            HookRuntimePolicy::from_millis(None, None, None).unwrap(),
+        )
+        .unwrap();
+    assert!(!app.advance_owner_continuation(run).unwrap());
+    assert!(app.advance_owner_continuation(run).unwrap());
+    let view = app.managed_run_inspection(run).unwrap().unwrap();
+    assert!(
+        matches!(view.run.state,RunState::Finished(ref outcome) if outcome.outcome==RunOutcome::Cancelled)
+    );
+    sender.join().unwrap();
 }
 
 // Test-ID: PR-TEST-0645

@@ -152,6 +152,7 @@ impl PactrunApplication {
         id: SnapshotId,
         destination: &Path,
         authorize_sensitive: bool,
+        trace: &std::sync::Arc<crate::trace::Trace>,
     ) -> Result<(), ApplicationError> {
         if !authorize_sensitive {
             return Err(PersistenceError::UnauthorizedSnapshotExport.into());
@@ -162,14 +163,14 @@ impl PactrunApplication {
             ));
         }
         let stage = self.persistence.export_snapshot_stage(id, true)?;
-        crate::output_publication::publish_reported(&stage, destination).map_err(|failure| {
-            ApplicationError::Publication {
+        crate::output_publication::publish_reported_traced(&stage, destination, trace).map_err(
+            |failure| ApplicationError::Publication {
                 operation: "publish Snapshot bundle without replacement",
                 destination: destination.to_path_buf(),
                 destination_published: failure.destination_published,
                 source: failure.source,
-            }
-        })?;
+            },
+        )?;
         Ok(())
     }
     pub(crate) fn inspect_snapshot(

@@ -171,6 +171,7 @@ pub(crate) struct StagedRuntimeSource {
 
 #[derive(Debug)]
 pub(crate) enum StagingError {
+    Store(Box<crate::persistence::PersistenceError>),
     Io {
         operation: &'static str,
         source: io::Error,
@@ -189,6 +190,7 @@ impl StagingError {
 impl fmt::Display for StagingError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Store(source) => write!(formatter, "Store preflight: {source}"),
             Self::Io { operation, source } => write!(formatter, "{operation}: {source}"),
             Self::Unsupported(message) => formatter.write_str(message),
             Self::ManagedInputTooLarge => write!(
@@ -204,6 +206,7 @@ impl fmt::Display for StagingError {
 impl std::error::Error for StagingError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Store(source) => Some(source.as_ref()),
             Self::Io { source, .. } => Some(source),
             _ => None,
         }
@@ -219,7 +222,7 @@ impl StagingSession {
     /// Prepare only this session; do not inspect another schema's abandoned state.
     pub(crate) fn prepare(storage_root: &Path) -> Result<Self, StagingError> {
         crate::persistence::PactrunPersistence::preflight_storage(storage_root, false)
-            .map_err(|error| StagingError::Unsupported(error.to_string()))?;
+            .map_err(|error| StagingError::Store(Box::new(error)))?;
         Self::open_inner(storage_root, false)
     }
 
@@ -760,6 +763,45 @@ mod tests {
     };
 
     struct PanicReader;
+
+    // Test-ID: PR-TEST-0791
+    // Verifies: PR-REQ-0299, PR-REQ-0373
+    #[test]
+    fn store_preflight_preserves_sqlite_cause_without_preparing_or_repairing_data() {
+        use crate::persistence::{PactrunPersistence, PersistenceError};
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/input-staging-tests");
+        fs::create_dir_all(&parent).unwrap();
+        let temp = tempfile::tempdir_in(parent).unwrap();
+        fs::create_dir(temp.path().join("database")).unwrap();
+        let file = temp.path().join("database/pactrun.sqlite3");
+        let original = vec![b'x'; 4096];
+        fs::write(&file, &original).unwrap();
+        let staged = StagingSession::prepare(temp.path()).unwrap_err();
+        assert!(
+            std::error::Error::source(&staged)
+                .unwrap()
+                .downcast_ref::<PersistenceError>()
+                .is_some()
+        );
+        for error in [
+            staged,
+            StagingError::Store(Box::new(PactrunPersistence::open(temp.path()).unwrap_err())),
+        ] {
+            let StagingError::Store(source) = error else {
+                panic!("Store preflight cause was erased")
+            };
+            let PersistenceError::Sqlite { source, .. } = *source else {
+                panic!("SQLite classification was lost")
+            };
+            assert_eq!(
+                source.sqlite_error_code(),
+                Some(rusqlite::ErrorCode::NotADatabase)
+            );
+        }
+        assert_eq!(fs::read(file).unwrap(), original);
+        assert!(!temp.path().join("staging").exists());
+        assert!(!temp.path().join("runtime-content").exists());
+    }
 
     impl Read for PanicReader {
         fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {

@@ -1641,7 +1641,7 @@ mod tests {
                     |row| row.get::<_, i64>(0),
                 )
                 .unwrap(),
-            80 // Includes lifecycle/edge artifact headers and chunks in alpha.5.
+            83 // Includes the three non-pinning Input history relations in alpha.6.
         );
         let identity = params![
             revision.package_id.as_bytes().as_slice(),

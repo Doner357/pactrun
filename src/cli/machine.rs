@@ -10,6 +10,20 @@ pub(super) enum Version {
 impl Version {
     pub(super) fn require_run(self, run: &crate::domain::ManagedRunView) -> Result<(), CliError> {
         if let crate::domain::RunState::Finished(outcome) = &run.state {
+            if self == Self::Legacy
+                && outcome.primary_failure.as_ref().is_some_and(|failure| {
+                    matches!(
+                        failure.cause,
+                        Some(crate::domain::RunFailureCause::ServicePresenceRequirement(
+                            _
+                        ))
+                    )
+                })
+            {
+                return Err(CliError::operation(
+                    "machine interface 1.0-alpha.3 cannot represent service prerequisite failure facts; select --machine-version 1.0-alpha.4",
+                ));
+            }
             self.require_artifacts(&outcome.artifacts)?;
             if self == Self::Legacy
                 && !matches!(run.operation, crate::domain::ManagedRunIdentity::Action(_))
@@ -402,8 +416,10 @@ pub(super) fn requirements(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct Selection {
+    pub(super) diagnostic_id: Option<crate::domain::TraceId>,
     pub(super) format: presentation::Format,
     pub(super) version: Version,
+    pub(super) human: configuration::HumanPreferences,
 }
 impl Selection {
     pub(super) fn with_format(self, format: presentation::Format) -> Self {
@@ -414,7 +430,9 @@ impl From<presentation::Format> for Selection {
     fn from(format: presentation::Format) -> Self {
         Self {
             format,
+            diagnostic_id: None,
             version: Version::default(),
+            human: configuration::HumanPreferences::default(),
         }
     }
 }
@@ -424,6 +442,10 @@ pub(super) fn recognize(args: &[OsString]) -> Selection {
     let (mut format_seen, mut version_seen) = (false, false);
     let mut index = 0;
     while let Some(key) = args.get(index).and_then(|key| key.to_str()) {
+        if let Some(width) = configuration::global_width(key) {
+            index += width;
+            continue;
+        }
         let Some(value) = args.get(index + 1).and_then(|value| value.to_str()) else {
             break;
         };

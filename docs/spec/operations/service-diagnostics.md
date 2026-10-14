@@ -1,0 +1,46 @@
+---
+title: Service Prerequisite Diagnostics
+---
+
+# Service Prerequisite Diagnostics
+
+### PR-REQ-0400 - Historical service presence failure facts
+
+When pre-Hook service qualification observes a mismatch with a declared resource
+presence requirement, Pactrun MUST retain the exact logical reference, expected
+presence and observed presence as a typed primary failure cause. The reference
+contains view, active/retained role and resource identity, never a native path,
+locator, file contents or an operating-system error string. Migration causes
+also identify the exact source/target Revision edge on the accepted path.
+
+The cause remains attributed to `admission.plan_invalidated` at Session
+establishment. It MUST NOT change execution eligibility, recovery risk, the Run
+outcome, or replay authority. In a multi-edge Migration it describes the affected
+Hook, not a claim that no earlier edge ran. Unknown observations, permission
+failures and unsafe paths MUST NOT be reclassified as absence.
+
+Publication MUST store the cause with the failed outcome. Reopening, subsequent
+resource repair, Migration or Instance retirement MUST NOT rewrite the observed
+facts. Readers MUST reject contradictory, off-path or misattributed stored causes.
+Old Runs without captured facts remain without them; inspection does not observe
+the current service to manufacture historical detail. Human and machine views
+expose equivalent facts. An explicitly selected legacy machine contract that
+cannot represent the new cause MUST refuse it, not omit its meaning.
+
+**Verification: PR-TEST-0765, PR-TEST-0766, PR-TEST-0767, PR-TEST-0769, PR-TEST-0770.**
+
+### PR-REQ-0401 - Service failure evidence schema upgrade
+
+Persistence `1.0-alpha.6` adds the service prerequisite cause table, keyed by the
+existing primary failure. It stores only validated reference enums, resource
+identity, presence enums and optional exact Migration-edge digests. The private
+SQLite bootstrap/admission marker is 5. Existing format `1.0-alpha.5` is validated
+against its frozen complete schema before the supported atomic upgrade.
+
+Upgrades MUST retain existing object identities, immutable content, artifacts,
+Run outcomes and recovery/deletion obligations. The new cause table starts empty;
+old failure text is not parsed into invented observations. Live or unprobeable
+old writers and unsupported/modified source schemas MUST be refused without a
+partial upgrade. Existing earlier supported upgrade sources remain supported.
+
+**Verification: PR-TEST-0768.**

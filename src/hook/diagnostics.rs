@@ -1,7 +1,9 @@
 //! Bounded evidence collection is independent of process supervision and outcome.
 use crate::{
-    domain::{DiagnosticKind, DiagnosticWindow, HookEvidence, HookText, RunId},
+    diagnostic_retention::{EvidenceUpdate, StoreWriter},
+    domain::{DiagnosticKind, DiagnosticWindow, HookEvidence, HookText, RunId, TracePolicy},
     persistence::PactrunPersistence,
+    trace_journal::Error as RetentionError,
 };
 use std::{
     collections::BTreeMap,
@@ -22,9 +24,18 @@ pub(crate) struct Diagnostics {
     #[cfg(test)]
     pub(crate) fail_persistence: AtomicBool,
     live: AtomicBool,
+    policy: Mutex<Option<TracePolicy>>,
     runs: Mutex<BTreeMap<RunId, Arc<Journal>>>,
 }
 impl Diagnostics {
+    pub(crate) fn configure_retention(&self, policy: TracePolicy) {
+        if policy.valid() {
+            self.policy
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get_or_insert(policy);
+        }
+    }
     pub(crate) fn enable_live(&self) {
         self.live.store(true, Ordering::Release);
     }
@@ -55,6 +66,10 @@ impl Diagnostics {
                     self.retain(),
                     self.live.load(Ordering::Acquire),
                     fail,
+                    self.policy
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .unwrap_or_default(),
                 )
             })
             .clone();
@@ -104,7 +119,14 @@ struct Journal {
     next_hook: AtomicU64,
 }
 impl Journal {
-    fn start(root: PathBuf, run: RunId, retain: bool, live: bool, fail: bool) -> Arc<Self> {
+    fn start(
+        root: PathBuf,
+        run: RunId,
+        retain: bool,
+        live: bool,
+        fail: bool,
+        policy: TracePolicy,
+    ) -> Arc<Self> {
         let shared = Arc::new(Shared::default());
         let (done_tx, done_rx) = mpsc::sync_channel(1);
         let writer = shared.clone();
@@ -113,7 +135,7 @@ impl Journal {
             .spawn(move || {
                 if fail {
                     writer.failed.store(true, Ordering::Release);
-                    if let Ok(store) = PactrunPersistence::open(&root) {
+                    if let Ok(store) = PactrunPersistence::open_for_diagnostics(&root) {
                         let _ = store.save_diagnostics(
                             run,
                             &DiagnosticWindow::default(),
@@ -123,7 +145,7 @@ impl Journal {
                         );
                     }
                 } else {
-                    collect(root, run, retain, &writer);
+                    collect(root, run, retain, policy, &writer);
                 }
                 writer.writer_done.store(true, Ordering::Release);
                 let _ = done_tx.send(());
@@ -302,10 +324,17 @@ impl Drop for DiagnosticScope {
             .store(false, Ordering::Release);
     }
 }
-fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
+fn collect(root: PathBuf, run: RunId, retain: bool, policy: TracePolicy, shared: &Shared) {
     let result = (|| {
-        let store = PactrunPersistence::open(&root)?;
-        store.bound_diagnostic_wait()?;
+        let opening_deadline = Instant::now() + Duration::from_secs(1);
+        let mut store = loop {
+            match StoreWriter::open(&root) {
+                Err(RetentionError::Busy) if Instant::now() < opening_deadline => {
+                    thread::sleep(Duration::from_millis(20))
+                }
+                result => break result?,
+            }
+        };
         let mut last = Instant::now() - Duration::from_millis(250);
         let mut terminal = 0;
         let mut saved_observed = None;
@@ -330,10 +359,31 @@ fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
                     continue;
                 }
                 let deadline = Instant::now() + Duration::from_secs(1);
+                let core = shared
+                    .core
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .ok()
+                    .and_then(|time| u64::try_from(time.as_millis()).ok())
+                    .ok_or(RetentionError::Io)?;
                 let saved = loop {
-                    match store.save_diagnostics(run, &window, retain, closing, false) {
-                        Err(error)
-                            if error.diagnostic_contention() && Instant::now() < deadline =>
+                    match store.save_evidence(
+                        EvidenceUpdate {
+                            run,
+                            hook: &window,
+                            core: core.as_ref(),
+                            retain_text: retain,
+                            closed: closing,
+                            failed: false,
+                        },
+                        policy,
+                        now,
+                    ) {
+                        Err(RetentionError::Busy | RetentionError::RetentionIncomplete)
+                            if Instant::now() < deadline =>
                         {
                             thread::sleep(Duration::from_millis(20));
                         }
@@ -341,52 +391,49 @@ fn collect(root: PathBuf, run: RunId, retain: bool, shared: &Shared) {
                     }
                 };
                 if let Err(error) = saved {
-                    let _ = store.save_diagnostics(run, &window, retain, false, true);
+                    let _ = store.save_evidence(
+                        EvidenceUpdate {
+                            run,
+                            hook: &window,
+                            core: core.as_ref(),
+                            retain_text: retain,
+                            closed: false,
+                            failed: true,
+                        },
+                        policy,
+                        now,
+                    );
                     return Err(error);
                 }
-                if let Some(core) = shared
-                    .core
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone()
+                if matches!(saved, Ok(status) if status != crate::domain::TraceRetention::Complete)
                 {
-                    let deadline = Instant::now() + Duration::from_secs(1);
-                    let saved = loop {
-                        match store.save_core_diagnostics(run, &core, closing, false) {
-                            Err(error)
-                                if error.diagnostic_contention() && Instant::now() < deadline =>
-                            {
-                                thread::sleep(Duration::from_millis(20))
-                            }
-                            value => break value,
-                        }
-                    };
-                    if let Err(error) = saved {
-                        let _ = store.save_core_diagnostics(run, &core, false, true);
-                        let _ = store.save_diagnostics(run, &window, retain, false, true);
-                        return Err(error);
-                    }
+                    // Retention failure is not loss of this committed window.
+                    // Keep receiving evidence from the backend that still works.
+                    mark_storage_failure(shared);
                 }
                 saved_observed = Some(window.observed);
                 terminal = current_terminal;
                 last = Instant::now();
             }
             if closing {
-                return Ok::<_, crate::persistence::PersistenceError>(());
+                return Ok::<_, RetentionError>(());
             }
             thread::sleep(Duration::from_millis(20));
         }
     })();
     if result.is_err() {
-        shared.failed.store(true, Ordering::Release);
-        if let Some(delivery) = shared
+        mark_storage_failure(shared);
+    }
+}
+fn mark_storage_failure(shared: &Shared) {
+    if !shared.failed.swap(true, Ordering::AcqRel)
+        && let Some(delivery) = shared
             .core_delivery
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
-        {
-            delivery.core_incomplete(crate::domain::CoreCollectionIssue::Storage);
-        }
+    {
+        delivery.core_incomplete(crate::domain::CoreCollectionIssue::Storage);
     }
 }
 fn present(run: RunId, shared: &Shared) {

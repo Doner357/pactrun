@@ -180,10 +180,47 @@ pub(crate) struct ServiceAccessV2 {
     pub(crate) mode: ServiceAccessMode,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[cfg_attr(test, derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ServicePresenceRequirement {
     Present,
     Absent,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ServicePresenceFailure {
+    pub(crate) reference: ServiceReferenceV2,
+    pub(crate) expected: ServicePresenceRequirement,
+    pub(crate) observed: ServicePresenceRequirement,
+    pub(crate) edge: Option<super::MigrationEdgeIdentity>,
+}
+impl ServicePresenceFailure {
+    pub(crate) fn valid_for(&self, kind: super::ManagedExecutionKind) -> bool {
+        if self.expected == self.observed
+            || !matches!(self.reference.scope, ServiceScope::Resource(_))
+        {
+            return false;
+        }
+        match kind {
+            super::ManagedExecutionKind::Migration => {
+                self.edge.as_ref().is_some_and(|e| e.source != e.target)
+                    && matches!(
+                        self.reference.view,
+                        ServiceView::Source | ServiceView::Target
+                    )
+                    && (self.reference.view != ServiceView::Target
+                        || self.reference.role == ServiceRole::Active)
+            }
+            super::ManagedExecutionKind::Deletion => {
+                self.edge.is_none() && self.reference.view == ServiceView::Current
+            }
+            _ => {
+                self.edge.is_none()
+                    && self.reference.view == ServiceView::Current
+                    && self.reference.role == ServiceRole::Active
+            }
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

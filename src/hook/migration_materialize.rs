@@ -152,6 +152,10 @@ impl MaterializedExecution {
                     outputs,
                     capture: None,
                     operation: super::super::protocol::SessionOperation::Migration,
+                    migration_edge: Some(crate::domain::MigrationEdgeIdentity {
+                        source: edge.source().content_digest,
+                        target: edge.target().content_digest,
+                    }),
                     protocol_state: None,
                     protocol_transport: None,
                     _service_access: None,

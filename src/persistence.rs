@@ -19,8 +19,17 @@ pub(crate) use store_bootstrap::prepare_new_store;
 mod sqlite_catalog;
 mod sqlite_core_diagnostics;
 mod sqlite_deletions;
+pub(crate) use sqlite_deletions::AllocationFinalizationStep;
 mod sqlite_diagnostics;
 pub(crate) use sqlite_diagnostics::DiagnosticInspection;
+mod sqlite_diagnostic_retention;
+pub(crate) use sqlite_diagnostic_retention::{
+    DiagnosticRetentionCandidate, DiagnosticRetentionInventory,
+};
+mod sqlite_input_history;
+mod sqlite_input_history_export;
+mod sqlite_run_export;
+pub(crate) use sqlite_run_export::RunExportSink;
 mod sqlite_instances;
 mod sqlite_migration_runs;
 mod sqlite_migrations;
@@ -29,6 +38,7 @@ mod sqlite_revision_metadata;
 mod sqlite_revision_store;
 mod sqlite_runs;
 mod sqlite_service_admission;
+mod sqlite_service_failures;
 mod sqlite_service_migrations;
 mod sqlite_service_preparations;
 mod sqlite_service_storage;

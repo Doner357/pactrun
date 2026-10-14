@@ -12,18 +12,38 @@ use super::support::{
 fn cli_startup_commands_do_not_require_or_create_storage() {
     let temporary = tempfile::tempdir().unwrap();
     let absent_storage = temporary.path().join("absent-storage");
-    for arguments in [
-        vec!["--help"],
-        vec!["--version"],
-        vec!["pack", "generate-id"],
-    ] {
+    for arguments in [vec!["--help"], vec!["--version"]] {
         let output = super::support::run_command(startup_command(temporary.path(), arguments));
         assert_success(&output);
         assert!(!absent_storage.exists());
         assert!(!temporary.path().join(".pactrun").exists());
         assert!(!temporary.path().join("startup-data").exists());
         assert!(!temporary.path().join("startup-home").exists());
+        assert!(!temporary.path().join("startup-state").exists());
+        assert!(!temporary.path().join("startup-config").exists());
     }
+    // An ordinary command can retain diagnostics, but cannot provision a Store.
+    let output = run_command(startup_command(temporary.path(), ["pack", "generate-id"]));
+    assert_success(&output);
+    assert!(!absent_storage.exists());
+    assert!(!temporary.path().join(".pactrun").exists());
+    assert!(!temporary.path().join("startup-data/pactrun").exists());
+    assert!(
+        !temporary
+            .path()
+            .join("startup-home/.local/share/pactrun")
+            .exists()
+    );
+    for base in ["startup-data", "startup-state"] {
+        let path = temporary.path().join(base);
+        if path.exists() {
+            for entry in fs::read_dir(path).unwrap() {
+                assert_eq!(entry.unwrap().file_name(), "pactrun-diagnostics");
+            }
+        }
+    }
+    assert!(!temporary.path().join("startup-home").exists());
+    assert!(!temporary.path().join("startup-config").exists());
     let output = run_command(command(
         &absent_storage,
         temporary.path(),

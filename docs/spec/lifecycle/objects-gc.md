@@ -57,7 +57,7 @@ MUST acknowledge that the destination may exist and MUST NOT delete it to preten
 publication never happened.
 
 **Verification: PR-TEST-0448, PR-TEST-0449, PR-TEST-0450, PR-TEST-0451,
-PR-TEST-0452, PR-TEST-0453, PR-TEST-0454, PR-TEST-0455, PR-TEST-0466.**
+PR-TEST-0452, PR-TEST-0453, PR-TEST-0454, PR-TEST-0455, PR-TEST-0466, PR-TEST-0806.**
 
 Snapshot export retains its read snapshot when another process commits deletion.
 

@@ -61,9 +61,52 @@ fn without_hook_text() -> ActionCancellation {
     cancellation
 }
 
+fn phase_cancellation(
+    f: &RuntimeFixture,
+    operation: crate::domain::TraceOperation,
+) -> ActionCancellation {
+    let cancellation = ActionCancellation::default();
+    cancellation.trace.begin();
+    cancellation.trace.operation(operation);
+    cancellation.trace.configure(
+        None,
+        Some(&f.storage),
+        crate::domain::TracePolicy::startup(),
+        crate::domain::TracePolicy::default(),
+    );
+    cancellation
+}
+
+fn completed_phase_trace(
+    f: &RuntimeFixture,
+    cancellation: &ActionCancellation,
+    run: RunId,
+    code: i32,
+) -> crate::domain::TraceDocument {
+    let finished = cancellation.trace.finish(code).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Ok(Some(trace)) = crate::trace_journal::read(
+            &crate::trace_journal::Location::store(&f.storage),
+            finished.id,
+        ) && trace.closed
+        {
+            assert_eq!(trace.run_id, Some(run));
+            let bytes = serde_json::to_vec(&trace).unwrap();
+            assert!(!contains(&bytes, SECRET_BINDING));
+            assert!(!contains(&bytes, SENSITIVE_PARAMETER.as_bytes()));
+            return trace;
+        }
+        assert!(Instant::now() < deadline, "phase trace did not close");
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 mod diagnostic_runtime {
     include!("diagnostic_tests.rs");
 }
+#[path = "diagnostic_retention_tests.rs"]
+mod retention_runtime;
 
 mod capture_runtime {
     include!("capture_tests.rs");
@@ -81,8 +124,14 @@ mod v2_runtime {
 mod deletion_runtime {
     include!("deletion_tests.rs");
 }
+#[path = "input_history_tests.rs"]
+mod input_history_runtime;
 #[path = "operation_runtime_tests.rs"]
 mod operation_runtime;
+#[path = "run_export_tests.rs"]
+mod run_export_runtime;
+#[path = "service_diagnostics_tests.rs"]
+mod service_diagnostics_runtime;
 
 mod supervision_runtime {
     include!("supervision_tests.rs");
@@ -880,6 +929,19 @@ impl HookWorker {
                 );
                 thread::sleep(Duration::from_millis(300));
                 fs::write(marker_variant(&marker, "done"), b"done").unwrap();
+                self.complete(json!({"status":"success","produced_outputs":[]}));
+                self.expect_accepted();
+            }
+            "configuration_latch" => {
+                io::stdout()
+                    .write_all(b"configuration-latch-ready\n")
+                    .unwrap();
+                io::stdout().flush().unwrap();
+                wait_for(&marker_variant(&marker, "continue"));
+                write_frame(
+                    &mut self.stream,
+                    &json!({"type":"diagnostic","severity":"info","code":"after_config_change","message":"configuration changed while this Hook was running"}),
+                );
                 self.complete(json!({"status":"success","produced_outputs":[]}));
                 self.expect_accepted();
             }
@@ -2455,17 +2517,19 @@ fn workspace_bytes_do_not_acquire_authority_on_success_rejection_or_timeout() {
 }
 
 // Test-ID: PR-TEST-0106
-// Verifies: PR-REQ-0073, PR-REQ-0144, PR-REQ-0281
+// Verifies: PR-REQ-0073, PR-REQ-0144, PR-REQ-0281, PR-REQ-0397
 #[test]
 fn accepted_output_subset_is_published_only_after_cleanup() {
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("output-subset");
     let admitted = fixture.admit("output_subset", "output_subset", &marker);
     let run = admitted.run();
+    let cancellation = phase_cancellation(&fixture, crate::domain::TraceOperation::ActionInvoke);
+    cancellation.trace.associate(run);
     fixture.application.execute_admitted_action(
         admitted,
         policy(None, None, None),
-        ActionCancellation::default(),
+        cancellation.clone(),
     );
     let session: Value =
         serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
@@ -2496,6 +2560,15 @@ fn accepted_output_subset_is_published_only_after_cleanup() {
         )
         .unwrap();
     assert_eq!(bytes, b"unpublished-output");
+    let trace = completed_phase_trace(&fixture, &cancellation, run, 0);
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].finished,
+        1
+    );
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].failed,
+        0
+    );
     assert!(
         outcome
             .artifacts
@@ -2541,17 +2614,19 @@ fn late_completion_keeps_timeout_outcome_but_publishes_eligible_output() {
 }
 
 // Test-ID: PR-TEST-0107
-// Verifies: PR-REQ-0051, PR-REQ-0144, PR-REQ-0281
+// Verifies: PR-REQ-0051, PR-REQ-0144, PR-REQ-0281, PR-REQ-0397
 #[test]
 fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
     let fixture = RuntimeFixture::new();
     let marker = fixture.marker("output-publication-failure");
     let admitted = fixture.admit("direct", "output", &marker);
     let run = admitted.run();
+    let cancellation = phase_cancellation(&fixture, crate::domain::TraceOperation::ActionInvoke);
+    cancellation.trace.associate(run);
     fixture.application.execute_admitted_action(
         admitted,
         policy(None, None, None),
-        ActionCancellation::default(),
+        cancellation.clone(),
     );
     let session: Value =
         serde_json::from_str(&fs::read_to_string(marker_variant(&marker, "session")).unwrap())
@@ -2577,6 +2652,15 @@ fn output_publication_failure_is_primary_when_no_earlier_failure_exists() {
     );
     assert!(outcome.secondary_failures.is_empty());
     assert!(outcome.artifacts.is_empty());
+    let trace = completed_phase_trace(&fixture, &cancellation, run, 1);
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].finished,
+        1
+    );
+    assert_eq!(
+        trace.totals[&crate::domain::TracePhase::OutputValidation].failed,
+        1
+    );
 }
 
 // Test-ID: PR-TEST-0110

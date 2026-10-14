@@ -24,10 +24,11 @@ impl PactrunApplication {
             ));
         }
         let mut staged = std::collections::BTreeMap::new();
-        for (key, mut source) in inputs {
+        for (key, source) in inputs {
             if cancellation.is_requested() {
                 return Err(crate::executor::ExecutorError::CancelledBeforeAcceptance.into());
             }
+            let mut source = cancellation.trace.reader(source);
             let bytes = self
                 .staging()?
                 .stage_managed_input(&mut source)

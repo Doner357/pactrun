@@ -79,9 +79,9 @@ def upgrade_fixture_source_format(records, versions):
     fixture_source_format(records, [versions[1]])
     defaults = [next(r['default_formats'] for r in records if r['product_version'] == v) for v in versions]
     transition = tuple(d['persistence'] for d in defaults)
-    if transition not in {('1.0-alpha.1', '1.0-alpha.4'), ('1.0-alpha.4', '1.0-alpha.5')}:
-        raise ValueError('Store-upgrade rehearsal requires Persistence alpha.1 to alpha.4 or alpha.4 to alpha.5')
-    if transition == ('1.0-alpha.4', '1.0-alpha.5'):
+    if transition not in {('1.0-alpha.1', '1.0-alpha.4'), ('1.0-alpha.4', '1.0-alpha.5'), ('1.0-alpha.5', '1.0-alpha.6')}:
+        raise ValueError('Store-upgrade rehearsal requires an explicitly implemented Persistence transition')
+    if transition != ('1.0-alpha.1', '1.0-alpha.4'):
         candidate = next(r for r in records if r['product_version'] == versions[1])
         if source not in candidate['supported_formats']['pack_source']:
             raise ValueError('Candidate must retain the baseline Pack source format')

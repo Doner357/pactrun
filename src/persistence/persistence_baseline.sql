@@ -1,4 +1,4 @@
--- Fresh Persistence 1.0-alpha.5. This is complete DDL, not an upgrade ladder.
+-- Fresh Persistence 1.0-alpha.6. This is complete DDL, not an upgrade ladder.
 
 CREATE TABLE allocation_discard_receipts (
     allocation_id BLOB NOT NULL CHECK(length(allocation_id) = 16),
@@ -737,6 +737,37 @@ CREATE TABLE run_hook_completions (
     FOREIGN KEY (run_id) REFERENCES run_outcomes(run_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_input_contexts (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    edge_index INTEGER NOT NULL CHECK(edge_index >= -1),
+    scope_rank INTEGER NOT NULL CHECK(scope_rank BETWEEN 0 AND 4),
+    coverage_rank INTEGER NOT NULL CHECK(coverage_rank IN (0, 1)),
+    snapshot_id BLOB CHECK(snapshot_id IS NULL OR length(snapshot_id) = 16),
+    snapshot_integrity BLOB CHECK(snapshot_integrity IS NULL OR length(snapshot_integrity) = 32),
+    PRIMARY KEY(run_id, edge_index, scope_rank),
+    CHECK((scope_rank IN (0, 1) AND edge_index = -1) OR (scope_rank IN (2, 3, 4) AND edge_index >= 0)),
+    CHECK((scope_rank = 1) = (snapshot_id IS NOT NULL)),
+    CHECK((scope_rank = 1) = (snapshot_integrity IS NOT NULL)),
+    FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE run_input_references (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    edge_index INTEGER NOT NULL,
+    scope_rank INTEGER NOT NULL,
+    input_id BLOB NOT NULL CHECK(length(input_id) BETWEEN 1 AND 128),
+    role_rank INTEGER NOT NULL CHECK(role_rank IN (0, 1)),
+    protection_rank INTEGER NOT NULL CHECK(protection_rank IN (0, 1)),
+    origin_rank INTEGER NOT NULL CHECK(origin_rank BETWEEN 0 AND 4),
+    payload_id BLOB CHECK(payload_id IS NULL OR length(payload_id) = 16),
+    PRIMARY KEY(run_id, edge_index, scope_rank, input_id),
+    CHECK((origin_rank = 1) = (payload_id IS NOT NULL)),
+    CHECK(origin_rank <> 2 OR scope_rank = 1),
+    CHECK(scope_rank <> 1 OR origin_rank IN (0, 2)),
+    CHECK(origin_rank NOT IN (3, 4) OR scope_rank = 3),
+    FOREIGN KEY(run_id, edge_index, scope_rank) REFERENCES run_input_contexts(run_id, edge_index, scope_rank) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_migration_boundaries (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     edge_index INTEGER NOT NULL CHECK(edge_index >= 0),
@@ -874,6 +905,22 @@ CREATE TABLE run_revision_pins (
         ON DELETE RESTRICT
 ) STRICT, WITHOUT ROWID;
 
+CREATE TABLE run_service_prerequisite_causes (
+    run_id BLOB NOT NULL CHECK(length(run_id) = 16),
+    view_rank INTEGER NOT NULL CHECK(view_rank BETWEEN 0 AND 2),
+    role_rank INTEGER NOT NULL CHECK(role_rank IN (0, 1)),
+    resource_id BLOB NOT NULL CHECK(length(resource_id) BETWEEN 1 AND 128),
+    expected_presence INTEGER NOT NULL CHECK(expected_presence IN (0, 1)),
+    observed_presence INTEGER NOT NULL CHECK(observed_presence IN (0, 1)),
+    source_revision_digest BLOB CHECK(source_revision_digest IS NULL OR length(source_revision_digest) = 32),
+    target_revision_digest BLOB CHECK(target_revision_digest IS NULL OR length(target_revision_digest) = 32),
+    PRIMARY KEY(run_id),
+    CHECK(expected_presence <> observed_presence),
+    CHECK((source_revision_digest IS NULL) = (target_revision_digest IS NULL)),
+    CHECK(source_revision_digest IS NULL OR source_revision_digest <> target_revision_digest),
+    FOREIGN KEY(run_id) REFERENCES run_primary_failures(run_id) ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE run_secondary_failures (
     run_id BLOB NOT NULL CHECK(length(run_id) = 16),
     ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
@@ -981,7 +1028,7 @@ CREATE TABLE snapshots (
 
 CREATE TABLE writable_admissions (
     owner_session BLOB NOT NULL CHECK(length(owner_session) = 40),
-    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 4),
+    admitted_schema_version INTEGER NOT NULL CHECK(admitted_schema_version = 5),
     PRIMARY KEY(owner_session)
 ) STRICT, WITHOUT ROWID;
 
@@ -990,7 +1037,7 @@ CREATE TABLE pactrun_metadata (
     format_version TEXT NOT NULL
 ) STRICT, WITHOUT ROWID;
 
-INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.5');
+INSERT INTO pactrun_metadata(singleton, format_version) VALUES (1, '1.0-alpha.6');
 
 CREATE TABLE package_local_names (
     package_id BLOB NOT NULL CHECK(length(package_id) = 16),
@@ -1047,3 +1094,6 @@ CREATE TABLE run_core_diagnostic_events (
     PRIMARY KEY(run_id, sequence),
     FOREIGN KEY(run_id) REFERENCES run_core_diagnostic_collections(run_id) ON DELETE CASCADE
 ) STRICT, WITHOUT ROWID;
+
+CREATE INDEX run_diagnostic_retention ON run_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,kind,severity,code,message,truncated,truncated_prefix_bytes,completion_status) AS BLOB)));
+CREATE INDEX run_core_diagnostic_retention ON run_core_diagnostic_events(received_at_unix_ms, length(CAST(json_array(hex(run_id),sequence,received_at_unix_ms,stage,failure) AS BLOB)));

@@ -725,6 +725,16 @@ impl PactrunPersistence {
             )
             .map_err(|e| PersistenceError::sqlite("establish Migration boundary", e))?;
             keep_checkpoint(&tx, run, view.instance)?;
+            let source = load_revision_from(&tx, invocation.source())?.ok_or_else(corrupt)?;
+            super::sqlite_input_history::record_migration(
+                &tx,
+                run,
+                0,
+                InputHistoryScope::Source,
+                source.content.core.inputs(),
+                &registry(&tx, view.instance)?,
+                &[],
+            )?;
             load_managed_run_from(&tx, run)?;
             Ok(())
         };
@@ -835,6 +845,8 @@ impl PactrunPersistence {
             load_revision_from(&tx, &invocation.path()[edge_index])?.ok_or_else(corrupt)?;
         let target =
             load_revision_from(&tx, &invocation.path()[edge_index + 1])?.ok_or_else(corrupt)?;
+        let source_declarations = source.content.core.inputs().to_vec();
+        let target_declarations = target.content.core.inputs().to_vec();
         let service = super::sqlite_service_migrations::state_from(&tx, view.instance)?
             .map(|before| {
                 evaluate_service_migration_edge(
@@ -892,6 +904,24 @@ impl PactrunPersistence {
             invocation.authorized(),
         )
         .map_err(|_| rejected("Migration edge completion is invalid"))?;
+        super::sqlite_input_history::record_migration(
+            &tx,
+            run,
+            edge_index,
+            InputHistoryScope::Source,
+            &source_declarations,
+            evaluated.source_bindings(),
+            &[],
+        )?;
+        super::sqlite_input_history::record_migration(
+            &tx,
+            run,
+            edge_index,
+            InputHistoryScope::TargetPrepared,
+            &target_declarations,
+            evaluated.staged_bindings(),
+            &evaluated.declaration().produces_target,
+        )?;
         if evaluated.declaration().hook.is_some() {
             if !transforming
                 && publication.completion.as_ref().map(|c| c.status)
@@ -982,6 +1012,15 @@ impl PactrunPersistence {
             .map_err(|e| PersistenceError::sqlite("publish Migration binding", e))?;
         }
         let next = fresh_state_version()?;
+        super::sqlite_input_history::record_migration(
+            &tx,
+            run,
+            edge_index,
+            InputHistoryScope::TargetCommitted,
+            &target_declarations,
+            &registry(&tx, view.instance)?,
+            &[],
+        )?;
         let _service_roots = service
             .as_ref()
             .map(|edge| {
@@ -1030,6 +1069,15 @@ impl PactrunPersistence {
         tx.execute("UPDATE run_migration_progress SET committed_edge_count=?2,step_rank=?3,boundary_revision_digest=?4,boundary_state_version=?5 WHERE run_id=?1",params![run.as_bytes().as_slice(),(edge_index+1) as i64,if final_edge {4}else{0},evaluated.target().content_digest.as_bytes().as_slice(),next.as_bytes().as_slice()]).map_err(|e|PersistenceError::sqlite("advance recovery boundary",e))?;
         if !final_edge {
             keep_checkpoint(&tx, run, view.instance)?;
+            super::sqlite_input_history::record_migration(
+                &tx,
+                run,
+                edge_index + 1,
+                InputHistoryScope::Source,
+                &target_declarations,
+                &registry(&tx, view.instance)?,
+                &[],
+            )?;
         }
         for (_, payload) in registry_refs(&bindings)? {
             reclaim_payload_if_unreferenced(&tx, view.instance, payload)?;

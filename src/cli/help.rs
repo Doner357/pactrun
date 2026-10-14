@@ -151,13 +151,17 @@ impl Request {
     }
 }
 
-fn option_rows(text: &mut String, options: &[HelpOption]) {
+fn option_rows(text: &mut String, options: &[HelpOption], compact: bool) {
     for option in options {
         let syntax = match &option.value {
             Some(value) => format!("{} <{value}>", option.name),
             None => option.name.clone(),
         };
-        let _ = writeln!(text, "  {syntax}\n    {}", option.description);
+        if compact {
+            let _ = writeln!(text, "  {syntax}  {}", option.description);
+        } else {
+            let _ = writeln!(text, "  {syntax}\n    {}", option.description);
+        }
     }
 }
 
@@ -178,7 +182,7 @@ fn render(help: &Help) -> String {
             text,
             "  {path} {}<command> [options]",
             if help.scope.is_empty() {
-                "[--format human|json|jsonl] [--machine-version <version>] "
+                "[global-options] "
             } else {
                 ""
             }
@@ -220,7 +224,7 @@ fn render(help: &Help) -> String {
     if let Some(command) = &help.command {
         if !command.options.is_empty() {
             text.push_str("\nOptions\n");
-            option_rows(&mut text, &command.options);
+            option_rows(&mut text, &command.options, false);
         }
         if !command.notes.is_empty() {
             text.push_str("\nNotes\n");
@@ -236,7 +240,7 @@ fn render(help: &Help) -> String {
         }
     }
     text.push_str("\nGlobal options\n");
-    option_rows(&mut text, &help.global_options);
+    option_rows(&mut text, &help.global_options, help.scope.is_empty());
     if !help.commands.is_empty() {
         let _ = writeln!(text, "\nRun '{path} <command> --help' for details.");
     }

@@ -12,10 +12,35 @@ fn command(binary: &Path, base: &Path) -> Command {
         .env_remove("PACTRUN_STORAGE_ROOT")
         .env("LOCALAPPDATA", base.join(".").join("data"))
         .env("XDG_DATA_HOME", base.join(".").join("data"))
+        .env("APPDATA", base.join("config"))
+        .env("XDG_CONFIG_HOME", base.join("config"))
+        .env("XDG_STATE_HOME", base.join("state"))
         .env("HOME", base.join("home"))
         .env("TEMP", base)
         .env("TMP", base);
     command
+}
+fn assert_no_default_store(base: &Path) {
+    for entry in ["pactrun", "pactrun-test"] {
+        assert!(
+            !base.join("data").join(entry).exists(),
+            "read-only entry probe provisioned a Store"
+        );
+    }
+    for area in ["data", "state"] {
+        let path = base.join(area);
+        if path.exists() {
+            for entry in fs::read_dir(path).unwrap() {
+                let name = entry.unwrap().file_name();
+                assert!(
+                    name == "pactrun-diagnostics" || name == "pactrun-test-diagnostics",
+                    "unexpected non-diagnostic default state"
+                );
+            }
+        }
+    }
+    assert!(!base.join("home").exists());
+    assert!(!base.join("config").exists());
 }
 fn success(mut command: Command, args: &[&str]) -> Output {
     let result = command.args(args).output().unwrap();
@@ -49,6 +74,10 @@ fn single_executable_entries_isolate_defaults_and_forward_the_selected_store_to_
         success(command(binary, base), &["--format", "json", "--version"]);
         success(command(binary, base), &["--help"]);
     }
+    assert!(
+        !base.join("data").exists() && !base.join("state").exists(),
+        "help/version created diagnostics"
+    );
     for binary in [&normal, &test] {
         let result = success(
             command(binary, base),
@@ -57,10 +86,7 @@ fn single_executable_entries_isolate_defaults_and_forward_the_selected_store_to_
         let value: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
         assert!(value["result"]["items"].as_array().unwrap().is_empty());
     }
-    assert!(
-        !base.join("data").exists(),
-        "Read-only entry probes created a default Store"
-    );
+    assert_no_default_store(base);
     assert!(
         !command(&renamed, base)
             .args(["instance", "list"])
@@ -78,10 +104,7 @@ fn single_executable_entries_isolate_defaults_and_forward_the_selected_store_to_
                 .success()
         );
     }
-    assert!(
-        !base.join("data").exists(),
-        "Invalid configuration fell back to a default"
-    );
+    assert_no_default_store(base);
 
     let source = base.join("pack");
     fs::create_dir(&source).unwrap();

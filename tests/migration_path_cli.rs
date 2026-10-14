@@ -786,7 +786,7 @@ fn assert_no_execution(root: &Path, before: &str) {
     let version: i64 = database
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 // Test-ID: PR-TEST-0290

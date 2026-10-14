@@ -222,11 +222,22 @@ pub(super) fn execute_stream(
                 loop {
                     match cursor.next() {
                         Ok(Some(record)) => {
-                            let written = if human {
-                                write_human_event(&record, stdout, stderr, false)
-                            } else {
-                                write_json(stdout, &record)
-                            };
+                            let written = cancellation.trace.measure(
+                                crate::domain::TracePhase::OutputDelivery,
+                                || {
+                                    if human {
+                                        write_human_event_with_preferences(
+                                            &record,
+                                            stdout,
+                                            stderr,
+                                            false,
+                                            selected.human,
+                                        )
+                                    } else {
+                                        write_json(stdout, &record)
+                                    }
+                                },
+                            );
                             if let Err(error) = written {
                                 output_failed = true;
                                 delivery.output_closed();
@@ -253,7 +264,9 @@ pub(super) fn execute_stream(
         worker.join().unwrap_or_else(|_| {
             delivery.fail("execution_response_unavailable");
             delivery.finish();
-            reply::Reply::unavailable(name, delivery.known_run()).with_version(selected.version)
+            reply::Reply::unavailable(name, delivery.known_run())
+                .with_version(selected.version)
+                .with_diagnostic_id(selected.diagnostic_id)
         })
     });
     if output_failed {
@@ -269,11 +282,22 @@ pub(super) fn execute_stream(
         loop {
             match cursor.next() {
                 Ok(Some(record)) => {
-                    let written = if human {
-                        write_human_event(&record, stdout, stderr, false)
-                    } else {
-                        write_json(stdout, &record)
-                    };
+                    let written = cancellation.trace.measure(
+                        crate::domain::TracePhase::OutputDelivery,
+                        || {
+                            if human {
+                                write_human_event_with_preferences(
+                                    &record,
+                                    stdout,
+                                    stderr,
+                                    false,
+                                    selected.human,
+                                )
+                            } else {
+                                write_json(stdout, &record)
+                            }
+                        },
+                    );
                     if written.is_err() {
                         return 1;
                     }
@@ -294,7 +318,19 @@ pub(super) fn execute_stream(
         loop {
             match deferred.next() {
                 Ok(Some(record)) => {
-                    if write_human_event(&record, stdout, stderr, true).is_err() {
+                    if cancellation
+                        .trace
+                        .measure(crate::domain::TracePhase::OutputDelivery, || {
+                            write_human_event_with_preferences(
+                                &record,
+                                stdout,
+                                stderr,
+                                true,
+                                selected.human,
+                            )
+                        })
+                        .is_err()
+                    {
                         return 1;
                     }
                 }
@@ -305,7 +341,8 @@ pub(super) fn execute_stream(
                 }
             }
         }
-        let rendered = response.render(format, stdout, stderr);
+        let rendered =
+            core_traces::render_reply(response, format, stdout, stderr, &cancellation.trace);
         if failed {
             let _ = writeln!(
                 stderr,
@@ -329,19 +366,40 @@ pub(super) fn execute_stream(
         events: (format == presentation::Format::Json)
             .then(|| delivery::Events(Arc::clone(&delivery))),
     };
-    let written = response.json(
-        stdout,
-        Some(&result),
-        (format == presentation::Format::Jsonl).then_some(sequence.as_str()),
-    );
+    let written = cancellation
+        .trace
+        .measure(crate::domain::TracePhase::OutputDelivery, || {
+            response.json(
+                stdout,
+                Some(&result),
+                (format == presentation::Format::Jsonl).then_some(sequence.as_str()),
+            )
+        });
     if written.is_err() || failed { 1 } else { code }
 }
 
+#[cfg(test)]
 fn write_human_event(
     record: &delivery::Record,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     deferred: bool,
+) -> io::Result<()> {
+    write_human_event_with_preferences(
+        record,
+        stdout,
+        stderr,
+        deferred,
+        configuration::HumanPreferences::default(),
+    )
+}
+
+fn write_human_event_with_preferences(
+    record: &delivery::Record,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    deferred: bool,
+    preferences: configuration::HumanPreferences,
 ) -> io::Result<()> {
     use base64::Engine as _;
     match &record.event {
@@ -357,6 +415,12 @@ fn write_human_event(
             phase,
             interactive,
         } if *interactive == deferred => {
+            if !matches!(phase, delivery::CorePhase::RetryingStorage)
+                && (!preferences.phase_messages
+                    || preferences.verbosity == crate::configuration::Verbosity::Quiet)
+            {
+                return Ok(());
+            }
             let text = match phase {
                 delivery::CorePhase::WaitingForProcessTree => "waiting for Hook processes to exit",
                 delivery::CorePhase::RetryingStorage => {
@@ -434,6 +498,91 @@ fn write_human_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Test-ID: PR-TEST-0750
+    // Verifies: PR-REQ-0396
+    #[test]
+    fn configuration_human_preferences_preserve_raw_bytes_and_ownership_warnings() {
+        use base64::Engine as _;
+        let preferences = configuration::HumanPreferences {
+            verbosity: crate::configuration::Verbosity::Quiet,
+            phase_messages: false,
+        };
+        let mut record = delivery::Record {
+            format: presentation::FORMAT_KIND.into(),
+            format_version: presentation::FORMAT_VERSION.into(),
+            sequence: "1".into(),
+            received_at_unix_ms: None,
+            command: "invoke".into(),
+            event: delivery::Event::CoreProgress {
+                run_id: "0".repeat(32),
+                phase: delivery::CorePhase::FinalizingExecution,
+                interactive: false,
+            },
+        };
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        write_human_event_with_preferences(&record, &mut stdout, &mut stderr, false, preferences)
+            .unwrap();
+        assert!(stdout.is_empty() && stderr.is_empty());
+        record.event = delivery::Event::CoreProgress {
+            run_id: "0".repeat(32),
+            phase: delivery::CorePhase::RetryingStorage,
+            interactive: false,
+        };
+        write_human_event_with_preferences(&record, &mut stdout, &mut stderr, false, preferences)
+            .unwrap();
+        assert!(String::from_utf8_lossy(&stderr).contains("ownership retained"));
+        stderr.clear();
+        record.event = delivery::Event::AcceptancePending {
+            candidate_run_id: "0".repeat(32),
+        };
+        write_human_event_with_preferences(&record, &mut stdout, &mut stderr, false, preferences)
+            .unwrap();
+        assert!(String::from_utf8_lossy(&stderr).contains("no replacement Run"));
+        let bytes = [0, 255, b'\r', b'A'];
+        let context = delivery::Context {
+            interactive: false,
+            run_id: "0".repeat(32),
+            hook_ordinal: "1".into(),
+            operation: "action".into(),
+            action_id: Some("inspect".into()),
+            revision: delivery::Revision {
+                package_id: "0".repeat(32),
+                content_digest: format!("sha256:{}", "0".repeat(64)),
+            },
+            source_revision: None,
+            target_revision: None,
+        };
+        for channel in [delivery::Channel::Stdout, delivery::Channel::Stderr] {
+            stdout.clear();
+            stderr.clear();
+            record.event = delivery::Event::Output {
+                context: context.clone(),
+                channel,
+                offset: "0".into(),
+                encoding: "base64".into(),
+                data: base64::engine::general_purpose::STANDARD.encode(bytes),
+                byte_length: bytes.len().to_string(),
+            };
+            let before = serde_json::to_value(&record).unwrap();
+            write_human_event_with_preferences(
+                &record,
+                &mut stdout,
+                &mut stderr,
+                false,
+                preferences,
+            )
+            .unwrap();
+            let (actual, other) = if channel == delivery::Channel::Stdout {
+                (&stdout, &stderr)
+            } else {
+                (&stderr, &stdout)
+            };
+            assert_eq!(actual.as_slice(), bytes);
+            assert!(other.is_empty());
+            assert_eq!(serde_json::to_value(&record).unwrap(), before);
+        }
+    }
     // Supporting coverage for PR-TEST-0690.
     #[test]
     fn core_diagnostics_wait_for_the_interactive_terminal() {

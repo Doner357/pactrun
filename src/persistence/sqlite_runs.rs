@@ -128,6 +128,7 @@ mod scoped_artifacts;
 mod terminal;
 
 pub(super) use admission::managed_mutation_conflict;
+pub(super) use artifacts::copy_artifact_from;
 use artifacts::insert_artifact;
 use publication::validate_capture_publication;
 use records::{

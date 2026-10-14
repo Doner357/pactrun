@@ -92,6 +92,11 @@ management atomically. Warn that already removed bytes cannot be restored and
 that remaining data does not imply a coherent/running service. GC and ordinary
 maintenance MUST preserve detached bytes.
 
+Ready allocation steps can proceed without a foreground polling delay between
+each allocation. Each step retains its own qualification and durable progress
+boundaries. Actual dependency waits still yield, and cancellation is checked
+between allocation steps; this is not a single atomic filesystem transaction.
+
 ### Detached handoff and discard {#pr-req-0337---detached-handoff-and-discard}
 
 Detached allocations MUST remain discoverable by immutable ID after Instance

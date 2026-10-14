@@ -290,13 +290,23 @@ fn migration_tables_preserve_shape_and_reject_unowned_invocations() {
             .unwrap();
         assert_eq!(flags, (1, 1));
     }
-    assert!(
-        db.execute(
-            "INSERT INTO writable_admissions VALUES (?1,5)",
-            [b"session-00000000000000000000000000000000".as_slice()]
-        )
-        .is_err()
-    );
+    for unsupported_marker in [4, 6] {
+        assert!(
+            db.execute(
+                "INSERT INTO writable_admissions VALUES (?1,?2)",
+                params![
+                    b"session-00000000000000000000000000000000".as_slice(),
+                    unsupported_marker
+                ],
+            )
+            .is_err()
+        );
+    }
+    db.execute(
+        "INSERT INTO writable_admissions VALUES (?1,5)",
+        [b"session-00000000000000000000000000000000".as_slice()],
+    )
+    .unwrap();
     assert!(
         db.execute(
             "INSERT INTO run_migration_invocations VALUES (?1,?2,?3,?3,0)",
