@@ -33,6 +33,20 @@ test('bootstrap prose agrees with the current private SQLite marker and rejects 
   assert.doesNotMatch(persistence, /migration executes only the additions|only future\s+destructive lifecycle|later M7 schema must add/);
 });
 
+test('installation qualification identifies the applicable alpha release', async () => {
+  const manifest = await readFile(path.join(root, 'Cargo.toml'), 'utf8');
+  const version = manifest.match(/^version = "([^"]+)"/m)[1];
+  const editions = JSON.parse(await readFile(path.join(root, 'website/versions.json'), 'utf8'));
+  for (const [release, file] of [[version, 'docs/guides/installation.md'], ...editions.map(release => [release, `website/versioned_docs/version-${release}/guides/installation.md`])]) {
+    const alpha = release.match(/-alpha\.(\d+)$/)?.[1];
+    if (!alpha) continue;
+    const text = await readFile(path.join(root, file), 'utf8');
+    const labels = [...text.matchAll(/Alpha\.(\d+)(?: qualification|'s highest measured| is verified directly)/g)];
+    for (const [, label] of labels) assert.equal(label, alpha, file);
+    if (release === version) assert.ok(labels.length > 0, 'current installation qualification must be explicit');
+  }
+});
+
 test('persistence reference exposes current records, not retired implementation-slice exclusions', () => {
   const persistence = docs.find(([name]) => name === 'spec/persistence/persistence-baseline.md')[1];
   assert.doesNotMatch(persistence, /^## (?:Historical|Deferred)/m);
