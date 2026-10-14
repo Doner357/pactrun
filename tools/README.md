@@ -28,6 +28,12 @@ legal notices; inspect its subcommand `--help`. The `release-sources` and
 not the public main-branch catalog.
 Package installation and update do not provision, convert or delete service data.
 
+Git dependency notices are read from the exact locked commit, including relative
+license symlinks within that repository. The packager rejects links escaping the
+Git tree, cycles, oversized files and mismatched checkout identities. This also
+avoids packaging Windows symlink-placeholder text as if it were a license.
+Registry dependency notices retain their package-directory safety boundary.
+
 ## Generate the package catalog
 
 The input is a JSON array of release records, as in `releases/catalog.json`.

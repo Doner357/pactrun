@@ -137,5 +137,78 @@ class ReleaseArtifacts(unittest.TestCase):
         self.assertNotIn(str(self.root),notice)
         (package/'MIT-LICENSE').unlink()
         with self.assertRaises(ValueError):release.dependency_notices(metadata)
+        outside=self.root/'outside-license';outside.write_text('private outside fixture',encoding='utf8')
+        metadata['packages'][1]['license_file']='../outside-license'
+        with self.assertRaisesRegex(ValueError,'unsafe'):
+            release.dependency_notices(metadata)
+
+    def git_dependency_fixture(self, target):
+        source=self.source_fixture()
+        package=source/'sys';package.mkdir()
+        (package/'Cargo.toml').write_text('[package]\nname="example-sys"\nversion="1.0.0"\n',encoding='utf8')
+        # A regular working-tree placeholder reproduces Windows core.symlinks=false;
+        # the committed entry still carries Git's symlink mode on every platform.
+        (package/'LICENSE').write_text(target,encoding='utf8')
+        self.git('add','sys/Cargo.toml')
+        oid=self.git('hash-object','-w',str(package/'LICENSE')).decode().strip()
+        self.git('update-index','--add','--cacheinfo',f'120000,{oid},sys/LICENSE')
+        self.git('commit','-m','dependency with repository-relative license')
+        revision=self.git('rev-parse','HEAD').decode().strip()
+        dependency={'id':'dep','name':'example-sys','version':'1.0.0',
+                    'source':'git+https://example.invalid/source#'+revision,
+                    'manifest_path':str(package/'Cargo.toml'),'license':'MIT'}
+        return source,dependency
+
+    def notice_metadata(self, dependency):
+        return {'packages':[{'id':'root','name':'pactrun','version':'1','source':None},dependency],
+                'resolve':{'root':'root','nodes':[
+                    {'id':'root','deps':[{'pkg':'dep','dep_kinds':[{'kind':None}]}]},
+                    {'id':'dep','deps':[]}]}}
+
+    def test_git_dependency_license_uses_pinned_blob_not_windows_link_placeholder(self):
+        source,dependency=self.git_dependency_fixture('../LICENSE')
+        notice=release.dependency_notices(self.notice_metadata(dependency))
+        self.assertIn('public fixture',notice)
+        self.assertNotIn('\n../LICENSE\n',notice)
+        self.assertNotIn(str(self.root),notice)
+        dependency['license_file']='../LICENSE'
+        self.assertIn('public fixture',release.dependency_notices(self.notice_metadata(dependency)))
+        dependency['license_file']='../../outside-license'
+        with self.assertRaisesRegex(ValueError,'escapes'):
+            release.dependency_notices(self.notice_metadata(dependency))
+        dependency.pop('license_file')
+        (source/'LICENSE').write_text('uncommitted-private-text',encoding='utf8')
+        self.assertEqual(release.dependency_notices(self.notice_metadata(dependency)),notice)
+        self.git('commit','--allow-empty','-m','different checkout identity')
+        with self.assertRaisesRegex(ValueError,'locked commit'):
+            release.dependency_notices(self.notice_metadata(dependency))
+
+    def test_git_dependency_license_rejects_escape_absolute_and_cycles(self):
+        _,dependency=self.git_dependency_fixture('../../outside')
+        (self.root/'outside').write_text('private outside fixture',encoding='utf8')
+        with self.assertRaisesRegex(ValueError,'escapes'):
+            release.dependency_notices(self.notice_metadata(dependency))
+        for target in ['/etc/passwd','C:/private','..\\private','LICENSE']:
+            with self.subTest(target=target):
+                file=self.root/'source'/'sys'/'LICENSE'
+                file.write_text(target,encoding='utf8')
+                oid=self.git('hash-object','-w',str(file)).decode().strip()
+                self.git('update-index','--cacheinfo',f'120000,{oid},sys/LICENSE')
+                self.git('commit','-m','unsafe license fixture')
+                dependency['source']='git+https://example.invalid/source#'+self.git('rev-parse','HEAD').decode().strip()
+                with self.assertRaises(ValueError):
+                    release.dependency_notices(self.notice_metadata(dependency))
+
+    def test_git_dependency_license_refuses_oversize_and_missing_committed_target(self):
+        source,dependency=self.git_dependency_fixture('../LICENSE')
+        (source/'LICENSE').write_bytes(b'x'*(release.LICENSE_LIMIT+1))
+        self.git('add','LICENSE');self.git('commit','-m','oversized notice')
+        dependency['source']='git+https://example.invalid/source#'+self.git('rev-parse','HEAD').decode().strip()
+        with self.assertRaisesRegex(ValueError,'oversized'):
+            release.dependency_notices(self.notice_metadata(dependency))
+        self.git('rm','LICENSE');self.git('commit','-m','missing notice')
+        dependency['source']='git+https://example.invalid/source#'+self.git('rev-parse','HEAD').decode().strip()
+        with self.assertRaisesRegex(ValueError,'committed file'):
+            release.dependency_notices(self.notice_metadata(dependency))
 
 if __name__=='__main__':unittest.main()
