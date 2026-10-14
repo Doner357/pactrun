@@ -254,7 +254,7 @@ impl VersionDomain {
                 prerelease: Some(Prerelease {
                     stage: Stage::Alpha,
                     number: if matches!(self, Self::Persistence) {
-                        5
+                        6
                     } else if matches!(self, Self::Machine) {
                         4
                     } else if matches!(self, Self::PackSource) {
