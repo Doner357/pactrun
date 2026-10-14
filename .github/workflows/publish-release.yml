@@ -1,0 +1,176 @@
+name: Publish qualified release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact reviewed product version already integrated into main
+        type: string
+        required: true
+      candidate_run_id:
+        description: Successful Release candidate run containing these exact bytes
+        type: string
+        required: true
+      baseline_version:
+        description: Published baseline for public native acquisition checks
+        type: string
+        default: 1.0.0-alpha.8
+        required: true
+      release_notes:
+        description: Product fixes/performance only; no internal workflow release notes
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pactrun-release-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Promote qualified assets without rebuilding
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      source_commit: ${{ steps.result.outputs.source_commit }}
+      main_ci_run: ${{ steps.result.outputs.main_ci_run }}
+    steps:
+      - name: Require an explicit main publication request
+        env:
+          REQUEST_REF: ${{ github.ref }}
+          REQUEST_RUN: ${{ inputs.candidate_run_id }}
+        run: |
+          test "$REQUEST_REF" = refs/heads/main
+          case "$REQUEST_RUN" in ''|*[!0-9]*) exit 1 ;; esac
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: ${{ runner.temp }}/candidates
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify publication failure and retry handling offline
+        run: python3 -B -m unittest tools.test_publish_release tools.test_qualify_candidate
+      - name: Publish exact qualified bytes and verify anonymous acquisition
+        id: result
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_VERSION: ${{ inputs.version }}
+          REQUEST_RUN: ${{ inputs.candidate_run_id }}
+          PRODUCT_NOTES: ${{ inputs.release_notes }}
+        run: |
+          import json, os, pathlib, subprocess, sys
+          temp=pathlib.Path(os.environ['RUNNER_TEMP'])
+          notes=temp/'product-release-notes.md'
+          notes.write_text(os.environ['PRODUCT_NOTES'],encoding='utf-8')
+          subprocess.run([sys.executable,'-B','-m','tools.publish_release',
+              '--version',os.environ['REQUEST_VERSION'],'--candidate-run',os.environ['REQUEST_RUN'],
+              '--artifacts',str(temp/'candidates'),'--notes',str(notes),
+              '--expected-main',os.environ['GITHUB_SHA'],'--output',str(temp/'publication')],check=True)
+          result=json.loads((temp/'publication/publication.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('source_commit='+result['source_commit']+'\n')
+              output.write('main_ci_run='+str(result['main_ci_run'])+'\n')
+      - name: Retain exact publication inventory and result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-evidence-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/publication/publication.json
+            ${{ runner.temp }}/publication/assets/SHA256SUMS
+          if-no-files-found: warn
+
+  public-native:
+    name: Verify public package entrypoints
+    needs: publish
+    uses: ./.github/workflows/native-qualification.yml
+    with:
+      source_commit: ${{ needs.publish.outputs.source_commit }}
+      version: ${{ inputs.version }}
+      baseline_version: ${{ inputs.baseline_version }}
+      candidate_run_id: ${{ inputs.candidate_run_id }}
+      public_source: true
+
+  site:
+    name: Import the already verified main site
+    needs: [publish, public-native]
+    if: vars.PACTRUN_PAGES_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify the exact successful producer and artifact digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_CI_RUN: ${{ needs.publish.outputs.main_ci_run }}
+        run: python3 -B -m tools.pages_artifact --run-id "$MAIN_CI_RUN" --sha "$GITHUB_SHA" --output "$RUNNER_TEMP/pages"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/pages/artifact.tar
+          compression-level: 0
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-source-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pages/receipt.json
+
+  pages:
+    name: Publish verified released documentation
+    needs: site
+    if: ${{ !cancelled() && needs.site.result == 'success' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
+    with:
+      product_version: ${{ inputs.version }}
+      allow_manual_publication: true
+
+  public-docs:
+    name: Verify the actual public documentation
+    needs: pages
+    if: ${{ !cancelled() && needs.pages.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: website/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: website/.node-version
+      - uses: ./.github/actions/browser-tools
+      - uses: actions/configure-pages@v5
+        id: destination
+        with:
+          enablement: false
+      - name: Check public version, text and desktop/mobile navigation
+        env:
+          PUBLIC_SITE: ${{ steps.destination.outputs.base_url }}
+        run: python3 -B tools/check_docs_browser.py --url "$PUBLIC_SITE/" --output "$RUNNER_TEMP/public-browser-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-browser-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public-browser-evidence/
+          if-no-files-found: warn

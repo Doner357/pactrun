@@ -41,6 +41,11 @@ Each test gets its own process. Process/I/O and Windows console groups have
 additional concurrency limits; explicit concurrency tests retain their internal
 competing processes. No automatic test retries are enabled.
 
+Before a full nextest run, `tools/verify_test_inventory.py` compares Cargo's
+built test executables and native libtest lists with nextest's names and ignored
+flags. A missing binary/test or an accidentally filtered non-ignored test fails
+the gate. Independent format oracles and doctests remain separate checks.
+
 For a controlled comparison with libtest, use the original serial Linux model:
 
 ```sh
@@ -120,6 +125,11 @@ checks require identical Persistence defaults; incompatible matrices are rejecte
 before creating the rehearsal directory or starting a package manager.
 Installation identities come from CLI JSON, using that envelope's machine format
 to construct the exact Revision reference.
+
+The release workflow invokes this same Python scenario runner directly after
+validating exact candidate and baseline bytes; the ignored Rust target remains
+the manual entry point. Do not describe a direct scenario run as executing the
+Rust wrapper, or a normal Rust pass as running the opt-in native/capacity gates.
 
 Run the offline runner regressions without installing packages or changing PATH:
 

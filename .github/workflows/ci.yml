@@ -36,6 +36,8 @@ jobs:
     outputs:
       runtime: ${{ steps.scope.outputs.runtime }}
       delivery: ${{ steps.scope.outputs.delivery }}
+      product_version: ${{ steps.version.outputs.version }}
+      browser: ${{ steps.scope.outputs.browser }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -53,15 +55,30 @@ jobs:
         run: |
           python3 -B -m unittest discover -s tools -p 'test_ci_policy.py'
           python3 -B -m unittest tools.test_measure_command
+          python3 -B -m unittest tools.test_ci_reuse
+          python3 -B -m unittest tools.test_publish_release tools.test_qualify_candidate tools.test_pages_artifact tools.test_check_docs_browser
+          python3 -B -m unittest tools.test_test_inventory
+          python3 -B -m unittest tools.test_finish_release
           node --test tools/test_pages_guard.mjs
       - name: Classify the complete change
         id: scope
         run: python3 tools/ci_scope.py
 
+      - name: Read the checked-out product version
+        id: version
+        shell: python
+        run: |
+          import os, pathlib, re, tomllib
+          version = tomllib.loads(pathlib.Path('Cargo.toml').read_text())['package']['version']
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?', version)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('version='+version+'\n')
+
   ubuntu:
     name: Ubuntu verification
     needs: scope
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     # Unrelated tests must not inherit each other's file locks across fork/exec.
     # Explicit concurrency tests still create their own threads and processes.
     env:
@@ -69,6 +86,7 @@ jobs:
     permissions:
       contents: read
       pages: read
+      actions: read
 
     steps:
       - name: Check out source
@@ -109,6 +127,10 @@ jobs:
       - name: Install documentation dependencies
         run: pnpm --dir website install --frozen-lockfile
 
+      - name: Prepare the pinned documentation browser
+        if: needs.scope.outputs.browser == 'true'
+        uses: ./.github/actions/browser-tools
+
       - name: Read the configured Pages destination
         id: pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
@@ -116,21 +138,59 @@ jobs:
         with:
           enablement: false
 
-      - name: Run the shared verification entry point
-        if: needs.scope.outputs.runtime == 'true'
-        run: python3 -B tools/measure_command.py --output "${{ runner.temp }}/pactrun-verification/linux.json" --label linux-verification -- cargo xtask ci
+      - name: Resolve one documentation destination for build and preview
+        shell: python
         env:
-          DOCUSAURUS_URL: ${{ steps.pages.outputs.origin || 'https://example.invalid' }}
-          DOCUSAURUS_BASE_URL: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
+          PAGES_ORIGIN: ${{ steps.pages.outputs.origin }}
+          PAGES_BASE: ${{ steps.pages.outputs.base_path }}
+        run: |
+          import os
+          configured = bool(os.environ.get('PAGES_ORIGIN'))
+          origin = os.environ['PAGES_ORIGIN'] if configured else 'https://doner357.github.io'
+          base = os.environ.get('PAGES_BASE','') if configured else '/pactrun'
+          assert '\n' not in origin+base and '\r' not in origin+base
+          base = base.rstrip('/')+'/'
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              output.write('DOCUSAURUS_URL='+origin+'\nDOCUSAURUS_BASE_URL='+base+'\n')
 
-      - name: Verify documentation-only changes
-        if: needs.scope.outputs.runtime == 'false'
+      - name: Check reusable runtime verification
+        id: reuse
+        if: needs.scope.outputs.runtime == 'true'
+        run: python3 -B tools/ci_reuse.py check --platform linux
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACTRUN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+
+      - name: Verify independent conformance and traceability
+        if: needs.scope.outputs.runtime == 'true'
+        run: cargo xtask conformance
+
+      - name: Run Rust verification
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
+        run: python3 -B tools/measure_command.py --output "${{ runner.temp }}/pactrun-verification/linux.json" --label linux-verification -- cargo xtask rust-ci
+
+      - name: Record successful runtime verification
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
+        run: python3 -B tools/ci_reuse.py record --platform linux --measurement "${{ runner.temp }}/pactrun-verification/linux.json" --output "${{ runner.temp }}/runtime-proof/runtime.json"
+        env:
+          PACTRUN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+
+      - name: Verify documentation and build the current site
         run: |
           pnpm --dir website run typecheck
           pnpm --dir website run build
-        env:
-          DOCUSAURUS_URL: ${{ steps.pages.outputs.origin || 'https://example.invalid' }}
-          DOCUSAURUS_BASE_URL: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
+
+      - name: Verify rendered version and reader navigation
+        if: needs.scope.outputs.browser == 'true'
+        run: python3 -B tools/check_docs_browser.py --output "$RUNNER_TEMP/browser-evidence"
+
+      - name: Retain browser checks and screenshots
+        if: always() && needs.scope.outputs.browser == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-evidence/
+          if-no-files-found: warn
 
       - name: Upload the verified site without rebuilding
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true'
@@ -144,25 +204,40 @@ jobs:
           python3 -B -m unittest tools.test_release_catalog
           python3 tools/verify_release_catalog.py
 
-      - name: Verify delivery-only changes with the catalog generator tests
-        if: needs.scope.outputs.runtime == 'false' && needs.scope.outputs.delivery == 'true'
-        run: cargo test --locked -p xtask --all-features
+      - name: Verify current delivery consumers when runtime was omitted or reused
+        if: needs.scope.outputs.delivery == 'true' && (needs.scope.outputs.runtime == 'false' || steps.reuse.outputs.reused == 'true')
+        run: |
+          cargo test --locked -p xtask --all-features
+          python3 -B -m unittest tools.test_native_package_acceptance
+
+      - name: Retain successful runtime proof
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-proof-linux-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runtime-proof/runtime.json
+          if-no-files-found: ignore
 
       - name: Retain verification timing and test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-verification-evidence
+          name: linux-verification-evidence-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/pactrun-verification/
             target/nextest/ci/junit.xml
+            target/nextest/ci/inventory.json
           if-no-files-found: ignore
 
   windows:
     name: Windows Rust verification
     needs: scope
-    if: needs.scope.outputs.runtime == 'true'
+    if: needs.scope.outputs.runtime == 'true' || needs.scope.outputs.delivery == 'true'
     runs-on: windows-2025
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Check out source
@@ -178,7 +253,7 @@ jobs:
           cache: true
 
       - name: Install pinned nextest
-        if: env.PACTRUN_TEST_RUNNER == 'nextest'
+        if: needs.scope.outputs.runtime == 'true' && env.PACTRUN_TEST_RUNNER == 'nextest'
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
         with:
           tool: cargo-nextest@0.9.148
@@ -194,17 +269,48 @@ jobs:
           $spec = [IO.File]::ReadAllText('docs/spec/persistence/persistence-baseline.md')
           if ($spec.Contains("`r`n")) { throw 'Canonical Markdown must be checked out with LF line endings.' }
 
+      - name: Check reusable runtime verification
+        id: reuse
+        if: needs.scope.outputs.runtime == 'true'
+        run: python -B tools/ci_reuse.py check --platform windows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACTRUN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+
       - name: Run Rust verification
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
         run: python -B tools/measure_command.py --output "${{ runner.temp }}/pactrun-verification/windows.json" --label windows-verification -- cargo xtask rust-ci
+
+      - name: Verify current delivery consumers when runtime was omitted or reused
+        if: needs.scope.outputs.delivery == 'true' && (needs.scope.outputs.runtime == 'false' || steps.reuse.outputs.reused == 'true')
+        run: |
+          cargo test --locked -p xtask --all-features
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B -m unittest tools.test_native_package_acceptance
+
+      - name: Record successful runtime verification
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
+        run: python -B tools/ci_reuse.py record --platform windows --measurement "${{ runner.temp }}/pactrun-verification/windows.json" --output "${{ runner.temp }}/runtime-proof/runtime.json"
+        env:
+          PACTRUN_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+
+      - name: Retain successful runtime proof
+        if: needs.scope.outputs.runtime == 'true' && steps.reuse.outputs.reused != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-proof-windows-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runtime-proof/runtime.json
+          if-no-files-found: ignore
 
       - name: Retain verification timing and test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-verification-evidence
+          name: windows-verification-evidence-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/pactrun-verification/
             target/nextest/ci/junit.xml
+            target/nextest/ci/inventory.json
           if-no-files-found: ignore
 
   debian12:
@@ -223,6 +329,7 @@ jobs:
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
           RUNTIME: ${{ needs.scope.outputs.runtime }}
+          DELIVERY: ${{ needs.scope.outputs.delivery }}
           UBUNTU_RESULT: ${{ needs.ubuntu.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           DEBIAN12_RESULT: ${{ needs.debian12.result }}
@@ -230,16 +337,17 @@ jobs:
           # BEGIN CI GATE
           test "$SCOPE_RESULT" = success
           test "$UBUNTU_RESULT" = success
-          case "$RUNTIME" in
-            true) test "$WINDOWS_RESULT" = success; test "$DEBIAN12_RESULT" = success ;;
-            false) test "$WINDOWS_RESULT" = skipped; test "$DEBIAN12_RESULT" = skipped ;;
+          case "$RUNTIME:$DELIVERY" in
+            true:true) test "$WINDOWS_RESULT" = success; test "$DEBIAN12_RESULT" = success ;;
+            false:true) test "$WINDOWS_RESULT" = success; test "$DEBIAN12_RESULT" = skipped ;;
+            false:false) test "$WINDOWS_RESULT" = skipped; test "$DEBIAN12_RESULT" = skipped ;;
             *) exit 1 ;;
           esac
           # END CI GATE
 
   pages:
     name: Publish verified documentation
-    needs: gate
+    needs: [gate, scope]
     # An intentionally skipped Windows ancestor must not suppress a passed gate.
     if: ${{ always() && !cancelled() && needs.gate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PACTRUN_PAGES_ENABLED == 'true' }}
     permissions:
@@ -247,3 +355,5 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/pages.yml
+    with:
+      product_version: ${{ needs.scope.outputs.product_version }}

@@ -1,5 +1,6 @@
 """Isolated standard-library checks for local artifact/source assembly."""
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -41,6 +42,78 @@ class ReleaseArtifacts(unittest.TestCase):
         self.git('add','.')
         self.git('commit','-m','isolated source fixture')
         return source
+
+    def candidate_fixture(self):
+        root = self.root/'candidate'
+        (root/'output/assets').mkdir(parents=True)
+        (root/'snapshot').mkdir()
+        manifest = root/'snapshot/source.sha256'
+        manifest.write_bytes(b'fixture manifest\n')
+        version, platform = '1.0.0-alpha.9', 'windows-x86_64'
+        part = dict(product_version=version, source_commit='a'*40,
+                    source_manifest_sha256=release.sha(manifest), rustc='rustc fixture',
+                    supported_formats={'cli_machine_interface':['1.0-alpha.4']},
+                    default_formats={'cli_machine_interface':'1.0-alpha.4'}, artifacts=[])
+        checks = {}
+        for flavor in ['normal','test','standalone']:
+            stem = 'pactrun-test' if flavor=='test' else 'pactrun'
+            suffix = '-standalone' if flavor=='standalone' else ''
+            name = f'{stem}-{version}-{platform}{suffix}.zip'
+            archive = root/'output/assets'/name
+            archive.write_bytes(('fixture '+flavor).encode())
+            checks[name] = {'sha256':release.sha(archive),'bytes':archive.stat().st_size}
+            if flavor != 'standalone':
+                part['artifacts'].append(dict(platform=platform,flavor=flavor,
+                    url='https://example.invalid/'+name,**checks[name]))
+        (root/'output/release-part.json').write_text(json.dumps(part))
+        (root/'output/artifact-checksums.json').write_text(json.dumps(checks))
+        (root/'snapshot/source.json').write_text(json.dumps({k:part[k] for k in ['source_commit','source_manifest_sha256']}))
+        (root/'output/binary-probe.json').write_text(json.dumps(dict(
+            format='pactrun.cli',format_version='1.0-alpha.4',command='version',status='success',error=None,
+            result=dict({k:v for k,v in part.items() if k!='artifacts'},build_target=release.TARGETS[platform]))))
+        return root, part
+
+    def test_candidate_verifier_binds_inventory_probe_and_requested_source(self):
+        root, part = self.candidate_fixture()
+        self.assertEqual(release.verify_candidate(root,'windows-x86_64','a'*40,'1.0.0-alpha.9'),part)
+        for source,version in [('b'*40,'1.0.0-alpha.9'),('a'*40,'1.0.0-alpha.8')]:
+            with self.assertRaises(ValueError):
+                release.verify_candidate(root,'windows-x86_64',source,version)
+        for path in ['snapshot/source.json','output/artifact-checksums.json','output/binary-probe.json']:
+            file=root/path; original=file.read_bytes()
+            file.write_text('{}')
+            with self.assertRaises(ValueError): release.verify_candidate(root,'windows-x86_64')
+            file.write_bytes(original)
+
+    def test_candidate_verifier_rejects_tampering_and_wrong_native_metadata(self):
+        root, part = self.candidate_fixture()
+        archive=next((root/'output/assets').glob('*.zip')); original=archive.read_bytes()
+        archive.write_bytes(b'changed')
+        with self.assertRaises(ValueError): release.verify_candidate(root,'windows-x86_64')
+        archive.write_bytes(original)
+        part['artifacts'][0]['sha256']='0'*64
+        (root/'output/release-part.json').write_text(json.dumps(part))
+        with self.assertRaises(ValueError): release.verify_candidate(root,'windows-x86_64')
+
+    def test_source_archive_requires_exact_complete_manifest_membership(self):
+        source = self.source_fixture()
+        snapshot = self.root/'snapshot'
+        release.source(source,snapshot)
+        expected = release.sha(snapshot/'source.sha256')
+        release.verify_source_archive(snapshot,expected)
+        original = (snapshot/'source.tar.gz').read_bytes()
+        for extra, omit in [('extra.txt',False), (None,True)]:
+            with tarfile.open(fileobj=io.BytesIO(original),mode='r:gz') as archive:
+                members = [(member,archive.extractfile(member).read()) for member in archive]
+            with tarfile.open(snapshot/'source.tar.gz','w:gz') as archive:
+                for index,(member,data) in enumerate(members):
+                    if omit and index==0: continue
+                    archive.addfile(member,io.BytesIO(data))
+                if extra:
+                    member=tarfile.TarInfo(extra); member.size=1
+                    archive.addfile(member,io.BytesIO(b'x'))
+            with self.assertRaises(ValueError): release.verify_source_archive(snapshot,expected)
+
     def test_archives_are_reproducible_and_contain_only_the_explicit_program_layout(self):
         first=self.root/'program'
         first.write_bytes(b'program bytes\x00')

@@ -165,6 +165,13 @@ fn run_rust_ci(workspace_root: &Path) -> Result<(), String> {
         ],
     )?;
     let runner = env::var("PACTRUN_TEST_RUNNER").unwrap_or_else(|_| "nextest".into());
+    if runner == "nextest" {
+        run(
+            workspace_root,
+            if cfg!(windows) { "python" } else { "python3" },
+            &["-B", "tools/verify_test_inventory.py"],
+        )?;
+    }
     for arguments in test_commands(&runner)? {
         run(workspace_root, "cargo", &arguments)?;
     }

@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EXPECTED_SOURCE: ${{ inputs.source_commit || github.sha }}
+
 defaults:
   run:
     shell: bash

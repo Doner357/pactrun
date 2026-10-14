@@ -6,7 +6,7 @@ import test from 'node:test';
 const workflow = readFileSync(new URL('../.github/workflows/pages.yml', import.meta.url), 'utf8');
 const body = workflow.match(/\/\/ BEGIN PAGES GUARD([\s\S]*?)\/\/ END PAGES GUARD/)?.[1];
 assert.ok(body, 'Missing executable Pages eligibility guard');
-const guard = new (Object.getPrototypeOf(async function () {}).constructor)('github', 'context', 'core', body);
+const guard = new (Object.getPrototypeOf(async function () {}).constructor)('github', 'context', 'core', 'process', body);
 
 test('a passed docs-only gate deploys despite an intentionally skipped Windows ancestor', () => {
   const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
@@ -30,20 +30,23 @@ test('a passed docs-only gate deploys despite an intentionally skipped Windows a
   assert.match(workflow, /if: \$\{\{ always\(\) && !cancelled\(\)/);
 });
 
-for (const [name, eventName, ref, current, expected] of [
+for (const [name, eventName, ref, current, expected, manual = 'false'] of [
   ['current main push', 'push', 'refs/heads/main', 'tested', 'true'],
   ['superseded main push', 'push', 'refs/heads/main', 'newer', 'false'],
   ['pull request', 'pull_request', 'refs/heads/main', 'tested', 'false'],
   ['develop push', 'push', 'refs/heads/develop', 'tested', 'false'],
   ['manual event', 'workflow_dispatch', 'refs/heads/main', 'tested', 'false'],
+  ['authorized publication event', 'workflow_dispatch', 'refs/heads/main', 'tested', 'true', 'true'],
 ]) {
   test(name, async () => {
     const outputs = {};
     await guard({rest: {repos: {getBranch: async (args) => {
       assert.deepEqual(args, {owner: 'owner', repo: 'repo', branch: 'main'});
       return {data: {commit: {sha: current}}};
-    }}}}, {repo: {owner: 'owner', repo: 'repo'}, eventName, ref, sha: 'tested'},
-    {setOutput: (key, value) => { outputs[key] = value; }, notice: () => {}});
+    }, getReleaseByTag: async () => ({data: {draft: false, tag_name: 'v1.0.0-alpha.9'}})}}},
+    {repo: {owner: 'owner', repo: 'repo'}, eventName, ref, sha: 'tested'},
+    {setOutput: (key, value) => { outputs[key] = value; }, notice: () => {}},
+    {env: {RELEASE_TAG: 'v1.0.0-alpha.9', ALLOW_MANUAL_PUBLICATION: manual}});
     assert.equal(outputs.publish, expected);
   });
 }
@@ -55,3 +58,19 @@ test('API failure cannot approve deployment', async () => {
     {setOutput: (key, value) => { outputs[key] = value; }}), /API failure/);
   assert.notEqual(outputs.publish, 'true');
 });
+
+for (const state of ['missing', 'draft', 'wrong-tag']) {
+  test(`unpublished or mismatched release (${state}) cannot replace the public site`, async () => {
+    const outputs = {};
+    await guard({rest: {repos: {
+      getBranch: async () => ({data: {commit: {sha: 'tested'}}}),
+      getReleaseByTag: async () => {
+        if (state === 'missing') throw Object.assign(new Error('missing'), {status: 404});
+        return {data: {draft: state === 'draft', tag_name: state === 'wrong-tag' ? 'v1.0.0-alpha.8' : 'v1.0.0-alpha.9'}};
+      },
+    }}}, {repo: {owner: 'owner', repo: 'repo'}, eventName: 'push', ref: 'refs/heads/main', sha: 'tested'},
+    {setOutput: (key, value) => { outputs[key] = value; }, notice: () => {}},
+    {env: {RELEASE_TAG: 'v1.0.0-alpha.9'}});
+    assert.equal(outputs.publish, 'false');
+  });
+}
