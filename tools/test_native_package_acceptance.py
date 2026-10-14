@@ -301,6 +301,16 @@ class NativePackageAcceptance(unittest.TestCase):
             self.tool.main(argv)
         self.assertFalse(target.exists())
 
+    def test_product_configuration_and_diagnostics_are_workspace_isolated(self):
+        inherited={key:'host-private-location' for key in ['APPDATA','LOCALAPPDATA','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_STATE_HOME']}
+        inherited.update(self.tool.isolated_product_environment(self.root))
+        for value in inherited.values():
+            self.assertTrue(Path(value).is_relative_to(self.root))
+        self.assertEqual(inherited['APPDATA'],inherited['XDG_CONFIG_HOME'])
+        self.assertEqual(inherited['LOCALAPPDATA'],inherited['XDG_DATA_HOME'])
+        self.assertNotEqual(inherited['XDG_STATE_HOME'],inherited['XDG_DATA_HOME'])
+        self.assertFalse((self.root/'home').exists(), 'environment selection must not provision data')
+
 
 if __name__ == '__main__':
     unittest.main()
