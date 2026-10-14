@@ -38,6 +38,27 @@ def load_tool():
 
 
 class NativePackageAcceptance(unittest.TestCase):
+    def test_path_cleanup_restores_exact_empty_entry_spelling_without_losing_unrelated_edits(self):
+        tool=load_tool()
+        shim=r'C:\owned\scoop\shims'
+        original=r'C:\first;;%USERPROFILE%\bin;'
+        self.assertEqual(tool.restored_user_path(original,shim+';C:\\first;%USERPROFILE%\\bin',shim),(original,True))
+        self.assertEqual(tool.restored_user_path('',shim,shim),('',True))
+        self.assertEqual(tool.restored_user_path(original,original,shim),(original,True))
+        changed=shim+';C:\\first;C:\\new;%USERPROFILE%\\bin'
+        self.assertEqual(tool.restored_user_path(original,changed,shim),(r'C:\first;C:\new;%USERPROFILE%\bin',False))
+        # A pre-existing same-name entry is not an owned addition.
+        self.assertEqual(tool.restored_user_path(shim,shim,shim),(shim,True))
+        self.assertEqual(tool.restored_user_path(shim,'',shim),('',False))
+
+    def test_path_restoration_keeps_absence_empty_value_type_and_external_removal_distinct(self):
+        tool=load_tool(); shim=r'C:\owned\shims'
+        self.assertIsNone(tool.user_path_restoration(None,(shim,1),shim))
+        self.assertEqual(tool.user_path_restoration(('',2),None,shim),('',2))
+        self.assertEqual(tool.user_path_restoration(('A;',2),(shim+';A',1),shim),('A;',2))
+        self.assertIsNone(tool.user_path_restoration(('A',2),None,shim))
+        self.assertEqual(tool.user_path_restoration(('A',2),(shim+';A;other',1),shim),('A;other',1))
+
     def setUp(self):
         self.tool = load_tool()
         parent = ROOT/'target/native-acceptance-unit'
