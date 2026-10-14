@@ -153,17 +153,17 @@ impl StoreWriter {
         // can distinguish reclaimed events from an originally empty collection.
         loop {
             let sql = store
-                .diagnostic_retention_inventory(Some(cutoff), None)
+                .expired_diagnostic_candidates(cutoff)
                 .map_err(persistence_error)?;
-            let (_, traces) = match journal.as_mut() {
-                Some(journal) => journal.retention_inventory(Some(cutoff), None)?,
-                None => (0, Vec::new()),
+            let traces = match journal.as_mut() {
+                Some(journal) => journal.expired_retention_candidates(cutoff)?,
+                None => Vec::new(),
             };
-            if sql.candidates.is_empty() && traces.is_empty() {
+            if sql.is_empty() && traces.is_empty() {
                 break;
             }
             store
-                .delete_diagnostic_retention_candidates(&sql.candidates)
+                .delete_diagnostic_retention_candidates(&sql)
                 .map_err(persistence_error)?;
             if let Some(journal) = journal.as_mut() {
                 journal.delete_retention_candidates(&traces)?;

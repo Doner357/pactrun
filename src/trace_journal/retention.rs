@@ -48,7 +48,7 @@ impl RetentionGuard {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TraceRetentionCandidate {
     id: TraceId,
     pub(crate) updated_at_ms: u64,
@@ -109,7 +109,31 @@ impl Journal {
                 |r| r.get(0),
             )
             .map_err(sql_error)?;
-        let mut query = self.connection.prepare("SELECT CASE WHEN length(id)=16 THEN id ELSE X'' END,updated_at_ms,length(document),CASE WHEN id=?1 THEN 1 ELSE 0 END AS preferred FROM records WHERE (?2 IS NULL OR updated_at_ms < ?2) ORDER BY preferred,updated_at_ms,id LIMIT 64").map_err(sql_error)?;
+        Ok((
+            u64::try_from(total).map_err(|_| Error::InvalidRecord)?,
+            self.retention_candidates(cutoff, preferred)?,
+        ))
+    }
+    pub(crate) fn expired_retention_candidates(
+        &self,
+        cutoff: u64,
+    ) -> Result<Vec<TraceRetentionCandidate>, Error> {
+        self.retention_candidates(
+            Some(i64::try_from(cutoff).map_err(|_| Error::InvalidRecord)?),
+            None,
+        )
+    }
+    fn retention_candidates(
+        &self,
+        cutoff: Option<i64>,
+        preferred: Option<TraceId>,
+    ) -> Result<Vec<TraceRetentionCandidate>, Error> {
+        let predicate = if cutoff.is_some() {
+            "updated_at_ms < ?2"
+        } else {
+            "?2 IS NULL"
+        };
+        let mut query = self.connection.prepare(&format!("SELECT CASE WHEN length(id)=16 THEN id ELSE X'' END,updated_at_ms,length(document),CASE WHEN id=?1 THEN 1 ELSE 0 END AS preferred FROM records WHERE {predicate} ORDER BY preferred,updated_at_ms,id LIMIT 64")).map_err(sql_error)?;
         let rows = query
             .query_map(
                 params![
@@ -139,10 +163,7 @@ impl Journal {
                 preferred,
             });
         }
-        Ok((
-            u64::try_from(total).map_err(|_| Error::InvalidRecord)?,
-            candidates,
-        ))
+        Ok(candidates)
     }
     pub(crate) fn delete_retention_candidates(
         &mut self,
