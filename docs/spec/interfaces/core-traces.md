@@ -111,6 +111,8 @@ missing record is explicitly unavailable, not a fabricated empty successful trac
 
 **Verification: PR-TEST-0795, PR-TEST-0796, PR-TEST-0797, PR-TEST-0798, PR-TEST-0799, PR-TEST-0800, PR-TEST-0801, PR-TEST-0802, PR-TEST-0803.**
 
+**Verification: PR-TEST-0807, PR-TEST-0808.**
+
 ### PR-REQ-0399 - Invocation capture and journal placement
 
 Help, version and diagnostic/configuration inspection MUST NOT create diagnostic

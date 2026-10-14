@@ -22,9 +22,10 @@ import tarfile
 import zipfile
 
 PREFIXES = ("src/", "crates/", "xtask/", "tests/", "docs/", "website/", "tools/", ".cargo/", ".github/", "bucket/", "Formula/", "releases/")
-ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes", "LICENSE"}
+ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes", "LICENSE", ".config/nextest.toml"}
 TARGETS = {"windows-x86_64": "x86_64-pc-windows-msvc", "linux-x86_64": "x86_64-unknown-linux-gnu"}
 FORBIDDEN = {".git", ".env", ".ssh", ".remote-sync", "node_modules", "__pycache__", "target", "dist", ".pactrun"}
+REQUIRED_SOURCE_FILES = {"Cargo.toml", "Cargo.lock", "build.rs", "LICENSE", "src/main.rs", "src/cli/storage_config.rs"}
 
 def selected(name: str) -> bool:
     return (name in ROOT_FILES or name.startswith(PREFIXES)) and not FORBIDDEN.intersection(PurePosixPath(name).parts)
@@ -39,6 +40,106 @@ def sha(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+def verify_candidate(artifacts: Path, platform: str, expected_source=None, expected_version=None):
+    """Check exact candidate inventory, bytes and declared build provenance.
+
+    This does not replace execution/native-manager qualification. In particular,
+    an empty checksum map or source object must never certify an archive set.
+    """
+    if platform not in TARGETS:
+        raise ValueError('Unknown candidate platform')
+    artifacts = artifacts.resolve()
+    def read(name):
+        path = artifacts / name
+        if path.is_symlink() or not path.resolve().is_relative_to(artifacts) or path.stat().st_size > 1024 * 1024:
+            raise ValueError('Unsafe or oversized candidate metadata')
+        value = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(value, dict):
+            raise ValueError('Candidate metadata must be an object')
+        return value
+    part = read('output/release-part.json')
+    version = part['product_version']
+    if (not isinstance(version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?', version)
+        or not re.fullmatch('[0-9a-f]{40}', part['source_commit'])
+        or not re.fullmatch('[0-9a-f]{64}', part['source_manifest_sha256'])):
+        raise ValueError('Invalid candidate identity')
+    if (expected_source is not None and part['source_commit'] != expected_source
+        or expected_version is not None and version != expected_version):
+        raise ValueError('Candidate differs from selected source/version')
+    provenance = read('snapshot/source.json')
+    expected = {key: part[key] for key in ('source_commit', 'source_manifest_sha256')}
+    manifest = artifacts / 'snapshot/source.sha256'
+    if (provenance != expected or manifest.is_symlink() or not manifest.resolve().is_relative_to(artifacts)
+        or manifest.stat().st_size > 16 * 1024 * 1024 or sha(manifest) != part['source_manifest_sha256']):
+        raise ValueError('Candidate source provenance mismatch')
+    extension = '.zip' if platform == 'windows-x86_64' else '.tar.gz'
+    normal = f'pactrun-{version}-{platform}{extension}'
+    test = f'pactrun-test-{version}-{platform}{extension}'
+    standalone = f'pactrun-{version}-{platform}-standalone{extension}'
+    checks = read('output/artifact-checksums.json')
+    if set(checks) != {normal, test, standalone}:
+        raise ValueError('Candidate must contain exactly normal/test/standalone checksums')
+    for name, entry in checks.items():
+        file = artifacts / 'output/assets' / name
+        if (type(entry['bytes']) is not int or not 0 < entry['bytes'] <= 1024 ** 3
+            or not re.fullmatch('[0-9a-f]{64}', entry['sha256']) or file.is_symlink()
+            or not file.resolve().is_relative_to(artifacts)
+            or file.stat().st_size != entry['bytes'] or sha(file) != entry['sha256']):
+            raise ValueError('Candidate archive differs from qualified checksum')
+    records = part['artifacts']
+    if not isinstance(records, list) or len(records) != 2:
+        raise ValueError('Candidate must have two native package records')
+    flavors = set()
+    for artifact in records:
+        flavor = artifact['flavor']
+        if artifact['platform'] != platform or flavor not in ('normal', 'test') or flavor in flavors:
+            raise ValueError('Duplicate or wrong native artifact')
+        flavors.add(flavor)
+        name = normal if flavor == 'normal' else test
+        if (artifact['url'].rsplit('/', 1)[-1] != name
+            or artifact['sha256'] != checks[name]['sha256'] or artifact['bytes'] != checks[name]['bytes']):
+            raise ValueError('Native package record differs from candidate bytes')
+    probe = read('output/binary-probe.json')
+    result = probe.get('result', {})
+    keys = ('product_version', 'source_commit', 'source_manifest_sha256', 'rustc', 'supported_formats', 'default_formats')
+    if (probe.get('format') != 'pactrun.cli' or probe.get('command') != 'version'
+        or probe.get('status') != 'success' or probe.get('error', True) is not None
+        or not isinstance(result, dict) or result.get('build_target') != TARGETS[platform]
+        or any(key not in part or key not in result or result[key] != part[key] for key in keys)
+        or not isinstance(part['default_formats'], dict)
+        or probe.get('format_version') != part['default_formats'].get('cli_machine_interface')):
+        raise ValueError('Binary probe differs from candidate provenance')
+    return part
+
+def verify_source_archive(snapshot: Path, expected: str):
+    """Validate exact manifest membership and streamed bytes without extracting."""
+    manifest = snapshot / 'source.sha256'
+    if manifest.stat().st_size > 16 * 1024 * 1024 or sha(manifest) != expected:
+        raise ValueError('Source manifest differs from selected candidate')
+    entries = {}
+    for line in manifest.read_text(encoding='utf-8').splitlines():
+        digest, name = line.split('  ', 1)
+        if not re.fullmatch('[0-9a-f]{64}', digest) or not safe_name(name) or not selected(name) or name in entries:
+            raise ValueError('Invalid source manifest entry')
+        entries[name] = digest
+    seen, total = set(), 0
+    with tarfile.open(snapshot / 'source.tar.gz', 'r|gz') as archive:
+        for entry in archive:
+            if not entry.isfile() or entry.name not in entries or entry.name in seen:
+                raise ValueError('Unexpected, duplicate or non-regular source entry')
+            total += entry.size
+            if entry.size > 64 * 1024 * 1024 or total > 256 * 1024 * 1024:
+                raise ValueError('Source archive exceeds qualification bounds')
+            digest = hashlib.sha256()
+            stream = archive.extractfile(entry)
+            for block in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(block)
+            if digest.hexdigest() != entries[entry.name]:
+                raise ValueError('Archived source differs from its manifest')
+            seen.add(entry.name)
+    if not REQUIRED_SOURCE_FILES.issubset(entries) or seen != set(entries):
+        raise ValueError('Source archive is incomplete')
 
 def execute(args, cwd=None, env=None) -> bytes:
     result = subprocess.run([str(a) for a in args], cwd=cwd, env=env,
@@ -85,8 +186,7 @@ def source(root: Path, output: Path):
             if not safe_name(member.name) or not member.isfile():
                 raise ValueError("release input must be a safe regular source file")
             files[member.name] = (archive.extractfile(member).read(), bool(member.mode & 0o111))
-    required = {"Cargo.toml", "Cargo.lock", "build.rs", "LICENSE", "src/main.rs", "src/cli/storage_config.rs"}
-    if not required.issubset(files):
+    if not REQUIRED_SOURCE_FILES.issubset(files):
         raise ValueError("source snapshot lacks required committed build inputs")
     manifest = "".join(hashlib.sha256(data).hexdigest() + "  " + name + "\n" for name, (data, _) in sorted(files.items())).encode()
     provenance = dict(source_commit=commit, source_manifest_sha256=hashlib.sha256(manifest).hexdigest())

@@ -2,7 +2,8 @@
 
 ## Build and run
 
-CI uses Rust stable with rustfmt and Clippy; Cargo.toml declares Rust 2024.
+CI uses the Rust version pinned in rust-toolchain.toml with rustfmt and Clippy;
+Cargo.toml declares Rust 2024. Candidate builds use the same compiler pin.
 Build on Windows or Linux with a native C compiler and linker for bundled
 SQLite. Windows CI uses the MSVC toolchain. Release reproduction uses the pinned
 toolchain in the release workflow rather than whichever compiler is newest.
@@ -28,6 +29,11 @@ see [data locations](docs/guides/data-location.md).
 Read the relevant [Spec](docs/spec/index.md) and its tests. Define changed behavior
 before implementing it. Keep Domain policy independent of CLI, storage adapters
 and third-party mechanism types.
+
+Install cargo-nextest 0.9.148 in an approved local or isolated tool location for
+the shared verification commands. CI installs the pinned binary automatically.
+`PACTRUN_TEST_RUNNER=libtest` selects the original Cargo runner for controlled
+comparisons or diagnosis; it is not a fallback after nextest reports a failure.
 
 Tests declare actual coverage with Test-ID: PR-TEST-NNNN and Verifies: PR-REQ-NNNN
 comments. Owning requirements cite those tests in the other direction. Preserve
@@ -61,6 +67,21 @@ Report checks actually run and their tested source; distinguish reused evidence
 and unrun checks. A documentation-only commit does not by itself invalidate
 unchanged runtime evidence. Do not remove behavioral assertions to obtain a pass.
 See [test entry points](tests/README.md) for focused and opt-in checks.
+
+GitHub CI is the primary complete verification and documentation-build entry.
+Use the dedicated remote for filesystem/capacity coverage that CI does not yet
+provide, fixed-environment profiling, and interactive diagnosis or preview; do
+not duplicate a full CI run merely because it is another machine. Until an
+environment-specific contract is covered in CI, retain its qualified checks.
+Repository-local agent preferences must not turn unchanged merge or delivery
+metadata into a mandatory second full product run.
+
+Keep `CI gate` as the required aggregate status. Generated catalog and package
+definition changes still run their generator, immutable-record and site checks;
+they do not by themselves rerun the product suite. Unknown changes, Spec/schema
+changes, toolchain and workflow changes remain conservative full-verification
+inputs. Temporary GitHub branches are deleted after their contents are merged;
+keep main and develop, and never delete unmerged work to tidy the branch list.
 
 ## Documentation and maintenance
 

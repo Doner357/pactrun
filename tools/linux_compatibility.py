@@ -126,17 +126,7 @@ def build(work, candidate_version):
 
 
 def candidate(artifacts):
-    part = json.loads((artifacts / 'output/release-part.json').read_text())
-    provenance = json.loads((artifacts / 'snapshot/source.json').read_text())
-    if any(part[k] != v for k, v in provenance.items()) or release.sha(artifacts / 'snapshot/source.sha256') != part['source_manifest_sha256']:
-        raise ValueError('Candidate source provenance mismatch')
-    checks = json.loads((artifacts / 'output/artifact-checksums.json').read_text())
-    for name, expected in checks.items():
-        if not release.safe_name(name) or Path(name).name != name:
-            raise ValueError('Expected a flat artifact name')
-        file = artifacts / 'output/assets' / name
-        if release.sha(file) != expected['sha256'] or file.stat().st_size != expected['bytes']:
-            raise ValueError('Candidate archive differs from qualified checksum')
+    part = release.verify_candidate(artifacts, 'linux-x86_64', os.environ.get('EXPECTED_SOURCE'))
     return part, json.loads((artifacts / 'linux-abi.json').read_text())
 
 

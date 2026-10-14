@@ -31,6 +31,60 @@ fn record(id: u8, full: bool) -> TraceDocument {
     window.snapshot()
 }
 
+// Test-ID: PR-TEST-0808
+// Verifies: PR-REQ-0398
+#[test]
+fn journal_expiry_candidates_preserve_cutoff_order_and_bounded_batches() {
+    let temp = scratch();
+    let location = Location::startup(temp.path().join("diagnostics.sqlite3"));
+    let mut journal = Journal::open(&location).unwrap();
+    let tx = journal.connection.transaction().unwrap();
+    for n in 1u32..151 {
+        let mut doc = record(1, false);
+        let mut id = [0; 16];
+        id[..4].copy_from_slice(&n.to_be_bytes());
+        doc.id = TraceId::from_bytes(id);
+        tx.execute(
+            "INSERT INTO records VALUES(?1,NULL,?2,?3)",
+            params![
+                id.as_slice(),
+                i64::from(n / 3),
+                serde_json::to_vec(&doc).unwrap(),
+            ],
+        )
+        .unwrap();
+    }
+    tx.commit().unwrap();
+    assert!(journal.expired_retention_candidates(0).unwrap().is_empty());
+    assert!(journal.expired_retention_candidates(u64::MAX).is_err());
+    let mut removed = 0;
+    loop {
+        let expected = journal.retention_inventory(Some(40), None).unwrap().1;
+        let actual = journal.expired_retention_candidates(40).unwrap();
+        assert_eq!(actual, expected);
+        assert!(actual.len() <= 64);
+        assert!(
+            actual
+                .iter()
+                .all(|candidate| candidate.updated_at_ms < 40 && !candidate.preferred)
+        );
+        if actual.is_empty() {
+            break;
+        }
+        removed += actual.len();
+        journal.delete_retention_candidates(&actual).unwrap();
+    }
+    assert_eq!(removed, 119);
+    assert_eq!(
+        journal
+            .connection
+            .query_row("SELECT count(*) FROM records", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        31
+    );
+}
+
 // Test-ID: PR-TEST-0756
 // Verifies: PR-REQ-0398, PR-REQ-0399
 #[test]
