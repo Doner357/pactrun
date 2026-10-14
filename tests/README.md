@@ -155,3 +155,9 @@ For alpha.7-to-alpha.8 qualification, use `--store-upgrade --versions
 `1.0-alpha.5` to `1.0-alpha.6`, preserves the supported legacy Pack source and
 its immutable Revision, and retains the same old-reader-refusal, separate test
 Store, uninstall/reinstall and data-preservation assertions.
+
+For alpha.8-to-alpha.9 qualification, use `--versions 1.0.0-alpha.8
+1.0.0-alpha.9` without `--store-upgrade`: both write Persistence `1.0-alpha.6`.
+The unchanged-format scenario checks continued operation, exact object/content
+preservation, normal/test separation, uninstall/reinstall and explicit baseline
+selection. The candidate workflow selects this mode from the qualified records.
