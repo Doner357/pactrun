@@ -22,7 +22,7 @@ import tarfile
 import zipfile
 
 PREFIXES = ("src/", "crates/", "xtask/", "tests/", "docs/", "website/", "tools/", ".cargo/", ".github/", "bucket/", "Formula/", "releases/")
-ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes", "LICENSE"}
+ROOT_FILES = {"Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "README.md", "CONTRIBUTING.md", ".gitattributes", "LICENSE", ".config/nextest.toml"}
 TARGETS = {"windows-x86_64": "x86_64-pc-windows-msvc", "linux-x86_64": "x86_64-unknown-linux-gnu"}
 FORBIDDEN = {".git", ".env", ".ssh", ".remote-sync", "node_modules", "__pycache__", "target", "dist", ".pactrun"}
 

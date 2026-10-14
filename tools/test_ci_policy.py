@@ -9,7 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from ci_scope import changed_paths, requires_runtime
+from ci_scope import changed_paths, delivery_metadata, requires_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,6 +28,17 @@ class ScopeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(requires_runtime(["README.md", path]))
         self.assertTrue(requires_runtime([]))
+
+    def test_generated_delivery_metadata_does_not_require_product_retests(self):
+        paths = ['releases/catalog.json', 'releases/1.0.0-alpha.9.json',
+                 'bucket/pactrun-preview.json', 'Formula/pactrun-preview.rb']
+        self.assertFalse(requires_runtime(paths))
+        self.assertTrue(all(delivery_metadata(path) for path in paths))
+        for path in ['tools/release_artifacts.py', 'xtask/src/release_sources.rs',
+                     '.github/workflows/release-candidate.yml', 'releases/schema.sql',
+                     'src/main.rs', 'Cargo.toml', '.config/nextest.toml']:
+            with self.subTest(path=path):
+                self.assertTrue(requires_runtime([*paths, path]))
 
     def test_unknown_initial_and_invalid_events(self):
         cases = [("workflow_dispatch", {}), ("push", {"before": "0" * 40}),
@@ -77,7 +88,7 @@ class ScopeTests(unittest.TestCase):
                        GITHUB_SHA="b" * 40, GITHUB_OUTPUT=str(output))
             subprocess.run([sys.executable, str(ROOT / "tools/ci_scope.py")], cwd=ROOT, env=env, check=True,
                            stdout=subprocess.PIPE)
-            self.assertEqual(output.read_text(encoding="utf-8"), "runtime=true\n")
+            self.assertEqual(output.read_text(encoding="utf-8"), "runtime=true\ndelivery=true\n")
 
     @unittest.skipIf(os.name == "nt", "CI gate uses the Ubuntu bash runner; exercised on Linux")
     def test_actual_aggregate_gate(self):

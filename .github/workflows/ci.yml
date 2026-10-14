@@ -2,6 +2,13 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      test_runner:
+        description: Explicit runner for controlled comparisons
+        type: choice
+        options: [nextest, libtest]
+        default: nextest
   push:
     branches:
       - develop
@@ -12,6 +19,7 @@ permissions:
 
 # Large executable fixtures are expensive at opt-level 0. Keep all checks on.
 env:
+  PACTRUN_TEST_RUNNER: ${{ inputs.test_runner || 'nextest' }}
   CARGO_PROFILE_TEST_OPT_LEVEL: '1'
   CARGO_PROFILE_TEST_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG_ASSERTIONS: 'true'
@@ -27,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       runtime: ${{ steps.scope.outputs.runtime }}
+      delivery: ${{ steps.scope.outputs.delivery }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -42,7 +51,8 @@ jobs:
           "$RUNNER_TEMP/actionlint" -shellcheck= .github/workflows/*.yml
       - name: Verify CI policy tests
         run: |
-          python3 -m unittest discover -s tools -p 'test_ci_policy.py'
+          python3 -B -m unittest discover -s tools -p 'test_ci_policy.py'
+          python3 -B -m unittest tools.test_measure_command
           node --test tools/test_pages_guard.mjs
       - name: Classify the complete change
         id: scope
@@ -68,12 +78,18 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        if: needs.scope.outputs.runtime == 'true'
+        if: needs.scope.outputs.runtime == 'true' || needs.scope.outputs.delivery == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.98.1
           components: rustfmt, clippy
           cache: true
+
+      - name: Install pinned nextest
+        if: needs.scope.outputs.runtime == 'true' && env.PACTRUN_TEST_RUNNER == 'nextest'
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
+        with:
+          tool: cargo-nextest@0.9.148
 
       - name: Check PTY driver
         run: python3 --version
@@ -102,7 +118,7 @@ jobs:
 
       - name: Run the shared verification entry point
         if: needs.scope.outputs.runtime == 'true'
-        run: cargo xtask ci
+        run: python3 -B tools/measure_command.py --output "${{ runner.temp }}/pactrun-verification/linux.json" --label linux-verification -- cargo xtask ci
         env:
           DOCUSAURUS_URL: ${{ steps.pages.outputs.origin || 'https://example.invalid' }}
           DOCUSAURUS_BASE_URL: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
@@ -123,16 +139,30 @@ jobs:
           path: website/build
 
       - name: Verify public package definitions and immutable records
-        if: needs.scope.outputs.runtime == 'true'
+        if: needs.scope.outputs.delivery == 'true'
         run: |
-          python3 -m unittest tools.test_release_catalog
+          python3 -B -m unittest tools.test_release_catalog
           python3 tools/verify_release_catalog.py
+
+      - name: Verify delivery-only changes with the catalog generator tests
+        if: needs.scope.outputs.runtime == 'false' && needs.scope.outputs.delivery == 'true'
+        run: cargo test --locked -p xtask --all-features
+
+      - name: Retain verification timing and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-verification-evidence
+          path: |
+            ${{ runner.temp }}/pactrun-verification/
+            target/nextest/ci/junit.xml
+          if-no-files-found: ignore
 
   windows:
     name: Windows Rust verification
     needs: scope
     if: needs.scope.outputs.runtime == 'true'
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
       - name: Check out source
@@ -143,9 +173,15 @@ jobs:
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.98.1
           components: rustfmt, clippy
           cache: true
+
+      - name: Install pinned nextest
+        if: env.PACTRUN_TEST_RUNNER == 'nextest'
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
+        with:
+          tool: cargo-nextest@0.9.148
 
       - name: Set up the independent Node oracle
         uses: actions/setup-node@v7
@@ -159,7 +195,17 @@ jobs:
           if ($spec.Contains("`r`n")) { throw 'Canonical Markdown must be checked out with LF line endings.' }
 
       - name: Run Rust verification
-        run: cargo xtask rust-ci
+        run: python -B tools/measure_command.py --output "${{ runner.temp }}/pactrun-verification/windows.json" --label windows-verification -- cargo xtask rust-ci
+
+      - name: Retain verification timing and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-verification-evidence
+          path: |
+            ${{ runner.temp }}/pactrun-verification/
+            target/nextest/ci/junit.xml
+          if-no-files-found: ignore
 
   debian12:
     name: Debian 12 artifact verification

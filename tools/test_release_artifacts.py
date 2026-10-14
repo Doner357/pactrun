@@ -12,6 +12,12 @@ import zipfile
 from tools import release_artifacts as release
 
 class ReleaseArtifacts(unittest.TestCase):
+    def test_source_selection_keeps_runner_policy_without_arbitrary_local_configuration(self):
+        self.assertTrue(release.selected('.config/nextest.toml'))
+        self.assertFalse(release.selected('.config/private.toml'))
+        self.assertFalse(release.selected('.configure-agent-workspace/profile.md'))
+        self.assertFalse(release.selected('.env/ssh-connections/private.env'))
+
     def setUp(self):
         self.parent=Path(__file__).resolve().parents[1]/'target'/'release-artifact-tests'
         self.parent.mkdir(parents=True,exist_ok=True)

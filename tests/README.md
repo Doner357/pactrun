@@ -11,6 +11,7 @@ change; the broader commands already include the lower-level checks.
 | `cargo test -p pactrun --test configuration_cli` | Real normal/test entry configuration discovery and no-Store checks |
 | `cargo xtask system-test` | System scenarios and the invocation CLI target |
 | `cargo xtask rust-ci` | Formatting, Clippy and all workspace Rust tests |
+| `cargo xtask conformance` | Independent format oracles and Spec/Test traceability |
 | `cargo xtask ci` | Format conformance, Rust checks, website typecheck and documentation build |
 
 For a narrower change, select the owning Cargo target and behavior filter, then
@@ -34,15 +35,30 @@ evidence, not a machine-dependent pass threshold; the ordinary regression suite
 separately checks ready-work draining and cancellation between durable steps.
 
 Process and filesystem tests need a supported persistent filesystem. Keep test
-outputs in the workspace. On Linux, run the full test commands serially:
+outputs in the workspace. The full gate uses pinned cargo-nextest with the `ci`
+profile in `.config/nextest.toml`, and separately runs workspace doctests.
+Each test gets its own process. Process/I/O and Windows console groups have
+additional concurrency limits; explicit concurrency tests retain their internal
+competing processes. No automatic test retries are enabled.
+
+For a controlled comparison with libtest, use the original serial Linux model:
 
 ```sh
-RUST_TEST_THREADS=1 cargo xtask ci
+PACTRUN_TEST_RUNNER=libtest RUST_TEST_THREADS=1 cargo xtask ci
 ```
 
-Unrelated fork/exec activity can inherit another test's open-file-description
-lock. Explicit concurrency tests still create their own competing processes.
-The CI workflow defines its assertion-preserving test profile.
+Unrelated libtest threads can inherit each other's open-file-description locks
+across fork/exec. Do not increase libtest concurrency as a substitute for nextest
+process isolation. Preserve assertions, overflow checks, test cases and product
+timeouts when comparing runners. The CI workflow defines the same optimized
+test build settings for either runner.
+
+Measure an explicit command with `python -B tools/measure_command.py --output
+target/measurements/NAME.json --label NAME -- COMMAND ...`. Receipts include wall
+time, exit status, source and selected build inputs; they are not qualification
+certificates. Use a new output name for every attempt. Compare warm execution
+separately from compilation and distinguish wall time from summed parallel job
+time. Logs and old failed receipts are retained rather than overwritten.
 
 ## Snapshot capacity
 

@@ -1,0 +1,22 @@
+# Process-per-test avoids unrelated libtest threads sharing fork-inherited locks.
+# Limit I/O/process fixtures separately; each test still owns its Store and IPC.
+[test-groups]
+process-io = { max-threads = 2 }
+windows-console = { max-threads = 1 }
+
+[profile.ci]
+test-threads = 4
+retries = 0
+fail-fast = false
+
+[profile.ci.junit]
+path = "junit.xml"
+
+[[profile.ci.overrides]]
+platform = 'cfg(windows)'
+filter = 'binary(invoke_cli) | (binary(system) & test(windows::))'
+test-group = 'windows-console'
+
+[[profile.ci.overrides]]
+filter = 'binary(system) | binary(invoke_cli) | test(hook::) | test(cli::) | test(persistence::) | test(application::)'
+test-group = 'process-io'
