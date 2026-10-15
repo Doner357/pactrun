@@ -17,6 +17,7 @@ import zipfile
 from tools import release_artifacts as release
 from tools import native_package_acceptance as native
 from tools.linux_compatibility import unpack
+from tools.public_repository import release_repository
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ('windows-x86_64', 'linux-x86_64')
@@ -24,7 +25,7 @@ PLATFORMS = ('windows-x86_64', 'linux-x86_64')
 
 def public_name(artifact, version):
     url = urllib.parse.urlsplit(artifact['url'])
-    prefix = f'/Doner357/pactrun/releases/download/v{version}/'
+    prefix = f'/{release_repository(version)}/releases/download/v{version}/'
     name = url.path.removeprefix(prefix)
     platform, flavor = artifact['platform'], artifact['flavor']
     if platform not in PLATFORMS or flavor not in ('normal','test'):

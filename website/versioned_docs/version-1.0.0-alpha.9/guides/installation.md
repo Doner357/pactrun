@@ -31,7 +31,7 @@ not automatically isolate data from an existing normal installation. Read
   these instructions as administrator/root merely to bypass an error.
 - Git must be available for source setup. If Scoop reports that Git is missing,
   install it with `scoop install git` before adding the Pactrun bucket.
-- The project-owned source is `https://github.com/Doner357/pactrun`. It is not a
+- The project-owned source is `https://github.com/Pipapoen/pactrun`. It is not a
   claim of endorsement or inclusion in either manager's official package catalog.
 - Packages download versioned Release assets and verify their SHA-256. The alpha
   executables are not represented as platform-signed binaries. Obtain the source
@@ -42,7 +42,7 @@ not automatically isolate data from an existing normal installation. Read
 In a terminal where Scoop works, add the source once and install:
 
 ```powershell
-scoop bucket add pactrun https://github.com/Doner357/pactrun
+scoop bucket add pactrun https://github.com/Pipapoen/pactrun
 scoop install pactrun/pactrun-preview
 pactrun --version
 pactrun --help
@@ -58,15 +58,30 @@ not an old standalone executable or shell alias.
 In a terminal where Homebrew works, add the source once and install:
 
 ```sh
-brew tap doner357/pactrun https://github.com/Doner357/pactrun
-brew install doner357/pactrun/pactrun-preview
+brew tap pipapoen/pactrun https://github.com/Pipapoen/pactrun
+brew install pipapoen/pactrun/pactrun-preview
 pactrun --version
 pactrun --help
 ```
 
-Use `brew tap-info doner357/pactrun` to inspect an existing source. `command -v
+Use `brew tap-info pipapoen/pactrun` to inspect an existing source. `command -v
 pactrun` should resolve to the Homebrew installation. Let the manager maintain
 that executable; use the standalone archive for a separate unmanaged copy.
+
+## Existing installations from Doner357
+
+If you already use the `pactrun` Scoop bucket or `doner357/pactrun` Homebrew tap,
+do not add a duplicate source. GitHub redirects the old repository URL.
+For Homebrew, you can update the remote while keeping the local tap name:
+
+```sh
+brew tap --custom-remote doner357/pactrun https://github.com/Pipapoen/pactrun
+brew tap-info doner357/pactrun
+```
+
+Continue using the `doner357/pactrun/` prefix in package commands for that
+existing tap. This does not uninstall Pactrun or migrate its data. Historical
+exact-version definitions retain their original release URLs.
 
 ## Verify and continue
 

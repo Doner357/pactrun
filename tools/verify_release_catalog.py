@@ -6,6 +6,10 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+if __package__:
+    from .public_repository import release_repository
+else:
+    from public_repository import release_repository
 
 
 def compare_files(root, generated):
@@ -31,7 +35,7 @@ def main():
     catalog = root / 'releases/catalog.json'
     records = json.loads(catalog.read_text(encoding='utf-8'))
     for release in records:
-        prefix = 'https://github.com/Doner357/pactrun/releases/download/v' + release['product_version'] + '/'
+        prefix = f"https://github.com/{release_repository(release['product_version'])}/releases/download/v{release['product_version']}/"
         if any(not item['url'].startswith(prefix) for item in release['artifacts']):
             raise ValueError('Published catalog must use its versioned public Release assets')
     with tempfile.TemporaryDirectory(prefix='catalog-check-', dir=target) as directory:

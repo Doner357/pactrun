@@ -127,7 +127,7 @@ jobs:
               '--parts',*prepared['parts'],'--versions',*prepared['versions']]
           if os.name == 'nt': command.append('--allow-user-path-change')
           if os.environ['PUBLIC_SOURCE'] == 'true':
-              command.extend(['--public-source','https://github.com/Doner357/pactrun',
+              command.extend(['--public-source',f"https://github.com/{os.environ['GITHUB_REPOSITORY']}",
                               '--public-version',os.environ['CANDIDATE_VERSION']])
           elif prepared['store_upgrade']:
               command.append('--store-upgrade')

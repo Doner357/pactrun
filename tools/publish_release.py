@@ -21,7 +21,7 @@ from tools.ci_scope import delivery_metadata
 from tools.qualify_candidate import combined_record, PLATFORMS
 
 ROOT = Path(__file__).resolve().parents[1]
-REPOSITORY = 'Doner357/pactrun'
+from tools.public_repository import REPOSITORY
 
 
 def command(args, *, data=None, timeout=120):

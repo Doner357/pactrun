@@ -20,6 +20,7 @@ import tomllib
 import urllib.request
 
 from tools import release_artifacts as release
+from tools.public_repository import REPOSITORY
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_GLIBC = (2, 36)
@@ -117,7 +118,7 @@ def build(work, candidate_version):
     unpack(snapshot / 'source.tar.gz', source)
     fetched = run(['cargo', 'fetch', '--locked', '--manifest-path', source / 'Cargo.toml', '--target', 'x86_64-unknown-linux-gnu'])
     (work / 'cargo-fetch.log').write_bytes(fetched.stdout + fetched.stderr)
-    url = f'https://github.com/Doner357/pactrun/releases/download/v{version}' if candidate_version else 'https://example.invalid/pactrun-ci'
+    url = f'https://github.com/{REPOSITORY}/releases/download/v{version}' if candidate_version else 'https://example.invalid/pactrun-ci'
     release.build(source, snapshot, output, 'linux-x86_64', url)
     binaries = output / 'cargo-target/x86_64-unknown-linux-gnu/release'
     info.update({'rustc': compiler, 'glibc_ceiling': '2.36', 'binaries': {

@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from tools import qualify_candidate as qualify
+from tools.public_repository import release_repository
 
 
 class QualificationTests(unittest.TestCase):
@@ -31,10 +32,20 @@ class QualificationTests(unittest.TestCase):
                 extension='.zip' if platform=='windows-x86_64' else '.tar.gz'
                 name=f'{stem}-{version}-{platform}{extension}'
                 artifacts.append(dict(platform=platform,flavor=flavor,
-                    url=f'https://github.com/Doner357/pactrun/releases/download/v{version}/{name}',
+                    url=f'https://github.com/{release_repository(version)}/releases/download/v{version}/{name}',
                     bytes=3,sha256=hashlib.sha256(b'abc').hexdigest()))
         return dict(product_version=version,source_commit='a'*40,source_manifest_sha256='b'*64,
                     supported_formats={k:[v] for k,v in formats.items()},default_formats=formats,artifacts=artifacts)
+
+    def test_transfer_accepts_historical_and_new_assets_but_rejects_wrong_publishers(self):
+        for version, owner, foreign in [('1.0.0-alpha.9', 'Doner357', 'Pipapoen'),
+                                         ('1.0.0-alpha.10', 'Pipapoen', 'Doner357')]:
+            artifact = self.record(version)['artifacts'][0]
+            self.assertIn('/'+owner+'/pactrun/', artifact['url'])
+            self.assertTrue(qualify.public_name(artifact, version))
+            for replacement in [foreign, 'untrusted']:
+                with self.assertRaises(ValueError):
+                    qualify.public_name(dict(artifact, url=artifact['url'].replace('/'+owner+'/', '/'+replacement+'/')), version)
 
     def test_preparation_uses_explicit_versions_and_never_installs_packages(self):
         downloaded=[]

@@ -281,6 +281,25 @@ fn package_base(major: u64, test: bool) -> String {
 
 fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<String, String> {
     let native_dirs = native_directories(release);
+    // Exact definitions published before the organization transfer remain byte-identical.
+    let historical = package.contains("-exact-")
+        && matches!(
+            release.product_version.as_str(),
+            "1.0.0-alpha.1"
+                | "1.0.0-alpha.2"
+                | "1.0.0-alpha.3"
+                | "1.0.0-alpha.4"
+                | "1.0.0-alpha.5"
+                | "1.0.0-alpha.6"
+                | "1.0.0-alpha.7"
+                | "1.0.0-alpha.8"
+                | "1.0.0-alpha.9"
+        );
+    let homepage = if historical {
+        "https://github.com/Doner357/pactrun"
+    } else {
+        "https://github.com/Pipapoen/pactrun"
+    };
     let app = if test { "pactrun-test" } else { "pactrun" };
     let flavor = if test { "test" } else { "normal" };
     let mut files = BTreeMap::new();
@@ -292,6 +311,15 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
         })
         .collect::<String>();
     for artifact in release.artifacts.iter().filter(|a| a.flavor == flavor) {
+        let url = if package.contains("-exact-") {
+            artifact.url.clone()
+        } else {
+            artifact.url.replacen(
+                "https://github.com/Doner357/pactrun/releases/",
+                "https://github.com/Pipapoen/pactrun/releases/",
+                1,
+            )
+        };
         if artifact.platform == "windows-x86_64" {
             // Detect any already installed package owning this entrypoint, including
             // exact versions not known when this immutable definition was published.
@@ -300,8 +328,8 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             );
             let manifest = json!({"version": release.product_version,
                 "description": "Pactrun immutable revisions and managed instances",
-                "homepage": "https://github.com/Doner357/pactrun", "license": "MIT",
-                "architecture": {"64bit": {"url": artifact.url, "hash": artifact.sha256}},
+                "homepage": homepage, "license": "MIT",
+                "architecture": {"64bit": {"url": url, "hash": artifact.sha256}},
                 "bin": [[format!("bin/{app}.exe"), app]], "pre_install": guard});
             files.insert(
                 format!("bucket/{package}.json"),
@@ -309,8 +337,8 @@ fn catalog_definition(release: &Release, package: &str, test: bool) -> BTreeMap<
             );
         } else {
             files.insert(format!("Formula/{package}.rb"), format!(
-                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage 'https://github.com/Doner357/pactrun'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install {native_dirs}, 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
-                ruby(&artifact.url), ruby(&release.product_version), ruby(&artifact.sha256)));
+                "class {class} < Formula\n  desc 'Pactrun immutable revisions and managed instances'\n  homepage '{homepage}'\n  license 'MIT'\n  url {}\n  version {}\n  sha256 {}\n  depends_on :linux\n  depends_on arch: :x86_64\n  def install\n    Formula.installed.each do |other|\n      if other.name != name && (other.opt_bin/\"{app}\").exist?\n        raise \"Uninstall #{{other.full_name}} before installing #{{full_name}}; managed data is retained.\"\n      end\n    end\n    prefix.install {native_dirs}, 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'rust-licenses'\n  end\n  test do\n    assert_match version.to_s, shell_output(\"#{{bin}}/{app} --version\")\n  end\nend\n",
+                ruby(&url), ruby(&release.product_version), ruby(&artifact.sha256)));
         }
     }
     files
@@ -787,6 +815,38 @@ mod tests {
         assert!(!valid_url("https://user:password@example.invalid/artifact"));
         assert_eq!(ruby("x'#{not_evaluated}"), "'x\\'#{not_evaluated}'");
     }
+    #[test]
+    fn organization_transfer_preserves_all_published_exact_definitions() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let releases = load(&root.join("releases/catalog.json")).unwrap();
+        let files = catalog(&releases, &releases).unwrap();
+        for (name, contents) in &files {
+            if name.contains("-exact-") || name.starts_with("releases/") {
+                assert_eq!(
+                    fs::read_to_string(root.join(name))
+                        .unwrap()
+                        .replace("\r\n", "\n"),
+                    *contents,
+                    "{name}"
+                );
+            } else {
+                assert!(
+                    contents.contains("https://github.com/Pipapoen/pactrun"),
+                    "{name}"
+                );
+                assert!(
+                    !contents.contains("https://github.com/Doner357/pactrun"),
+                    "{name}"
+                );
+            }
+        }
+        let future = release("1.0.0-alpha.10");
+        for contents in catalog_definition(&future, "pactrun-exact-1-0-0-alpha-10", false).values()
+        {
+            assert!(contents.contains("https://github.com/Pipapoen/pactrun"));
+        }
+    }
+
     // Test-ID: PR-TEST-0635
     // Verifies: PR-REQ-0333
     #[test]

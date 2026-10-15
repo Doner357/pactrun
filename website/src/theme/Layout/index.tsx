@@ -7,7 +7,7 @@ import {useEdition} from '../../lib/edition';
 export default function Layout(props: Props) {
   const {edition, docBase, location} = useEdition();
   const missing = new URLSearchParams(location.search).get('missing');
-  const report = 'https://github.com/Doner357/pactrun/issues/new?' + new URLSearchParams({
+  const report = 'https://github.com/Pipapoen/pactrun/issues/new?' + new URLSearchParams({
     title: '[Docs] ' + edition.label,
     body: `Documentation version: ${edition.label}\nPage: ${location.pathname}${location.hash}\n\nWhat needs correcting?\n`,
   });
