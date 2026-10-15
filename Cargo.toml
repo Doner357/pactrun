@@ -4,7 +4,7 @@ version = "1.0.0-alpha.9"
 edition = "2024"
 publish = false
 license = "MIT"
-repository = "https://github.com/Doner357/pactrun"
+repository = "https://github.com/Pipapoen/pactrun"
 default-run = "pactrun"
 
 [workspace]

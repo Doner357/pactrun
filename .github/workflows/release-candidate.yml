@@ -76,7 +76,7 @@ jobs:
           subprocess.run(['cargo','fetch','--locked','--manifest-path',str(source/'Cargo.toml'),'--target',os.environ['BUILD_TARGET']], check=True)
           subprocess.run([sys.executable,str(tool),'build','--root',str(source),'--snapshot',str(snapshot),
                           '--output',str(output),'--platform',os.environ['BUILD_PLATFORM'],
-                          '--url-base',f'https://github.com/Doner357/pactrun/releases/download/v{version}'], check=True)
+                          '--url-base',f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/v{version}"], check=True)
           program = output/'cargo-target'/os.environ['BUILD_TARGET']/'release'/('pactrun.exe' if os.name=='nt' else 'pactrun')
           subprocess.run([str(program),'--version'], check=True)
           subprocess.run([str(program),'--help'], check=True)

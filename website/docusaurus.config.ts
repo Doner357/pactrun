@@ -47,7 +47,7 @@ const config: Config = {
         {type: 'custom-editionLink', target: '/commands', label: 'Commands', position: 'right'},
         {type: 'custom-editionLink', target: '/search', label: 'Search', position: 'right'},
         {type: 'custom-editionPicker', position: 'right'},
-        {href: 'https://github.com/Doner357/pactrun', label: 'GitHub', position: 'right'},
+        {href: 'https://github.com/Pipapoen/pactrun', label: 'GitHub', position: 'right'},
         {type: 'custom-editionLink', target: '/', position: 'left', label: 'Browse'},
       ],
     },

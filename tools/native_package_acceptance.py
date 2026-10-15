@@ -227,15 +227,15 @@ def manager_setup():
         run(['git','clone',empty,MANAGER/'buckets/main'],'empty-main-clone')
     run(PM+['--version'],'manager-version')
     source_url=args.public_source or PUBLISHER.as_uri()
-    run(PM+(['bucket','add','pactrun',source_url] if WIN else ['tap','--custom-remote','doner357/pactrun',source_url]),'add-native-source')
+    run(PM+(['bucket','add','pactrun',source_url] if WIN else ['tap','--custom-remote','pipapoen/pactrun',source_url]),'add-native-source')
     (ROOT/'evidence/manager-environment.json').write_text(json.dumps({k:v for k,v in ENV.items() if k.startswith(('SCOOP','HOMEBREW'))},indent=2),encoding='utf-8')
 
 def source_path(flavor):
-    return MANAGER/('buckets/pactrun' if WIN else 'Library/Taps/doner357/homebrew-pactrun')
+    return MANAGER/('buckets/pactrun' if WIN else 'Library/Taps/pipapoen/homebrew-pactrun')
 
 def app(flavor): return 'pactrun' if flavor=='normal' else 'pactrun-test'
 
-def qualified(flavor): return ('pactrun/' if WIN else 'doner357/pactrun/')+PACKAGES[flavor]
+def qualified(flavor): return ('pactrun/' if WIN else 'pipapoen/pactrun/')+PACKAGES[flavor]
 
 def pm(operation,flavor='normal',required=True,extra=()):
     name=PACKAGES[flavor] if WIN and operation in ['hold','unhold','cleanup','uninstall'] else qualified(flavor)
@@ -404,10 +404,10 @@ def scenarios():
     before=immutable_state()
     content_before=runtime_bytes() if args.store_upgrade else None
     test_before=store_dump('test') if args.store_upgrade else None
-    stable=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun'
+    stable=('pactrun/' if WIN else 'pipapoen/pactrun/')+'pactrun'
     code,_=run(PM+['install',stable],'stable-unavailable',required=False)
     check('stable cannot fall back to alpha',code!=0 and observed()==initial)
-    conflict=('pactrun/' if WIN else 'doner357/pactrun/')+'pactrun-exact-'+BASELINE_EXACT
+    conflict=('pactrun/' if WIN else 'pipapoen/pactrun/')+'pactrun-exact-'+BASELINE_EXACT
     code,_=run(PM+['install',conflict],'command-conflict',required=False)
     check('second package cannot take over the command',code!=0 and observed()==initial)
     if args.public_source:

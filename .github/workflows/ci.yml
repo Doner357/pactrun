@@ -146,7 +146,7 @@ jobs:
         run: |
           import os
           configured = bool(os.environ.get('PAGES_ORIGIN'))
-          origin = os.environ['PAGES_ORIGIN'] if configured else 'https://doner357.github.io'
+          origin = os.environ['PAGES_ORIGIN'] if configured else f"https://{os.environ['GITHUB_REPOSITORY_OWNER'].lower()}.github.io"
           base = os.environ.get('PAGES_BASE','') if configured else '/pactrun'
           assert '\n' not in origin+base and '\r' not in origin+base
           base = base.rstrip('/')+'/'
