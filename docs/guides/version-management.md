@@ -4,6 +4,10 @@ title: Manage installed versions
 
 # Manage installed versions
 
+Commands below use the new `pipapoen/pactrun` Homebrew tap. If your existing tap
+is `doner357/pactrun`, keep that prefix instead; see
+[existing installations](./installation.md#existing-installations-from-doner357).
+
 Scoop/Homebrew manage programs; Pactrun manages its data. Updating or removing a
 program package must not remove management roots, Instances, Inputs, Secrets,
 Snapshots or service resources. When next opened, a supported older Store is
@@ -21,7 +25,7 @@ pactrun --version
 
 ```sh
 brew update
-brew upgrade doner357/pactrun/pactrun-preview
+brew upgrade pipapoen/pactrun/pactrun-preview
 pactrun --version
 ```
 
@@ -36,12 +40,12 @@ scoop hold pactrun-preview
 ```
 
 ```sh
-brew pin doner357/pactrun/pactrun-preview
+brew pin pipapoen/pactrun/pactrun-preview
 ```
 
 Hold/pin changes update eligibility without replacing the executable. Inspect the
 manager's hold/pin state. To resume updates, use `scoop unhold pactrun-preview` or
-`brew unpin doner357/pactrun/pactrun-preview`, then run the update separately.
+`brew unpin pipapoen/pactrun/pactrun-preview`, then run the update separately.
 
 ## Install an exact published version
 
@@ -54,8 +58,8 @@ pactrun --version
 ```
 
 ```sh
-brew uninstall doner357/pactrun/pactrun-preview
-brew install doner357/pactrun/pactrun-exact-1-0-0-alpha-7
+brew uninstall pipapoen/pactrun/pactrun-preview
+brew install pipapoen/pactrun/pactrun-exact-1-0-0-alpha-7
 pactrun --version
 ```
 
@@ -113,8 +117,8 @@ own the same command at the same time. No source branch checkout is involved.
 
 For example, after Stable becomes available, switch from Preview with
 `scoop uninstall pactrun-preview` followed by `scoop install pactrun/pactrun`, or
-`brew uninstall doner357/pactrun/pactrun-preview` followed by
-`brew install doner357/pactrun/pactrun`. Reverse the package names to opt into Preview.
+`brew uninstall pipapoen/pactrun/pactrun-preview` followed by
+`brew install pipapoen/pactrun/pactrun`. Reverse the package names to opt into Preview.
 These Stable commands are not available during the alpha-only delivery.
 
 There is a short interval without the command between uninstall and installation.

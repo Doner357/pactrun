@@ -7,8 +7,8 @@ operations on the local machine. It runs as a single executable on Linux and Win
 
 ## Get started
 
-[Documentation website](https://doner357.github.io/pactrun/) ·
-[Preview releases](https://github.com/Doner357/pactrun/releases)
+[Documentation website](https://pipapoen.github.io/pactrun/) ·
+[Preview releases](https://github.com/Pipapoen/pactrun/releases)
 
 1. [Install Pactrun with Scoop or Homebrew](./docs/guides/installation.md).
 2. [Create your first Instance](./docs/introduction.md) in an isolated environment.

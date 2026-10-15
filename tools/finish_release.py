@@ -35,7 +35,7 @@ def finish(version,main,publication_run,merge=False):
     if checks.get('strict') is not True or 'CI gate' not in checks.get('contexts',[]):
         raise ValueError('Up-to-date required CI must protect automatic closeout')
     title='release: back-merge '+version
-    pulls=api('pulls?state=open&base=develop&head=Doner357:main')
+    pulls=api(f"pulls?state=open&base=develop&head={REPOSITORY.split('/')[0]}:main")
     if pulls:
         if len(pulls)!=1 or pulls[0]['title']!=title or pulls[0]['head']['sha']!=main:
             raise ValueError('An unrelated back-merge PR needs review')
