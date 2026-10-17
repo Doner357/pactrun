@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="460" viewBox="0 0 800 460" role="img" aria-labelledby="title desc">
+  <title id="title">Who does what?</title>
+  <desc id="desc">The Pack author defines service-specific operations. The user chooses settings and actions. Pactrun runs the Pack's programs and keeps versions, settings and results. The service provides the application and owns its live data.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .heading { font-size: 23px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 17px; fill: #475569; }
+    .label { font-size: 15px; fill: #475569; }
+    .line { fill: none; stroke: #64748b; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <rect width="800" height="460" rx="18" fill="#f1f5f9"/>
+  <rect x="28" y="28" width="348" height="112" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="424" y="28" width="348" height="112" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="28" y="28" width="6" height="112" rx="3" fill="#8b5cf6"/>
+  <rect x="424" y="28" width="6" height="112" rx="3" fill="#0284c7"/>
+  <text x="52" y="64" class="heading">Pack author</text>
+  <text x="52" y="94" class="body">Defines service-specific settings</text>
+  <text x="52" y="118" class="body">and executable steps in a Pack.</text>
+  <text x="448" y="64" class="heading">You</text>
+  <text x="448" y="94" class="body">Choose the Pack, provide settings</text>
+  <text x="448" y="118" class="body">and decide what to run.</text>
+  <path d="M 202 140 V 174 H 318 V 207" class="line"/>
+  <path d="M 598 140 V 174 H 482 V 207" class="line"/>
+  <text x="96" y="190" class="label">defines the procedure</text>
+  <text x="565" y="190" class="label">chooses an operation</text>
+  <rect x="180" y="210" width="440" height="112" rx="12" fill="#0f766e"/>
+  <text x="400" y="246" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="700" fill="#ffffff">Pactrun</text>
+  <text x="400" y="276" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#ffffff">Keeps versions, settings and execution results.</text>
+  <text x="400" y="301" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#ffffff">Runs the steps defined by the Pack.</text>
+  <path d="M 400 322 V 372" class="line"/>
+  <text x="420" y="353" class="label">through the Pack's programs or scripts</text>
+  <rect x="100" y="376" width="600" height="60" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="124" y="413" class="heading">Your service</text>
+  <text x="293" y="413" class="body">Provides the app; owns its live data.</text>
+</svg>

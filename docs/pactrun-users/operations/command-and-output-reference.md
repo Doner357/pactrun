@@ -20,15 +20,15 @@ For Action parameter syntax, timeouts, defaults, and examples, read the
 
 ## Choose a command family
 
-| Task | Commands | Procedure |
+| Task | Commands | Reference |
 | --- | --- | --- |
-| Install or export a Revision | pack, revision | [Pack management](../../guides/pack-management.md) |
-| Create and inspect Instances | instance create/list/show | [First Instance](../../introduction.md) |
-| Supply or export configuration | input | [Inputs](../../guides/configure-inputs.md) |
-| Execute and inspect operations | action, invoke, run | [Actions and diagnostics](../../guides/run-and-diagnose.md) |
-| Inspect live data declarations | service-storage, resource | [Resources](../../guides/service-resources.md) |
-| Back up or transition | snapshot, instance migrate | [Snapshots and Migration](./snapshots-migrations-and-recovery.md) |
-| Retire and reclaim | instance delete/abandon, storage gc | [Retirement](../../guides/retirement.md) |
+| Install or export a Revision | pack, revision | [Command details](../reference/command-details.md) |
+| Create and inspect Instances | instance create/list/show | [Command details](../reference/command-details.md) |
+| Supply or export configuration | input | [Command details](../reference/command-details.md) |
+| Execute and inspect operations | action, invoke, run | [Invoke](./invoke-reference.md) |
+| Inspect live data declarations | service-storage, resource | [Resources](../reference/resource-details.md) |
+| Back up or transition | snapshot, instance migrate | [Snapshots](../reference/snapshot-details.md), [Migration](../reference/migration-details.md) |
+| Retire and reclaim | instance delete/abandon, storage gc | [Retirement](../reference/retirement-details.md) |
 
 ## References and pagination
 

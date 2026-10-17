@@ -22,7 +22,7 @@ cargo run -- --help
 ```
 
 Run exercises against an isolated, explicitly provisioned storage root;
-see [data locations](docs/guides/data-location.md).
+see [storage configuration](docs/pactrun-users/reference/configuration.md).
 
 ## Make a change
 

@@ -116,10 +116,19 @@ test('agent source files are excluded from human document generation', async () 
 test('repository README links and machine-format descriptions follow current contracts', async () => {
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
   const contributing = await readFile(path.join(root, 'CONTRIBUTING.md'), 'utf8');
+  const artwork = await Promise.all(['.github/assets/readme-responsibilities.svg', '.github/assets/readme-tooling.svg']
+    .map(async name => [name, await readFile(path.join(root, name), 'utf8')]));
+  for (const [name, svg] of artwork) {
+    assert.match(svg, /<svg\s/, name);
+    assert.match(svg, /<title\b/, name + ': accessible title');
+    assert.match(svg, /<desc\b/, name + ': text alternative');
+    assert.doesNotMatch(svg, /<script\b|\son\w+\s*=/i, name + ': no active content');
+  }
   const documents = await readDocuments(path.join(root, 'docs'));
   const maintenance = await Promise.all(['website/README.md', 'tests/README.md', 'tools/README.md'].map(async name => [name, await readFile(path.join(root, name), 'utf8')]));
   validateLinks([
     ['README.md', readme],
+    ...artwork,
     ['CONTRIBUTING.md', contributing],
     ...maintenance,
     ['LICENSE', await readFile(path.join(root, 'LICENSE'), 'utf8')],
@@ -132,4 +141,40 @@ test('repository README links and machine-format descriptions follow current con
       assert.ok(readme.includes('`' + declaration + '`'), file + ': README must describe ' + declaration);
     }
   }
+});
+
+test('Pactrun home follows the README structure with explanatory diagrams, not a tutorial', async () => {
+  const current = await readFile(path.join(root, 'docs/index.md'), 'utf8');
+  const released = await readFile(path.join(root, 'website/versioned_docs/version-1.0.0-alpha.9/index.md'), 'utf8');
+  assert.ok(released.includes('](./guides/installation.md)'));
+  assert.notEqual(current, released);
+  assert.match(current, /^slug: \/$/m);
+  const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+  const headings = text => [...text.matchAll(/^## (.+)$/gm)].map(match => match[1]);
+  assert.deepEqual(headings(current), headings(readme));
+  const comparison = current.split('## Where it fits\n')[1].split('## Install\n')[0];
+  assert.deepEqual([...comparison.matchAll(/^### (.+)$/gm)].map(match => match[1]),
+    ['Command interfaces and task runners', 'Service managers and container tools', 'Application management platforms']);
+  for (const product of ['Taskfile.yml', 'YunoHost', 'Cloudron', 'Coolify']) assert.ok(comparison.includes(product));
+  assert.doesNotMatch(current, /className="pactrun-home/);
+  const install = current.split('## Install\n')[1].split('## Use a Pack\n')[0];
+  assert.doesNotMatch(current.replace(install, ''), /^```/m, 'Only Install contains executable instructions');
+  assert.equal([...install.matchAll(/^```(?:powershell|sh)$/gm)].length, 2);
+  for (const text of ['Windows x86-64', 'glibc 2.36 or newer', 'Git',
+    'scoop install pactrun/pactrun-preview', 'brew install pipapoen/pactrun/pactrun-preview',
+    ':::warning Preview only', 'there is no Stable release yet']) assert.ok(install.includes(text), text);
+  const images = [...current.matchAll(/!\[([^\]]+)\]\((\/img\/intro-alpha9\/[^)]+)\)/g)];
+  assert.equal(images.length, 2);
+  for (const [, alt, url] of images) {
+    assert.ok(alt.length > 25, 'The explanation must also be available without the picture');
+    const svg = await readFile(path.join(root, 'website/static', url.slice(1)), 'utf8');
+    assert.match(svg, /<title\b/);
+    assert.match(svg, /<desc\b/);
+    assert.doesNotMatch(svg, /<script\b|\son\w+\s*=/i);
+  }
+  for (const destination of ['#install', './guides/index.md', './package-authors/index.md']) {
+    assert.ok(current.includes('](' + destination + ')'), destination);
+  }
+  const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
+  assert.ok(!sidebar.includes("'introduction'"), 'Removed tutorial must not remain in navigation');
 });

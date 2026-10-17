@@ -108,9 +108,9 @@ can leave external effects that require inspection; it does not promise rollback
 ## Examples
 
 These examples assume an Action named `inspect` with a string parameter named
-`message`. The [author guide](../../package-authors/fundamentals/actions-inputs-and-parameters.md)
-shows that declaration. The parameter-free starter Pack needs that declaration
-installed in a new Revision before these parameter examples apply.
+`message`. See [Pack fields](../../package-authors/reference/pack-fields.md)
+for parameter declarations. The selected Revision must declare this Action and
+parameter before these examples apply.
 
 ```text
 pactrun invoke demo inspect --param message=hello --plan

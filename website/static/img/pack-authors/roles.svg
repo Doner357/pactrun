@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="650" viewBox="0 0 680 650" role="img" aria-labelledby="title desc">
+  <title id="title">From Pack author to service operation</title>
+  <desc id="desc">The author defines a Pack. The user selects an operation and supplies settings. Both feed into Pactrun, which checks declarations, coordinates execution, and records results. Pack Hooks call existing tools such as Compose or service utilities to operate the service. The service implements its own application features and behavior. The arrows show an operation, not continuous monitoring.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#64748b"/></marker></defs>
+  <style>
+    text {font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-anchor: middle;}
+    .title {font-size: 23px; font-weight: 700; fill: #0f172a;}
+    .body {font-size: 19px; fill: #334155;}
+    .arrow {fill: none; stroke: #64748b; stroke-width: 2; marker-end: url(#arrow);}
+  </style>
+  <rect width="680" height="650" rx="18" fill="#f1f5f9"/>
+  <rect x="20" y="22" width="310" height="112" rx="12" fill="#fff" stroke="#94a3b8"/>
+  <text class="title" x="175" y="56">Pack author → Pack</text>
+  <text class="body" x="175" y="86">Defines settings, operations,</text>
+  <text class="body" x="175" y="112">and version transitions</text>
+  <rect x="350" y="22" width="310" height="112" rx="12" fill="#fff" stroke="#94a3b8"/>
+  <text class="title" x="505" y="56">User</text>
+  <text class="body" x="505" y="86">Supplies settings and</text>
+  <text class="body" x="505" y="112">chooses an operation</text>
+  <path class="arrow" d="M175 134V155H290V176"/>
+  <path class="arrow" d="M505 134V155H390V176"/>
+  <rect x="70" y="180" width="540" height="100" rx="12" fill="#dbeafe" stroke="#60a5fa"/>
+  <text class="title" x="340" y="214">Pactrun</text>
+  <text class="body" x="340" y="242">Checks declarations · coordinates execution</text>
+  <text class="body" x="340" y="267">Records execution results</text>
+  <path class="arrow" d="M340 280V316"/>
+  <rect x="70" y="320" width="540" height="76" rx="12" fill="#fff" stroke="#94a3b8"/>
+  <text class="title" x="340" y="352">Pack Hooks</text>
+  <text class="body" x="340" y="380">Programs that implement the requested operation</text>
+  <path class="arrow" d="M340 396V432"/>
+  <rect x="70" y="436" width="540" height="76" rx="12" fill="#fff" stroke="#94a3b8"/>
+  <text class="title" x="340" y="468">Existing tools</text>
+  <text class="body" x="340" y="496">For example, Compose and service utilities</text>
+  <path class="arrow" d="M340 512V548"/>
+  <rect x="70" y="552" width="540" height="76" rx="12" fill="#dcfce7" stroke="#86efac"/>
+  <text class="title" x="340" y="584">Managed service</text>
+  <text class="body" x="340" y="612">Implements application features and behavior</text>
+</svg>

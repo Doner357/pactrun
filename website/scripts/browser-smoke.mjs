@@ -143,10 +143,10 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({path: path.join(output, 'search-mobile.png'), fullPage: false});
   checks.push('mobile first result title is visible without opening filters');
-  await page.goto(url('introduction'), {waitUntil: 'networkidle'});
+  await page.goto(url('pactrun-users/reference/'), {waitUntil: 'networkidle'});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  await page.screenshot({path: path.join(output, 'tutorial-mobile.png'), fullPage: false});
-  checks.push('mobile tutorial has no viewport overflow');
+  await page.screenshot({path: path.join(output, 'reference-mobile.png'), fullPage: false});
+  checks.push('mobile reference has no viewport overflow');
 
   await page.route('**/document-catalog.json', route => route.abort());
   await page.goto(url('search'), {waitUntil: 'networkidle'});

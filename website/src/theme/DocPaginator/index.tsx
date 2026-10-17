@@ -10,8 +10,19 @@ import Link from '@docusaurus/Link';
 export default function DocPaginator(props: Props): ReactNode {
   const {pathname} = useLocation();
   const {base, docBase, edition: catalog} = useEdition();
-  const entry = catalog.pages.find(page => (base + page.url.slice(1)).replace(/\/$/, '') === pathname.replace(/\/$/, ''));
+  const pageAt = (permalink: string) => catalog.pages.find(page =>
+    (base + page.url.slice(1)).replace(/\/$/, '') === permalink.replace(/\/$/, ''));
+  const entry = pageAt(pathname);
   if (!entry) return null;
+  const inTutorial = (source: string) => source === 'package-authors/index.md' ||
+    source.startsWith('package-authors/tutorial/');
+  if (entry.state === 'current' && inTutorial(entry.source)) {
+    const tutorialTarget = (item: Props['previous']) => {
+      const page = item && pageAt(item.permalink);
+      return page && inTutorial(page.source) ? item : undefined;
+    };
+    return <OriginalPaginator {...props} previous={tutorialTarget(props.previous)} next={tutorialTarget(props.next)} />;
+  }
   const route = readingNavigation(entry.source, entry.state);
   const target = (source?: string) => {
     const page = catalog.pages.find(item => item.source === source);

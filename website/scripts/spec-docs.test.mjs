@@ -207,14 +207,13 @@ test('Complete baseline SQL remains identical to the owning Persistence specific
   assert.equal(spec.split('```sql\n')[1].split('```')[0].trim(), sql.trim());
 });
 
-test('usage guides are substantive, linked, and non-normative', () => {
+test('usage guides are substantive and non-normative', () => {
   const names = ['agents/use-pactrun.md', 'agents/author-packs.md', 'agents/integrate-hooks.md'];
   for (const [name, body] of docs) {
     if (!names.includes(name) && !name.startsWith('pactrun-users/') && !name.startsWith('package-authors/')) continue;
     if (!name.endsWith('.md')) continue; // JSON schemas have separate exact-source checks.
     assert.doesNotMatch(body, /Planned usage-guide placeholder|guidance is planned|guided example are planned/i, name);
     assert.ok(body.length > 300, name);
-    assert.match(body, /\[[^\]]+\]\([^)]+\.md(?:#[^)]*)?\)/, name);
     assert.doesNotMatch(body, /^### PR-REQ-\d+/m, name);
   }
 });

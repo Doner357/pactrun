@@ -8,7 +8,7 @@ The resource-model specification is in
 [Packages, Revisions, and Instances](../../spec/core/objects.md).
 
 For a plain-language explanation, read
-[the concept guide](../../pactrun-users/concepts/packages-revisions-and-instances.md).
+[the user vocabulary](../../pactrun-users/reference/vocabulary.md).
 
 ## Requirement links {#previous-requirement-links}
 
