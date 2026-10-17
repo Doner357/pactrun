@@ -45,10 +45,10 @@ try {
   await page.waitForURL('**/' + release + '/pactrun-users/operations/invoke-reference');
   checks.push('brand, Commands and command-reference links preserve edition');
 
-  await page.goto(url('next/guides/pack-management'), {waitUntil: 'networkidle'});
+  await page.goto(url(release + '/guides/pack-management'), {waitUntil: 'networkidle'});
   await page.locator('.theme-doc-markdown').getByRole('link', {name: 'command overview'}).click();
-  await page.waitForURL(url('next/commands'));
-  checks.push('absolute Markdown command links remain in development');
+  await page.waitForURL(url(release + '/commands'));
+  checks.push('absolute Markdown command links remain in the released edition');
 
   await page.goto(url('search?q=PR-REQ-0258&audience=Authors'), {waitUntil: 'networkidle'});
   await ready();
@@ -79,7 +79,7 @@ try {
   }
   checks.push('HTML discovery, text and metadata identify the same edition');
 
-  await page.goto(url('next/not-a-real-page'), {waitUntil: 'networkidle'});
+  await page.goto(url('next/package-authors/tutorial/first-hello-pack/installing-the-first-revision'), {waitUntil: 'networkidle'});
   await picker().selectOption(release);
   await page.getByRole('status').filter({hasText: 'not available'}).waitFor();
   checks.push('unavailable topic produces an explicit version-specific notice');

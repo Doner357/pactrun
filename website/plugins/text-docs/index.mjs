@@ -36,8 +36,13 @@ export function scopeTextLinks(body, prefix) {
       return line;
     }
     if (fence) return line;
-    return line.replace(/(`+).*?\1|\[[^\]\n]*\]\((\/(?!\/)[^)\s]*)\)/g,
-      (match, code, href) => code ? match : match.replace('](' + href + ')', '](' + prefix + href + ')'));
+    return line.replace(/(`+).*?\1|(!?)\[[^\]\n]*\]\((\/(?!\/)[^)\s]*)\)/g,
+      (match, code, image, href) => {
+        if (code) return match;
+        // Static images live at the site base, not under a documentation edition.
+        const destination = image ? prefix.slice(0, prefix.lastIndexOf('/')) : prefix;
+        return match.replace('](' + href + ')', '](' + destination + href + ')');
+      });
   }).join('\n');
 }
 

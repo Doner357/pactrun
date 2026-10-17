@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 import tempfile
@@ -15,15 +14,13 @@ class BrowserDriverTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
 
-    def test_reader_checks_use_the_exact_edition_and_no_browser_build(self):
-        (self.root/'website').mkdir()
-        (self.root/'website/versions.json').write_text(json.dumps(['1.0.0-alpha.9']))
+    def test_reader_checks_use_development_edition_and_no_browser_build(self):
         with patch.object(docs,'ROOT',self.root),patch.object(docs.subprocess,'run') as run:
             docs.checks('https://example.invalid/pactrun//',self.root/'out')
         commands=[call.args[0] for call in run.call_args_list]
         self.assertEqual(len(commands),3)
         self.assertEqual(commands[0][2],'https://example.invalid/pactrun/')
-        self.assertEqual(commands[2][2],'https://example.invalid/pactrun/1.0.0-alpha.9/')
+        self.assertEqual(commands[2][2],'https://example.invalid/pactrun/next/')
         self.assertTrue(all(command[0]=='node' for command in commands))
 
     def test_owned_preview_is_stopped_when_a_check_fails(self):

@@ -8,10 +8,9 @@ Use ServiceStorage for service-owned live data. Use managed Inputs for detached
 configuration bytes. Neither a resource declaration nor a successful command
 means the service is healthy, stopped, backed up, or coherent.
 
-This page complements [Pack fields](./pack-fields.md). The
-[Migration tutorial](../managed-capabilities/migrations.md) provides a runnable
-Input transition; [declaration types and identity](./revision-format.md) provides
-the complete mapping and validation details within this author section.
+This page complements [Pack fields](./pack-fields.md).
+[Declaration types and identity](./revision-format.md) provides the complete
+mapping and validation details within this author section.
 
 ## Storage and resources
 

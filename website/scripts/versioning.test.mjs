@@ -75,6 +75,19 @@ test('absolute Markdown links stay in their edition without changing external li
   }
 });
 
+test('static images stay at the site base in text editions, without rewriting code samples', () => {
+  const source = '![Service illustration](/img/intro-alpha9/workbench.svg)\n[Commands](/commands)\n`![sample](/img/sample.svg)`\n```md\n![sample](/img/sample.svg)\n```\n';
+  for (const base of ['/', '/pactrun/']) {
+    for (const version of ['current', '1.0.0-alpha.9']) {
+      const body = textBody('index.md', source, version, base);
+      assert.ok(body.includes('![Service illustration](' + base + 'img/intro-alpha9/workbench.svg)'));
+      assert.ok(body.includes('[Commands](' + base + (version === 'current' ? 'next' : version) + '/commands)'));
+      assert.ok(body.includes('`![sample](/img/sample.svg)`'));
+      assert.ok(body.includes('```md\n![sample](/img/sample.svg)\n```'));
+    }
+  }
+});
+
 test('agent website links carry the base path and edition without rewriting code or schemas', () => {
   const source = '# Guide\n[Commands](/commands) and [source](../spec/index.md)\n`[example](/commands)`\n```md\n[example](/commands)\n```\n';
   const text = textBody('guides/example.md', source, 'current', '/pactrun/');

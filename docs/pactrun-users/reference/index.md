@@ -4,12 +4,9 @@ title: User reference
 
 # User reference
 
-Start with [user tasks](../../guides/index.md) for procedures. Use the references
-below for complete spelling, options, output meanings, limits, and safety rules.
-They remain within the user section; Spec and Development are optional maintainer sources.
-These pages are lookup material, not a course or a checklist of operations to run.
-If you are new, complete [installation](../../guides/installation.md) and the
-[first Instance tutorial](../../introduction.md), then choose a task.
+Use these references for complete spelling, options, output meanings, limits,
+and safety rules. These pages are lookup material, not a sequence of operations
+to run. Spec and Development are optional maintainer sources.
 
 | Need | Reference |
 | --- | --- |

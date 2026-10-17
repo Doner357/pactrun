@@ -1,95 +1,62 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFile, mkdir, mkdtemp, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {spawnSync} from 'node:child_process';
+import {editions} from '../plugins/editions.mjs';
+import {readDocuments} from '../plugins/text-docs/index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const source = await readFile(path.join(root, 'docs/introduction.md'), 'utf8');
-const windows = process.platform === 'win32';
-const language = windows ? 'powershell' : 'sh';
-const snippet = source.match(new RegExp('^```' + language + '\\r?\\n([\\s\\S]*?)^```', 'm'))?.[1];
-assert.ok(snippet, 'The introductory setup must be executable from its published code block');
-const output = path.join(root, 'target/tutorial-setup-tests');
-await mkdir(output, {recursive: true});
+for (const directory of ['docs']) {
+  test(`${directory}: reader sections retain references and Hello Pack lessons`, async () => {
+    const documents = new Map(await readDocuments(path.join(root, directory)));
+    assert.ok(!documents.has('introduction.md'));
+    const exceptions = new Set(['guides/index.md', 'package-authors/index.md',
+      'package-authors/tutorial/first-hello-pack/intro.md',
+      'package-authors/tutorial/first-hello-pack/understanding-a-pack.md',
+      'package-authors/tutorial/first-hello-pack/installing-the-first-revision.md',
+      'pactrun-users/operations/command-and-output-reference.md',
+      'pactrun-users/operations/invoke-reference.md']);
+    for (const name of documents.keys()) {
+      if (/^(guides|package-authors|pactrun-users)\//.test(name))
+        assert.ok(name.includes('/reference/') || exceptions.has(name), name);
+    }
+    for (const name of ['package-authors/reference/pack-fields.md',
+      'package-authors/reference/service-fields.md', 'package-authors/reference/shell-loader.md',
+      'pactrun-users/reference/index.md', ...exceptions]) assert.ok(documents.has(name), name);
+    const intro = documents.get('package-authors/tutorial/first-hello-pack/intro.md');
+    assert.match(intro, /Service Storage/);
+    assert.match(intro, /Gitea/);
+  });
+}
 
-const locations = await readFile(path.join(root, 'docs/guides/data-location.md'), 'utf8');
-const selection = locations.match(new RegExp('^```' + language + '\\r?\\n([\\s\\S]*?)^```', 'm'))?.[1];
-assert.ok(selection, 'Data-location selection must come from the documented shell block');
-for (const existing of ['none', 'directory', 'file']) {
-  test(`${language} Store selection preserves ${existing} without provisioning`, async () => {
-    const cwd = await mkdtemp(path.join(output, 'selection-'));
-    const destination = path.join(cwd, 'pactrun-data');
-    const sentinel = existing === 'directory' ? path.join(destination, 'sentinel') : destination;
-    if (existing === 'directory') await mkdir(destination);
-    if (existing !== 'none') await writeFile(sentinel, 'preserve me');
-    const env = {...process.env, PACTRUN_STORAGE_ROOT: 'previous-selection'};
-    if (windows) { delete env.PSModulePath; delete env.PSMODULEPATH; }
-    const script = windows
-      ? selection + '\n[Console]::WriteLine($env:PACTRUN_STORAGE_ROOT)'
-      : selection + '\nprintf "%s\\n" "$PACTRUN_STORAGE_ROOT"';
-    const result = spawnSync(windows ? 'powershell.exe' : 'sh',
-      windows ? ['-NoProfile', '-NonInteractive', '-Command', script] : ['-c', script],
-      {cwd, env, encoding: 'utf8', timeout: 15000});
-    assert.ifError(result.error);
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), destination);
-    if (existing === 'none') {
-      const {stat} = await import('node:fs/promises');
-      await assert.rejects(stat(destination), {code: 'ENOENT'});
-    } else {
-      assert.equal(await readFile(sentinel, 'utf8'), 'preserve me');
-      if (existing === 'directory') {
-        const {readdir} = await import('node:fs/promises');
-        assert.deepEqual(await readdir(destination), ['sentinel']);
+test('released alpha.9 keeps its original tutorial routes', async () => {
+  const documents = new Map(await readDocuments(path.join(root, 'website/versioned_docs/version-1.0.0-alpha.9')));
+  assert.ok(documents.has('introduction.md'));
+  assert.ok(documents.has('package-authors/fundamentals/authoring-model.md'));
+  assert.ok(!documents.has('package-authors/tutorial/first-hello-pack/intro.md'));
+});
+
+test('tutorial Pack source examples use a format supported by their edition', async () => {
+  const site = path.join(root, 'website');
+  for (const edition of await editions(site)) {
+    const documents = new Map(await readDocuments(edition.docsDir));
+    const tutorial = [...documents].filter(([name]) => name.startsWith('package-authors/tutorial/'));
+    if (tutorial.length === 0) continue;
+
+    const formats = documents.get('spec/storage/format-domains.md')
+      ?.match(/Pack source writes `([^`]+)` and also reads `([^`]+)`/);
+    assert.ok(formats, `${edition.id}: Pack source support must be stated in format-domains.md`);
+    const supported = new Set(formats.slice(1));
+    let examples = 0;
+    for (const [name, body] of tutorial) {
+      for (const block of body.matchAll(/^```(?:yaml|yml)[^\n]*\n([\s\S]*?)^```/gm)) {
+        for (const marker of block[1].matchAll(/^source_format:\s*"([^"\n]+)"\s*$/gm)) {
+          examples++;
+          assert.ok(supported.has(marker[1]),
+            `${edition.id}/${name}: source_format ${marker[1]} is unsupported; expected ${[...supported].join(' or ')}`);
+        }
       }
     }
-  });
-}
-
-for (const existing of ['none', 'directory', 'file']) {
-  test(`${language} tutorial setup: ${existing === 'none' ? 'fresh directory' : 'refuse existing ' + existing}`, async () => {
-    const cwd = await mkdtemp(path.join(output, 'setup-'));
-    const destination = path.join(cwd, 'pactrun-demo');
-    const sentinel = existing === 'directory' ? path.join(destination, 'sentinel') : destination;
-    if (existing === 'directory') await mkdir(destination);
-    if (existing !== 'none') await writeFile(sentinel, 'preserve me');
-    const script = windows ? `
-$before = (Get-Location).Path
-$preference = $ErrorActionPreference
-$ok = $false
-try {
-${snippet}
-$ok = $true
-} catch { }
-[ordered]@{ok=$ok; cwd=(Get-Location).Path; storage=$env:PACTRUN_STORAGE_ROOT; preferencePreserved=($preference -eq $ErrorActionPreference)} | ConvertTo-Json -Compress
-` : `${snippet}
-status=$?
-printf '%s\\n' "$status" "$PWD" "$PACTRUN_STORAGE_ROOT"
-`;
-    const result = spawnSync(windows ? 'powershell.exe' : 'sh', windows
-      ? ['-NoProfile', '-NonInteractive', '-Command', script] : ['-c', script],
-    {cwd, env: {...process.env, PACTRUN_STORAGE_ROOT: 'unchanged-test-store'}, encoding: 'utf8', timeout: 15000});
-    assert.ifError(result.error);
-    assert.equal(result.status, 0, result.stderr);
-    let observed;
-    if (windows) {
-      observed = JSON.parse(result.stdout.trim());
-      assert.equal(observed.preferencePreserved, true);
-    } else {
-      const [status, workingDirectory, storage] = result.stdout.trim().split('\n');
-      observed = {ok: status === '0', cwd: workingDirectory, storage};
-    }
-    assert.equal(observed.ok, existing === 'none', result.stderr);
-    assert.equal(observed.cwd, existing === 'none' ? destination : cwd);
-    assert.equal(observed.storage, existing === 'none' ? path.join(destination, 'store') : 'unchanged-test-store');
-    if (existing !== 'none') assert.equal(await readFile(sentinel, 'utf8'), 'preserve me');
-    else {
-      const {stat} = await import('node:fs/promises');
-      assert.ok((await stat(path.join(destination, 'pack'))).isDirectory());
-      await assert.rejects(stat(path.join(destination, 'store')), {code: 'ENOENT'},
-        'Tutorial setup selects a Store; Pactrun, not the shell snippet, provisions it');
-    }
-  });
-}
+    assert.ok(examples > 0, `${edition.id}: tutorial must include a Pack source format example`);
+  }
+});

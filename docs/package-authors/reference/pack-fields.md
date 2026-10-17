@@ -9,7 +9,6 @@ Use this reference while editing `pactrun.yaml`. The paths below are YAML paths:
 Fields not listed by the selected shape are rejected. Omission uses a documented
 default; it does not mean that arbitrary `null` values are accepted.
 
-Start with the [complete runnable Pack](../fundamentals/authoring-model.md).
 For the exact grammar, portable metadata shapes, and path rules, use the
 [complete source reference](./source-format.md). Advanced normalized declaration
 rules are in [declaration types and identity](./revision-format.md).
@@ -198,9 +197,9 @@ authors use the [message reference](./hook-protocol.md).
 
 All fields listed inside a present capability are required; empty sequences are
 valid where the capability needs no parameters or bindings. Capture/Restore may
-be declared independently. Follow the [Snapshot tutorial](../managed-capabilities/snapshots-and-managed-data.md)
-for candidate registration and fresh-store recovery, and
-[Cleanup guidance](../managed-capabilities/hooks-recovery-and-cleanup.md) for failure handling.
+be declared independently. See the [Shell helper reference](./shell-loader.md)
+for Hook interactions and the [declaration reference](./revision-format.md)
+for capability contracts.
 Check [Snapshot authoring limits](./snapshot-limits.md) before choosing payload
 sizes or descriptor counts.
 

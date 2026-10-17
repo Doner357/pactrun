@@ -1,6 +1,5 @@
 """Run existing version/reader browser checks; always stop the owned preview."""
 import argparse
-import json
 import os
 from pathlib import Path
 import socket
@@ -14,10 +13,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def checks(base,output):
     base=base.rstrip('/')+'/'
-    edition=json.loads((ROOT/'website/versions.json').read_text())[0]
     for script,url,name in [('verify-publication.mjs',base,'publication'),
                             ('version-browser.mjs',base,'versions'),
-                            ('role-browser.mjs',base.rstrip('/')+'/'+edition+'/','roles')]:
+                            ('role-browser.mjs',base.rstrip('/')+'/next/','roles')]:
         subprocess.run(['node',str(ROOT/'website/scripts'/script),url,str(output/name)],cwd=ROOT,check=True)
 
 
