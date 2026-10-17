@@ -1,12 +1,5 @@
 // Editorial reading routes, not product operation or authorization rules.
-export const readingSequences = {
-  Users: ['guides/index.md', 'guides/installation.md', 'introduction.md', 'guides/use-pack.md'],
-  Authors: ['package-authors/index.md', 'package-authors/setup.md',
-    'package-authors/fundamentals/authoring-model.md',
-    'package-authors/fundamentals/actions-inputs-and-parameters.md',
-    'package-authors/fundamentals/recipes-and-runtime-content.md',
-    'package-authors/managed-capabilities/hooks-recovery-and-cleanup.md'],
-};
+export const readingSequences = {Users: [], Authors: []};
 
 export function readingNavigation(source, state = 'current') {
   if (state !== 'current') return {kind: 'record', back: 'spec/index.md', label: 'Read the specification'};

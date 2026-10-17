@@ -30,19 +30,45 @@ async function scopedSearch(role, query) {
 }
 try {
   await open('package-authors/');
-  await article().getByRole('link', {name: 'Prepare an isolated authoring workspace'}).click();
-  await article().getByRole('heading', {name: 'Prepare an authoring workspace', exact: true}).waitFor();
-  assert.ok((await article().innerText()).includes('PACTRUN_STORAGE_ROOT'));
-  const nextTutorial = page.locator('.pagination-nav__link--next');
-  assert.ok((await nextTutorial.innerText()).includes('Author your first Pack'));
-  await nextTutorial.click();
-  await article().getByRole('heading', {name: 'Author your first Pack', exact: true}).waitFor();
-  assert.ok((await article().innerText()).includes('Windows variant'));
-  checks.push('author landing, setup and executable tutorial stay in Authors');
+  assert.equal(await page.locator('.pagination-nav__link--prev').count(), 0);
+  await page.locator('.pagination-nav__link--next').click();
+  await article().getByRole('heading', {name: 'Getting Ready', exact: true}).waitFor();
+  const tutorialLinks = await page.locator('.pagination-nav a').evaluateAll(items => items.map(item => item.getAttribute('href')));
+  assert.ok(tutorialLinks.every(href => href.includes('/package-authors/tutorial/') || /\/package-authors\/?$/.test(href)));
+  await page.locator('.pagination-nav__link--prev').click();
+  await article().getByRole('heading', {name: 'Pack authors', exact: true}).waitFor();
+  checks.push('tutorial pagination connects the author introduction and lesson without entering Reference');
+  const authorSidebar = page.locator('.theme-doc-sidebar-container');
+  await authorSidebar.getByText('Tutorial', {exact: true}).click();
+  await authorSidebar.getByText('First Hello Pack', {exact: true}).click();
+  await authorSidebar.getByRole('link', {name: 'Getting Ready', exact: true}).click();
+  await article().getByRole('heading', {name: 'Getting Ready', exact: true}).waitFor();
+  assert.ok((await article().innerText()).includes('Service Storage'));
+  checks.push('author sidebar opens the first Hello Pack introduction');
+  await page.locator('.pagination-nav__link--next').click();
+  await article().getByRole('heading', {name: 'Understanding a Pack', exact: true}).waitFor();
+  await article().locator('img').evaluateAll(async images => {
+    await Promise.all(images.map(image => image.decode()));
+    if (images.length !== 2 || images.some(image => image.naturalWidth === 0))
+      throw new Error('Pack concept diagrams did not load');
+  });
+  await page.screenshot({path: path.join(output, 'understanding-a-pack.png'), fullPage: true});
+  await page.locator('.pagination-nav__link--next').click();
+  await article().getByRole('heading', {name: 'Installing the First Revision', exact: true}).waitFor();
+  assert.equal(await page.locator('.pagination-nav__link--next').count(), 0);
+  const installationLesson = await article().innerText();
+  for (const command of ['pactrun pack install ./pack', 'pactrun revision list',
+    "pactrun revision show 'REVISION_REFERENCE'"]) assert.ok(installationLesson.includes(command), command);
+  await page.locator('.pagination-nav__link--prev').click();
+  await article().getByRole('heading', {name: 'Understanding a Pack', exact: true}).waitFor();
+  await page.locator('.pagination-nav__link--prev').click();
+  await article().getByRole('heading', {name: 'Getting Ready', exact: true}).waitFor();
+  checks.push('Hello Pack lessons connect setup, Pack concepts and installation in order');
 
   await open('package-authors/');
-  await article().getByRole('link', {name: 'Pack fields, choices, defaults, and examples'}).click();
+  await page.locator('.theme-doc-sidebar-container').getByRole('link', {name: 'Pack fields and values', exact: true}).click();
   await article().getByRole('heading', {name: 'Pack fields and values', exact: true}).waitFor();
+  assert.equal(await page.locator('.pagination-nav__link--next').count(), 0);
   const fields = await article().innerText();
   for (const value of ['io.terminal', 'interactive', 'required', 'protection', 'parameters', 'There is no default terminal mode']) assert.ok(fields.includes(value), value);
   const sidebarLinks = await page.locator('.theme-doc-sidebar-container a[href]').evaluateAll(links => links.map(link => link.getAttribute('href')).filter(href => href.startsWith('/')));
@@ -59,7 +85,7 @@ try {
   checks.push('author can look up values, defaults and service-transition meanings locally');
 
   await open('package-authors/');
-  await article().getByRole('link', {name: 'Direct Hook message reference'}).click();
+  await page.locator('.theme-doc-sidebar-container').getByRole('link', {name: 'Direct Hook message reference', exact: true}).click();
   await article().getByRole('heading', {name: 'Direct Hook message reference', exact: true}).waitFor();
   assert.ok((await article().innerText()).includes('session_start'));
   assert.ok((await article().innerText()).includes('completion_accepted'));
@@ -68,6 +94,7 @@ try {
   checks.push('direct Hook author can read complete exchanges without opening Spec');
 
   await open('guides/');
+  await article().getByRole('link', {name: 'User reference', exact: true}).click();
   await article().getByRole('link', {name: 'User vocabulary', exact: true}).click();
   await article().getByRole('heading', {name: 'User vocabulary', exact: true}).waitFor();
   assert.ok((await article().innerText()).includes('Detached allocation'));
@@ -90,16 +117,15 @@ try {
   await article().getByRole('link', {name: 'Retirement and recovery', exact: true}).click();
   await article().getByRole('heading', {name: 'Retirement and recovery details', exact: true}).waitFor();
   assert.ok((await article().innerText()).includes('--assert-cleanup-complete'));
-  await open('guides/recovery');
+  await open('pactrun-users/reference/command-details');
   assert.ok((await article().innerText()).includes('pactrun instance resolve-manual-recovery'));
   checks.push('user can find recovery and deletion completion syntax without a developer page');
 
-  await open('package-authors/managed-capabilities/snapshots-and-managed-data');
-  // Section permalink controls contribute to the accessible heading name.
-  const example = article().locator('h2').filter({hasText: 'Worked example: capture and read one value'});
-  assert.ok(await example.isVisible());
-  assert.equal(await example.evaluate(el => !!el.closest('details')), false);
-  checks.push('worked Snapshot procedure is visible outside optional maintainer sources');
+  for (const route of ['introduction', 'package-authors/setup', 'guides/recovery',
+    'package-authors/managed-capabilities/snapshots-and-managed-data']) {
+    assert.equal((await page.request.get(url(route))).status(), 404, route);
+  }
+  checks.push('retired tutorials return 404 rather than stale content');
 
   for (const [route, role] of [['package-authors/reference/snapshot-limits', 'Authors'], ['pactrun-users/reference/snapshot-limits', 'Users']]) {
     await open(route);
@@ -136,7 +162,7 @@ try {
   assert.ok(mobile.every(href => readerRole(href, new URL(base).pathname) === 'Authors'));
   await page.getByRole('button', {name: /Back to main menu/}).click();
   await page.locator('.navbar-sidebar').getByRole('link', {name: 'Users', exact: true}).click();
-  await article().getByRole('heading', {name: 'User guides', exact: true}).waitFor();
+  await article().getByRole('heading', {name: 'Users', exact: true}).waitFor();
   await page.locator('.navbar__toggle').click();
   mobile = await mobileLinks();
   assert.ok(mobile.length > 5);

@@ -6,7 +6,7 @@
 
 [![Preview: 1.0.0-alpha.9](https://img.shields.io/badge/preview-1.0.0--alpha.9-0f766e?style=flat-square)](https://github.com/Pipapoen/pactrun/releases/tag/v1.0.0-alpha.9)
 [![CI on main](https://img.shields.io/github/actions/workflow/status/Pipapoen/pactrun/ci.yml?branch=main&event=push&style=flat-square&label=CI)](https://github.com/Pipapoen/pactrun/actions/workflows/ci.yml?query=branch%3Amain)
-[![Platforms: Windows and Linux x86-64](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20x86--64-475569?style=flat-square)](./docs/guides/installation.md)
+[![Platforms: Windows and Linux x86-64](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20x86--64-475569?style=flat-square)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-475569?style=flat-square)](./LICENSE)
 [![AI Disclosure: AGAIN](https://img.shields.io/badge/AI%20Disclosure-AGAIN-8055CC?style=flat-square)](https://github.com/Doner357/AGAIN)
 
@@ -104,7 +104,7 @@ using it for anything important. There is no Stable release yet.
 These commands assume Git and the relevant package manager are already available.
 The published packages target **Windows x86-64** and **Linux x86-64 with glibc 2.36
 or newer**. The Preview executables are unsigned; use the project-owned source
-and follow the [installation prerequisites](./docs/guides/installation.md).
+and the prerequisites above.
 
 ### Windows · Scoop
 
@@ -122,11 +122,9 @@ brew install pipapoen/pactrun/pactrun-preview
 pactrun --version
 ```
 
-Already installed? See [version management](./docs/guides/version-management.md).
-If you use the old `doner357/pactrun` tap, follow the
-[existing-installation guidance](./docs/guides/installation.md#existing-installations-from-doner357)
-instead of adding a duplicate. For a separate unmanaged copy, use the
-[standalone archives](./docs/guides/standalone-installation.md).
+If you use the old `doner357/pactrun` tap, do not add a duplicate tap. Review
+[release information](https://github.com/Pipapoen/pactrun/releases) before changing
+an existing installation. Standalone archives are available with the releases.
 
 ## Use a Pack
 
@@ -147,8 +145,8 @@ start a service. Creation may allocate declared service storage.
 
 Next, follow the Pack author's instructions to supply required configuration and
 choose an operation from the list. Each Pack exposes its own operations; there
-is no universal `start` command. See the [step-by-step user guide](./docs/guides/use-pack.md)
-and [planning and running an operation](./docs/guides/run-and-diagnose.md).
+is no universal `start` command. See the [command reference](./docs/pactrun-users/operations/command-and-output-reference.md)
+and [invocation reference](./docs/pactrun-users/operations/invoke-reference.md).
 
 <details>
 <summary><strong>Using Pactrun from scripts?</strong></summary>

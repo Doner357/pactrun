@@ -33,17 +33,14 @@ test('bootstrap prose agrees with the current private SQLite marker and rejects 
   assert.doesNotMatch(persistence, /migration executes only the additions|only future\s+destructive lifecycle|later M7 schema must add/);
 });
 
-test('installation qualification identifies the applicable alpha release', async () => {
-  const manifest = await readFile(path.join(root, 'Cargo.toml'), 'utf8');
-  const version = manifest.match(/^version = "([^"]+)"/m)[1];
+test('historical installation qualification identifies the applicable alpha release', async () => {
   const editions = JSON.parse(await readFile(path.join(root, 'website/versions.json'), 'utf8'));
-  for (const [release, file] of [[version, 'docs/guides/installation.md'], ...editions.map(release => [release, `website/versioned_docs/version-${release}/guides/installation.md`])]) {
+  for (const [release, file] of editions.filter(release => release !== '1.0.0-alpha.9').map(release => [release, `website/versioned_docs/version-${release}/guides/installation.md`])) {
     const alpha = release.match(/-alpha\.(\d+)$/)?.[1];
     if (!alpha) continue;
     const text = await readFile(path.join(root, file), 'utf8');
     const labels = [...text.matchAll(/Alpha\.(\d+)(?: qualification|'s highest measured| is verified directly)/g)];
     for (const [, label] of labels) assert.equal(label, alpha, file);
-    if (release === version) assert.ok(labels.length > 0, 'current installation qualification must be explicit');
   }
 });
 
@@ -137,13 +134,6 @@ test('topic indexes and vocabulary are searchable references without reader-faci
   assert.equal(catalog.pages.find(page => page.source === 'spec/core/objects.md').role, 'Specification');
 });
 
-test('Input deletion guide distinguishes active required, optional and retained bindings', () => {
-  const text = docs.find(([name]) => name === 'guides/configure-inputs.md')[1].replace(/\s+/g, ' ');
-  assert.match(text, /optional active binding or a retained binding/);
-  assert.match(text, /active required binding cannot be deleted once it is bound/);
-  assert.match(text, /pactrun input delete demo notes/);
-  assert.doesNotMatch(text, /Deletion can leave a required Input missing/);
-});
 
 test('current ServiceStorage summaries and evidence boundaries do not defer available contracts', () => {
   for (const name of ['spec/core/vocabulary.md', 'spec/core/objects.md',
@@ -163,7 +153,7 @@ test('catalog retains source identity, excludes agent routes, and covers reader 
   assert.equal(catalog.source_digest, documentDigest(docs));
   assert.ok(catalog.pages.length > 100);
   assert.ok(catalog.pages.every(p => !p.source.startsWith('agents/')));
-  for (const name of ['introduction.md', 'guides/retirement.md', 'package-authors/fundamentals/authoring-model.md'])
+  for (const name of ['guides/index.md', 'pactrun-users/reference/retirement-details.md', 'package-authors/reference/pack-fields.md'])
     assert.equal(catalog.pages.find(p => p.source === name).state, 'current');
 });
 test('superseded contracts cannot masquerade as current search results', () => {
@@ -175,7 +165,7 @@ test('superseded contracts cannot masquerade as current search results', () => {
 test('search supports IDs, multiword queries, combined filters, superseded pages and no results', () => {
   assert.equal(searchPages(catalog.pages, {q: 'PR-REQ-0258'})[0].source, 'spec/packages/source-format.md');
   const restore = searchPages(catalog.pages, {q: 'restore', audience: 'Users'});
-  assert.ok(restore.some(p => p.source.endsWith('snapshots-migrations-and-recovery.md')));
+  assert.ok(restore.some(p => p.source.endsWith('snapshot-details.md')));
   assert.ok(restore.every(p => p.state === 'current' && p.audiences.includes('Users')));
   assert.ok(searchPages(catalog.pages, {q: 'shell loader', audience: 'Authors'}).length > 0);
   assert.ok(searchPages(catalog.pages, {state: 'superseded'}).length > 0);
@@ -206,73 +196,18 @@ test('CLI reference derives its version and command text from executable declara
   }
 });
 test('current entry points do not repeat retired storage/approval claims', () => {
-  for (const name of ['index.md', 'agents/index.md', 'guides/index.md', 'introduction.md']) {
+  for (const name of ['index.md', 'agents/index.md', 'guides/index.md', 'package-authors/index.md']) {
     const body = docs.find(([file]) => file === name)[1];
     assert.doesNotMatch(body, /V11|exact-V8\/V9\/V10|M5 review gates|E is the next|planned placeholders|guides come later/i, name);
   }
 });
 
 
-test('Windows tutorials supply complete manifests rather than requiring test-side rewrites', () => {
-  const cases = [
-    ['package-authors/fundamentals/authoring-model.md', 'Windows variant', 'inspect.ps1'],
-    ['package-authors/managed-capabilities/snapshots-and-managed-data.md', 'Windows Snapshot variant', 'snapshot.ps1'],
-    ['package-authors/managed-capabilities/migrations.md', 'Windows target variant', 'migrate.ps1'],
-  ];
-  for (const [name, heading, script] of cases) {
-    const body = docs.find(([file]) => file === name)[1].split('### ' + heading + '\n')[1];
-    const yaml = body.match(/^\x60{3}yaml\n([\s\S]*?)^\x60{3}/m)?.[1];
-    assert.ok(yaml, name);
-    assert.ok(yaml.includes('shell: powershell_7, command: pwsh.exe'), name);
-    assert.ok(yaml.includes('source: ' + script + ', path: ' + script), name);
-    assert.doesNotMatch(yaml, /shell: sh|source: .*\.sh/);
-  }
-});
 
 
-test('introductory tutorial names the installed Revision before using its local reference', () => {
-  const document = name => docs.find(([file]) => file === name)[1];
-  const intro = document('introduction.md');
-  assert.match(intro, /pactrun pack install \.\/pack --package-name demo --revision-name initial/);
-  assert.match(intro, /pactrun instance create demo --revision demo:initial/);
-  assert.doesNotMatch(intro, /### Copy a Revision reference/);
-  const author = document('package-authors/fundamentals/authoring-model.md');
-  assert.match(author, /pack install \.\/pack --package-name hook-example --revision-name initial/);
-  assert.match(author, /instance create hook-demo --revision hook-example:initial/);
-});
 
-test('Snapshot tutorial distinguishes source restoration from fresh-store recovery', () => {
-  const body = docs.find(([name]) => name === 'package-authors/managed-capabilities/snapshots-and-managed-data.md')[1];
-  const headings = ['Exercise Capture and Restore', 'Export the recovery files', 'Prepare a fresh destination store', 'Import and restore in the destination', 'Prepare an incompatible Revision', 'Check the incompatible Restore refusal', 'Retire destination test objects', 'Return to the source store'];
-  const offsets = headings.map(h => body.indexOf('### ' + h + '\n'));
-  assert.ok(offsets.every((offset, i) => offset >= 0 && (!i || offset > offsets[i - 1])));
-  assert.match(body, /pactrun revision export <snapshot-reference> --output \.\/snapshot-pack/);
-  assert.match(body, /pactrun pack install \.\/snapshot-pack\.pack/);
-  assert.match(body, /pactrun snapshot import \.\/backup\.snapshot/);
-  assert.match(body, /pactrun snapshot restore restored-demo <snapshot-id>/);
-  assert.match(body.replace(/\s+/g, ' '), /already_present.*not fresh; do not count it/);
-  assert.match(body, /Test-Path -LiteralPath '\.\/recovery-store'/);
-  assert.match(body, /\[ -e \.\/recovery-store \]/);
-});
 
-test('Migration tutorial provides executable byte comparisons and a separate Package fixture', () => {
-  const body = docs.find(([name]) => name === 'package-authors/managed-capabilities/migrations.md')[1];
-  assert.match(body, /### Compare the exported Input/);
-  assert.match(body, /ReadAllBytes/);
-  assert.match(body, /\$original\[\$i\] -ne \$copy\[\$i\]/);
-  assert.match(body, /cmp \.\/config\.txt \.\/settings-copy\.txt/);
-  assert.match(body, /pactrun pack generate-id/);
-  assert.match(body, /migration-unrelated\/pactrun\.yaml/);
-  assert.match(body, /--to <unrelated-reference> --plan/);
-  assert.match(body, /value after `Path ID:`/);
-  assert.match(body, /--no-trunc/);
-});
 
-test('operator Snapshot guidance links to the same fresh-store recovery example', () => {
-  const body = docs.find(([name]) => name === 'pactrun-users/operations/snapshots-migrations-and-recovery.md')[1];
-  assert.match(body, /already_present/);
-  assert.match(body, /snapshots-and-managed-data\.md#export-the-recovery-files/);
-});
 
 
 test('search excerpts hide custom heading syntax while anchors retain their stable identity', () => {

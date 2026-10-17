@@ -5,17 +5,7 @@ const sidebars: SidebarsConfig = {
     'index',
     {
       type: 'category', label: 'Users', collapsed: true, items: [
-        'guides/index', 'guides/installation', 'introduction', 'guides/use-pack',
-        {type: 'category', label: 'Choose a task', collapsed: false, items: [
-          'guides/configure-inputs', 'guides/run-and-diagnose', 'guides/service-resources',
-          'pactrun-users/operations/snapshots-migrations-and-recovery', 'guides/pack-management',
-          'guides/recovery', 'guides/retirement', 'guides/data-location', 'guides/configuration',
-        ]},
-        {type: 'category', label: 'Concepts', items: [
-          'pactrun-users/concepts/packages-revisions-and-instances',
-          'pactrun-users/concepts/inputs-secrets-and-readiness',
-          'pactrun-users/concepts/actions-plans-and-runs',
-        ]},
+        'guides/index',
         {type: 'category', label: 'Reference', collapsed: false, items: [
           'pactrun-users/reference/index', 'pactrun-users/reference/vocabulary',
           'pactrun-users/operations/command-and-output-reference', 'pactrun-users/operations/invoke-reference',
@@ -33,14 +23,13 @@ const sidebars: SidebarsConfig = {
       ],
     },
     {type: 'category', label: 'Pack authors', items: [
-          'package-authors/index', 'package-authors/setup',
-          'package-authors/fundamentals/authoring-model',
-          'package-authors/fundamentals/actions-inputs-and-parameters',
-          'package-authors/fundamentals/recipes-and-runtime-content',
-          'package-authors/managed-capabilities/hooks-recovery-and-cleanup',
-          {type: 'category', label: 'Optional capability tutorials', items: [
-            'package-authors/managed-capabilities/snapshots-and-managed-data',
-            'package-authors/managed-capabilities/migrations',
+          'package-authors/index',
+          {type: 'category', label: 'Tutorial', items: [
+            {type: 'category', label: 'First Hello Pack', items: [
+              'package-authors/tutorial/first-hello-pack/intro',
+              'package-authors/tutorial/first-hello-pack/understanding-a-pack',
+              'package-authors/tutorial/first-hello-pack/installing-the-first-revision',
+            ]},
           ]},
           {type: 'category', label: 'Reference', collapsed: false, items: [
             'package-authors/reference/pack-fields', 'package-authors/reference/service-fields',

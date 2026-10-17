@@ -14,5 +14,5 @@ for eligibility, ownership, recovery, and machine-output details. Maintainer sou
 are optional; use the same reader-facing material as human operators.
 
 Do not repeat an external mutation blindly after failure. Preserve diagnostic
-information without revealing sensitive values. Use [retirement](../guides/retirement.md)
+information without revealing sensitive values. Use [retirement](../pactrun-users/reference/retirement-details.md)
 only after deciding what should happen to managed and service-owned data.

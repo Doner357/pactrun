@@ -146,7 +146,8 @@ test('repository README links and machine-format descriptions follow current con
 test('Pactrun home follows the README structure with explanatory diagrams, not a tutorial', async () => {
   const current = await readFile(path.join(root, 'docs/index.md'), 'utf8');
   const released = await readFile(path.join(root, 'website/versioned_docs/version-1.0.0-alpha.9/index.md'), 'utf8');
-  assert.equal(current, released, 'Both alpha.9-based home pages must show the reviewed content');
+  assert.ok(released.includes('[Installation guide](./guides/installation.md)'));
+  assert.notEqual(current, released);
   assert.match(current, /^slug: \/$/m);
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
   const headings = text => [...text.matchAll(/^## (.+)$/gm)].map(match => match[1]);
@@ -171,9 +172,9 @@ test('Pactrun home follows the README structure with explanatory diagrams, not a
     assert.match(svg, /<desc\b/);
     assert.doesNotMatch(svg, /<script\b|\son\w+\s*=/i);
   }
-  for (const destination of ['./guides/installation.md', './guides/index.md', './package-authors/index.md']) {
+  for (const destination of ['#install', './guides/index.md', './package-authors/index.md']) {
     assert.ok(current.includes('](' + destination + ')'), destination);
   }
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
-  assert.ok(sidebar.includes("'guides/installation', 'introduction', 'guides/use-pack'"), 'Keep the original first-Instance tutorial route');
+  assert.ok(!sidebar.includes("'introduction'"), 'Removed tutorial must not remain in navigation');
 });

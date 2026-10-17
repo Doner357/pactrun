@@ -58,19 +58,13 @@ test('non-developer primary reading flow has no Spec or Development dependency',
   }
 });
 
-test('author setup uses the same safe executable snippets as the user tutorial', () => {
-  for (const language of ['powershell', 'sh']) {
-    const code = text => text.match(new RegExp('^```' + language + '\\n([\\s\\S]*?)^```', 'm'))[1];
-    assert.equal(code(bodies.get('package-authors/setup.md')), code(bodies.get('introduction.md')));
-  }
-});
 
 test('reader views preserve every real source code block independently of projection equality', () => {
   const blocks = body => [...body.matchAll(/^```[^\n]*\n[\s\S]*?^```[ \t]*$/gm)].map(match => match[0]);
   for (const entry of references) assert.deepEqual(blocks(bodies.get(entry.output)), blocks(bodies.get(entry.source)), entry.output);
 });
 
-test('both reader roles explain exact invocation text and user maintenance states its store-wide scope', () => {
+test('both reader roles explain exact invocation text', () => {
   const owner = bodies.get('spec/operations/parameters.md');
   const patterns = [String.raw`-?(0|[1-9][0-9]*)`, String.raw`-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`];
   for (const pattern of patterns) {
@@ -78,11 +72,7 @@ test('both reader roles explain exact invocation text and user maintenance state
     for (const name of ['pactrun-users/operations/invoke-reference.md', 'package-authors/reference/pack-fields.md'])
       assert.ok(bodies.get(name).includes(pattern), name);
   }
-  for (const name of ['guides/recovery.md', 'guides/retirement.md']) {
-    const text = bodies.get(name).replace(/\s+/g, ' ');
-    assert.match(text, /store-wide/);
-    assert.match(text, /selected store/);
-  }
+
 });
 
 test('author field guide exposes choices, omissions and meanings for common declarations', () => {
@@ -129,11 +119,34 @@ test('reader enum choices follow the owning declaration vocabulary', () => {
   }
 });
 
-test('all reader references are reachable through the role sidebar and landing maps', async () => {
+test('all reader references are reachable through role sidebars; the user index retains its lookup map', async () => {
   const sidebar = await readFile(path.join(root, 'website/sidebars.ts'), 'utf8');
-  assert.ok(sidebar.indexOf("'package-authors/fundamentals/authoring-model'") < sidebar.indexOf("'package-authors/fundamentals/actions-inputs-and-parameters'"));
   for (const entry of references) assert.ok(sidebar.includes("'" + entry.output.replace(/\.md$/, '') + "'"), entry.output);
-  const authors = bodies.get('package-authors/index.md');
   const users = bodies.get('pactrun-users/reference/index.md');
-  for (const entry of references) assert.ok((entry.audience === 'Users' ? users : authors).includes(path.posix.basename(entry.output)), entry.output);
+  for (const entry of references.filter(entry => entry.audience === 'Users')) assert.ok(users.includes(path.posix.basename(entry.output)), entry.output);
+});
+
+test('author introduction explains responsibilities and learning prerequisites without duplicating the sidebar', async () => {
+  const current = bodies.get('package-authors/index.md');
+  const released = await readFile(path.join(root, 'website/versioned_docs/version-1.0.0-alpha.9/package-authors/index.md'), 'utf8');
+  assert.match(released, /^# Pack author guide$/m);
+  assert.notEqual(current, released);
+  assert.equal([...current.matchAll(/^## /gm)].length, 6);
+  const [story, terms] = current.split('## Terms used on this page');
+  assert.ok(terms);
+  assert.doesNotMatch(story.split('## Where your work fits')[1], /Gitea/);
+  for (const anchor of ['gitea', 'docker-and-containers', 'docker-compose', 'scripts', 'compose-file', 'env-file']) {
+    assert.ok(story.includes('](#' + anchor + ')'), anchor + ': story link');
+    assert.ok(terms.includes('{#' + anchor + '}'), anchor + ': explanation target');
+  }
+  assert.equal([...terms.matchAll(/Read more: \[/g)].length, 6);
+  assert.doesNotMatch(current, /^## (?:Reference|How we will learn)/m);
+  assert.doesNotMatch(current, /^- \[[^\]]+\]\(\.\/reference\//m);
+  assert.match(current, /not a complete\s+qualification/);
+  const svg = await readFile(path.join(root, 'website/static/img/pack-authors/roles.svg'), 'utf8');
+  assert.ok(current.includes('/img/pack-authors/roles.svg'));
+  assert.match(svg, /<title\b/);
+  assert.match(svg, /<desc\b/);
+  assert.doesNotMatch(svg, /Gitea|Git hosting/);
+  assert.doesNotMatch(svg, /<script\b|\son\w+\s*=/i);
 });

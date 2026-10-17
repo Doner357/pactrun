@@ -7,7 +7,7 @@ slug: /
 
 [Source code](https://github.com/Pipapoen/pactrun) ·
 [Preview releases](https://github.com/Pipapoen/pactrun/releases) ·
-[Installation guide](./guides/installation.md)
+[Install](#install)
 
 Pactrun is a command-line tool for managing local services on Windows and Linux.
 It brings together the instructions for operating a service, the configuration
