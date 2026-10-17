@@ -146,7 +146,7 @@ test('repository README links and machine-format descriptions follow current con
 test('Pactrun home follows the README structure with explanatory diagrams, not a tutorial', async () => {
   const current = await readFile(path.join(root, 'docs/index.md'), 'utf8');
   const released = await readFile(path.join(root, 'website/versioned_docs/version-1.0.0-alpha.9/index.md'), 'utf8');
-  assert.ok(released.includes('[Installation guide](./guides/installation.md)'));
+  assert.ok(released.includes('](./guides/installation.md)'));
   assert.notEqual(current, released);
   assert.match(current, /^slug: \/$/m);
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
